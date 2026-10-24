@@ -1,0 +1,50 @@
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import type { Lang } from './translations';
+import { T } from './translations';
+
+type TK = keyof typeof T.ar;
+
+interface LangCtx {
+  lang: Lang;
+  setLang: (l: Lang) => void;
+  t: (key: TK) => string;
+  dir: 'rtl' | 'ltr';
+}
+
+const LanguageContext = createContext<LangCtx>({
+  lang: 'ar',
+  setLang: () => {},
+  t: (key) => T.ar[key],
+  dir: 'rtl',
+});
+
+export function LanguageProvider({ children }: { children: ReactNode }) {
+  const [lang, setLangState] = useState<Lang>(() => {
+    const saved = localStorage.getItem('app-lang') as Lang;
+    return saved || 'ar';
+  });
+
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    localStorage.setItem('app-lang', l);
+  };
+
+  const dir: 'rtl' | 'ltr' = lang === 'en' || lang === 'fr' ? 'ltr' : 'rtl';
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = dir;
+  }, [lang, dir]);
+
+  const t = (key: TK) => T[lang][key] || T.ar[key] || key;
+
+  return (
+    <LanguageContext.Provider value={{ lang, setLang, t, dir }}>
+      {children}
+    </LanguageContext.Provider>
+  );
+}
+
+export function useLang() {
+  return useContext(LanguageContext);
+}
