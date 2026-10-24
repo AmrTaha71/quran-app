@@ -654,18 +654,24 @@ export default function QuranMushafPage({
                 </div>
               )}
 
-              {/* Touch navigation zones */}
+              {/* Page-turn zones: full-height side strips with a large,
+                  always-visible arrow + label, so the target is easy to
+                  find and to press anywhere along the edge. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
-                className="absolute bottom-0 right-0 w-1/3 h-1/3 z-20 flex items-end justify-end pb-8 pr-4 disabled:opacity-20 group">
-                <div className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-smooth group-disabled:opacity-20">
-                  <ChevronRight className="w-8 h-8" />
+                aria-label="الصفحة السابقة"
+                className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-white/15 to-transparent disabled:opacity-20 group">
+                <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
+                  <ChevronRight className="w-10 h-10" />
                 </div>
+                <span className="text-xs font-bold text-white/90 drop-shadow">السابق</span>
               </button>
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
-                className="absolute bottom-0 left-0 w-1/3 h-1/3 z-20 flex items-end justify-start pb-8 pl-4 disabled:opacity-20 group">
-                <div className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-smooth group-disabled:opacity-20">
-                  <ChevronLeft className="w-8 h-8" />
+                aria-label="الصفحة التالية"
+                className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-white/15 to-transparent disabled:opacity-20 group">
+                <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
+                  <ChevronLeft className="w-10 h-10" />
                 </div>
+                <span className="text-xs font-bold text-white/90 drop-shadow">التالي</span>
               </button>
 
               {/* Verse selector — show all verses */}
