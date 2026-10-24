@@ -8,7 +8,7 @@ import { SURAHS } from '../lib/surahs';
 import {
   BookOpen, LogOut, Search, Bookmark, Settings, Trash2,
   ChevronRight, ChevronLeft, Download, Filter, X,
-  Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Heart, Loader2,
+  Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Heart, Loader2, Mic,
 } from 'lucide-react';
 import AdminLogin from './AdminLogin';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
@@ -92,7 +92,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     }
     if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
     if (statusFilter === 'green') query = query.eq('has_links', true);
-    else if (statusFilter === 'red') query = query.eq('has_links', false);
+    else if (statusFilter === 'red') query = query.or('has_links.eq.false,has_links.is.null');
 
     query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
 
@@ -107,11 +107,16 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   }, [debouncedSearch, surahFilter, statusFilter, page]);
 
   const fetchStats = useCallback(async () => {
-    const [{ count: withLinks }, { count: withoutLinks }] = await Promise.all([
+    const [{ count: total }, { count: withLinks }] = await Promise.all([
+      supabase.from('quran_verses').select('*', { count: 'exact', head: true }),
       supabase.from('quran_verses').select('*', { count: 'exact', head: true }).eq('has_links', true),
-      supabase.from('quran_verses').select('*', { count: 'exact', head: true }).eq('has_links', false),
     ]);
-    setStats({ withLinks: withLinks || 0, withoutLinks: withoutLinks || 0 });
+    const totalRows = total || 0;
+    const withCount = withLinks || 0;
+    // "Without links" = every ayah not marked as linked, including rows
+    // whose has_links is still NULL, so with + without always equals the
+    // total number of ayahs in the table.
+    setStats({ withLinks: withCount, withoutLinks: Math.max(0, totalRows - withCount) });
   }, []);
 
   const fetchPendingLinks = useCallback(async () => {
@@ -142,7 +147,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       supabase
         .from('quran_verses')
         .select('id')
-        .eq('has_links', false)
+        .or('has_links.eq.false,has_links.is.null')
         .order('id', { ascending: true })
         .limit(1)
         .single()
@@ -397,11 +402,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                           <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg">{verse.surah_no}:{verse.ayah_no}</span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
-                          {verse.links_count > 0 && (
-                            <span className="flex items-center gap-1 text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full">
-                              <Bookmark className="w-3 h-3" /> {verse.links_count} رابط
-                            </span>
-                          )}
+                          <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500 bg-gray-50'}`}>
+                            <Bookmark className="w-3 h-3" /> {verse.links_count || 0} رابط
+                          </span>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
+                            {verse.has_links ? 'لها رابط' : 'بدون رابط'}
+                          </span>
                         </div>
                         <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{verse.ayah_text}</p>
 
@@ -435,7 +441,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         <button onClick={() => setLinkModalVerse(verse)}
                           title="سجلي هنا يا رنا"
                           className="flex flex-col items-center justify-center gap-1 w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-2xl shadow-lg hover:shadow-xl transition-smooth">
-                          <Bookmark className="w-6 h-6" />
+                          <Mic className="w-6 h-6" />
                           <span className="text-[10px] font-bold leading-tight text-center">سجلي هنا<br />يا رنا</span>
                         </button>
                         <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}

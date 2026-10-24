@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
 import { SURAHS } from '../lib/surahs';
@@ -162,6 +162,31 @@ export default function QuranMushafPage({
   const goToPage = (page: number) => {
     const clamped = Math.max(1, Math.min(TOTAL_PAGES, page));
     setCurrentPage(clamped);
+  };
+
+  // Fullscreen swipe navigation (touch): swipe left = next page, swipe
+  // right = previous page, matching the corner buttons. Attached only to
+  // the page image so swipes over the verse strip still scroll the strip.
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const handlePageTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStartX.current = t.clientX;
+    touchStartY.current = t.clientY;
+  };
+  const handlePageTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const startX = touchStartX.current;
+    const startY = touchStartY.current;
+    touchStartX.current = null;
+    touchStartY.current = null;
+    if (showRatelIntro || showEditionPickerInFullscreen || selectedVerse) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0) goToPage(currentPage + 1);
+    else goToPage(currentPage - 1);
   };
 
   const goToSurah = (surahNo: number) => {
@@ -615,9 +640,13 @@ export default function QuranMushafPage({
               {!imageError ? (
                 <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
                   className="max-h-[100vh] max-w-[100vw] object-contain"
-                  onClick={(e) => e.stopPropagation()} />
+                  onClick={(e) => e.stopPropagation()}
+                  onTouchStart={handlePageTouchStart}
+                  onTouchEnd={handlePageTouchEnd} />
               ) : (
-                <div className="text-center" onClick={(e) => e.stopPropagation()}>
+                <div className="text-center" onClick={(e) => e.stopPropagation()}
+                  onTouchStart={handlePageTouchStart}
+                  onTouchEnd={handlePageTouchEnd}>
                   <BookOpen className="w-14 h-14 text-white/30 mx-auto mb-3" />
                   <p className="text-white/50 text-base">تعذر تحميل الصفحة</p>
                   <button onClick={(e) => { e.stopPropagation(); setImageError(false); setImageLoading(true); }}
