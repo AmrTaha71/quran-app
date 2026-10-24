@@ -33,10 +33,9 @@ function AppContent() {
       setLoading(false);
     });
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      const wasNull = !session;
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session && wasNull) {
+      if (event === 'SIGNED_IN' && session) {
         setAuthJustSucceeded(true);
         setRoute('mushaf');
         setTimeout(() => setAuthJustSucceeded(false), 10500);
