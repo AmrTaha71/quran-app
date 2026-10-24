@@ -12,10 +12,26 @@ body {
   font-family: 'Cairo', system-ui, sans-serif;
   background-color: #f8fafc;
   color: #1e293b;
+  /* Responsive default: readable on a phone, roomier on a large screen.
+     Individual controls can still override this (e.g. the Mushaf zoom). */
+  font-size: clamp(1.02rem, 2vw + 0.6rem, 1.15rem);
 }
 
 .font-arabic {
   font-family: 'Noto Naskh Arabic', serif;
+  /* Ayah text: scales with the viewport instead of a fixed small size. */
+  font-size: clamp(1.5rem, 4vw + 0.9rem, 2.25rem);
+  line-height: 2.1;
+}
+
+/* Large, labelled action icons: minimum comfortable touch target. */
+.icon-action {
+  min-width: 3rem;
+  min-height: 3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 /* Custom scrollbar */

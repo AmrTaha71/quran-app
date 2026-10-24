@@ -95,7 +95,11 @@ Deno.serve(async (req: Request) => {
     if (!apiKey) {
       const rephrased = basicRephrase(text, command || "", mode || "rephrase");
       return new Response(
-        JSON.stringify({ rephrased }),
+        JSON.stringify({
+          rephrased,
+          ai_used: false,
+          note: "استخدام المعالجة المحلية: مفتاح الذكاء الاصطناعي غير مكون",
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -132,10 +136,14 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
+      await response.text();
       const fallback = basicRephrase(text, command || "", mode || "rephrase");
       return new Response(
-        JSON.stringify({ rephrased: fallback, note: "استخدام المعالجة المحلية" }),
+        JSON.stringify({
+          rephrased: fallback,
+          ai_used: false,
+          note: `استخدام المعالجة المحلية: فشل طلب نموذج الذكاء الاصطناعي (رمز ${response.status})`,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -144,7 +152,7 @@ Deno.serve(async (req: Request) => {
     const rephrased = data.choices?.[0]?.message?.content || basicRephrase(text, command || "", mode || "rephrase");
 
     return new Response(
-      JSON.stringify({ rephrased }),
+      JSON.stringify({ rephrased, ai_used: true }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

@@ -7,6 +7,8 @@ import { LANGUAGES } from '../lib/translations';
 import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
+import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
+import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers,
@@ -15,84 +17,21 @@ import {
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
 
-interface MushafEdition {
-  id: string;
-  name: string;
-  description: string;
-  imageUrl: (page: number) => string;
+const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
+
+const EDITION_STORAGE_KEY = 'quran-mushaf-edition';
+const PAGE_STORAGE_KEY = 'quran-mushaf-page';
+const TARGET_STORAGE_KEY = 'quran-mushaf-target';
+
+function readStoredEdition(): number {
+  const raw = Number(localStorage.getItem(EDITION_STORAGE_KEY));
+  return Number.isInteger(raw) && raw >= 0 && raw < EDITIONS.length ? raw : 0;
 }
 
-const TOTAL_PAGES = 604;
-
-const QURANHUB_CDN = 'https://cdn.jsdelivr.net/gh/QuranHub/quran-pages-images@main';
-
-const EDITIONS: MushafEdition[] = [
-  {
-    id: 'madinah',
-    name: 'مصحف المدينة المنورة',
-    description: 'طبعة مجمع الملك فهد — الخط الأصلي',
-    imageUrl: (page: number) => `https://cdn.jsdelivr.net/gh/sufone/medina-mushaf@master/png-d150/${page}.png`,
-  },
-  {
-    id: 'tajweed',
-    name: 'مصحف التجويد الملون',
-    description: 'مصحف ملون بقواعد التجويد — دار المعرفة',
-    imageUrl: (page: number) => `${QURANHUB_CDN}/ayat/tajweed/${page}.png`,
-  },
-  {
-    id: 'warsh',
-    name: 'مصحف ورش',
-    description: 'قراءة ورش عن نافع — مجمع الملك فهد',
-    imageUrl: (page: number) => `${QURANHUB_CDN}/kfgqpc/warsh/${page}.jpg`,
-  },
-  {
-    id: 'hafs',
-    name: 'مصحف حفص (الخط الواسط)',
-    description: 'رواية حفص عن عاصم — مجمع الملك فهد',
-    imageUrl: (page: number) => `${QURANHUB_CDN}/kfgqpc/hafs-wasat/${page}.jpg`,
-  },
-];
-
-const SURAH_START_PAGES: { surah: number; page: number }[] = [
-  { surah: 1, page: 1 }, { surah: 2, page: 2 }, { surah: 3, page: 50 },
-  { surah: 4, page: 77 }, { surah: 5, page: 106 }, { surah: 6, page: 128 },
-  { surah: 7, page: 151 }, { surah: 8, page: 177 }, { surah: 9, page: 187 },
-  { surah: 10, page: 208 }, { surah: 11, page: 221 }, { surah: 12, page: 235 },
-  { surah: 13, page: 249 }, { surah: 14, page: 255 }, { surah: 15, page: 262 },
-  { surah: 16, page: 267 }, { surah: 17, page: 282 }, { surah: 18, page: 293 },
-  { surah: 19, page: 305 }, { surah: 20, page: 312 }, { surah: 21, page: 322 },
-  { surah: 22, page: 332 }, { surah: 23, page: 342 }, { surah: 24, page: 350 },
-  { surah: 25, page: 359 }, { surah: 26, page: 367 }, { surah: 27, page: 377 },
-  { surah: 28, page: 385 }, { surah: 29, page: 396 }, { surah: 30, page: 404 },
-  { surah: 31, page: 411 }, { surah: 32, page: 415 }, { surah: 33, page: 418 },
-  { surah: 34, page: 428 }, { surah: 35, page: 434 }, { surah: 36, page: 440 },
-  { surah: 37, page: 446 }, { surah: 38, page: 453 }, { surah: 39, page: 458 },
-  { surah: 40, page: 467 }, { surah: 41, page: 477 }, { surah: 42, page: 483 },
-  { surah: 43, page: 489 }, { surah: 44, page: 496 }, { surah: 45, page: 499 },
-  { surah: 46, page: 502 }, { surah: 47, page: 507 }, { surah: 48, page: 511 },
-  { surah: 49, page: 515 }, { surah: 50, page: 518 }, { surah: 51, page: 520 },
-  { surah: 52, page: 523 }, { surah: 53, page: 526 }, { surah: 54, page: 528 },
-  { surah: 55, page: 531 }, { surah: 56, page: 534 }, { surah: 57, page: 537 },
-  { surah: 58, page: 542 }, { surah: 59, page: 545 }, { surah: 60, page: 548 },
-  { surah: 61, page: 549 }, { surah: 62, page: 550 }, { surah: 63, page: 551 },
-  { surah: 64, page: 552 }, { surah: 65, page: 553 }, { surah: 66, page: 554 },
-  { surah: 67, page: 556 }, { surah: 68, page: 558 }, { surah: 69, page: 561 },
-  { surah: 70, page: 563 }, { surah: 71, page: 566 }, { surah: 72, page: 568 },
-  { surah: 73, page: 570 }, { surah: 74, page: 572 }, { surah: 75, page: 574 },
-  { surah: 76, page: 577 }, { surah: 77, page: 578 }, { surah: 78, page: 581 },
-  { surah: 79, page: 583 }, { surah: 80, page: 585 }, { surah: 81, page: 586 },
-  { surah: 82, page: 587 }, { surah: 83, page: 587 }, { surah: 84, page: 589 },
-  { surah: 85, page: 590 }, { surah: 86, page: 591 }, { surah: 87, page: 591 },
-  { surah: 88, page: 592 }, { surah: 89, page: 593 }, { surah: 90, page: 594 },
-  { surah: 91, page: 595 }, { surah: 92, page: 595 }, { surah: 93, page: 596 },
-  { surah: 94, page: 596 }, { surah: 95, page: 597 }, { surah: 96, page: 597 },
-  { surah: 97, page: 598 }, { surah: 98, page: 598 }, { surah: 99, page: 599 },
-  { surah: 100, page: 599 }, { surah: 101, page: 600 }, { surah: 102, page: 600 },
-  { surah: 103, page: 601 }, { surah: 104, page: 601 }, { surah: 105, page: 601 },
-  { surah: 106, page: 602 }, { surah: 107, page: 602 }, { surah: 108, page: 602 },
-  { surah: 109, page: 603 }, { surah: 110, page: 603 }, { surah: 111, page: 603 },
-  { surah: 112, page: 604 }, { surah: 113, page: 604 }, { surah: 114, page: 604 },
-];
+function readStoredPage(): number {
+  const raw = Number(localStorage.getItem(PAGE_STORAGE_KEY));
+  return Number.isInteger(raw) && raw >= 1 && raw <= TOTAL_PAGES ? raw : 1;
+}
 
 function getPageSurah(page: number): number {
   let result = 1;
@@ -131,8 +70,10 @@ export default function QuranMushafPage({
   onNavigate: (r: Route) => void;
 }) {
   const { t, lang, setLang } = useLang();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedEdition, setSelectedEdition] = useState(0);
+  const [currentPage, setCurrentPage] = useState(readStoredPage);
+  const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
+  const [ayahFilter, setAyahFilter] = useState('');
+  const [pendingAyah, setPendingAyah] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showRatelIntro, setShowRatelIntro] = useState(false);
@@ -182,18 +123,55 @@ export default function QuranMushafPage({
     fetchPageVerses(currentPage);
   }, [currentPage, fetchPageVerses]);
 
+  // Remember the user's chosen edition and last page, and honour a
+  // cross-page jump from لوحتي (stored as { surah, ayah }).
+  useEffect(() => {
+    localStorage.setItem(EDITION_STORAGE_KEY, String(selectedEdition));
+  }, [selectedEdition]);
+  useEffect(() => {
+    localStorage.setItem(PAGE_STORAGE_KEY, String(currentPage));
+  }, [currentPage]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TARGET_STORAGE_KEY);
+      if (!raw) return;
+      const target = JSON.parse(raw) as { surah?: number; ayah?: number };
+      localStorage.removeItem(TARGET_STORAGE_KEY);
+      if (target.surah) {
+        setCurrentPage(getSurahStartPage(target.surah));
+        if (target.ayah) setPendingAyah(target.ayah);
+      }
+    } catch { /* ignore a malformed stored target */ }
+    // Only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (pendingAyah === null) return;
+    const verse = surahVerses.find((v) => v.ayah_no === pendingAyah);
+    if (verse) {
+      setSelectedVerse(verse);
+      fetchVerseLinks(verse.id);
+      setPendingAyah(null);
+    } else if (surahVerses.length > 0) {
+      // Target ayah is not on this surah's list (e.g. a page spanning two
+      // surahs) — drop the stale target instead of firing it later.
+      setPendingAyah(null);
+    }
+  }, [pendingAyah, surahVerses, fetchVerseLinks]);
+
   const goToPage = (page: number) => {
     const clamped = Math.max(1, Math.min(TOTAL_PAGES, page));
     setCurrentPage(clamped);
   };
 
   const goToSurah = (surahNo: number) => {
-    const surahStart = SURAH_START_PAGES.find((s) => s.surah === surahNo);
-    if (surahStart) {
-      goToPage(surahStart.page);
-      setShowIndex(false);
-    }
+    goToPage(getSurahStartPage(surahNo));
+    setShowIndex(false);
   };
+
+  const visibleVerses = ayahFilter.trim()
+    ? surahVerses.filter((v) => String(v.ayah_no) === ayahFilter.trim())
+    : surahVerses;
 
   const openFullscreen = () => {
     setShowRatelIntro(true);
@@ -213,7 +191,7 @@ export default function QuranMushafPage({
   const playAudio = (url: string) => { new Audio(url).play(); };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/30 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/30 to-white pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -392,6 +370,22 @@ export default function QuranMushafPage({
                     <p className="text-sm text-accent-500">اضغط على أي آية لمعرفة الرابط</p>
                   </div>
                 </div>
+                {/* Ayah filter: jump straight to one ayah of this surah. */}
+                <div className="flex items-center gap-2 mt-3">
+                  <label htmlFor="ayah-filter" className="text-sm font-semibold text-accent-600 whitespace-nowrap">
+                    رقم الآية:
+                  </label>
+                  <input id="ayah-filter" type="number" min={1} inputMode="numeric"
+                    value={ayahFilter} placeholder="مثال: 255"
+                    onChange={(e) => setAyahFilter(e.target.value)}
+                    className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-base font-semibold text-accent-700 focus:outline-none focus:border-emerald-400" />
+                  {ayahFilter.trim() && (
+                    <button onClick={() => setAyahFilter('')}
+                      className="px-3 py-2 text-sm font-semibold text-accent-500 hover:bg-white rounded-lg">
+                      إلغاء الفلتر
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="max-h-[600px] overflow-y-auto divide-y divide-gray-50">
                 {surahVerses.length === 0 ? (
@@ -399,8 +393,13 @@ export default function QuranMushafPage({
                     <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-30" />
                     <p className="text-base">لا توجد آيات محملة</p>
                   </div>
+                ) : visibleVerses.length === 0 ? (
+                  <div className="py-12 text-center text-accent-400">
+                    <BookOpen className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                    <p className="text-base">لا توجد آية بهذا الرقم في سورة {currentSurahName}</p>
+                  </div>
                 ) : (
-                  surahVerses.map((verse) => {
+                  visibleVerses.map((verse) => {
                     const isSelected = selectedVerse?.id === verse.id;
                     const hasLinks = verse.has_links;
                     return (
@@ -473,6 +472,9 @@ export default function QuranMushafPage({
           </div>
         </div>
       </div>
+
+      {/* Bottom nav: لوحتي first (rightmost in RTL), then المصحف. */}
+      <BottomNav current="mushaf" onNavigate={onNavigate} />
 
       {/* Index modal — Surah / Juz / Hizb */}
       {showIndex && (

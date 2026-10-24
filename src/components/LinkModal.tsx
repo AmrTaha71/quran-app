@@ -17,6 +17,29 @@ interface SpeechRecognitionEvent {
   resultIndex: number;
 }
 
+interface SpeechRecognitionErrorEvent {
+  error?: string;
+}
+
+/** Arabic message for a browser speech-recognition failure. */
+function recognitionErrorMessage(error?: string): string | null {
+  switch (error) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'تم رفض إذن الميكروفون. اسمحي بالميكروفون من إعدادات المتصفح ثم حاولي مرة أخرى.';
+    case 'no-speech':
+      return 'لم يتم سماع صوت واضح. تحدثي بصوت أعلى وأقرب إلى الميكروفون ثم حاولي مرة أخرى.';
+    case 'audio-capture':
+      return 'لم يتم العثور على ميكروفون يعمل على هذا الجهاز.';
+    case 'network':
+      return 'تعذر الاتصال بخدمة التعرف الصوتي. تحققي من الاتصال ثم حاولي مرة أخرى.';
+    case 'aborted':
+      return null; // Stopping the recording is not an error.
+    default:
+      return 'تعذر التعرف الصوتي المباشر. سيتم تجربة التحويل من الملف المسجل، أو اكتبي النص يدوياً.';
+  }
+}
+
 function deduplicateTranscript(text: string): string {
   const sentences = text.split(/([.،!؟\n])/).filter((s) => s.trim());
   const seen = new Set<string>();
@@ -65,6 +88,9 @@ export default function LinkModal({
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
   const liveTranscriptRef = useRef('');
+  // Final results only. Interim results are partial prefixes of the same
+  // speech — appending them is what used to repeat sentences in the text.
+  const finalTranscriptRef = useRef('');
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -74,13 +100,22 @@ export default function LinkModal({
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
       recognitionRef.current.onresult = (e: SpeechRecognitionEvent) => {
-        let full = '';
-        for (let i = 0; i < e.results.length; i++) {
-          full += e.results[i][0].transcript + ' ';
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const result = e.results[i][0];
+          if (result.isFinal) {
+            finalTranscriptRef.current += result.transcript + ' ';
+          } else {
+            interim += result.transcript + ' ';
+          }
         }
-        const cleaned = deduplicateTranscript(full.trim());
-        liveTranscriptRef.current = cleaned;
-        setLiveTranscript(cleaned);
+        const display = (deduplicateTranscript(finalTranscriptRef.current.trim()) + ' ' + interim.trim()).trim();
+        liveTranscriptRef.current = display;
+        setLiveTranscript(display);
+      };
+      recognitionRef.current.onerror = (e: SpeechRecognitionErrorEvent) => {
+        const message = recognitionErrorMessage(e.error);
+        if (message) setError(message);
       };
     }
   }, []);
@@ -93,6 +128,7 @@ export default function LinkModal({
   const startRecording = useCallback(async () => {
     try {
       liveTranscriptRef.current = '';
+      finalTranscriptRef.current = '';
       setLiveTranscript('');
 
       // Start browser SpeechRecognition for live transcription
@@ -100,19 +136,38 @@ export default function LinkModal({
         try { recognitionRef.current.start(); } catch {}
       }
 
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError('هذا المتصفح لا يدعم التسجيل من الميكروفون. جرّبي متصفحاً آخر، أو ارفعي ملفاً صوتياً بالأسفل.');
+        setIsRecording(false);
+        return;
+      }
+      if (typeof MediaRecorder === 'undefined') {
+        setError('هذا المتصفح لا يدعم تسجيل الصوت. ارفعي ملفاً صوتياً بالأسفل بدلاً من التسجيل المباشر.');
+        setIsRecording(false);
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Safari does not support audio/webm; fall back to audio/mp4 there.
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       audioChunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       recorder.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
         stream.getTracks().forEach((t) => t.stop());
 
         if (recognitionRef.current) {
           try { recognitionRef.current.stop(); } catch {}
         }
 
-        const rawTranscript = liveTranscriptRef.current.trim();
+        // Only final results become the transcript — interim prefixes are
+        // shown live but never saved, so sentences no longer repeat.
+        const rawTranscript = finalTranscriptRef.current.trim();
         const transcriptText = deduplicateTranscript(rawTranscript);
 
         try {
@@ -142,8 +197,15 @@ export default function LinkModal({
   }, []);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+    // Stop recognition first, then give its final result a moment to flush
+    // before the recorder's onstop reads the transcript.
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
     setIsRecording(false);
+    window.setTimeout(() => {
+      if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+    }, 400);
   }, []);
 
   // --- Fallback: edge function transcription ---
@@ -217,8 +279,11 @@ export default function LinkModal({
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
         body: JSON.stringify({ text, command, mode }),
       });
-      if (!res.ok) throw new Error('فشلت إعادة الصياغة');
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Surface the real server error instead of a generic failure.
+        throw new Error(data.error || `فشلت إعادة الصياغة (رمز ${res.status})`);
+      }
       const result = data.rephrased || text;
       // Filter out placeholder text
       if (result.includes('لم يتم تكوين') || result.includes('نص تجريبي')) {
@@ -226,10 +291,16 @@ export default function LinkModal({
       } else {
         setRephrasedText(result);
       }
+      if (data.ai_used === false) {
+        setError('تنبيه: تمت المعالجة محلياً لأن مفتاح الذكاء الاصطناعي غير متوفر — هذه النتيجة ليست من نموذج ذكاء اصطناعي. راجعيها قبل الحفظ.');
+      }
       setReviewMode(mode);
       setSyntheticAudioUrl(null);
       setPhase('review');
-    } catch {
+    } catch (err: any) {
+      // Keep the original text so no work is lost, but say plainly that
+      // the AI step failed instead of silently showing the original.
+      setError(`تعذرت إعادة الصياغة بالذكاء الاصطناعي: ${err?.message || 'خطأ غير معروف'}. تم عرض النص الأصلي، ويمكنك تعديله يدوياً قبل الحفظ.`);
       setRephrasedText(text);
       setReviewMode(mode);
       setSyntheticAudioUrl(null);

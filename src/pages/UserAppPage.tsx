@@ -11,6 +11,7 @@ import {
   Heart, Bookmark, AlertTriangle, X, BookMarked, AlertCircle,
   Volume2, Filter, Layers,
 } from 'lucide-react';
+import BottomNav from '../components/BottomNav';
 import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import QRCodeSection from '../components/QRCodeSection';
@@ -170,7 +171,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter ? 1 : 0) + (debouncedSearch ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -412,6 +413,18 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                         >
                           إعادة صياغة
                         </button>
+                        <button
+                          onClick={() => {
+                            try {
+                              localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: verse.surah_no, ayah: verse.ayah_no }));
+                            } catch { /* storage unavailable: still navigate to the Mushaf */ }
+                            onNavigate('mushaf');
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                        >
+                          <BookMarked className="w-5 h-5" />
+                          فتح في المصحف
+                        </button>
                         <ShareButton verseText={verse.ayah_text} surahName={verse.surah_name} ayahNo={verse.ayah_no} />
                       </div>
                     </div>
@@ -485,6 +498,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <QRCodeSection />
         </div>
       </div>
+
+      {/* Bottom nav: لوحتي first (rightmost in RTL), then المصحف. */}
+      <BottomNav current="app" onNavigate={onNavigate} />
 
       {/* Long press menus */}
       {longPressVerse && session && (

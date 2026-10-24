@@ -55,9 +55,19 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
       setIsRecording(false);
       processRephrase(transcript, '');
     };
-    recognition.onerror = () => {
+    recognition.onerror = (event: { error?: string }) => {
       setIsRecording(false);
-      setError('تعذر التعرف على الصوت. حاول مرة أخرى.');
+      const message =
+        event.error === 'not-allowed' || event.error === 'service-not-allowed'
+          ? 'تم رفض إذن الميكروفون. اسمح بالميكروفون من إعدادات المتصفح ثم حاول مرة أخرى.'
+          : event.error === 'no-speech'
+            ? 'لم يتم سماع صوت واضح. تحدث بصوت أعلى ثم حاول مرة أخرى.'
+            : event.error === 'audio-capture'
+              ? 'لم يتم العثور على ميكروفون يعمل على هذا الجهاز.'
+              : event.error === 'network'
+                ? 'تعذر الاتصال بخدمة التعرف الصوتي. تحقق من الاتصال ثم حاول مرة أخرى.'
+                : 'تعذر التعرف على الصوت. حاول مرة أخرى، أو اكتب النص يدوياً.';
+      setError(message);
       setMode('idle');
     };
     recognition.onend = () => {
@@ -80,12 +90,17 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
         body: JSON.stringify({ text, command }),
       });
 
-      if (!response.ok) throw new Error('فشل في معالجة النص');
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || `فشل في معالجة النص (رمز ${response.status})`);
+      }
       setRephrasedText(data.rephrased || 'لم يتم الحصول على نتيجة');
+      if (data.ai_used === false) {
+        setError('تنبيه: تمت المعالجة محلياً لأن مفتاح الذكاء الاصطناعي غير متوفر — هذه النتيجة ليست من نموذج ذكاء اصطناعي.');
+      }
       setMode('result');
-    } catch (err) {
-      setError('تعذر الاتصال بالخدمة. تأكد من إعداد مفتاح الذكاء الاصطناعي.');
+    } catch (err: any) {
+      setError(`تعذر الاتصال بخدمة إعادة الصياغة: ${err?.message || 'خطأ غير معروف'}. إذا تكرر ذلك، تحقق من إعداد مفتاح الذكاء الاصطناعي في Supabase.`);
       setMode('idle');
     }
   };

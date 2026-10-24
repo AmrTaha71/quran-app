@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   Share2, X, MessageCircle, Mail, Phone, Facebook, Twitter, Link2,
-  Send, Linkedin, Copy, Check, Smartphone, Apple, Play,
+  Send, Linkedin, Copy, Check,
 } from 'lucide-react';
 
 export default function ShareButton({
@@ -86,26 +86,10 @@ export default function ShareButton({
     },
   ];
 
-  const storeLinks = [
-    {
-      icon: <Play className="w-5 h-5" />,
-      label: 'جوجل بلاي',
-      color: 'bg-green-600 hover:bg-green-700',
-      url: 'https://play.google.com/store/apps/details?id=com.quranlinks.app',
-    },
-    {
-      icon: <Apple className="w-5 h-5" />,
-      label: 'آب ستور',
-      color: 'bg-gray-900 hover:bg-black',
-      url: 'https://apps.apple.com/app/quran-links/id1234567890',
-    },
-    {
-      icon: <Smartphone className="w-5 h-5" />,
-      label: 'ويندوز',
-      color: 'bg-blue-600 hover:bg-blue-700',
-      url: 'https://www.microsoft.com/store/apps/quran-links',
-    },
-  ];
+  // The app is not published in any store yet, so there are no real store
+  // links to show. Share the web link for now; store links appear only
+  // after actual publication. (Previously this section linked to
+  // placeholder store URLs that do not exist — removed.)
 
   return (
     <div className="relative" ref={ref}>
@@ -146,7 +130,8 @@ export default function ShareButton({
                   }}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`flex flex-col items-center gap-2 p-3 rounded-xl text-white text-xs font-semibold transition-smooth ${s.color}`}
+                  aria-label={s.label}
+                  className={`icon-action flex-col p-3 rounded-xl text-white text-xs font-semibold transition-smooth ${s.color}`}
                 >
                   {s.icon}
                   {s.label}
@@ -154,23 +139,18 @@ export default function ShareButton({
               ))}
             </div>
 
-            {/* Download links */}
+            {/* Store links: pending publication — share the web link meanwhile */}
             <div className="border-t border-gray-100 pt-4">
-              <p className="text-xs font-bold text-accent-600 mb-2 text-center">حمّل التطبيق من:</p>
-              <div className="flex gap-2">
-                {storeLinks.map((s) => (
-                  <a
-                    key={s.label}
-                    href={s.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-white text-xs font-bold transition-smooth ${s.color}`}
-                  >
-                    {s.icon}
-                    {s.label}
-                  </a>
-                ))}
-              </div>
+              <p className="text-sm text-accent-600 mb-2 text-center">
+                التطبيق غير منشور في المتاجر بعد — شارك رابط الويب، وستظهر روابط جوجل بلاي وآب ستور وويندوز هنا بعد النشر الفعلي.
+              </p>
+              <button
+                onClick={handleCopy}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-smooth bg-teal-600 hover:bg-teal-700"
+              >
+                <Link2 className="w-5 h-5" />
+                {copied ? 'تم نسخ رابط الويب' : 'نسخ رابط الويب'}
+              </button>
             </div>
 
             {/* Native share API */}
