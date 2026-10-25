@@ -81,6 +81,17 @@ export default function QuranMushafPage({
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showEditionPicker, setShowEditionPicker] = useState(false);
   const [showEditionPickerInFullscreen, setShowEditionPickerInFullscreen] = useState(false);
+  // Clean reading mode: hides every fullscreen control (top buttons,
+  // chips, side strips, verse strip) so only the page shows. Word taps
+  // and swipes keep working; tapping the page margin restores controls.
+  const [cleanMode, setCleanMode] = useState(false);
+  const [showCleanHint, setShowCleanHint] = useState(false);
+  useEffect(() => {
+    if (!cleanMode) return;
+    setShowCleanHint(true);
+    const t = setTimeout(() => setShowCleanHint(false), 4000);
+    return () => clearTimeout(t);
+  }, [cleanMode]);
   const [showIndex, setShowIndex] = useState(false);
   const [indexTab, setIndexTab] = useState<IndexTab>('surah');
   const [pageInput, setPageInput] = useState('');
@@ -361,9 +372,31 @@ export default function QuranMushafPage({
     ? surahVerses.filter((v) => String(v.ayah_no) === ayahFilter.trim())
     : surahVerses;
 
+  // Best-effort native fullscreen (iPad Safari supports it for elements
+  // in recent versions): removes Safari's own chrome entirely so the page
+  // truly fills the screen. Silently ignored where unsupported, where the
+  // app-level fullscreen view below still applies.
+  const requestNativeFullscreen = () => {
+    try {
+      const el = document.documentElement as any;
+      const p = el.requestFullscreen?.() || el.webkitRequestFullscreen?.();
+      (p as any)?.catch?.(() => {});
+    } catch {}
+  };
+  const exitFullscreenView = () => {
+    try {
+      const d = document as any;
+      const p = d.exitFullscreen?.() || d.webkitExitFullscreen?.();
+      (p as any)?.catch?.(() => {});
+    } catch {}
+    setShowFullscreen(false);
+    setCleanMode(false);
+  };
+
   const openFullscreen = () => {
     setShowRatelIntro(true);
     setShowFullscreen(true);
+    requestNativeFullscreen();
     setTimeout(() => setShowRatelIntro(false), 3000);
   };
 
@@ -853,7 +886,11 @@ export default function QuranMushafPage({
       {/* Fullscreen viewer with intro */}
       {showFullscreen && (
         <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none overflow-hidden overscroll-contain"
-          onClick={() => !showRatelIntro && !showEditionPickerInFullscreen && !selectedVerse && setShowFullscreen(false)}>
+          onClick={() => {
+            // In clean mode, taps on the black bands restore controls.
+            if (cleanMode) { setCleanMode(false); return; }
+            if (!showRatelIntro && !showEditionPickerInFullscreen && !selectedVerse) exitFullscreenView();
+          }}>
 
           {showRatelIntro && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-900 to-emerald-950 transition-opacity duration-1000">
@@ -873,14 +910,29 @@ export default function QuranMushafPage({
             </div>
           )}
 
-          {!showRatelIntro && (
-            <button onClick={(e) => { e.stopPropagation(); setShowFullscreen(false); }}
+          {!showRatelIntro && !cleanMode && (
+            <button onClick={(e) => { e.stopPropagation(); exitFullscreenView(); }}
               className="absolute top-4 right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
               <X className="w-7 h-7" />
             </button>
           )}
 
-          {!showRatelIntro && (
+          {/* Clean reading: hide every control, keep only the page. */}
+          {!showRatelIntro && !showEditionPickerInFullscreen && !cleanMode && (
+            <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(false); setCleanMode(true); requestNativeFullscreen(); }}
+              title="قراءة نظيفة — إخفاء كل الأدوات"
+              className="absolute top-4 right-20 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
+              <Maximize2 className="w-7 h-7" />
+            </button>
+          )}
+
+          {cleanMode && showCleanHint && !selectedVerse && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/70 text-white text-sm font-semibold rounded-full pointer-events-none whitespace-nowrap">
+              اضغط على هامش الصفحة لإظهار الأدوات
+            </div>
+          )}
+
+          {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
               className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg">
               <Layers className="w-5 h-5" /> {edition.name}
@@ -888,7 +940,7 @@ export default function QuranMushafPage({
           )}
 
           {/* Juz / Hizb info in fullscreen */}
-          {!showRatelIntro && (
+          {!showRatelIntro && !cleanMode && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-none">
               <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">{currentJuz.name}</span>
               <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">الحزب {currentHizb.number}</span>
@@ -904,15 +956,16 @@ export default function QuranMushafPage({
                 // coordinates are measured against this box (fractions
                 // are unchanged by uniform scaling).
                 <div ref={pageWrapRef}
-                  // Fullscreen fill + no-dance: svh (not dvh) so Safari's
-                  // address-bar show/hide can never resize the page (the
-                  // second cause of the left/right shifting); the 1.15 zoom
+                  // Fullscreen fill + no-dance: vh (the large viewport,
+                  // stable when Safari's chrome shows/hides) so the page
+                  // fills the whole layout viewport — svh left bands whose
+                  // size changed with the chrome state; the 1.15 zoom
                   // applies only to the Madinah edition, whose dark outer
                   // margins were measured (text block 11-88% / 13-87%) — it
                   // zooms past those margins so the decorated frame nearly
                   // touches the screen edges, with no text cropped; other
                   // editions keep exact fit. aspect-ratio reserves the box.
-                  className={`relative h-[100svh] w-auto max-w-[100vw]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
+                  className={`relative h-screen w-auto max-w-[100vw]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
                   // Madinah aspect is frozen at 0.63: updating it from
                   // every page's natural size let the box width jitter
                   // from page to page (magnified by the 1.15 zoom), which
@@ -924,6 +977,14 @@ export default function QuranMushafPage({
                     // Word tap (click, not touchend — see touchend note).
                     // Clicks right after a swipe are ignored via lastSwipeAt.
                     if (showRatelIntro || showEditionPickerInFullscreen || selectedVerse) return;
+                    if (cleanMode) {
+                      // Margin/frame taps restore the controls; word taps
+                      // still open the ayah popup.
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const px = ((e.clientX - rect.left) / rect.width) * 100;
+                      const py = ((e.clientY - rect.top) / rect.height) * 100;
+                      if (px < 11 || px > 88 || py < 13 || py > 87) { setCleanMode(false); return; }
+                    }
                     if (Date.now() - lastSwipeAt.current < 500) return;
                     void handleWordTap(e.clientX, e.clientY);
                   }}
@@ -953,6 +1014,9 @@ export default function QuranMushafPage({
                 </div>
               )}
 
+              {/* In clean mode the strips and verse strip below are hidden;
+                  the page wrapper and the ayah popup stay visible. */}
+              {!cleanMode && (<>
               {/* Page-turn zones: full-height side strips with a large,
                   always-visible arrow + label, so the target is easy to
                   find and to press anywhere along the edge. The strip on
@@ -967,11 +1031,11 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      // Same height as the main page (100svh) and centered
+                      // Same height as the main page (100vh) and centered
                       // in the strip: the old h-full (container height) ran
                       // longer than the page. No zoom here — scaling about
                       // the image's own center would shift the visible slice.
-                      className="absolute top-1/2 -translate-y-1/2 left-0 h-[100svh] w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
+                      className="absolute top-1/2 -translate-y-1/2 left-0 h-screen w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -988,9 +1052,9 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      // Same height as the main page (100svh) and centered
+                      // Same height as the main page (100vh) and centered
                       // in the strip — see the other sliver's note.
-                      className="absolute top-1/2 -translate-y-1/2 right-0 h-[100svh] w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
+                      className="absolute top-1/2 -translate-y-1/2 right-0 h-screen w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -1019,6 +1083,7 @@ export default function QuranMushafPage({
                   </div>
                 </div>
               </div>
+              </>)}
 
               {/* Ayah popup: links, then irab, then tafsir — in that order */}
               {selectedVerse && (
