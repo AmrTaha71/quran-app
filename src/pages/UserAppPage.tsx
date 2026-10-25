@@ -365,7 +365,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     placeholder={t('search')}
                     className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={toggleVoiceSearch}
-                    title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي — انطق ٣ كلمات على الأقل'}
+                    title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
                     className={`absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full transition-smooth ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:bg-gray-200'}`}>
                     <Mic className="w-5 h-5" />
                   </button>
