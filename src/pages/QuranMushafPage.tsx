@@ -555,10 +555,13 @@ export default function QuranMushafPage({
     if (cached) { setPageWordBoxes(cached); return; }
     let cancelled = false;
     const file = String(currentPage).padStart(3, '0');
-    // jsdelivr first, raw.githubusercontent as fallback — same file.
+    // raw.githubusercontent FIRST: jsdelivr cannot serve this repo at
+    // all — it refuses packages over 50 MB ("Package size exceeded the
+    // configured limit of 50 MB"), so jsdelivr stays only as a fallback
+    // in case the repo ever shrinks below that limit. Same file either way.
     const urls = [
-      `https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@master/src/qurancoor/data/page-${file}.json`,
       `https://raw.githubusercontent.com/bodoorzahera/Quran-coordinate/master/src/qurancoor/data/page-${file}.json`,
+      `https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@master/src/qurancoor/data/page-${file}.json`,
     ];
     const loadCoords = async (i: number): Promise<any | null> => {
       if (i >= urls.length) return null;
