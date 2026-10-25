@@ -1191,8 +1191,8 @@ export default function QuranMushafPage({
                 // no-dance: vh (the large viewport, stable when Safari's
                 // chrome shows/hides) so the page fills the whole layout
                 // viewport — svh left bands whose size changed with the
-                // chrome state. The Madinah zoom is a LAYOUT height
-                // (115vh, cropped by the container), NOT a transform
+                // chrome state. The Madinah zoom is a LAYOUT size (115vh
+                // tall, cropped by the container), NOT a transform
                 // scale: a scaled layer re-rasterizes in Safari on every
                 // image swap, which read as dancing on page turns.
                 // Madinah paper-box normalization (see madinahNorm):
@@ -1201,9 +1201,24 @@ export default function QuranMushafPage({
                 // its paper box fills the wrapper width exactly — the
                 // scan framing can no longer shift the page between
                 // turns. Other editions keep exact fit + adaptive aspect.
+                // CRITICAL for tap precision: the wrapper aspect must
+                // actually HOLD on every screen. A definite height
+                // (h-[115vh]) plus max-w-[100vw] breaks it on narrow
+                // screens — the cap shrinks the width while the height
+                // stays, so the rendered aspect is no longer the style
+                // aspect, object-contain letterboxes the image inside
+                // its box, and every tap maps up to ~3 image-% points
+                // off vertically (measured: 60% of taps correct, 14%
+                // wrong ayah, 26% missed on iPad portrait). So the
+                // Madinah size is width-driven via min(): width =
+                // min(100vw, 115vh x aspect), height derived from the
+                // aspect — the aspect holds on all screens, contain
+                // becomes a no-op, and the tap math is exact.
                 <div ref={pageWrapRef}
-                  className={`relative ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
-                  style={{ aspectRatio: String(edition.id === 'madinah' ? MADINAH_NORMALIZED_ASPECT : imgAspect) }}
+                  className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
+                  style={edition.id === 'madinah'
+                    ? { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh)` }
+                    : { aspectRatio: String(imgAspect) }}
                   onClick={(e) => {
                     e.stopPropagation();
                     // Word tap (click, not touchend — see touchend note).

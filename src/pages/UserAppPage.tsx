@@ -44,9 +44,12 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searchHint, setSearchHint] = useState('');
   // Voice search: browser SpeechRecognition (ar-SA), same pattern as
-  // LinkModal. The transcript is written into `search`, so the existing
-  // 3-word rule and the diacritic-clean match (ayah_text_clean) apply
-  // to voice exactly as they do to typed text — no separate search path.
+  // LinkModal. The transcript is written into `search`, so the same
+  // search path and diacritic-clean match (ayah_text_clean) apply to
+  // voice exactly as they do to typed text — no separate search path.
+  // Search works from a single word up (no minimum word count), and
+  // when a search term is present the whole Mushaf is searched, not
+  // just the ayahs that already have links.
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
   const voiceFinalRef = useRef('');
@@ -69,12 +72,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     debounceTimer.current = setTimeout(() => {
       const cleanText = trimmed.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
       const words = cleanText.split(/\s+/).filter((w) => w.length > 0);
-      if (words.length < 3) {
-        setSearchHint(`اكتب ٣ كلمات على الأقل (${words.length}/٣)`);
-        setDebouncedSearch('');
-      } else {
+      // Any real word searches (the old 3-word minimum blocked 1-2 word
+      // searches and short voice phrases outright, which read as
+      // "search doesn't work"). Input that cleans to nothing (marks
+      // only) simply does not search.
+      if (words.length >= 1) {
         setSearchHint('');
         setDebouncedSearch(trimmed);
+      } else {
+        setSearchHint('');
+        setDebouncedSearch('');
       }
     }, 500);
 
@@ -125,7 +132,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     }
     voiceFinalRef.current = '';
     voiceInterimRef.current = '';
-    setSearchHint('جارٍ الاستماع… انطق ٣ كلمات على الأقل');
+    setSearchHint('جارٍ الاستماع…');
     setIsListening(true);
     try { recognitionRef.current.start(); } catch { setIsListening(false); }
   };
@@ -159,8 +166,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
       let query = supabase.from('quran_verses').select('*', { count: 'exact' }).in('id', verseIds);
       if (debouncedSearch) {
-        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
-        query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${debouncedSearch}%`);
+        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').replace(/[%(),]/g, '').trim();
+        const safeName = debouncedSearch.replace(/[%(),]/g, '').trim();
+        query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${safeName}%`);
       }
       if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
       query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
@@ -168,31 +176,52 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       setVerses(data || []);
       setTotalCount(count || 0);
     } else {
-      let query = supabase.from('quran_verses').select('*', { count: 'exact' }).eq('has_links', true);
+      // Searching searches the whole Mushaf: the has_links browse
+      // filter applies only when there is no search term, otherwise
+      // ayahs without links could never be found by search.
+      let query = supabase.from('quran_verses').select('*', { count: 'exact' });
+      if (!debouncedSearch) query = query.eq('has_links', true);
+      const cleanWords: string[] = [];
       if (debouncedSearch) {
-        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
-        query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${debouncedSearch}%`);
+        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').replace(/[%(),]/g, '').trim();
+        const safeName = debouncedSearch.replace(/[%(),]/g, '').trim();
+        query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${safeName}%`);
+        cleanWords.push(...cleanSearch.split(/\s+/).filter((w) => w.length > 0));
       }
       if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
 
+      let linkVerseIds: number[] | null = null;
       if (linkTypeFilter) {
         const { data: linkData } = await supabase
           .from('ayah_links')
           .select('verse_id')
           .contains('link_types', [linkTypeFilter])
           .eq('status', 'approved');
-        const verseIds = (linkData || []).map((d) => d.verse_id);
-        if (verseIds.length === 0) {
+        linkVerseIds = (linkData || []).map((d) => d.verse_id);
+        if (linkVerseIds.length === 0) {
           setVerses([]);
           setTotalCount(0);
           setLoading(false);
           return;
         }
-        query = query.in('id', verseIds);
+        query = query.in('id', linkVerseIds);
       }
 
       query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
-      const { data, count } = await query;
+      let { data, count } = await query;
+      // Fallback: a multi-word phrase that is not contiguous in any
+      // ayah still finds ayahs containing ALL the words (any order).
+      // Runs only when the phrase search found nothing.
+      if ((!data || data.length === 0) && cleanWords.length >= 2) {
+        let q2 = supabase.from('quran_verses').select('*', { count: 'exact' });
+        if (surahFilter) q2 = q2.eq('surah_no', parseInt(surahFilter));
+        if (linkVerseIds) q2 = q2.in('id', linkVerseIds);
+        for (const w of cleanWords) q2 = q2.ilike('ayah_text_clean', `%${w}%`);
+        q2 = q2.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
+        const r2 = await q2;
+        data = r2.data;
+        count = r2.count;
+      }
       setVerses(data || []);
       setTotalCount(count || 0);
     }
@@ -333,7 +362,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input type="text" value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                    placeholder={t('search') + ' (٣ كلمات على الأقل)'}
+                    placeholder={t('search')}
                     className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={toggleVoiceSearch}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي — انطق ٣ كلمات على الأقل'}
