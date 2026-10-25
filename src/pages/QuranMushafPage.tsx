@@ -406,9 +406,11 @@ export default function QuranMushafPage({
               ) : (
                 <img key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)}
                   alt={`صفحة ${currentPage} — ${edition.name}`}
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
                   onLoad={() => setImageLoading(false)}
                   onError={() => { setImageError(true); setImageLoading(false); }}
-                  className="max-w-full h-auto rounded-lg shadow-md transition-transform duration-300 origin-top"
+                  className="max-w-full h-auto rounded-lg shadow-md transition-transform duration-300 origin-top [-webkit-touch-callout:none]"
                   style={{ transform: `scale(${zoom})` }} loading="eager" />
               )}
             </div>
@@ -693,7 +695,7 @@ export default function QuranMushafPage({
             <>
               {!imageError ? (
                 <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
-                  className="max-h-[100vh] max-w-[100vw] object-contain touch-none"
+                  className="max-h-[100vh] max-w-[100vw] object-contain touch-none [-webkit-touch-callout:none]"
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
@@ -724,7 +726,7 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      className="absolute top-0 left-0 h-full w-auto max-w-none opacity-70" />
+                      className="absolute top-0 left-0 h-full w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -741,7 +743,7 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      className="absolute top-0 right-0 h-full w-auto max-w-none opacity-70" />
+                      className="absolute top-0 right-0 h-full w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
