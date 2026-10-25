@@ -727,7 +727,19 @@ export default function QuranMushafPage({
       ((clientX - rect.left) / rect.width) * 100,
       ((clientY - rect.top) / rect.height) * 100,
     );
-    let box = boxes.find((b) => px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height);
+    // Smallest containing box wins, not the first: the source data has
+    // a few word boxes that overlap their neighbour (e.g. page 371
+    // words 26:109:5/6, page 500 words 45:17:14/15, where the later
+    // word's box sits almost entirely inside the earlier word's) —
+    // first-match picked the neighbour, smallest-area picks the word
+    // actually tapped. Non-overlapping taps are unaffected (only one
+    // box contains the point).
+    let box: WordBox | null = null;
+    for (const b of boxes) {
+      if (px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height) {
+        if (!box || b.width * b.height < box.width * box.height) box = b;
+      }
+    }
     // Forgiving fallback: a tap in a small gap between words still opens
     // the nearest word — but only inside the text block, so border taps
     // still open nothing. Vertical distance counts double: a wrong line
@@ -1353,7 +1365,7 @@ export default function QuranMushafPage({
               </button>
 
               {/* Verse selector — only the ayahs printed on this page */}
-              <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-4 pointer-events-auto px-4"
+              <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(1rem_+_env(safe-area-inset-bottom))] pointer-events-auto px-4"
                 onClick={(e) => e.stopPropagation()}>
                 <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح المتشابهات والروابط والإعراب والتفسير</p>
                 <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">

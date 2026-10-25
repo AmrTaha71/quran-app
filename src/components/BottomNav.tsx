@@ -22,7 +22,7 @@ export default function BottomNav({
   return (
     <nav
       aria-label="التنقل الرئيسي"
-      className="fixed bottom-0 right-0 left-0 z-40 bg-white/95 backdrop-blur-md border-t border-emerald-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]"
+      className="fixed bottom-0 right-0 left-0 z-40 bg-white/95 backdrop-blur-md border-t border-emerald-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)] pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]"
     >
       <div className="max-w-5xl mx-auto flex">
         {items.map((item) => {
