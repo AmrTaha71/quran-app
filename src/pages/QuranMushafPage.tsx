@@ -434,8 +434,8 @@ export default function QuranMushafPage({
     const file = String(currentPage).padStart(3, '0');
     // jsdelivr first, raw.githubusercontent as fallback — same file.
     const urls = [
-      `https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@main/src/qurancoor/data/page-${file}.json`,
-      `https://raw.githubusercontent.com/bodoorzahera/Quran-coordinate/main/src/qurancoor/data/page-${file}.json`,
+      `https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@master/src/qurancoor/data/page-${file}.json`,
+      `https://raw.githubusercontent.com/bodoorzahera/Quran-coordinate/master/src/qurancoor/data/page-${file}.json`,
     ];
     const loadCoords = async (i: number): Promise<any | null> => {
       if (i >= urls.length) return null;
