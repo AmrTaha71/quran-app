@@ -153,7 +153,7 @@ export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => 
       <footer className="py-10 px-4 border-t border-emerald-100 bg-white">
         <div className="max-w-6xl mx-auto text-center text-base text-accent-500">
           <p>{t('appName')} © 2026</p>
-          <p className="mt-2 text-sm text-emerald-600 font-semibold">معك في كل آية، حتى تُتمّ حفظ كتاب الله</p>
+          <p className="mt-2 text-sm text-emerald-600 font-semibold">معك في كل آية، حتى نُتمّ حفظ كتاب الله</p>
         </div>
       </footer>
     </div>

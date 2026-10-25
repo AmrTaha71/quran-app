@@ -31,14 +31,21 @@ function AppContent() {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      // Returning user with a valid session and no explicit deep link
+      // goes straight to لوحتي — no landing page, no login taps.
+      if (data.session && !window.location.hash.replace('#', '').replace('/', '')) {
+        setRoute('app');
+      }
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (event === 'SIGNED_IN' && session) {
         setAuthJustSucceeded(true);
-        setRoute('mushaf');
-        setTimeout(() => setAuthJustSucceeded(false), 10500);
+        // The app opens on لوحتي after login (not the Mushaf page):
+        // it is lighter to load, and the Mushaf opens from there.
+        setRoute('app');
+        setTimeout(() => setAuthJustSucceeded(false), 2500);
       }
     });
 
@@ -71,9 +78,10 @@ function AppContent() {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
-  // Splash after successful auth — 10 seconds
+  // Short brand flash after successful auth (was 10 seconds of
+  // forced waiting — the main cause of the slow startup feeling).
   if (authJustSucceeded) {
-    return <SplashScreen onFinish={() => setAuthJustSucceeded(false)} duration={10000} message="معك في كل آية، حتى تُتمّ حفظ كتاب الله" />;
+    return <SplashScreen onFinish={() => setAuthJustSucceeded(false)} duration={2000} message="معك في كل آية، حتى نُتمّ حفظ كتاب الله" />;
   }
 
   if (route === 'auth') {

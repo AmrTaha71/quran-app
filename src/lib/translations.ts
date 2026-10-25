@@ -69,7 +69,7 @@ type TR = Record<Lang, Record<TK, string>>;
 
 export const T: TR = {
   ar: {
-    appName: 'روابط الذكر الحكيم', appTagline: 'معك في كل آية، حتى تُتمّ حفظ كتاب الله',
+    appName: 'روابط الذكر الحكيم', appTagline: 'معك في كل آية، حتى نُتمّ حفظ كتاب الله',
     login: 'تسجيل الدخول', signup: 'إنشاء حساب', logout: 'خروج', email: 'البريد الإلكتروني',
     password: 'كلمة المرور', username: 'اسم المستخدم', phone: 'رقم الهاتف',
     birthDate: 'تاريخ الميلاد', gender: 'الجنس', male: 'ذكر', female: 'أنثى',

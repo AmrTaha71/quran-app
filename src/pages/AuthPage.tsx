@@ -80,7 +80,12 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
     }
 
     setLoading(true);
-    const signupEmail = username.includes('@') ? username : `${username}@quran-app.user`;
+    // The real email field, when filled, is the account email: the old
+    // username-derived address (username@quran-app.user) is not a real
+    // mailbox, so Supabase rejected it and signup could never succeed
+    // for a plain username. Login already accepts a real email typed
+    // in the username field, so the two now match.
+    const signupEmail = email.trim() || (username.includes('@') ? username : `${username}@quran-app.user`);
 
     const { data, error } = await supabase.auth.signUp({ email: signupEmail, password });
     if (error) {

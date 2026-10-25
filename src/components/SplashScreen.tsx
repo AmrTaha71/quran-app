@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 
-export default function SplashScreen({ onFinish, duration = 5000, message }: { onFinish: () => void; duration?: number; message?: string }) {
+export default function SplashScreen({ onFinish, duration = 2000, message }: { onFinish: () => void; duration?: number; message?: string }) {
   const [progress, setProgress] = useState(0);
   const [fadeOut, setFadeOut] = useState(false);
 
@@ -40,7 +40,7 @@ export default function SplashScreen({ onFinish, duration = 5000, message }: { o
         </div>
         <h1 className="text-3xl font-bold text-white mb-3">روابط الذكر الحكيم</h1>
         <p className="text-emerald-200 text-base text-center px-8 leading-relaxed">
-          {message || 'معك في كل آية، حتى تُتمّ حفظ كتاب الله'}
+          {message || 'معك في كل آية، حتى نُتمّ حفظ كتاب الله'}
         </p>
       </div>
 

@@ -1248,7 +1248,11 @@ export default function QuranMushafPage({
                     onLoad={(e) => {
                       const im = e.currentTarget;
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
-                    }} />
+                    }}
+                    // Without this, a failed fullscreen image was a
+                    // silent blank page: imageError drives the error
+                    // block with its retry button, in both views.
+                    onError={() => setImageError(true)} />
                   {tapFlash && (() => {
                     const f = imageBoxToContainer(tapFlash);
                     return (
