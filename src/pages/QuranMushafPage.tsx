@@ -667,27 +667,40 @@ export default function QuranMushafPage({
   // to ~10% of the image width on turns. Mapping each page's measured
   // paper box onto the fixed wrapper pins every paper's left/right
   // edges to identical container coordinates: the paper always fills
-  // the wrapper width exactly, centered vertically, so nothing can
-  // shift left/right between pages. Pure % math (no DOM measurement):
-  // the wrapper aspect is the minimum paper aspect, so no paper is
-  // ever cropped — wider papers just get centered vertical bands.
-  // Taps and the tap flash go through the same mapping, so word taps
-  // stay calibrated on the normalized image. Other editions are
-  // untouched (their scans never danced).
+  // the wrapper width exactly. Vertically the paper is TOP-pinned
+  // (not centered): centering let the first line drift ~1.3% of the
+  // wrapper height between pages whose paper heights differ, while
+  // top-pinning holds the first line steady — any band sits below
+  // the paper, and a taller-than-wrapper paper only loses its bottom
+  // margin, never text. Pure % math (no DOM measurement). Taps and
+  // the tap flash go through the same mapping, so word taps stay
+  // calibrated on the normalized image. Other editions are untouched
+  // (their scans never danced).
   const MADINAH_IMG_ASPECT = 0.7070; // sufone png-d150 natural 1240x1754
-  const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
-  const madinahNorm = (() => {
-    if (!madinahPaperBox) return null;
-    const [pl, pt, pr, pb] = madinahPaperBox;
+  const normForPaperBox = (box: number[] | undefined) => {
+    if (!box) return null;
+    const [pl, pt, pr, pb] = box;
     const pw = (pr - pl) / 100;
     const ph = (pb - pt) / 100;
     if (pw <= 0 || ph <= 0) return null;
     const imgW = 100 / pw; // % of wrapper width
     const imgH = (MADINAH_NORMALIZED_ASPECT / (pw * MADINAH_IMG_ASPECT)) * 100; // % of wrapper height
     const imgL = -pl / pw; // % of wrapper width
-    const imgT = (100 - imgH * ph) / 2 - imgH * (pt / 100); // % of wrapper height
-    return { pl, pt, pw, ph, imgW, imgH, imgL, imgT };
-  })();
+    // Top-pinned: the paper's top edge sits at the wrapper's top edge.
+    const imgT = -imgH * (pt / 100); // % of wrapper height
+    return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
+  };
+  const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
+  const madinahNorm = normForPaperBox(madinahPaperBox);
+  // Same normalization for the FACING page (the peek sliver): the old
+  // sliver rendered the facing image unnormalized at 115vh, so its
+  // paper jumped against the pinned main page on every turn. The
+  // sliver below pins the facing page's SPINE edge (its paper edge,
+  // not the raw image edge) at the window's edge, at the main page's
+  // scale and vertical alignment, so the peek stays stable too.
+  const facingNorm = edition.id === 'madinah' && hasFacingPage
+    ? normForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1])
+    : null;
   // Container % -> full-image % (identity when not normalized).
   const containerToImagePercent = (fx: number, fy: number): [number, number] => {
     if (!madinahNorm) return [fx, fy];
@@ -1141,7 +1154,7 @@ export default function QuranMushafPage({
                 <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
                   اقرأ وارتق، ورتل كما كنت ترتل في الدنيا، فإن منزلتك عند آخر آية تقرؤها
                 </h2>
-                <p className="text-emerald-200 text-base">اقرأ بتأنٍّ وارتقِ في درجات الحفظ</p>
+
               </div>
             </div>
           )}
@@ -1289,11 +1302,19 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      // Same height as the main page (100vh) and centered
-                      // in the strip: the old h-full (container height) ran
-                      // longer than the page. No zoom here — scaling about
-                      // the image's own center would shift the visible slice.
-                      className={`absolute top-1/2 -translate-y-1/2 left-0 ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`} />
+                      // Madinah: a window into the facing page at the
+                      // main page's scale and vertical alignment, with
+                      // the facing paper's spine edge (left edge) pinned
+                      // to the window's edge — so the peek no longer
+                      // jumps against the pinned main page. Other
+                      // editions keep the old centered full-height sliver.
+                      className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 left-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`}
+                      style={facingNorm ? {
+                        width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
+                        height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        left: `calc(0px - ${(facingNorm.pl / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
+                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(-facingNorm.imgT / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                      } : undefined} />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -1310,9 +1331,17 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      // Same height as the main page (100vh) and centered
-                      // in the strip — see the other sliver's note.
-                      className={`absolute top-1/2 -translate-y-1/2 right-0 ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`} />
+                      // Madinah: same normalized peek as the other
+                      // sliver, but the facing page's spine edge here
+                      // is its RIGHT edge, pinned to the window's right
+                      // edge. See the other sliver's note.
+                      className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 right-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`}
+                      style={facingNorm ? {
+                        width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
+                        height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        left: `calc(32px - ${(facingNorm.pr / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
+                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(-facingNorm.imgT / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                      } : undefined} />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">

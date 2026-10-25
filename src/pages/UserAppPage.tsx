@@ -176,20 +176,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       setVerses(data || []);
       setTotalCount(count || 0);
     } else {
-      // Searching searches the whole Mushaf: the has_links browse
-      // filter applies only when there is no search term, otherwise
-      // ayahs without links could never be found by search.
-      let query = supabase.from('quran_verses').select('*', { count: 'exact' });
-      if (!debouncedSearch) query = query.eq('has_links', true);
-      const cleanWords: string[] = [];
-      if (debouncedSearch) {
-        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').replace(/[%(),]/g, '').trim();
-        const safeName = debouncedSearch.replace(/[%(),]/g, '').trim();
-        query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${safeName}%`);
-        cleanWords.push(...cleanSearch.split(/\s+/).filter((w) => w.length > 0));
-      }
-      if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
-
+      // Link-type filter narrows every path below (browse and search).
       let linkVerseIds: number[] | null = null;
       if (linkTypeFilter) {
         const { data: linkData } = await supabase
@@ -204,24 +191,69 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           setLoading(false);
           return;
         }
-        query = query.in('id', linkVerseIds);
       }
 
-      query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
-      let { data, count } = await query;
-      // Fallback: a multi-word phrase that is not contiguous in any
-      // ayah still finds ayahs containing ALL the words (any order).
-      // Runs only when the phrase search found nothing.
-      if ((!data || data.length === 0) && cleanWords.length >= 2) {
-        let q2 = supabase.from('quran_verses').select('*', { count: 'exact' });
-        if (surahFilter) q2 = q2.eq('surah_no', parseInt(surahFilter));
-        if (linkVerseIds) q2 = q2.in('id', linkVerseIds);
-        for (const w of cleanWords) q2 = q2.ilike('ayah_text_clean', `%${w}%`);
-        q2 = q2.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
-        const r2 = await q2;
-        data = r2.data;
-        count = r2.count;
+      if (debouncedSearch) {
+        // Search across ayah text AND link content, by words, by
+        // filter type, or mixed (type + words AND together): the two
+        // sources live in different tables, so match verse ids in each
+        // and paginate the union. Searching searches the whole Mushaf
+        // (no has_links restriction), and the surah filter applies to
+        // both sources. A multi-word phrase that is not contiguous
+        // anywhere falls back to ayahs/links containing ALL the words.
+        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').replace(/[%(),]/g, '').trim();
+        const safeName = debouncedSearch.replace(/[%(),]/g, '').trim();
+        const cleanWords = cleanSearch.split(/\s+/).filter((w) => w.length > 0);
+        const filterLinkIdsBySurah = async (ids: number[]) => {
+          if (!surahFilter || ids.length === 0) return ids;
+          const { data: sRows } = await supabase.from('quran_verses').select('id').in('id', ids).eq('surah_no', parseInt(surahFilter));
+          const ok = new Set((sRows || []).map((r) => r.id));
+          return ids.filter((id) => ok.has(id));
+        };
+        let aq = supabase.from('quran_verses').select('id')
+          .or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${safeName}%`);
+        if (surahFilter) aq = aq.eq('surah_no', parseInt(surahFilter));
+        if (linkVerseIds) aq = aq.in('id', linkVerseIds);
+        const { data: aRows } = await aq;
+        let lq = supabase.from('ayah_links').select('verse_id').eq('status', 'approved')
+          .or(`link_content.ilike.%${cleanSearch}%,link_title.ilike.%${cleanSearch}%,original_transcript.ilike.%${cleanSearch}%`);
+        if (linkTypeFilter) lq = lq.contains('link_types', [linkTypeFilter]);
+        const { data: lRows } = await lq;
+        const lIds = await filterLinkIdsBySurah((lRows || []).map((r) => r.verse_id));
+        let unionIds = [...new Set([...(aRows || []).map((r) => r.id), ...lIds])].sort((a, b) => a - b);
+        if (unionIds.length === 0 && cleanWords.length >= 2) {
+          let q2 = supabase.from('quran_verses').select('id');
+          if (surahFilter) q2 = q2.eq('surah_no', parseInt(surahFilter));
+          if (linkVerseIds) q2 = q2.in('id', linkVerseIds);
+          for (const w of cleanWords) q2 = q2.ilike('ayah_text_clean', `%${w}%`);
+          const { data: a2 } = await q2;
+          let lq2 = supabase.from('ayah_links').select('verse_id').eq('status', 'approved');
+          if (linkTypeFilter) lq2 = lq2.contains('link_types', [linkTypeFilter]);
+          for (const w of cleanWords) lq2 = lq2.ilike('link_content', `%${w}%`);
+          const { data: l2 } = await lq2;
+          const l2Ids = await filterLinkIdsBySurah((l2 || []).map((r) => r.verse_id));
+          unionIds = [...new Set([...(a2 || []).map((r) => r.id), ...l2Ids])].sort((a, b) => a - b);
+        }
+        if (unionIds.length === 0) {
+          setVerses([]);
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
+        const pageIds = unionIds.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+        const { data: pageData } = await supabase.from('quran_verses').select('*').in('id', pageIds).order('id', { ascending: true });
+        setVerses(pageData || []);
+        setTotalCount(unionIds.length);
+        setLoading(false);
+        return;
       }
+
+      // No search term: browse ayahs that have links, paginated.
+      let query = supabase.from('quran_verses').select('*', { count: 'exact' }).eq('has_links', true);
+      if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
+      if (linkVerseIds) query = query.in('id', linkVerseIds);
+      query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
+      const { data, count } = await query;
       setVerses(data || []);
       setTotalCount(count || 0);
     }
@@ -263,7 +295,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-              <BookOpen className="w-6 h-6 text-white" />
+              <BookOpen className="w-7 h-7 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-accent-800">{t('appName')}</h1>
@@ -273,8 +305,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="flex items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowLangMenu(!showLangMenu)}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
-                <Globe className="w-4 h-4" />
+                className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
+                <Globe className="w-5 h-5" />
                 {LANGUAGES.find((l) => l.code === lang)?.flag}
               </button>
               {showLangMenu && (
@@ -293,17 +325,17 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </div>
             {session && (
               <button onClick={async () => { await signOut(); onNavigate('home'); }}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth">
-                <LogOut className="w-4 h-4" />
+                className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth">
+                <LogOut className="w-5 h-5" />
               </button>
             )}
             <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition-smooth font-semibold border border-amber-200">
-              <BookMarked className="w-4 h-4" /> المصحف
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition-smooth font-semibold border border-amber-200">
+              <BookMarked className="w-5 h-5" /> المصحف
             </button>
             <button onClick={() => onNavigate('home')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
-              <Home className="w-4 h-4" />
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
+              <Home className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -357,7 +389,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <div className="px-4 pb-4 space-y-3 animate-slide-up border-t border-gray-50 pt-4">
               {/* Search */}
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">بحث في الآيات</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">بحث في الآيات والروابط</label>
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input type="text" value={search}
@@ -366,8 +398,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={toggleVoiceSearch}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
-                    className={`absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full transition-smooth ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:bg-gray-200'}`}>
-                    <Mic className="w-5 h-5" />
+                    className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
+                    <Mic className="w-6 h-6" />
                   </button>
                 </div>
                 {searchHint && (
