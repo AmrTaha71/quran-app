@@ -857,12 +857,18 @@ export default function QuranMushafPage({
                       ))}
                       {popupTab === 'irab' && (
                         <div className="space-y-3">
-                          <p className="text-base text-accent-600 leading-relaxed">إعراب الآية كلمة كلمة من Quranic Arabic Corpus — مشروع أكاديمي (جامعة ليدز) يبيّن لكل كلمة نوعها وحالتها الإعرابية وجذرها.</p>
+                          <p className="text-base text-accent-600 leading-relaxed">إعراب الآية كلمة كلمة من Quranic Arabic Corpus — مشروع أكاديمي (جامعة ليدز) يبيّن لكل كلمة نوعها وحالتها الإعرابية وجذرها، ويظهر هنا داخل النافذة قدام الصفحة من غير ما تسيب المصحف.</p>
+                          <iframe
+                            key={`${selectedVerse.surah_no}:${selectedVerse.ayah_no}`}
+                            src={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`}
+                            title={`إعراب ${selectedVerse.surah_name} — آية ${selectedVerse.ayah_no}`}
+                            className="w-full h-[55vh] rounded-lg border border-gray-200 bg-white"
+                          />
                           <a href={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`} target="_blank" rel="noreferrer"
-                            className="block text-center py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-lg transition-smooth">
-                            فتح إعراب {selectedVerse.surah_name} — آية {selectedVerse.ayah_no}
+                            className="block text-center text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+                            فتح الإعراب في صفحة مستقلة (اختياري)
                           </a>
-                          <p className="text-xs text-accent-400 leading-relaxed text-center">يفتح في صفحة جديدة. أما «الجدول في إعراب القرآن» للصافي فهو المرجع الورقي الكامل، ونصّه غير متاح كخدمة مجانية.</p>
+                          <p className="text-xs text-accent-400 leading-relaxed text-center">ملحوظة: صفحة Corpus قد تبدأ بالآية اللي قبلها — مرّر شوية لحد آية {selectedVerse.ayah_no}. أما «الجدول في إعراب القرآن» للصافي فهو المرجع الورقي الكامل، ونصّه غير متاح كخدمة مجانية.</p>
                         </div>
                       )}
                       {popupTab === 'tafsir' && (
