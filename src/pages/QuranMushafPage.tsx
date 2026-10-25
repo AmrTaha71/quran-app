@@ -114,9 +114,10 @@ export default function QuranMushafPage({
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
   const [loadingLinks, setLoadingLinks] = useState(false);
-  // Ayah popup tabs, in the order the user asked for: links, then irab,
-  // then tafsir (with a choice of three published tafsirs inside it).
-  const [popupTab, setPopupTab] = useState<'links' | 'irab' | 'tafsir'>('links');
+  // Ayah popup tabs, in the order the user asked for: mutashabihat,
+  // then links, then irab, then tafsir (with a choice of three
+  // published tafsirs inside it). Mutashabihat is the default tab.
+  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'tafsir'>('mutashabihat');
   const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
   const [tafsirText, setTafsirText] = useState<string | null>(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
@@ -268,6 +269,128 @@ export default function QuranMushafPage({
     loadTafsir(tafsirEdition, selectedVerse);
   }, [popupTab, tafsirEdition, selectedVerse, loadTafsir]);
 
+  // Mutashabihat (similar verses) tab: computed from the Quran text
+  // itself, not from a third-party list — no published open per-ayah
+  // mutashabihat API was verified (Quran.com has a related-verses
+  // endpoint but it is thematic relatedness, and its exact public route
+  // is undocumented; Tarteel's reviewed phrase data has no simple
+  // per-ayah API). The memorizer's definition is wording similarity, so:
+  // an ayah counts as mutashabih with the open ayah when they share a
+  // contiguous phrase of 3+ words. The full text comes from the app's
+  // own seeded quran_verses table (ayah_text_clean = diacritic-stripped,
+  // the same cleaning the search already uses), loaded once per session
+  // and indexed by word trigrams so each lookup stays fast.
+  type QuranTextRow = { id: number; surah_no: number; surah_name: string; ayah_no: number; ayah_text: string; ayah_text_clean: string | null };
+  type SimilarAyah = { verse: QuranTextRow; shared: string[]; run: number };
+  const cleanArabic = (t: string) => t.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
+  const wordsOf = (r: QuranTextRow) => (r.ayah_text_clean || cleanArabic(r.ayah_text)).split(/\s+/).filter((w) => w.length > 0);
+  const [mutashabihat, setMutashabihat] = useState<SimilarAyah[] | null>(null);
+  const [mutashabihatLoading, setMutashabihatLoading] = useState(false);
+  const [mutashabihatError, setMutashabihatError] = useState<string | null>(null);
+  const quranTextCache = useRef<QuranTextRow[] | null>(null);
+  const trigramIndex = useRef<Map<string, number[]> | null>(null);
+
+  const loadQuranText = useCallback(async (): Promise<QuranTextRow[] | null> => {
+    if (quranTextCache.current) return quranTextCache.current;
+    try {
+      const rows: QuranTextRow[] = [];
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase.from('quran_verses')
+          .select('id,surah_no,surah_name,ayah_no,ayah_text,ayah_text_clean')
+          .order('surah_no', { ascending: true }).order('ayah_no', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error || !data) throw new Error('fetch failed');
+        rows.push(...(data as QuranTextRow[]));
+        if (data.length < PAGE) break;
+      }
+      if (rows.length < 6000) throw new Error('incomplete');
+      const idx = new Map<string, number[]>();
+      rows.forEach((r, i) => {
+        const words = wordsOf(r);
+        for (let j = 0; j + 2 < words.length; j++) {
+          const key = `${words[j]} ${words[j + 1]} ${words[j + 2]}`;
+          const arr = idx.get(key);
+          if (arr) arr.push(i); else idx.set(key, [i]);
+        }
+      });
+      quranTextCache.current = rows;
+      trigramIndex.current = idx;
+      return rows;
+    } catch { return null; }
+  }, []);
+
+  const findSimilar = useCallback(async (verse: QuranVerse) => {
+    setMutashabihat(null);
+    setMutashabihatError(null);
+    setMutashabihatLoading(true);
+    const rows = await loadQuranText();
+    if (!rows || !trigramIndex.current) {
+      setMutashabihatError('تعذر تحميل نص القرآن للمقارنة — تحقق من الاتصال وحاول مجدداً');
+      setMutashabihatLoading(false);
+      return;
+    }
+    const target = rows.find((r) => r.surah_no === verse.surah_no && r.ayah_no === verse.ayah_no);
+    if (!target) {
+      setMutashabihatError('لا توجد بيانات نصية لهذه الآية');
+      setMutashabihatLoading(false);
+      return;
+    }
+    const tWords = wordsOf(target);
+    const cand = new Set<number>();
+    for (let j = 0; j + 2 < tWords.length; j++) {
+      const arr = trigramIndex.current.get(`${tWords[j]} ${tWords[j + 1]} ${tWords[j + 2]}`);
+      if (arr) for (const i of arr) cand.add(i);
+    }
+    const results: SimilarAyah[] = [];
+    for (const i of cand) {
+      const row = rows[i];
+      if (row.surah_no === verse.surah_no && row.ayah_no === verse.ayah_no) continue;
+      const cWords = wordsOf(row);
+      let best = 0; let bestStart = 0;
+      for (let a = 0; a < cWords.length; a++) {
+        for (let b = 0; b < tWords.length; b++) {
+          let len = 0;
+          while (a + len < cWords.length && b + len < tWords.length && cWords[a + len] === tWords[b + len]) len++;
+          if (len > best) { best = len; bestStart = a; }
+        }
+      }
+      if (best >= 3) results.push({ verse: row, shared: cWords.slice(bestStart, bestStart + best), run: best });
+    }
+    results.sort((x, y) => y.run - x.run || x.verse.surah_no - y.verse.surah_no || x.verse.ayah_no - y.verse.ayah_no);
+    setMutashabihat(results.slice(0, 12));
+    setMutashabihatLoading(false);
+  }, [loadQuranText]);
+
+  useEffect(() => {
+    if (popupTab !== 'mutashabihat' || !selectedVerse) return;
+    findSimilar(selectedVerse);
+  }, [popupTab, selectedVerse, findSimilar]);
+
+  // Jump from a similar ayah to that ayah's own popup, staying on the
+  // mutashabihat tab so similar verses can be compared by hopping.
+  const handleSimilarClick = (row: QuranTextRow) => {
+    const verse: QuranVerse = { id: row.id, surah_no: row.surah_no, surah_name: row.surah_name, ayah_no: row.ayah_no, ayah_text: row.ayah_text, has_links: false, links_count: 0, is_protected: false, created_at: '', updated_at: '' };
+    setSelectedVerse(verse);
+    setPopupTab('mutashabihat');
+    fetchVerseLinks(row.id);
+  };
+
+  // Render a similar ayah's display text with the shared phrase
+  // highlighted: display words are cleaned with the same diacritic
+  // strip as the stored clean text, so the match lines up.
+  const renderWithShared = (displayText: string, shared: string[]) => {
+    const dispWords = displayText.split(/\s+/).filter((w) => w.length > 0);
+    const cleaned = dispWords.map((w) => cleanArabic(w));
+    let start = -1;
+    for (let i = 0; i + shared.length <= cleaned.length; i++) {
+      if (shared.every((w, k) => cleaned[i + k] === w)) { start = i; break; }
+    }
+    return dispWords.map((w, i) => (start >= 0 && i >= start && i < start + shared.length
+      ? <mark key={i} className="bg-amber-200 rounded px-0.5">{w} </mark>
+      : <span key={i}>{w} </span>));
+  };
+
   useEffect(() => {
     setImageLoading(true);
     setImageError(false);
@@ -313,7 +436,7 @@ export default function QuranMushafPage({
     const verse = surahVerses.find((v) => v.ayah_no === pendingAyah);
     if (verse) {
       setSelectedVerse(verse);
-      setPopupTab('links');
+      setPopupTab('mutashabihat');
       fetchVerseLinks(verse.id);
       setPendingAyah(null);
     } else if (surahVerses.length > 0) {
@@ -406,7 +529,7 @@ export default function QuranMushafPage({
       return;
     }
     setSelectedVerse(verse);
-    setPopupTab('links');
+    setPopupTab('mutashabihat');
     fetchVerseLinks(verse.id);
   };
 
@@ -1073,7 +1196,7 @@ export default function QuranMushafPage({
               {/* Verse selector — only the ayahs printed on this page */}
               <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-4 pointer-events-auto px-4"
                 onClick={(e) => e.stopPropagation()}>
-                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح الروابط والإعراب والتفسير</p>
+                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح المتشابهات والروابط والإعراب والتفسير</p>
                 <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
                   <div className="flex gap-2">
                     {stripVerses.map((v) => (
@@ -1113,6 +1236,10 @@ export default function QuranMushafPage({
                     <div className="p-4 overflow-y-auto">
                       <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
                       <div className="flex gap-2 mb-4">
+                        <button onClick={() => setPopupTab('mutashabihat')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          المتشابهات
+                        </button>
                         <button onClick={() => setPopupTab('links')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'links' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           الروابط
@@ -1126,6 +1253,34 @@ export default function QuranMushafPage({
                           التفسير
                         </button>
                       </div>
+                      {popupTab === 'mutashabihat' && (mutashabihatLoading ? (
+                        <div className="flex items-center justify-center py-6">
+                          <div className="w-7 h-7 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+                        </div>
+                      ) : mutashabihatError ? (
+                        <div className="text-center py-6 bg-gray-50 rounded-lg">
+                          <p className="text-base text-accent-500 mb-3">{mutashabihatError}</p>
+                          <button onClick={() => selectedVerse && findSimilar(selectedVerse)}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                            إعادة المحاولة
+                          </button>
+                        </div>
+                      ) : mutashabihat && mutashabihat.length > 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-accent-400 leading-relaxed text-center">آيات تشترك مع هذه الآية في عبارة من ٣ كلمات فأكثر — محسوبة من نص المصحف نفسه، والعبارة المشتركة مظللة بالأصفر. اضغط أي آية لعرض متشابهاتها.</p>
+                          {mutashabihat.map((s) => (
+                            <button key={`${s.verse.surah_no}:${s.verse.ayah_no}`} onClick={() => handleSimilarClick(s.verse)}
+                              className="block w-full text-right bg-gray-50 hover:bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                              <p className="text-sm font-bold text-accent-700 mb-1">{s.verse.surah_name} — آية {s.verse.ayah_no} <span className="text-emerald-700 font-semibold">· {s.run} كلمات مشتركة</span></p>
+                              <p className="font-arabic text-lg text-accent-800 leading-loose">{renderWithShared(s.verse.ayah_text, s.shared)}</p>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 bg-gray-50 rounded-lg">
+                          <p className="text-base text-accent-400">لا توجد آيات تشترك مع هذه الآية في عبارة من ٣ كلمات فأكثر</p>
+                        </div>
+                      ))}
                       {popupTab === 'links' && (loadingLinks ? (
                         <div className="flex items-center justify-center py-6">
                           <div className="w-7 h-7 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
