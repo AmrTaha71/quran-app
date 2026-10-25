@@ -175,6 +175,16 @@ export default function QuranMushafPage({
     fetchPageVerses(currentPage);
   }, [currentPage, fetchPageVerses]);
 
+  // Preload the neighbouring pages so turning feels instant.
+  useEffect(() => {
+    for (const p of [currentPage - 1, currentPage + 1]) {
+      if (p >= 1 && p <= TOTAL_PAGES) {
+        const img = new Image();
+        img.src = edition.imageUrl(p);
+      }
+    }
+  }, [currentPage, edition]);
+
   // Remember the user's chosen edition and last page, and honour a
   // cross-page jump from لوحتي (stored as { surah, ayah }).
   useEffect(() => {
@@ -670,14 +680,14 @@ export default function QuranMushafPage({
 
           {!showRatelIntro && (
             <button onClick={(e) => { e.stopPropagation(); setShowFullscreen(false); }}
-              className="absolute top-4 right-4 p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg z-30 transition-smooth">
+              className="absolute top-4 right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
               <X className="w-7 h-7" />
             </button>
           )}
 
           {!showRatelIntro && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
-              className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg z-30 transition-smooth text-sm font-semibold">
+              className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg">
               <Layers className="w-5 h-5" /> {edition.name}
             </button>
           )}
@@ -685,9 +695,9 @@ export default function QuranMushafPage({
           {/* Juz / Hizb info in fullscreen */}
           {!showRatelIntro && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-none">
-              <span className="px-3 py-1.5 bg-white/10 backdrop-blur text-white text-xs font-semibold rounded-lg">{currentJuz.name}</span>
-              <span className="px-3 py-1.5 bg-white/10 backdrop-blur text-white text-xs font-semibold rounded-lg">الحزب {currentHizb.number}</span>
-              <span className="px-3 py-1.5 bg-white/10 backdrop-blur text-white text-xs font-semibold rounded-lg">سورة {currentSurahName}</span>
+              <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">{currentJuz.name}</span>
+              <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">الحزب {currentHizb.number}</span>
+              <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">سورة {currentSurahName}</span>
             </div>
           )}
 
@@ -695,7 +705,7 @@ export default function QuranMushafPage({
             <>
               {!imageError ? (
                 <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
-                  className="max-h-[100vh] max-w-[100vw] object-contain touch-none [-webkit-touch-callout:none]"
+                  className="h-[100dvh] w-auto max-w-[100vw] object-contain touch-none [-webkit-touch-callout:none]"
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
@@ -721,7 +731,7 @@ export default function QuranMushafPage({
                   the spread — while the main page itself stays fixed. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
                 aria-label="الصفحة السابقة"
-                className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-white/15 to-transparent disabled:opacity-20 group">
+                className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 group">
                 {!facingOnLeft && hasFacingPage && (
                   <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
@@ -730,15 +740,15 @@ export default function QuranMushafPage({
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
+                  <div className="p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
                     <ChevronRight className="w-10 h-10" />
                   </div>
-                  <span className="text-xs font-bold text-white/90 drop-shadow">السابق</span>
+                  <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded-full ring-1 ring-white/30 shadow">السابق</span>
                 </div>
               </button>
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
                 aria-label="الصفحة التالية"
-                className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-white/15 to-transparent disabled:opacity-20 group">
+                className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
                 {facingOnLeft && hasFacingPage && (
                   <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
@@ -747,23 +757,24 @@ export default function QuranMushafPage({
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
+                  <div className="p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
                     <ChevronLeft className="w-10 h-10" />
                   </div>
-                  <span className="text-xs font-bold text-white/90 drop-shadow">التالي</span>
+                  <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded-full ring-1 ring-white/30 shadow">التالي</span>
                 </div>
               </button>
 
               {/* Verse selector — show all verses */}
               <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-4 pointer-events-auto px-4"
                 onClick={(e) => e.stopPropagation()}>
-                <div className="bg-black/70 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
+                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">اضغط رقم الآية لفتح الروابط والإعراب والتفسير</p>
+                <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
                   <div className="flex gap-2">
                     {surahVerses.map((v) => (
                       <button key={v.id} onClick={() => handleVerseClick(v)}
                         className={`flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
-                          v.has_links ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50' : 'bg-white/10 text-white/70 hover:bg-white/20'
+                          v.has_links ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50' : 'bg-white/20 text-white hover:bg-white/30'
                         }`}>
                         {v.ayah_no}
                       </button>
