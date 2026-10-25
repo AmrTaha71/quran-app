@@ -8,6 +8,7 @@ import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
+import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -269,17 +270,20 @@ export default function QuranMushafPage({
     loadTafsir(tafsirEdition, selectedVerse);
   }, [popupTab, tafsirEdition, selectedVerse, loadTafsir]);
 
-  // Mutashabihat (similar verses) tab: computed from the Quran text
-  // itself, not from a third-party list — no published open per-ayah
-  // mutashabihat API was verified (Quran.com has a related-verses
-  // endpoint but it is thematic relatedness, and its exact public route
-  // is undocumented; Tarteel's reviewed phrase data has no simple
-  // per-ayah API). The memorizer's definition is wording similarity, so:
-  // an ayah counts as mutashabih with the open ayah when they share a
-  // contiguous phrase of 3+ words. The full text comes from the app's
-  // own seeded quran_verses table (ayah_text_clean = diacritic-stripped,
-  // the same cleaning the search already uses), loaded once per session
-  // and indexed by word trigrams so each lookup stays fast.
+  // Mutashabihat (similar verses) tab: published reviewed phrase data
+  // FIRST, computed detection as fallback. The published source is
+  // Tarteel's Quranic Universal Library (QUL) "Mutashabihat ul Quran"
+  // dataset (phrases.json + phrase_verses.json, bundled under
+  // public/mutashabihat/ so the popup reads them same-origin, in-window;
+  // ranges are 0-based inclusive token ranges of the raw Hafs text).
+  // Quran.com's related-verses endpoint was tested and is NOT usable by
+  // a third-party app (direct route 404s, its proxy rejects cross-origin
+  // browser fetches), and QUL itself has no live API (its download needs
+  // a sign-in) — hence the bundled open mirror of the same QUL data.
+  // Fallback: computed from the app's own seeded quran_verses table
+  // (ayah_text_clean = diacritic-stripped), where an ayah counts as
+  // mutashabih when it shares a contiguous phrase of 3+ words, indexed
+  // by word trigrams so each lookup stays fast.
   type QuranTextRow = { id: number; surah_no: number; surah_name: string; ayah_no: number; ayah_text: string; ayah_text_clean: string | null };
   type SimilarAyah = { verse: QuranTextRow; shared: string[]; run: number };
   const cleanArabic = (t: string) => t.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
@@ -289,6 +293,23 @@ export default function QuranMushafPage({
   const [mutashabihatError, setMutashabihatError] = useState<string | null>(null);
   const quranTextCache = useRef<QuranTextRow[] | null>(null);
   const trigramIndex = useRef<Map<string, number[]> | null>(null);
+  // Published QUL phrase data (bundled JSON, fetched once per session).
+  type QulPhrase = { surahs: number; ayahs: number; count: number; source: { key: string; from: number; to: number }; ayah: Record<string, number[][]> };
+  type QulData = { phrases: Record<string, QulPhrase>; phraseVerses: Record<string, number[]> };
+  type QulPhraseEntry = { id: number; text: string; ayahs: number; surahs: number; others: { key: string; surah_no: number; ayah_no: number; surah_name: string }[] };
+  const [qulPhrases, setQulPhrases] = useState<QulPhraseEntry[] | null>(null);
+  const [mutashabihatSource, setMutashabihatSource] = useState<'qul' | 'computed' | null>(null);
+  const qulDataCache = useRef<QulData | null>(null);
+  const loadQulData = useCallback(async (): Promise<QulData | null> => {
+    if (qulDataCache.current) return qulDataCache.current;
+    try {
+      const [pRes, vRes] = await Promise.all([fetch('/mutashabihat/phrases.json'), fetch('/mutashabihat/phrase_verses.json')]);
+      if (!pRes.ok || !vRes.ok) throw new Error('fetch failed');
+      const data: QulData = { phrases: await pRes.json(), phraseVerses: await vRes.json() };
+      qulDataCache.current = data;
+      return data;
+    } catch { return null; }
+  }, []);
 
   const loadQuranText = useCallback(async (): Promise<QuranTextRow[] | null> => {
     if (quranTextCache.current) return quranTextCache.current;
@@ -322,6 +343,8 @@ export default function QuranMushafPage({
 
   const findSimilar = useCallback(async (verse: QuranVerse) => {
     setMutashabihat(null);
+    setQulPhrases(null);
+    setMutashabihatSource(null);
     setMutashabihatError(null);
     setMutashabihatLoading(true);
     const rows = await loadQuranText();
@@ -330,6 +353,39 @@ export default function QuranMushafPage({
       setMutashabihatLoading(false);
       return;
     }
+    // Published QUL data first: the open ayah's phrase ids, each phrase
+    // labelled by slicing its source ayah's raw words by the stored
+    // range, with the other ayahs it appears in as hop targets.
+    const qul = await loadQulData();
+    const qulKey = `${verse.surah_no}:${verse.ayah_no}`;
+    const qulIds = qul?.phraseVerses[qulKey];
+    if (qul && qulIds && qulIds.length > 0) {
+      const surahName = new Map<number, string>();
+      rows.forEach((r) => { if (!surahName.has(r.surah_no)) surahName.set(r.surah_no, r.surah_name); });
+      const entries: QulPhraseEntry[] = [];
+      for (const id of qulIds) {
+        const ph = qul.phrases[String(id)];
+        if (!ph) continue;
+        const [sNo, aNo] = ph.source.key.split(':').map(Number);
+        const srcRow = rows.find((r) => r.surah_no === sNo && r.ayah_no === aNo);
+        const srcWords = srcRow ? srcRow.ayah_text.split(/\s+/).filter((w) => w.length > 0) : [];
+        const text = srcWords.slice(ph.source.from, ph.source.to + 1).join(' ');
+        if (!text) continue;
+        const others = Object.keys(ph.ayah).filter((k) => k !== qulKey).map((k) => {
+          const [os, oa] = k.split(':').map(Number);
+          return { key: k, surah_no: os, ayah_no: oa, surah_name: surahName.get(os) || `سورة ${os}` };
+        }).sort((x, y) => x.surah_no - y.surah_no || x.ayah_no - y.ayah_no);
+        entries.push({ id, text, ayahs: ph.ayahs, surahs: ph.surahs, others });
+      }
+      if (entries.length > 0) {
+        entries.sort((a, b) => b.text.split(/\s+/).length - a.text.split(/\s+/).length);
+        setQulPhrases(entries);
+        setMutashabihatSource('qul');
+        setMutashabihatLoading(false);
+        return;
+      }
+    }
+    // Fallback: computed detection from the text itself.
     const target = rows.find((r) => r.surah_no === verse.surah_no && r.ayah_no === verse.ayah_no);
     if (!target) {
       setMutashabihatError('لا توجد بيانات نصية لهذه الآية');
@@ -359,8 +415,9 @@ export default function QuranMushafPage({
     }
     results.sort((x, y) => y.run - x.run || x.verse.surah_no - y.verse.surah_no || x.verse.ayah_no - y.verse.ayah_no);
     setMutashabihat(results.slice(0, 12));
+    setMutashabihatSource('computed');
     setMutashabihatLoading(false);
-  }, [loadQuranText]);
+  }, [loadQuranText, loadQulData]);
 
   useEffect(() => {
     if (popupTab !== 'mutashabihat' || !selectedVerse) return;
@@ -374,6 +431,12 @@ export default function QuranMushafPage({
     setSelectedVerse(verse);
     setPopupTab('mutashabihat');
     fetchVerseLinks(row.id);
+  };
+
+  // Hop from a published QUL phrase to one of its occurrence ayahs.
+  const hopToQulAyah = (surahNo: number, ayahNo: number) => {
+    const row = quranTextCache.current?.find((r) => r.surah_no === surahNo && r.ayah_no === ayahNo);
+    if (row) handleSimilarClick(row);
   };
 
   // Render a similar ayah's display text with the shared phrase
@@ -597,13 +660,60 @@ export default function QuranMushafPage({
     return () => { cancelled = true; };
   }, [currentPage, edition.id]);
 
+  // Madinah paper-box normalization — the page-turn dance fix. The
+  // sufone scans frame the paper differently per page (two widths,
+  // ~80% vs ~91%, and two horizontal positions: odd pages sit at left
+  // 5%, even pages at 3.7% or 15.3%), so consecutive pages jumped up
+  // to ~10% of the image width on turns. Mapping each page's measured
+  // paper box onto the fixed wrapper pins every paper's left/right
+  // edges to identical container coordinates: the paper always fills
+  // the wrapper width exactly, centered vertically, so nothing can
+  // shift left/right between pages. Pure % math (no DOM measurement):
+  // the wrapper aspect is the minimum paper aspect, so no paper is
+  // ever cropped — wider papers just get centered vertical bands.
+  // Taps and the tap flash go through the same mapping, so word taps
+  // stay calibrated on the normalized image. Other editions are
+  // untouched (their scans never danced).
+  const MADINAH_IMG_ASPECT = 0.7070; // sufone png-d150 natural 1240x1754
+  const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
+  const madinahNorm = (() => {
+    if (!madinahPaperBox) return null;
+    const [pl, pt, pr, pb] = madinahPaperBox;
+    const pw = (pr - pl) / 100;
+    const ph = (pb - pt) / 100;
+    if (pw <= 0 || ph <= 0) return null;
+    const imgW = 100 / pw; // % of wrapper width
+    const imgH = (MADINAH_NORMALIZED_ASPECT / (pw * MADINAH_IMG_ASPECT)) * 100; // % of wrapper height
+    const imgL = -pl / pw; // % of wrapper width
+    const imgT = (100 - imgH * ph) / 2 - imgH * (pt / 100); // % of wrapper height
+    return { pl, pt, pw, ph, imgW, imgH, imgL, imgT };
+  })();
+  // Container % -> full-image % (identity when not normalized).
+  const containerToImagePercent = (fx: number, fy: number): [number, number] => {
+    if (!madinahNorm) return [fx, fy];
+    return [madinahNorm.pl + fx * madinahNorm.pw, ((fy - madinahNorm.imgT) / madinahNorm.imgH) * 100];
+  };
+  // Full-image % word box -> container % rect (for the tap flash).
+  const imageBoxToContainer = (b: WordBox) => {
+    if (!madinahNorm) return b;
+    return {
+      ...b,
+      left: (b.left - madinahNorm.pl) / madinahNorm.pw,
+      top: madinahNorm.imgT + (b.top * madinahNorm.imgH) / 100,
+      width: b.width / madinahNorm.pw,
+      height: (b.height * madinahNorm.imgH) / 100,
+    };
+  };
+
   const handleWordTap = async (clientX: number, clientY: number) => {
     const wrap = pageWrapRef.current;
     const boxes = pageWordBoxes;
     if (!wrap || !boxes) return;
     const rect = wrap.getBoundingClientRect();
-    const px = ((clientX - rect.left) / rect.width) * 100;
-    const py = ((clientY - rect.top) / rect.height) * 100;
+    const [px, py] = containerToImagePercent(
+      ((clientX - rect.left) / rect.width) * 100,
+      ((clientY - rect.top) / rect.height) * 100,
+    );
     let box = boxes.find((b) => px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height);
     // Forgiving fallback: a tap in a small gap between words still opens
     // the nearest word — but only inside the text block, so border taps
@@ -1077,32 +1187,23 @@ export default function QuranMushafPage({
           {!showRatelIntro && !showEditionPickerInFullscreen && (
             <>
               {!imageError ? (
-                // Wrapper owns size, zoom and touch: the scale transform
-                // applies to image + tap flash together, and tap
-                // coordinates are measured against this box (fractions
-                // are unchanged by uniform scaling).
+                // Wrapper owns size, zoom and touch. Fullscreen fill +
+                // no-dance: vh (the large viewport, stable when Safari's
+                // chrome shows/hides) so the page fills the whole layout
+                // viewport — svh left bands whose size changed with the
+                // chrome state. The Madinah zoom is a LAYOUT height
+                // (115vh, cropped by the container), NOT a transform
+                // scale: a scaled layer re-rasterizes in Safari on every
+                // image swap, which read as dancing on page turns.
+                // Madinah paper-box normalization (see madinahNorm):
+                // the wrapper aspect is the fixed minimum paper aspect
+                // and the image is absolutely positioned per page so
+                // its paper box fills the wrapper width exactly — the
+                // scan framing can no longer shift the page between
+                // turns. Other editions keep exact fit + adaptive aspect.
                 <div ref={pageWrapRef}
-                  // Fullscreen fill + no-dance: vh (the large viewport,
-                  // stable when Safari's chrome shows/hides) so the page
-                  // fills the whole layout viewport — svh left bands whose
-                  // size changed with the chrome state. The Madinah zoom is
-                  // a LAYOUT height (115vh, cropped by the container), NOT
-                  // a transform scale: a scaled layer re-rasterizes in
-                  // Safari on every image swap, which read as dancing on
-                  // page turns — and the scale was the one Madinah-only
-                  // visual difference left after other editions stopped
-                  // dancing. The 115vh height zooms past the measured dark
-                  // outer margins (text block 11-88% / 13-87%) so the frame
-                  // nearly touches the screen edges, with no text cropped;
-                  // other editions keep exact fit. aspect-ratio reserves
-                  // the box.
-                  className={`relative ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-[100vw]`}
-                  // Madinah aspect is frozen at 0.63: updating it from
-                  // every page's natural size let the box width jitter
-                  // from page to page (magnified by the 1.15 zoom), which
-                  // read as the page dancing left/right. Other editions
-                  // keep their adaptive aspect — they never danced.
-                  style={{ aspectRatio: String(edition.id === 'madinah' ? 0.63 : imgAspect) }}
+                  className={`relative ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
+                  style={{ aspectRatio: String(edition.id === 'madinah' ? MADINAH_NORMALIZED_ASPECT : imgAspect) }}
                   onClick={(e) => {
                     e.stopPropagation();
                     // Word tap (click, not touchend — see touchend note).
@@ -1110,10 +1211,13 @@ export default function QuranMushafPage({
                     if (showRatelIntro || showEditionPickerInFullscreen || selectedVerse) return;
                     if (cleanMode) {
                       // Margin/frame taps restore the controls; word taps
-                      // still open the ayah popup.
+                      // still open the ayah popup. Margins are judged in
+                      // full-image %, through the normalization mapping.
                       const rect = e.currentTarget.getBoundingClientRect();
-                      const px = ((e.clientX - rect.left) / rect.width) * 100;
-                      const py = ((e.clientY - rect.top) / rect.height) * 100;
+                      const [px, py] = containerToImagePercent(
+                        ((e.clientX - rect.left) / rect.width) * 100,
+                        ((e.clientY - rect.top) / rect.height) * 100,
+                      );
                       if (px < 11 || px > 88 || py < 13 || py > 87) { setCleanMode(false); return; }
                     }
                     if (Date.now() - lastSwipeAt.current < 500) return;
@@ -1122,17 +1226,21 @@ export default function QuranMushafPage({
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd}>
                   <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
-                    className="h-full w-full object-contain touch-none [-webkit-touch-callout:none]"
+                    className={`${madinahNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
+                    style={madinahNorm ? { left: `${madinahNorm.imgL}%`, top: `${madinahNorm.imgT}%`, width: `${madinahNorm.imgW}%`, height: `${madinahNorm.imgH}%` } : undefined}
                     draggable={false}
                     onDragStart={(e) => e.preventDefault()}
                     onLoad={(e) => {
                       const im = e.currentTarget;
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
                     }} />
-                  {tapFlash && (
-                    <div className="absolute rounded-md ring-2 ring-amber-300 bg-amber-300/20 pointer-events-none"
-                      style={{ left: `${tapFlash.left}%`, top: `${tapFlash.top}%`, width: `${tapFlash.width}%`, height: `${tapFlash.height}%` }} />
-                  )}
+                  {tapFlash && (() => {
+                    const f = imageBoxToContainer(tapFlash);
+                    return (
+                      <div className="absolute rounded-md ring-2 ring-amber-300 bg-amber-300/20 pointer-events-none"
+                        style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-center touch-none" onClick={(e) => e.stopPropagation()}
@@ -1267,6 +1375,26 @@ export default function QuranMushafPage({
                             className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
                             إعادة المحاولة
                           </button>
+                        </div>
+                      ) : qulPhrases && qulPhrases.length > 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-accent-400 leading-relaxed text-center">عبارات مشتركة مراجعة لهذه الآية — اضغط أي آية لعرض متشابهاتها.</p>
+                          {qulPhrases.map((e) => (
+                            <div key={e.id} className="bg-gray-50 rounded-lg p-3 border border-emerald-100">
+                              <p className="font-arabic text-lg font-bold text-accent-800 leading-loose"><mark className="bg-amber-200 rounded px-0.5">{e.text}</mark></p>
+                              <p className="text-sm text-accent-500 mb-2">تتكرر في {e.ayahs} آية في {e.surahs} سورة</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {e.others.slice(0, 12).map((o) => (
+                                  <button key={o.key} onClick={() => hopToQulAyah(o.surah_no, o.ayah_no)}
+                                    className="px-2.5 py-1 bg-white border border-emerald-200 hover:bg-emerald-50 rounded-full text-sm font-semibold text-emerald-700">
+                                    {o.surah_name} — {o.ayah_no}
+                                  </button>
+                                ))}
+                                {e.others.length > 12 && <span className="text-sm text-accent-400 self-center">و{e.others.length - 12} آية أخرى</span>}
+                              </div>
+                            </div>
+                          ))}
+                          <p className="text-xs text-accent-400 leading-relaxed text-center">المصدر: بيانات «المتشابهات» من مكتبة القرآن العالمية (QUL) — مشروع Tarteel.</p>
                         </div>
                       ) : mutashabihat && mutashabihat.length > 0 ? (
                         <div className="space-y-2">
