@@ -589,9 +589,9 @@ export default function QuranMushafPage({
         </div>
       )}
 
-      {/* Fullscreen viewer with "رتل وارتق" intro */}
+      {/* Fullscreen viewer with intro */}
       {showFullscreen && (
-        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none"
+        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none overflow-hidden overscroll-contain"
           onClick={() => !showRatelIntro && !showEditionPickerInFullscreen && !selectedVerse && setShowFullscreen(false)}>
 
           {showRatelIntro && (
@@ -604,8 +604,8 @@ export default function QuranMushafPage({
                 <div className="w-24 h-24 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center shadow-2xl mb-8 border border-white/20">
                   <BookOpen className="w-12 h-12 text-emerald-300" />
                 </div>
-                <h2 className="text-6xl font-bold text-white mb-4 tracking-wide" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
-                  رَتِّلْ وَارْتَقِ
+                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
+                  اقرأ وارتق، ورتل كما كنت ترتل في الدنيا، فإن منزلتك عند آخر آية تقرؤها
                 </h2>
                 <p className="text-emerald-200 text-base">اقرأ بتأنٍّ وارتقِ في درجات الحفظ</p>
               </div>
@@ -639,12 +639,14 @@ export default function QuranMushafPage({
             <>
               {!imageError ? (
                 <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
-                  className="max-h-[100vh] max-w-[100vw] object-contain"
+                  className="max-h-[100vh] max-w-[100vw] object-contain touch-none"
+                  draggable={false}
+                  onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd} />
               ) : (
-                <div className="text-center" onClick={(e) => e.stopPropagation()}
+                <div className="text-center touch-none" onClick={(e) => e.stopPropagation()}
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd}>
                   <BookOpen className="w-14 h-14 text-white/30 mx-auto mb-3" />
