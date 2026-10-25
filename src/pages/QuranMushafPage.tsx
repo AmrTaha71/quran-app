@@ -22,6 +22,7 @@ const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
 const EDITION_STORAGE_KEY = 'quran-mushaf-edition';
 const PAGE_STORAGE_KEY = 'quran-mushaf-page';
 const TARGET_STORAGE_KEY = 'quran-mushaf-target';
+const PAGE_LIST_STORAGE_KEY = 'quran-mushaf-page-lists';
 
 function readStoredEdition(): number {
   const raw = Number(localStorage.getItem(EDITION_STORAGE_KEY));
@@ -86,6 +87,14 @@ export default function QuranMushafPage({
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [surahVerses, setSurahVerses] = useState<QuranVerse[]>([]);
+  // Ayahs actually printed on the current Mushaf page (from the free
+  // Quranpedia API, mushaf 1 = Hafs, Madani pagination). While it loads
+  // — or if it fails — the strip falls back to the full surah list, so
+  // it never goes empty. Spanned pages can hold the tail of earlier
+  // surahs too, so their Supabase rows are fetched separately.
+  const [pageAyahRefs, setPageAyahRefs] = useState<{ surah: number; ayah: number }[] | null>(null);
+  const [spannedVerses, setSpannedVerses] = useState<QuranVerse[]>([]);
+  const surahPageListCache = useRef<Record<number, { number: number; page_number: number }[]>>({});
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
   const [loadingLinks, setLoadingLinks] = useState(false);
@@ -111,6 +120,14 @@ export default function QuranMushafPage({
   const hasFacingPage = facingPage >= 1 && facingPage <= TOTAL_PAGES;
   const currentJuz = getJuzFromPage(currentPage);
   const currentHizb = getHizbFromPage(currentPage);
+  // The strip shows only this page's ayahs (in page order) once their
+  // refs have loaded; otherwise it falls back to the full surah list.
+  const stripVerses: QuranVerse[] = pageAyahRefs
+    ? pageAyahRefs.map((r) => {
+        const pool = r.surah === currentSurah ? surahVerses : spannedVerses;
+        return pool.find((v) => v.ayah_no === r.ayah);
+      }).filter((v): v is QuranVerse => Boolean(v))
+    : surahVerses;
 
   const fetchPageVerses = useCallback(async (page: number) => {
     const surah = getPageSurah(page);
@@ -121,6 +138,72 @@ export default function QuranMushafPage({
       .order('ayah_no', { ascending: true });
     setSurahVerses(data || []);
   }, []);
+
+  // One surah's ayah->page list from Quranpedia (cached in memory and
+  // localStorage; the lists are static, so caching is safe).
+  const loadSurahPageList = useCallback(async (surah: number) => {
+    if (surahPageListCache.current[surah]) return surahPageListCache.current[surah];
+    try {
+      const raw = localStorage.getItem(`${PAGE_LIST_STORAGE_KEY}:${surah}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { number: number; page_number: number }[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          surahPageListCache.current[surah] = parsed;
+          return parsed;
+        }
+      }
+    } catch { /* ignore a malformed cache entry */ }
+    const res = await fetch(`https://api.quranpedia.net/v1/mushafs/1/${surah}`);
+    if (!res.ok) throw new Error('page list fetch failed');
+    const json = await res.json();
+    const list = (Array.isArray(json) ? json : [])
+      .map((a: any) => ({ number: Number(a.number), page_number: Number(a.page_number) }))
+      .filter((a) => Number.isInteger(a.number) && Number.isInteger(a.page_number));
+    if (list.length === 0) throw new Error('empty page list');
+    surahPageListCache.current[surah] = list;
+    try { localStorage.setItem(`${PAGE_LIST_STORAGE_KEY}:${surah}`, JSON.stringify(list)); } catch { /* ignore */ }
+    return list;
+  }, []);
+
+  // The ayah refs printed on one page, in page order. Walks backwards
+  // from the page's surah while each surah starts on this page, so a
+  // page shared by several short surahs (e.g. page 604) is fully covered.
+  const loadPageAyahs = useCallback(async (page: number) => {
+    const surah = getPageSurah(page);
+    try {
+      const refs: { surah: number; ayah: number }[] = [];
+      let s = surah;
+      while (s >= 1) {
+        const list = await loadSurahPageList(s);
+        const onPage = list.filter((a) => a.page_number === page);
+        if (onPage.length === 0) break;
+        refs.unshift(...onPage.map((a) => ({ surah: s, ayah: a.number })));
+        if (!onPage.some((a) => a.number === 1)) break;
+        s -= 1;
+      }
+      setPageAyahRefs(refs.length > 0 ? refs : null);
+      const other = refs.filter((r) => r.surah !== surah);
+      if (other.length > 0) {
+        const bySurah = new Map<number, number[]>();
+        for (const r of other) {
+          const arr = bySurah.get(r.surah) || [];
+          arr.push(r.ayah);
+          bySurah.set(r.surah, arr);
+        }
+        const rows: QuranVerse[] = [];
+        for (const [os, ayahs] of bySurah) {
+          const { data } = await supabase.from('quran_verses').select('*').eq('surah_no', os).in('ayah_no', ayahs);
+          if (data) rows.push(...data);
+        }
+        setSpannedVerses(rows);
+      } else {
+        setSpannedVerses([]);
+      }
+    } catch {
+      setPageAyahRefs(null);
+      setSpannedVerses([]);
+    }
+  }, [loadSurahPageList]);
 
   const fetchVerseLinks = useCallback(async (verseId: number) => {
     setLoadingLinks(true);
@@ -173,7 +256,9 @@ export default function QuranMushafPage({
     setImageLoading(true);
     setImageError(false);
     fetchPageVerses(currentPage);
-  }, [currentPage, fetchPageVerses]);
+    setPageAyahRefs(null);
+    loadPageAyahs(currentPage);
+  }, [currentPage, fetchPageVerses, loadPageAyahs]);
 
   // Preload the neighbouring pages so turning feels instant.
   useEffect(() => {
@@ -764,13 +849,13 @@ export default function QuranMushafPage({
                 </div>
               </button>
 
-              {/* Verse selector — show all verses */}
+              {/* Verse selector — only the ayahs printed on this page */}
               <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-4 pointer-events-auto px-4"
                 onClick={(e) => e.stopPropagation()}>
-                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">اضغط رقم الآية لفتح الروابط والإعراب والتفسير</p>
+                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح الروابط والإعراب والتفسير</p>
                 <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
                   <div className="flex gap-2">
-                    {surahVerses.map((v) => (
+                    {stripVerses.map((v) => (
                       <button key={v.id} onClick={() => handleVerseClick(v)}
                         className={`flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
@@ -857,18 +942,18 @@ export default function QuranMushafPage({
                       ))}
                       {popupTab === 'irab' && (
                         <div className="space-y-3">
-                          <p className="text-base text-accent-600 leading-relaxed">إعراب الآية كلمة كلمة من Quranic Arabic Corpus — مشروع أكاديمي (جامعة ليدز) يبيّن لكل كلمة نوعها وحالتها الإعرابية وجذرها، ويظهر هنا داخل النافذة قدام الصفحة من غير ما تسيب المصحف.</p>
+                          <p className="text-base text-accent-600 leading-relaxed">إعراب موجز بالعربي، يظهر هنا داخل النافذة قدام الصفحة من غير ما تسيب المصحف.</p>
                           <iframe
                             key={`${selectedVerse.surah_no}:${selectedVerse.ayah_no}`}
-                            src={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`}
+                            src={`https://quranpedia.net/embed?surah=${selectedVerse.surah_no}&ayah=${selectedVerse.ayah_no}&type=e3rab&lock=1&ayah_text=0`}
                             title={`إعراب ${selectedVerse.surah_name} — آية ${selectedVerse.ayah_no}`}
                             className="w-full h-[55vh] rounded-lg border border-gray-200 bg-white"
                           />
-                          <a href={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`} target="_blank" rel="noreferrer"
+                          <a href={`https://quranpedia.net/embed?surah=${selectedVerse.surah_no}&ayah=${selectedVerse.ayah_no}&type=e3rab&lock=1`} target="_blank" rel="noreferrer"
                             className="block text-center text-sm font-semibold text-emerald-700 hover:text-emerald-800">
                             فتح الإعراب في صفحة مستقلة (اختياري)
                           </a>
-                          <p className="text-xs text-accent-400 leading-relaxed text-center">ملحوظة: صفحة Corpus قد تبدأ بالآية اللي قبلها — مرّر شوية لحد آية {selectedVerse.ayah_no}. أما «الجدول في إعراب القرآن» للصافي فهو المرجع الورقي الكامل، ونصّه غير متاح كخدمة مجانية.</p>
+                          <p className="text-xs text-accent-400 leading-relaxed text-center">المصدر: «المجتبى من مشكل إعراب القرآن الكريم» لأحمد بن محمد الخراط، عبر الموسوعة القرآنية (Quranpedia). إن لم يظهر إعراب موجز لهذه الآية، فالإعراب التفصيلي كلمة كلمة (بالإنجليزية) متاح هنا: <a href={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`} target="_blank" rel="noreferrer" className="text-emerald-700 underline">Quranic Arabic Corpus</a>.</p>
                         </div>
                       )}
                       {popupTab === 'tafsir' && (
