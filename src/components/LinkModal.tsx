@@ -81,6 +81,12 @@ export default function LinkModal({
   const [syntheticAudioUrl, setSyntheticAudioUrl] = useState<string | null>(null);
   const [voiceType, setVoiceType] = useState<'male' | 'female'>('male');
   const [rephraseCommand, setRephraseCommand] = useState('');
+  // AI version history for the approve-or-re-request loop: every
+  // successful rephrase appends a version instead of destroying the
+  // previous one, so the admin can compare and restore any version
+  // before approving and saving.
+  const [versions, setVersions] = useState<{ text: string; command: string; label: string }[]>([]);
+  const [audioError, setAudioError] = useState('');
   const [reviewMode, setReviewMode] = useState<'rephrase' | 'keep_original'>('rephrase');
   const [liveTranscript, setLiveTranscript] = useState('');
 
@@ -176,7 +182,9 @@ export default function LinkModal({
           const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
           setAudioPublicUrl(urlData.publicUrl);
         } catch {
-
+          // Was silently swallowed: the recording would vanish with no
+          // trace. Surface it; the transcript flow below still proceeds.
+          setAudioError('تعذر رفع المقطع الصوتي — سيُحفظ النص فقط، وستحتاج لإعادة رفع الملف لاحقاً.');
         }
 
         if (transcriptText) {
@@ -286,11 +294,28 @@ export default function LinkModal({
       }
       const result = data.rephrased || text;
       // Filter out placeholder text
-      if (result.includes('لم يتم تكوين') || result.includes('نص تجريبي')) {
-        setRephrasedText(text);
-      } else {
-        setRephrasedText(result);
-      }
+      const finalResult = (result.includes('لم يتم تكوين') || result.includes('نص تجريبي')) ? text : result;
+      setRephrasedText(finalResult);
+      // Append to the version history (original first, then each AI
+      // version). A re-request never overwrites an earlier version.
+      setVersions((prev) => {
+        const next = [...prev];
+        if (next.length === 0 && text.trim()) {
+          next.push({ text: text.trim(), command: '', label: 'النص الأصلي' });
+        }
+        if (next.length === 0 || next[next.length - 1].text !== finalResult) {
+          next.push({
+            text: finalResult,
+            command,
+            label: command
+              ? `تعديل: ${command}`
+              : mode === 'keep_original'
+                ? 'النص المنقّى'
+                : 'صياغة بالذكاء الاصطناعي',
+          });
+        }
+        return next;
+      });
       if (data.ai_used === false) {
         setError('تنبيه: تمت المعالجة محلياً لأن مفتاح الذكاء الاصطناعي غير متوفر — هذه النتيجة ليست من نموذج ذكاء اصطناعي. راجعيها قبل الحفظ.');
       }
@@ -298,10 +323,11 @@ export default function LinkModal({
       setSyntheticAudioUrl(null);
       setPhase('review');
     } catch (err: any) {
-      // Keep the original text so no work is lost, but say plainly that
-      // the AI step failed instead of silently showing the original.
-      setError(`تعذرت إعادة الصياغة بالذكاء الاصطناعي: ${err?.message || 'خطأ غير معروف'}. تم عرض النص الأصلي، ويمكنك تعديله يدوياً قبل الحفظ.`);
-      setRephrasedText(text);
+      // Never destroy a good draft because a re-request failed: keep
+      // the current text and just report the failure. Only a first
+      // attempt (no draft yet) falls back to showing the original.
+      setError(`تعذرت إعادة الصياغة بالذكاء الاصطناعي: ${err?.message || 'خطأ غير معروف'}. ${rephrasedText.trim() ? 'تم الاحتفاظ بالنص الحالي.' : 'تم عرض النص الأصلي، ويمكنك تعديله يدوياً قبل الحفظ.'}`);
+      if (!rephrasedText.trim()) setRephrasedText(text);
       setReviewMode(mode);
       setSyntheticAudioUrl(null);
       setPhase('review');
@@ -518,6 +544,11 @@ export default function LinkModal({
                   </button>
                 </div>
               )}
+              {audioError && !audioPublicUrl && (
+                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 text-center">
+                  {audioError}
+                </div>
+              )}
 
               {/* Original transcript */}
               {originalTranscript && (
@@ -592,6 +623,27 @@ export default function LinkModal({
               <input type="text" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)}
                 placeholder="عنوان مختصر (اختياري)"
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+
+              {/* AI version history: the approve-or-re-request loop */}
+              {versions.length > 1 && (
+                <div className="bg-white rounded-lg p-3 border border-gray-200">
+                  <p className="text-xs font-semibold text-accent-500 mb-2">نسخ الصياغة — اختر أي نسخة لعرضها، ثم وافق واحفظ أو اطلب تعديلاً جديداً</p>
+                  <div className="space-y-1.5">
+                    {versions.map((v, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2.5 py-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold text-violet-600">{v.label}</p>
+                          <p className="text-xs text-accent-600 truncate">{v.text}</p>
+                        </div>
+                        <button onClick={() => { setRephrasedText(v.text); setSyntheticAudioUrl(null); }}
+                          className="flex-shrink-0 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-semibold rounded-lg">
+                          استخدام هذه النسخة
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Rephrase command */}
               <div className="flex gap-2">

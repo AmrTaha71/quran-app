@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { loadVerseIndex, loadLinkIndex, searchVerseIds } from '../lib/searchIndex';
 import { signOut } from '../lib/auth';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { LINK_TYPES } from '../lib/types';
@@ -164,12 +165,26 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         return;
       }
 
-      let query = supabase.from('quran_verses').select('*', { count: 'exact' }).in('id', verseIds);
       if (debouncedSearch) {
-        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').replace(/[%(),]/g, '').trim();
-        const safeName = debouncedSearch.replace(/[%(),]/g, '').trim();
-        query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${safeName}%`);
+        try {
+          const verses = await loadVerseIndex();
+          const ids = searchVerseIds(verses, [], debouncedSearch, {
+            verseIds,
+            surahNo: surahFilter ? parseInt(surahFilter) : null,
+          });
+          const pageIds = ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+          const { data: pageData } = await supabase.from('quran_verses').select('*').in('id', pageIds).order('id', { ascending: true });
+          setVerses(pageData || []);
+          setTotalCount(ids.length);
+        } catch {
+          setSearchHint('تعذر تحميل فهرس البحث — حاول مجدداً');
+          setVerses([]);
+          setTotalCount(0);
+        }
+        setLoading(false);
+        return;
       }
+      let query = supabase.from('quran_verses').select('*', { count: 'exact' }).in('id', verseIds);
       if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
       query = query.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1).order('id', { ascending: true });
       const { data, count } = await query;
@@ -194,56 +209,27 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       }
 
       if (debouncedSearch) {
-        // Search across ayah text AND link content, by words, by
-        // filter type, or mixed (type + words AND together): the two
-        // sources live in different tables, so match verse ids in each
-        // and paginate the union. Searching searches the whole Mushaf
-        // (no has_links restriction), and the surah filter applies to
-        // both sources. A multi-word phrase that is not contiguous
-        // anywhere falls back to ayahs/links containing ALL the words.
-        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').replace(/[%(),]/g, '').trim();
-        const safeName = debouncedSearch.replace(/[%(),]/g, '').trim();
-        const cleanWords = cleanSearch.split(/\s+/).filter((w) => w.length > 0);
-        const filterLinkIdsBySurah = async (ids: number[]) => {
-          if (!surahFilter || ids.length === 0) return ids;
-          const { data: sRows } = await supabase.from('quran_verses').select('id').in('id', ids).eq('surah_no', parseInt(surahFilter));
-          const ok = new Set((sRows || []).map((r) => r.id));
-          return ids.filter((id) => ok.has(id));
-        };
-        let aq = supabase.from('quran_verses').select('id')
-          .or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${safeName}%`);
-        if (surahFilter) aq = aq.eq('surah_no', parseInt(surahFilter));
-        if (linkVerseIds) aq = aq.in('id', linkVerseIds);
-        const { data: aRows } = await aq;
-        let lq = supabase.from('ayah_links').select('verse_id').eq('status', 'approved')
-          .or(`link_content.ilike.%${cleanSearch}%,link_title.ilike.%${cleanSearch}%,original_transcript.ilike.%${cleanSearch}%`);
-        if (linkTypeFilter) lq = lq.contains('link_types', [linkTypeFilter]);
-        const { data: lRows } = await lq;
-        const lIds = await filterLinkIdsBySurah((lRows || []).map((r) => r.verse_id));
-        let unionIds = [...new Set([...(aRows || []).map((r) => r.id), ...lIds])].sort((a, b) => a - b);
-        if (unionIds.length === 0 && cleanWords.length >= 2) {
-          let q2 = supabase.from('quran_verses').select('id');
-          if (surahFilter) q2 = q2.eq('surah_no', parseInt(surahFilter));
-          if (linkVerseIds) q2 = q2.in('id', linkVerseIds);
-          for (const w of cleanWords) q2 = q2.ilike('ayah_text_clean', `%${w}%`);
-          const { data: a2 } = await q2;
-          let lq2 = supabase.from('ayah_links').select('verse_id').eq('status', 'approved');
-          if (linkTypeFilter) lq2 = lq2.contains('link_types', [linkTypeFilter]);
-          for (const w of cleanWords) lq2 = lq2.ilike('link_content', `%${w}%`);
-          const { data: l2 } = await lq2;
-          const l2Ids = await filterLinkIdsBySurah((l2 || []).map((r) => r.verse_id));
-          unionIds = [...new Set([...(a2 || []).map((r) => r.id), ...l2Ids])].sort((a, b) => a - b);
-        }
-        if (unionIds.length === 0) {
+        // Cross-rasm search (Uthmani / imla'i / voice transcripts):
+        // the whole Mushaf + approved links are searched in memory
+        // on normalized text (see lib/searchIndex + lib/arabicNormalize),
+        // so spelling variants of the same word all match. The surah
+        // and link-type filters apply to both sources, as before.
+        try {
+          const [verses, links] = await Promise.all([loadVerseIndex(), loadLinkIndex()]);
+          const ids = searchVerseIds(verses, links, debouncedSearch, {
+            surahNo: surahFilter ? parseInt(surahFilter) : null,
+            linkType: linkTypeFilter || null,
+          });
+          if (ids.length === 0) { setVerses([]); setTotalCount(0); setLoading(false); return; }
+          const pageIds = ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+          const { data: pageData } = await supabase.from('quran_verses').select('*').in('id', pageIds).order('id', { ascending: true });
+          setVerses(pageData || []);
+          setTotalCount(ids.length);
+        } catch {
+          setSearchHint('تعذر تحميل فهرس البحث — حاول مجدداً');
           setVerses([]);
           setTotalCount(0);
-          setLoading(false);
-          return;
         }
-        const pageIds = unionIds.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-        const { data: pageData } = await supabase.from('quran_verses').select('*').in('id', pageIds).order('id', { ascending: true });
-        setVerses(pageData || []);
-        setTotalCount(unionIds.length);
         setLoading(false);
         return;
       }
@@ -408,6 +394,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     {searchHint}
                   </div>
                 )}
+                <p className="text-[11px] text-accent-400 mt-1.5">يقبل البحث الرسم العثماني والإملائي — اكتب كما تنطق، وسيجد الآيات حتى لو اختلف رسم الكلمة.</p>
               </div>
 
               {/* Surah selection */}

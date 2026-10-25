@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { loadVerseIndex, searchVerseIds } from '../lib/searchIndex';
 import { signOut } from '../lib/auth';
 import type { Session } from '@supabase/supabase-js';
 import type { QuranVerse, VerseFilter, AyahLink } from '../lib/types';
@@ -36,6 +37,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [showPending, setShowPending] = useState(false);
   const [rephrasingId, setRephrasingId] = useState<number | null>(null);
   const [rephraseCmd, setRephraseCmd] = useState('');
+  // AI proposals awaiting the admin's decision (per pending link).
+  // A proposal is NOT written to the database until the admin approves
+  // it, so re-requesting never destroys the current text.
+  const [proposals, setProposals] = useState<Record<number, { text: string; command: string }>>({});
   const [generatingVoiceId, setGeneratingVoiceId] = useState<number | null>(null);
   const [editingLinkId, setEditingLinkId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
@@ -58,15 +63,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     }
 
     debounceTimer.current = setTimeout(() => {
-      const cleanText = trimmed.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
-      const words = cleanText.split(/\s+/).filter((w) => w.length > 0);
-      if (words.length < 3) {
-        setSearchHint(`اكتب ٣ كلمات على الأقل (${words.length}/٣)`);
-        setDebouncedSearch('');
-      } else {
-        setSearchHint('');
-        setDebouncedSearch(trimmed);
-      }
+      // No minimum word count anymore: the cross-rasm index search
+      // matches even a single word, in any spelling.
+      setSearchHint('');
+      setDebouncedSearch(trimmed);
     }, 500);
 
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
@@ -84,10 +84,25 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       } else if (!isNaN(searchNum) && debouncedSearch.toString().trim() === searchNum.toString()) {
         query = query.or(`ayah_no.eq.${searchNum},surah_no.eq.${searchNum},id.eq.${searchNum}`);
       } else {
-        const cleanSearch = debouncedSearch.replace(/[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06DC\u06DF-\u06E8\u06EA-\u06ED\u08D3-\u08FF\u0640\u200C-\u200F\u061C\u061F]/g, '').replace(/ـ/g, '').trim();
-        if (cleanSearch) {
-          query = query.or(`ayah_text_clean.ilike.%${cleanSearch}%,surah_name.ilike.%${debouncedSearch}%`);
+        // Cross-rasm index search (1+ words, Uthmani/imla'i tolerant,
+        // same normalized index as the user search). The number and
+        // surah:ayah shortcuts above are unchanged.
+        try {
+          const verses = await loadVerseIndex();
+          const ids = searchVerseIds(verses, [], debouncedSearch, {
+            surahNo: surahFilter ? parseInt(surahFilter) : null,
+            hasLinks: statusFilter === 'green' ? true : statusFilter === 'red' ? false : null,
+          });
+          const pageIds = ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+          const { data: pageData } = await supabase.from('quran_verses').select('*').in('id', pageIds).order('id', { ascending: true });
+          setVerses(pageData || []);
+          setTotalCount(ids.length);
+        } catch {
+          setVerses([]);
+          setTotalCount(0);
         }
+        setLoading(false);
+        return;
       }
     }
     if (surahFilter) query = query.eq('surah_no', parseInt(surahFilter));
@@ -191,13 +206,27 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       if (!res.ok) throw new Error('فشل');
       const data = await res.json();
       const newText = data.rephrased || link.link_content;
-      await supabase.from('ayah_links').update({ link_content: newText, rephrase_command: rephraseCmd || null }).eq('id', link.id);
-      fetchPendingLinks();
+      // Proposal only: the admin approves it, discards it, or asks
+      // for another version. The stored text is untouched until approval.
+      setProposals((prev) => ({ ...prev, [link.id]: { text: newText, command: rephraseCmd || '' } }));
       setRephraseCmd('');
     } catch {
       alert('تعذر إعادة الصياغة');
     }
     setRephrasingId(null);
+  };
+
+  // Approve a proposed AI version: only now is it written to the DB.
+  const applyProposal = async (linkId: number) => {
+    const proposal = proposals[linkId];
+    if (!proposal) return;
+    await supabase.from('ayah_links').update({ link_content: proposal.text, rephrase_command: proposal.command || null }).eq('id', linkId);
+    setProposals((prev) => { const next = { ...prev }; delete next[linkId]; return next; });
+    fetchPendingLinks();
+  };
+
+  const discardProposal = (linkId: number) => {
+    setProposals((prev) => { const next = { ...prev }; delete next[linkId]; return next; });
   };
 
   const startEditText = (link: AyahLink) => { setEditingLinkId(link.id); setEditText(link.link_content); };
@@ -577,7 +606,18 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         </button>
                       </div>
 
-                      <div className="flex gap-2 mt-3">
+                      {proposals[link.id] && (
+                        <div className="bg-violet-50 rounded-lg p-3 border border-violet-200 mt-3">
+                          <p className="text-xs font-semibold text-violet-700 mb-1">صياغة مقترحة بالذكاء الاصطناعي{proposals[link.id].command ? ` (طلب: ${proposals[link.id].command})` : ''}</p>
+                          <p className="text-sm text-accent-700 leading-relaxed mb-2">{proposals[link.id].text}</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => applyProposal(link.id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">اعتماد المقترح</button>
+                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-500 text-xs hover:bg-gray-100 rounded-lg">تجاهل</button>
+                          </div>
+                          <p className="text-[11px] text-accent-400 mt-1.5">النص الأصلي محفوظ كما هو حتى الاعتماد — اطلب تعديلاً آخر من الحقل أعلاه وكرر حتى ترضى، ثم اعتمد.</p>
+                        </div>
+                      )}
+                                            <div className="flex gap-2 mt-3">
                         <button onClick={() => approveLink(link.id)}
                           className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-smooth">
                           <Check className="w-4 h-4" /> قبول ونشر
