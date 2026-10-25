@@ -89,10 +89,26 @@ export default function QuranMushafPage({
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
   const [loadingLinks, setLoadingLinks] = useState(false);
+  // Ayah popup tabs, in the order the user asked for: links, then irab,
+  // then tafsir (with a choice of three published tafsirs inside it).
+  const [popupTab, setPopupTab] = useState<'links' | 'irab' | 'tafsir'>('links');
+  const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
+  const [tafsirText, setTafsirText] = useState<string | null>(null);
+  const [tafsirLoading, setTafsirLoading] = useState(false);
+  const [tafsirError, setTafsirError] = useState<string | null>(null);
+  const tafsirCache = useRef<Record<string, string>>({});
 
   const edition = EDITIONS[selectedEdition];
   const currentSurah = getPageSurah(currentPage);
   const currentSurahName = SURAHS.find((s) => s.no === currentSurah)?.name || '';
+  // Facing-page peek (printed Mushaf spread, RTL): odd pages sit on the
+  // right of the spread, even pages on the left — so the facing page is
+  // the next page on the left for odd pages, the previous page on the
+  // right for even pages. The peek lives inside the fixed navigation
+  // strip, so the main page never moves.
+  const facingPage = currentPage % 2 === 1 ? currentPage + 1 : currentPage - 1;
+  const facingOnLeft = currentPage % 2 === 1;
+  const hasFacingPage = facingPage >= 1 && facingPage <= TOTAL_PAGES;
   const currentJuz = getJuzFromPage(currentPage);
   const currentHizb = getHizbFromPage(currentPage);
 
@@ -116,6 +132,42 @@ export default function QuranMushafPage({
     setVerseLinks(data || []);
     setLoadingLinks(false);
   }, []);
+
+  // Published tafsirs served by the free AlQuranCloud API (no key):
+  // per-ayah text at /v1/ayah/{surah}:{ayah}/{edition}.
+  const TAFSIR_EDITIONS = [
+    { id: 'ar.muyassar', name: 'التفسير الميسر' },
+    { id: 'ar.jalalayn', name: 'تفسير الجلالين' },
+    { id: 'ar.qurtubi', name: 'تفسير القرطبي' },
+  ];
+  const loadTafsir = useCallback(async (editionId: string, verse: QuranVerse) => {
+    const key = `${editionId}:${verse.surah_no}:${verse.ayah_no}`;
+    if (tafsirCache.current[key]) {
+      setTafsirText(tafsirCache.current[key]);
+      setTafsirError(null);
+      setTafsirLoading(false);
+      return;
+    }
+    setTafsirLoading(true);
+    setTafsirError(null);
+    setTafsirText(null);
+    try {
+      const res = await fetch(`https://api.alquran.cloud/v1/ayah/${verse.surah_no}:${verse.ayah_no}/${editionId}`);
+      if (!res.ok) throw new Error('fetch failed');
+      const json = await res.json();
+      const text = json?.data?.text as string | undefined;
+      if (!text) throw new Error('empty');
+      tafsirCache.current[key] = text;
+      setTafsirText(text);
+    } catch {
+      setTafsirError('تعذر تحميل التفسير الآن — تحقق من الاتصال وحاول مجدداً');
+    }
+    setTafsirLoading(false);
+  }, []);
+  useEffect(() => {
+    if (popupTab !== 'tafsir' || !selectedVerse) return;
+    loadTafsir(tafsirEdition, selectedVerse);
+  }, [popupTab, tafsirEdition, selectedVerse, loadTafsir]);
 
   useEffect(() => {
     setImageLoading(true);
@@ -150,6 +202,7 @@ export default function QuranMushafPage({
     const verse = surahVerses.find((v) => v.ayah_no === pendingAyah);
     if (verse) {
       setSelectedVerse(verse);
+      setPopupTab('links');
       fetchVerseLinks(verse.id);
       setPendingAyah(null);
     } else if (surahVerses.length > 0) {
@@ -210,6 +263,7 @@ export default function QuranMushafPage({
       return;
     }
     setSelectedVerse(verse);
+    setPopupTab('links');
     fetchVerseLinks(verse.id);
   };
 
@@ -658,22 +712,44 @@ export default function QuranMushafPage({
 
               {/* Page-turn zones: full-height side strips with a large,
                   always-visible arrow + label, so the target is easy to
-                  find and to press anywhere along the edge. */}
+                  find and to press anywhere along the edge. The strip on
+                  the facing-page side also carries a thin sliver of that
+                  page (its spine-side edge), so the user always sees
+                  whether the open page sits on the right or the left of
+                  the spread — while the main page itself stays fixed. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
                 aria-label="الصفحة السابقة"
                 className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-white/15 to-transparent disabled:opacity-20 group">
-                <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
-                  <ChevronRight className="w-10 h-10" />
+                {!facingOnLeft && hasFacingPage && (
+                  <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
+                    <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      className="absolute top-0 left-0 h-full w-auto max-w-none opacity-70" />
+                  </div>
+                )}
+                <div className="relative z-10 flex flex-col items-center gap-1">
+                  <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
+                    <ChevronRight className="w-10 h-10" />
+                  </div>
+                  <span className="text-xs font-bold text-white/90 drop-shadow">السابق</span>
                 </div>
-                <span className="text-xs font-bold text-white/90 drop-shadow">السابق</span>
               </button>
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
                 aria-label="الصفحة التالية"
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-white/15 to-transparent disabled:opacity-20 group">
-                <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
-                  <ChevronLeft className="w-10 h-10" />
+                {facingOnLeft && hasFacingPage && (
+                  <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
+                    <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      className="absolute top-0 right-0 h-full w-auto max-w-none opacity-70" />
+                  </div>
+                )}
+                <div className="relative z-10 flex flex-col items-center gap-1">
+                  <div className="p-4 bg-white/25 group-hover:bg-white/35 text-white rounded-full shadow-lg ring-1 ring-white/40 transition-smooth group-disabled:opacity-20">
+                    <ChevronLeft className="w-10 h-10" />
+                  </div>
+                  <span className="text-xs font-bold text-white/90 drop-shadow">التالي</span>
                 </div>
-                <span className="text-xs font-bold text-white/90 drop-shadow">التالي</span>
               </button>
 
               {/* Verse selector — show all verses */}
@@ -694,7 +770,7 @@ export default function QuranMushafPage({
                 </div>
               </div>
 
-              {/* Links popup */}
+              {/* Ayah popup: links, then irab, then tafsir — in that order */}
               {selectedVerse && (
                 <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/40"
                   onClick={(e) => { e.stopPropagation(); setSelectedVerse(null); }}>
@@ -716,7 +792,21 @@ export default function QuranMushafPage({
                     </div>
                     <div className="p-4 overflow-y-auto">
                       <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
-                      {loadingLinks ? (
+                      <div className="flex gap-2 mb-4">
+                        <button onClick={() => setPopupTab('links')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'links' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          الروابط
+                        </button>
+                        <button onClick={() => setPopupTab('irab')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          الإعراب
+                        </button>
+                        <button onClick={() => setPopupTab('tafsir')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          التفسير
+                        </button>
+                      </div>
+                      {popupTab === 'links' && (loadingLinks ? (
                         <div className="flex items-center justify-center py-6">
                           <div className="w-7 h-7 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
                         </div>
@@ -750,6 +840,44 @@ export default function QuranMushafPage({
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
                           <Bookmark className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                           <p className="text-base text-accent-400">لا توجد روابط لهذه الآية بعد</p>
+                        </div>
+                      ))}
+                      {popupTab === 'irab' && (
+                        <div className="space-y-3">
+                          <p className="text-base text-accent-600 leading-relaxed">إعراب الآية كلمة كلمة من Quranic Arabic Corpus — مشروع أكاديمي (جامعة ليدز) يبيّن لكل كلمة نوعها وحالتها الإعرابية وجذرها.</p>
+                          <a href={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`} target="_blank" rel="noreferrer"
+                            className="block text-center py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-lg transition-smooth">
+                            فتح إعراب {selectedVerse.surah_name} — آية {selectedVerse.ayah_no}
+                          </a>
+                          <p className="text-xs text-accent-400 leading-relaxed text-center">يفتح في صفحة جديدة. أما «الجدول في إعراب القرآن» للصافي فهو المرجع الورقي الكامل، ونصّه غير متاح كخدمة مجانية.</p>
+                        </div>
+                      )}
+                      {popupTab === 'tafsir' && (
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            {TAFSIR_EDITIONS.map((ed) => (
+                              <button key={ed.id} onClick={() => setTafsirEdition(ed.id)}
+                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${tafsirEdition === ed.id ? 'bg-amber-600 text-white' : 'bg-amber-50 text-accent-600 hover:bg-amber-100'}`}>
+                                {ed.name}
+                              </button>
+                            ))}
+                          </div>
+                          {tafsirLoading ? (
+                            <div className="flex items-center justify-center py-6">
+                              <div className="w-7 h-7 border-2 border-amber-200 border-t-amber-600 rounded-full animate-spin" />
+                            </div>
+                          ) : tafsirError ? (
+                            <div className="text-center py-6 bg-gray-50 rounded-lg">
+                              <p className="text-base text-accent-500 mb-3">{tafsirError}</p>
+                              <button onClick={() => selectedVerse && loadTafsir(tafsirEdition, selectedVerse)}
+                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg">
+                                إعادة المحاولة
+                              </button>
+                            </div>
+                          ) : tafsirText ? (
+                            <p className="text-base text-accent-700 leading-loose whitespace-pre-line">{tafsirText}</p>
+                          ) : null}
+                          <p className="text-xs text-accent-400 text-center">المصدر: نصوص تفاسير منشورة عبر AlQuranCloud</p>
                         </div>
                       )}
                     </div>
