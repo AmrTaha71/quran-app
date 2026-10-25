@@ -322,6 +322,9 @@ export default function QuranMushafPage({
   // the page image so swipes over the verse strip still scroll the strip.
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  // Timestamp of the last swipe page-turn: the compatibility click that
+  // follows a swipe must not be treated as a word tap.
+  const lastSwipeAt = useRef(0);
   const handlePageTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     touchStartX.current = t.clientX;
@@ -338,15 +341,15 @@ export default function QuranMushafPage({
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
     if (Math.abs(dx) >= 60 && Math.abs(dx) >= Math.abs(dy)) {
+      lastSwipeAt.current = Date.now();
       if (dx < 0) goToPage(currentPage + 1);
       else goToPage(currentPage - 1);
-      return;
     }
-    // A near-motionless touch is a tap: hit-test it against the page's
-    // word boxes (Madinah only; other editions have no boxes loaded).
-    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
-      void handleWordTap(t.clientX, t.clientY);
-    }
+    // Taps are handled by the wrapper's onClick, NOT here: opening the
+    // popup from touchend raced with the compatibility click that follows
+    // every touch — the popup's own backdrop caught that click and closed
+    // instantly, so word taps looked dead while strip buttons (click-only)
+    // worked fine.
   };
 
   const goToSurah = (surahNo: number) => {
@@ -396,8 +399,17 @@ export default function QuranMushafPage({
     if (cached) { setPageWordBoxes(cached); return; }
     let cancelled = false;
     const file = String(currentPage).padStart(3, '0');
-    fetch(`https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@main/src/qurancoor/data/page-${file}.json`)
-      .then((r) => (r.ok ? r.json() : null))
+    // jsdelivr first, raw.githubusercontent as fallback — same file.
+    const urls = [
+      `https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@main/src/qurancoor/data/page-${file}.json`,
+      `https://raw.githubusercontent.com/bodoorzahera/Quran-coordinate/main/src/qurancoor/data/page-${file}.json`,
+    ];
+    const loadCoords = async (i: number): Promise<any | null> => {
+      if (i >= urls.length) return null;
+      try { const r = await fetch(urls[i]); if (r.ok) return await r.json(); } catch {}
+      return loadCoords(i + 1);
+    };
+    loadCoords(0)
       .then((j) => {
         if (cancelled) return;
         if (!j || !j.coords) { setPageWordBoxes(null); return; }
@@ -433,7 +445,20 @@ export default function QuranMushafPage({
     const rect = wrap.getBoundingClientRect();
     const px = ((clientX - rect.left) / rect.width) * 100;
     const py = ((clientY - rect.top) / rect.height) * 100;
-    const box = boxes.find((b) => px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height);
+    let box = boxes.find((b) => px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height);
+    // Forgiving fallback: a tap in a small gap between words still opens
+    // the nearest word — but only inside the text block, so border taps
+    // still open nothing. Vertical distance counts double: a wrong line
+    // is a wrong ayah, a wrong word on the same line usually is not.
+    if (!box && px >= 8 && px <= 92 && py >= 10 && py <= 90) {
+      let best: WordBox | null = null;
+      let bestD = Infinity;
+      for (const b of boxes) {
+        const d = Math.hypot(px - (b.left + b.width / 2), (py - (b.top + b.height / 2)) * 2);
+        if (d < bestD) { bestD = d; best = b; }
+      }
+      if (best && bestD < 4) box = best;
+    }
     if (!box) return;
     setTapFlash(box);
     if (tapFlashTimer.current) clearTimeout(tapFlashTimer.current);
@@ -888,8 +913,20 @@ export default function QuranMushafPage({
                   // touches the screen edges, with no text cropped; other
                   // editions keep exact fit. aspect-ratio reserves the box.
                   className={`relative h-[100svh] w-auto max-w-[100vw]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
-                  style={{ aspectRatio: String(imgAspect) }}
-                  onClick={(e) => e.stopPropagation()}
+                  // Madinah aspect is frozen at 0.63: updating it from
+                  // every page's natural size let the box width jitter
+                  // from page to page (magnified by the 1.15 zoom), which
+                  // read as the page dancing left/right. Other editions
+                  // keep their adaptive aspect — they never danced.
+                  style={{ aspectRatio: String(edition.id === 'madinah' ? 0.63 : imgAspect) }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Word tap (click, not touchend — see touchend note).
+                    // Clicks right after a swipe are ignored via lastSwipeAt.
+                    if (showRatelIntro || showEditionPickerInFullscreen || selectedVerse) return;
+                    if (Date.now() - lastSwipeAt.current < 500) return;
+                    void handleWordTap(e.clientX, e.clientY);
+                  }}
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd}>
                   <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
@@ -930,7 +967,11 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      className="absolute top-0 left-0 h-full w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
+                      // Same height as the main page (100svh) and centered
+                      // in the strip: the old h-full (container height) ran
+                      // longer than the page. No zoom here — scaling about
+                      // the image's own center would shift the visible slice.
+                      className="absolute top-1/2 -translate-y-1/2 left-0 h-[100svh] w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -947,7 +988,9 @@ export default function QuranMushafPage({
                   <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      className="absolute top-0 right-0 h-full w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
+                      // Same height as the main page (100svh) and centered
+                      // in the strip — see the other sliver's note.
+                      className="absolute top-1/2 -translate-y-1/2 right-0 h-[100svh] w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
