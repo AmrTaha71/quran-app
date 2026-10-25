@@ -86,6 +86,11 @@ export default function QuranMushafPage({
   const [pageInput, setPageInput] = useState('');
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
+  // Natural aspect of the loaded page image (default 0.63 = Madani page).
+  // Reserving the box with aspect-ratio means the layout never collapses
+  // while the next page loads — a collapsing width was one of the two
+  // causes of the page visibly shifting left/right on page turns.
+  const [imgAspect, setImgAspect] = useState(0.63);
   const [surahVerses, setSurahVerses] = useState<QuranVerse[]>([]);
   // Ayahs actually printed on the current Mushaf page (from the free
   // Quranpedia API, mushaf 1 = Hafs, Madani pagination). While it loads
@@ -790,10 +795,23 @@ export default function QuranMushafPage({
             <>
               {!imageError ? (
                 <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
-                  className="h-[100dvh] w-auto max-w-[100vw] object-contain touch-none [-webkit-touch-callout:none]"
+                  // Fullscreen fill + no-dance: svh (not dvh) so Safari's
+                  // address-bar show/hide can never resize the page (the
+                  // second cause of the left/right shifting); the 1.15 zoom
+                  // applies only to the Madinah edition, whose dark outer
+                  // margins were measured (text block 11-88% / 13-87%) — it
+                  // zooms past those margins so the decorated frame nearly
+                  // touches the screen edges, with no text cropped; other
+                  // editions keep exact fit. aspect-ratio reserves the box.
+                  className={`h-[100svh] w-auto max-w-[100vw] object-contain touch-none [-webkit-touch-callout:none]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
+                  style={{ aspectRatio: String(imgAspect) }}
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
+                  onLoad={(e) => {
+                    const im = e.currentTarget;
+                    if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
+                  }}
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd} />
               ) : (

@@ -9,7 +9,7 @@ import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   Heart, Bookmark, AlertTriangle, X, BookMarked, AlertCircle,
-  Volume2, Filter, Layers,
+  Volume2, Filter, Layers, Mic,
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import VoiceSelector from '../components/VoiceSelector';
@@ -43,6 +43,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searchHint, setSearchHint] = useState('');
+  // Voice search: browser SpeechRecognition (ar-SA), same pattern as
+  // LinkModal. The transcript is written into `search`, so the existing
+  // 3-word rule and the diacritic-clean match (ayah_text_clean) apply
+  // to voice exactly as they do to typed text — no separate search path.
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const voiceFinalRef = useRef('');
+  const voiceInterimRef = useRef('');
 
   const { lists, toggleList: toggleListRaw } = useUserLists();
 
@@ -72,6 +80,55 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
   }, [search]);
+
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = 'ar-SA';
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i][0];
+        if (r.isFinal) voiceFinalRef.current += r.transcript + ' ';
+        else interim += r.transcript + ' ';
+      }
+      voiceInterimRef.current = interim;
+      const display = (voiceFinalRef.current + ' ' + interim).trim();
+      if (display) { setSearch(display); setPage(0); }
+    };
+    rec.onerror = (e: any) => {
+      setIsListening(false);
+      setSearchHint(
+        e.error === 'not-allowed' ? 'اسمح بالميكروفون من إعدادات المتصفح ثم حاول مجدداً'
+        : e.error === 'no-speech' ? 'لم أسمع شيئاً — اضغط الميكروفون وحاول مجدداً'
+        : e.error === 'network' ? 'البحث الصوتي يحتاج اتصالاً بالإنترنت'
+        : 'تعذر البحث الصوتي — حاول مجدداً'
+      );
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      const finalText = voiceFinalRef.current.trim() || voiceInterimRef.current.trim();
+      if (finalText) { setSearch(finalText); setPage(0); }
+    };
+    recognitionRef.current = rec;
+    return () => { try { rec.stop(); } catch {} };
+  }, []);
+
+  const toggleVoiceSearch = () => {
+    if (isListening) { try { recognitionRef.current?.stop(); } catch {} return; }
+    if (!recognitionRef.current) {
+      setSearchHint('هذا المتصفح لا يدعم البحث الصوتي — اكتب البحث بدلاً منه');
+      return;
+    }
+    voiceFinalRef.current = '';
+    voiceInterimRef.current = '';
+    setSearchHint('جارٍ الاستماع… انطق ٣ كلمات على الأقل');
+    setIsListening(true);
+    try { recognitionRef.current.start(); } catch { setIsListening(false); }
+  };
 
   const toggleList = async (verseId: number, listType: ListType, linkId?: number) => {
     await toggleListRaw(verseId, listType, linkId);
@@ -277,7 +334,12 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   <input type="text" value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                     placeholder={t('search') + ' (٣ كلمات على الأقل)'}
-                    className="w-full pr-11 pl-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
+                    className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  <button type="button" onClick={toggleVoiceSearch}
+                    title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي — انطق ٣ كلمات على الأقل'}
+                    className={`absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full transition-smooth ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-gray-500 hover:bg-gray-200'}`}>
+                    <Mic className="w-5 h-5" />
+                  </button>
                 </div>
                 {searchHint && (
                   <div className="flex items-center gap-1.5 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 mt-2">
