@@ -959,13 +959,18 @@ export default function QuranMushafPage({
                   // Fullscreen fill + no-dance: vh (the large viewport,
                   // stable when Safari's chrome shows/hides) so the page
                   // fills the whole layout viewport — svh left bands whose
-                  // size changed with the chrome state; the 1.15 zoom
-                  // applies only to the Madinah edition, whose dark outer
-                  // margins were measured (text block 11-88% / 13-87%) — it
-                  // zooms past those margins so the decorated frame nearly
-                  // touches the screen edges, with no text cropped; other
-                  // editions keep exact fit. aspect-ratio reserves the box.
-                  className={`relative h-screen w-auto max-w-[100vw]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
+                  // size changed with the chrome state. The Madinah zoom is
+                  // a LAYOUT height (115vh, cropped by the container), NOT
+                  // a transform scale: a scaled layer re-rasterizes in
+                  // Safari on every image swap, which read as dancing on
+                  // page turns — and the scale was the one Madinah-only
+                  // visual difference left after other editions stopped
+                  // dancing. The 115vh height zooms past the measured dark
+                  // outer margins (text block 11-88% / 13-87%) so the frame
+                  // nearly touches the screen edges, with no text cropped;
+                  // other editions keep exact fit. aspect-ratio reserves
+                  // the box.
+                  className={`relative ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-[100vw]`}
                   // Madinah aspect is frozen at 0.63: updating it from
                   // every page's natural size let the box width jitter
                   // from page to page (magnified by the 1.15 zoom), which
@@ -1035,7 +1040,7 @@ export default function QuranMushafPage({
                       // in the strip: the old h-full (container height) ran
                       // longer than the page. No zoom here — scaling about
                       // the image's own center would shift the visible slice.
-                      className="absolute top-1/2 -translate-y-1/2 left-0 h-screen w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
+                      className={`absolute top-1/2 -translate-y-1/2 left-0 ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`} />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -1054,7 +1059,7 @@ export default function QuranMushafPage({
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Same height as the main page (100vh) and centered
                       // in the strip — see the other sliver's note.
-                      className="absolute top-1/2 -translate-y-1/2 right-0 h-screen w-auto max-w-none opacity-70 [-webkit-touch-callout:none]" />
+                      className={`absolute top-1/2 -translate-y-1/2 right-0 ${edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen'} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`} />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
