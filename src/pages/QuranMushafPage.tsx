@@ -337,9 +337,16 @@ export default function QuranMushafPage({
     const t = e.changedTouches[0];
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-    if (dx < 0) goToPage(currentPage + 1);
-    else goToPage(currentPage - 1);
+    if (Math.abs(dx) >= 60 && Math.abs(dx) >= Math.abs(dy)) {
+      if (dx < 0) goToPage(currentPage + 1);
+      else goToPage(currentPage - 1);
+      return;
+    }
+    // A near-motionless touch is a tap: hit-test it against the page's
+    // word boxes (Madinah only; other editions have no boxes loaded).
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
+      void handleWordTap(t.clientX, t.clientY);
+    }
   };
 
   const goToSurah = (surahNo: number) => {
@@ -365,6 +372,79 @@ export default function QuranMushafPage({
     setSelectedVerse(verse);
     setPopupTab('links');
     fetchVerseLinks(verse.id);
+  };
+
+  // Word taps (Madinah edition only): per-page word boxes from qurancoor
+  // (MIT), remapped from its tight text-block crop onto the app's framed
+  // page image — calibration verified against the sufone page 7 overlay
+  // test (vertical alignment exact on every line, horizontal within ~1/4
+  // word). Boxes whose calibrated left edge is >= 88% are the dataset's
+  // spurious border boxes (no word under them) and are dropped, so taps
+  // on the border open nothing. A tap only needs ayah-level accuracy:
+  // words of one ayah are adjacent, so edge errors matter only at ayah
+  // boundaries, and the popup shows the ayah text on top for confirmation.
+  type WordBox = { key: string; surah: number; ayah: number; left: number; top: number; width: number; height: number };
+  const [pageWordBoxes, setPageWordBoxes] = useState<WordBox[] | null>(null);
+  const wordBoxCache = useRef<Record<number, WordBox[]>>({});
+  const pageWrapRef = useRef<HTMLDivElement | null>(null);
+  const [tapFlash, setTapFlash] = useState<WordBox | null>(null);
+  const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (edition.id !== 'madinah') { setPageWordBoxes(null); return; }
+    const cached = wordBoxCache.current[currentPage];
+    if (cached) { setPageWordBoxes(cached); return; }
+    let cancelled = false;
+    const file = String(currentPage).padStart(3, '0');
+    fetch(`https://cdn.jsdelivr.net/gh/bodoorzahera/Quran-coordinate@main/src/qurancoor/data/page-${file}.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled) return;
+        if (!j || !j.coords) { setPageWordBoxes(null); return; }
+        const boxes: WordBox[] = [];
+        for (const [key, v] of Object.entries<any>(j.coords)) {
+          const h = v?.h;
+          if (!h) continue;
+          const left = 11 + ((h.x - 40) / 840) * 77;
+          if (left >= 88) continue;
+          const parts = key.split(':').map(Number);
+          if (parts.length < 2 || !parts[0] || !parts[1]) continue;
+          boxes.push({
+            key,
+            surah: parts[0],
+            ayah: parts[1],
+            left,
+            top: 13 + ((h.y - 25) / 1380) * 74,
+            width: (h.w / 840) * 77,
+            height: (h.h / 1380) * 74,
+          });
+        }
+        wordBoxCache.current[currentPage] = boxes;
+        setPageWordBoxes(boxes);
+      })
+      .catch(() => { if (!cancelled) setPageWordBoxes(null); });
+    return () => { cancelled = true; };
+  }, [currentPage, edition.id]);
+
+  const handleWordTap = async (clientX: number, clientY: number) => {
+    const wrap = pageWrapRef.current;
+    const boxes = pageWordBoxes;
+    if (!wrap || !boxes) return;
+    const rect = wrap.getBoundingClientRect();
+    const px = ((clientX - rect.left) / rect.width) * 100;
+    const py = ((clientY - rect.top) / rect.height) * 100;
+    const box = boxes.find((b) => px >= b.left && px <= b.left + b.width && py >= b.top && py <= b.top + b.height);
+    if (!box) return;
+    setTapFlash(box);
+    if (tapFlashTimer.current) clearTimeout(tapFlashTimer.current);
+    tapFlashTimer.current = setTimeout(() => setTapFlash(null), 700);
+    const pool = [...stripVerses, ...surahVerses, ...spannedVerses];
+    let row = pool.find((v) => v.surah_no === box.surah && v.ayah_no === box.ayah);
+    if (!row) {
+      const { data } = await supabase.from('quran_verses').select('*').eq('surah_no', box.surah).eq('ayah_no', box.ayah).limit(1);
+      row = data?.[0] ?? undefined;
+    }
+    if (row) handleVerseClick(row);
   };
 
   const playAudio = (url: string) => { new Audio(url).play(); };
@@ -794,7 +874,11 @@ export default function QuranMushafPage({
           {!showRatelIntro && !showEditionPickerInFullscreen && (
             <>
               {!imageError ? (
-                <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
+                // Wrapper owns size, zoom and touch: the scale transform
+                // applies to image + tap flash together, and tap
+                // coordinates are measured against this box (fractions
+                // are unchanged by uniform scaling).
+                <div ref={pageWrapRef}
                   // Fullscreen fill + no-dance: svh (not dvh) so Safari's
                   // address-bar show/hide can never resize the page (the
                   // second cause of the left/right shifting); the 1.15 zoom
@@ -803,17 +887,24 @@ export default function QuranMushafPage({
                   // zooms past those margins so the decorated frame nearly
                   // touches the screen edges, with no text cropped; other
                   // editions keep exact fit. aspect-ratio reserves the box.
-                  className={`h-[100svh] w-auto max-w-[100vw] object-contain touch-none [-webkit-touch-callout:none]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
+                  className={`relative h-[100svh] w-auto max-w-[100vw]${edition.id === 'madinah' ? ' scale-[1.15]' : ''}`}
                   style={{ aspectRatio: String(imgAspect) }}
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => e.stopPropagation()}
-                  onLoad={(e) => {
-                    const im = e.currentTarget;
-                    if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
-                  }}
                   onTouchStart={handlePageTouchStart}
-                  onTouchEnd={handlePageTouchEnd} />
+                  onTouchEnd={handlePageTouchEnd}>
+                  <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
+                    className="h-full w-full object-contain touch-none [-webkit-touch-callout:none]"
+                    draggable={false}
+                    onDragStart={(e) => e.preventDefault()}
+                    onLoad={(e) => {
+                      const im = e.currentTarget;
+                      if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
+                    }} />
+                  {tapFlash && (
+                    <div className="absolute rounded-md ring-2 ring-amber-300 bg-amber-300/20 pointer-events-none"
+                      style={{ left: `${tapFlash.left}%`, top: `${tapFlash.top}%`, width: `${tapFlash.width}%`, height: `${tapFlash.height}%` }} />
+                  )}
+                </div>
               ) : (
                 <div className="text-center touch-none" onClick={(e) => e.stopPropagation()}
                   onTouchStart={handlePageTouchStart}
