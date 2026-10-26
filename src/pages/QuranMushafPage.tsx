@@ -417,45 +417,61 @@ export default function QuranMushafPage({
   const [qulPhrases, setQulPhrases] = useState<QulPhraseEntry[] | null>(null);
   const [mutashabihatSource, setMutashabihatSource] = useState<'qul' | 'computed' | null>(null);
   const qulDataCache = useRef<QulData | null>(null);
+  // Shared in-flight promise: rapid tab opens/hops must not refetch.
+  const qulDataPromise = useRef<Promise<QulData | null> | null>(null);
   const loadQulData = useCallback(async (): Promise<QulData | null> => {
     if (qulDataCache.current) return qulDataCache.current;
-    try {
-      const [pRes, vRes] = await Promise.all([fetch('/mutashabihat/phrases.json'), fetch('/mutashabihat/phrase_verses.json')]);
-      if (!pRes.ok || !vRes.ok) throw new Error('fetch failed');
-      const data: QulData = { phrases: await pRes.json(), phraseVerses: await vRes.json() };
-      qulDataCache.current = data;
-      return data;
-    } catch { return null; }
+    if (!qulDataPromise.current) {
+      qulDataPromise.current = (async () => {
+        try {
+          const [pRes, vRes] = await Promise.all([fetch('/mutashabihat/phrases.json'), fetch('/mutashabihat/phrase_verses.json')]);
+          if (!pRes.ok || !vRes.ok) throw new Error('fetch failed');
+          const data: QulData = { phrases: await pRes.json(), phraseVerses: await vRes.json() };
+          qulDataCache.current = data;
+          return data;
+        } catch { return null; }
+      })();
+      // A failed load clears itself so the next tab open retries.
+      qulDataPromise.current.then((d) => { if (!d) qulDataPromise.current = null; });
+    }
+    return qulDataPromise.current;
   }, []);
 
+  const quranTextPromise = useRef<Promise<QuranTextRow[] | null> | null>(null);
   const loadQuranText = useCallback(async (): Promise<QuranTextRow[] | null> => {
     if (quranTextCache.current) return quranTextCache.current;
-    try {
-      const rows: QuranTextRow[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const { data, error } = await supabase.from('quran_verses')
-          .select('id,surah_no,surah_name,ayah_no,ayah_text,ayah_text_clean')
-          .order('surah_no', { ascending: true }).order('ayah_no', { ascending: true })
-          .range(from, from + PAGE - 1);
-        if (error || !data) throw new Error('fetch failed');
-        rows.push(...(data as QuranTextRow[]));
-        if (data.length < PAGE) break;
-      }
-      if (rows.length < 6000) throw new Error('incomplete');
-      const idx = new Map<string, number[]>();
-      rows.forEach((r, i) => {
-        const words = wordsOf(r);
-        for (let j = 0; j + 2 < words.length; j++) {
-          const key = `${words[j]} ${words[j + 1]} ${words[j + 2]}`;
-          const arr = idx.get(key);
-          if (arr) arr.push(i); else idx.set(key, [i]);
-        }
-      });
-      quranTextCache.current = rows;
-      trigramIndex.current = idx;
-      return rows;
-    } catch { return null; }
+    if (!quranTextPromise.current) {
+      quranTextPromise.current = (async () => {
+        try {
+          const rows: QuranTextRow[] = [];
+          const PAGE = 1000;
+          for (let from = 0; ; from += PAGE) {
+            const { data, error } = await supabase.from('quran_verses')
+              .select('id,surah_no,surah_name,ayah_no,ayah_text,ayah_text_clean')
+              .order('surah_no', { ascending: true }).order('ayah_no', { ascending: true })
+              .range(from, from + PAGE - 1);
+            if (error || !data) throw new Error('fetch failed');
+            rows.push(...(data as QuranTextRow[]));
+            if (data.length < PAGE) break;
+          }
+          if (rows.length < 6000) throw new Error('incomplete');
+          const idx = new Map<string, number[]>();
+          rows.forEach((r, i) => {
+            const words = wordsOf(r);
+            for (let j = 0; j + 2 < words.length; j++) {
+              const key = `${words[j]} ${words[j + 1]} ${words[j + 2]}`;
+              const arr = idx.get(key);
+              if (arr) arr.push(i); else idx.set(key, [i]);
+            }
+          });
+          quranTextCache.current = rows;
+          trigramIndex.current = idx;
+          return rows;
+        } catch { return null; }
+      })();
+      quranTextPromise.current.then((d) => { if (!d) quranTextPromise.current = null; });
+    }
+    return quranTextPromise.current;
   }, []);
 
   const findSimilar = useCallback(async (verse: QuranVerse) => {
@@ -464,45 +480,64 @@ export default function QuranMushafPage({
     setMutashabihatSource(null);
     setMutashabihatError(null);
     setMutashabihatLoading(true);
+    // QUL FIRST — measured on the real corpus, the lookup itself is
+    // ~1ms and both JSONs parse in ~18ms; the old order loaded all
+    // 6,236 verses (7 sequential paginated queries) before even
+    // consulting QUL, and that wait was the slowness. The published
+    // phrase data now answers without the table: labels need only the
+    // source ayahs' words, fetched by one small query over the distinct
+    // source surahs, with surah names from the SURAHS constant.
+    const qul = await loadQulData();
+    const qulKey = `${verse.surah_no}:${verse.ayah_no}`;
+    const qulIds = qul?.phraseVerses[qulKey];
+    if (qul && qulIds && qulIds.length > 0) {
+      let labelRows: { surah_no: number; ayah_no: number; ayah_text: string }[] | null = null;
+      try {
+        const srcSurahs = [...new Set(qulIds.map((id) => qul.phrases[String(id)]?.source.key.split(':')[0]).filter(Boolean).map(Number))];
+        const { data, error } = await supabase.from('quran_verses')
+          .select('surah_no,ayah_no,ayah_text').in('surah_no', srcSurahs);
+        if (error || !data) throw new Error('label fetch failed');
+        labelRows = data as { surah_no: number; ayah_no: number; ayah_text: string }[];
+      } catch {
+        // Label fetch failed: use the full table for labels instead.
+        labelRows = await loadQuranText();
+      }
+      if (labelRows) {
+        const entries: QulPhraseEntry[] = [];
+        for (const id of qulIds) {
+          const ph = qul.phrases[String(id)];
+          if (!ph) continue;
+          const [sNo, aNo] = ph.source.key.split(':').map(Number);
+          const srcRow = labelRows.find((r) => r.surah_no === sNo && r.ayah_no === aNo);
+          const srcWords = srcRow ? srcRow.ayah_text.split(/\s+/).filter((w) => w.length > 0) : [];
+          const text = srcWords.slice(ph.source.from, ph.source.to + 1).join(' ');
+          if (!text) continue;
+          const others = Object.keys(ph.ayah).filter((k) => k !== qulKey).map((k) => {
+            const [os, oa] = k.split(':').map(Number);
+            return { key: k, surah_no: os, ayah_no: oa, surah_name: SURAHS.find((s) => s.no === os)?.name || `سورة ${os}` };
+          }).sort((x, y) => x.surah_no - y.surah_no || x.ayah_no - y.ayah_no);
+          entries.push({ id, text, ayahs: ph.ayahs, surahs: ph.surahs, others });
+        }
+        if (entries.length > 0) {
+          entries.sort((a, b) => b.text.split(/\s+/).length - a.text.split(/\s+/).length);
+          setQulPhrases(entries);
+          setMutashabihatSource('qul');
+          setMutashabihatLoading(false);
+          return;
+        }
+      }
+      // QUL ids existed but produced no usable labels: fall through to
+      // the computed detection below.
+    }
+    // Fallback: computed detection from the text itself. The full table
+    // + trigram index load lazily, only when QUL has nothing for this
+    // ayah (measured: index build ~90ms, lookup <11ms on real data).
     const rows = await loadQuranText();
     if (!rows || !trigramIndex.current) {
       setMutashabihatError('تعذر تحميل نص القرآن للمقارنة — تحقق من الاتصال وحاول مجدداً');
       setMutashabihatLoading(false);
       return;
     }
-    // Published QUL data first: the open ayah's phrase ids, each phrase
-    // labelled by slicing its source ayah's raw words by the stored
-    // range, with the other ayahs it appears in as hop targets.
-    const qul = await loadQulData();
-    const qulKey = `${verse.surah_no}:${verse.ayah_no}`;
-    const qulIds = qul?.phraseVerses[qulKey];
-    if (qul && qulIds && qulIds.length > 0) {
-      const surahName = new Map<number, string>();
-      rows.forEach((r) => { if (!surahName.has(r.surah_no)) surahName.set(r.surah_no, r.surah_name); });
-      const entries: QulPhraseEntry[] = [];
-      for (const id of qulIds) {
-        const ph = qul.phrases[String(id)];
-        if (!ph) continue;
-        const [sNo, aNo] = ph.source.key.split(':').map(Number);
-        const srcRow = rows.find((r) => r.surah_no === sNo && r.ayah_no === aNo);
-        const srcWords = srcRow ? srcRow.ayah_text.split(/\s+/).filter((w) => w.length > 0) : [];
-        const text = srcWords.slice(ph.source.from, ph.source.to + 1).join(' ');
-        if (!text) continue;
-        const others = Object.keys(ph.ayah).filter((k) => k !== qulKey).map((k) => {
-          const [os, oa] = k.split(':').map(Number);
-          return { key: k, surah_no: os, ayah_no: oa, surah_name: surahName.get(os) || `سورة ${os}` };
-        }).sort((x, y) => x.surah_no - y.surah_no || x.ayah_no - y.ayah_no);
-        entries.push({ id, text, ayahs: ph.ayahs, surahs: ph.surahs, others });
-      }
-      if (entries.length > 0) {
-        entries.sort((a, b) => b.text.split(/\s+/).length - a.text.split(/\s+/).length);
-        setQulPhrases(entries);
-        setMutashabihatSource('qul');
-        setMutashabihatLoading(false);
-        return;
-      }
-    }
-    // Fallback: computed detection from the text itself.
     const target = rows.find((r) => r.surah_no === verse.surah_no && r.ayah_no === verse.ayah_no);
     if (!target) {
       setMutashabihatError('لا توجد بيانات نصية لهذه الآية');
@@ -540,6 +575,16 @@ export default function QuranMushafPage({
     if (popupTab !== 'mutashabihat' || !selectedVerse) return;
     findSimilar(selectedVerse);
   }, [popupTab, selectedVerse, findSimilar]);
+
+  // Warm the QUL phrase JSONs shortly after the Mushaf mounts (idle,
+  // best-effort): the first mutashabihat tab open then skips its only
+  // remaining fetch. The full verse table is NOT preloaded — it is
+  // needed only for the computed fallback.
+  useEffect(() => {
+    const t = setTimeout(() => { void loadQulData(); }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Jump from a similar ayah to that ayah's own popup, staying on the
   // mutashabihat tab so similar verses can be compared by hopping.
@@ -719,6 +764,13 @@ export default function QuranMushafPage({
   const [followHeard, setFollowHeard] = useState('');
   const [followError, setFollowError] = useState<string | null>(null);
   const [followManual, setFollowManual] = useState('');
+  // Visible follow diagnostics (no silent failure): index-load state,
+  // Whisper chunk phase / count / consecutive failures. The lobby shows
+  // all of these, so a tap that does nothing visible is impossible.
+  const [followIndexLoading, setFollowIndexLoading] = useState(false);
+  const [followChunkPhase, setFollowChunkPhase] = useState<'idle' | 'recording' | 'uploading' | 'transcribing'>('idle');
+  const [followChunkCount, setFollowChunkCount] = useState(0);
+  const [followChunkFails, setFollowChunkFails] = useState(0);
   const followOrderedRef = useRef<OrderedVerse[] | null>(null);
   const followBufferRef = useRef<string[]>([]);
   const followListeningRef = useRef(false);
@@ -730,8 +782,6 @@ export default function QuranMushafPage({
   const followWakeLockRef = useRef<any>(null);
   const followActiveRef = useRef(false);
   const followVisListenerRef = useRef(false);
-  const srAvailable = typeof window !== 'undefined'
-    && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 
   // The screen must NEVER sleep during a prayer. Browsers release wake
   // locks when the tab hides and sometimes when the system intervenes,
@@ -780,6 +830,10 @@ export default function QuranMushafPage({
     followPosRef.current = null;
     setFollowHeard('');
     setFollowError(null);
+    setFollowIndexLoading(false);
+    setFollowChunkPhase('idle');
+    setFollowChunkCount(0);
+    setFollowChunkFails(0);
     followBufferRef.current = [];
     followMissRef.current = 0;
     setCleanMode(false);
@@ -803,7 +857,15 @@ export default function QuranMushafPage({
     try { followWakeLockRef.current?.release(); } catch {}
     followWakeLockRef.current = null;
     setFollowOn(false);
-    setFollowReady(false);
+    // Back to the START branch, not the listening branch: on the follow
+    // route the lobby stays visible after a stop, and showing "listening"
+    // with a dead engine left the user stuck with no way to start again
+    // (that dead state was part of "listening doesn't work").
+    setFollowReady(true);
+    setFollowIndexLoading(false);
+    setFollowChunkPhase('idle');
+    setFollowChunkCount(0);
+    setFollowChunkFails(0);
     setFollowPos(null);
     followPosRef.current = null;
     setFollowEngine(null);
@@ -881,41 +943,31 @@ export default function QuranMushafPage({
     setTimeout(() => { try { rec.stop(); } catch {} }, ms);
   });
 
+  // Whisper chunk loop only. The mic stream and the login check are done
+  // by startFollowListening BEFORE the verse-index await (inside the tap
+  // gesture) — see below — so by the time this runs, the stream exists
+  // and the loop just records, uploads, transcribes, and reports its
+  // phase, so the lobby never looks frozen while chunks are in flight.
   const runWhisperLoop = useCallback(async () => {
-    if (!window.MediaRecorder) {
-      setFollowError('هذا المتصفح لا يدعم التسجيل — اكتب الكلمات يدوياً بالأسفل');
-      setFollowReady(true);
-      followListeningRef.current = false;
-      return;
-    }
-    try {
-      followStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
-      setFollowReady(true);
-      followListeningRef.current = false;
-      return;
-    }
     const uid = session?.user?.id;
-    if (!uid) {
-      setFollowError('الاستماع عبر الخادم يحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
-      setFollowReady(true);
-      followListeningRef.current = false;
-      return;
-    }
+    if (!uid || !followStreamRef.current) return;
     let consecutiveFails = 0;
     while (followListeningRef.current) {
-      // A fresh path per chunk: storage has an INSERT policy but NO
-      // UPDATE policy, so re-uploading one path (upsert) fails from the
-      // second chunk on and freezes tracking. Delete after transcribing
-      // so chunks don't pile up in the bucket.
-      const chunkPath = `follow/${uid}/${Date.now()}.webm`;
+      let chunkPath = '';
       try {
+        setFollowChunkCount((c) => c + 1);
+        setFollowChunkPhase('recording');
         const blob = await recordChunk(8000);
         if (!followListeningRef.current) break;
+        // The chunk file's extension matches its real bytes (iOS records
+        // mp4, desktop webm) so stored chunks are honestly named.
+        const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
+        chunkPath = `follow/${uid}/${Date.now()}.${ext}`;
+        setFollowChunkPhase('uploading');
         const { error: upErr } = await supabase.storage.from('rana-audio').upload(chunkPath, blob);
         if (upErr) throw upErr;
         const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(chunkPath);
+        setFollowChunkPhase('transcribing');
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
@@ -928,38 +980,44 @@ export default function QuranMushafPage({
           followFinalRef.current(data.transcript);
         }
         consecutiveFails = 0;
+        setFollowChunkFails(0);
         setFollowError(null);
       } catch {
         // One failed chunk must not kill the session — but after several
         // in a row, say so instead of looking frozen.
         consecutiveFails += 1;
+        setFollowChunkFails(consecutiveFails);
         if (consecutiveFails >= 3) {
           setFollowError('تعذر الاستماع عبر الخادم — تأكد من الاتصال، أو اكتب الكلمات يدوياً بالأسفل');
         }
         await new Promise((r) => setTimeout(r, 1500));
       } finally {
-        try { await supabase.storage.from('rana-audio').remove([chunkPath]); } catch {}
+        if (chunkPath) {
+          try { await supabase.storage.from('rana-audio').remove([chunkPath]); } catch {}
+        }
       }
     }
+    setFollowChunkPhase('idle');
   }, [session]);
 
+  // Two iOS-Safari failure modes lived here, both looking exactly like
+  // "listening doesn't work":
+  // (1) The old order awaited the verse index (7 sequential queries,
+  // seconds on mobile) BEFORE requesting the mic — and iOS Safari
+  // rejects getUserMedia requested outside the tap gesture with
+  // NotAllowedError and NO permission prompt, so the user got a
+  // misleading "allow the mic in browser settings" error for a
+  // permission they never denied. Now the mic (Whisper path) and the
+  // live recognizer (live path) start FIRST, inside the tap, and the
+  // index loads after — onFollowFinal safely drops transcripts until
+  // the index is ready.
+  // (2) During the index load the lobby showed no change at all, so a
+  // tap looked dead. Now followIndexLoading shows "loading the ayah
+  // index…" in the lobby, and the listening branch shows the engine
+  // (live vs Whisper), the chunk phase, and the failure count.
   const startFollowListening = useCallback(async () => {
+    if (followListeningRef.current) return; // double-tap guard: one loop only
     setFollowError(null);
-    try {
-      if (!followOrderedRef.current) {
-        const verses = await loadVerseIndex();
-        followOrderedRef.current = buildOrderedVerses(verses);
-      }
-    } catch {
-      setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
-      return;
-    }
-    followListeningRef.current = true;
-    setFollowReady(false);
-    setFollowStatus('listening');
-    followStatusRef.current = 'listening';
-    // Keep the screen on through a long Taraweeh (re-acquired if lost).
-    ensureWakeLockTracking();
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SR) {
       setFollowEngine('live');
@@ -994,13 +1052,81 @@ export default function QuranMushafPage({
       } catch {
         setFollowError('تعذر بدء الاستماع — جرّب الإدخال اليدوي بالأسفل');
         setFollowReady(true);
+        return;
+      }
+      followListeningRef.current = true;
+      setFollowReady(false);
+      setFollowStatus('listening');
+      followStatusRef.current = 'listening';
+      // Keep the screen on through a long Taraweeh (re-acquired if lost).
+      ensureWakeLockTracking();
+      setFollowIndexLoading(true);
+      try {
+        if (!followOrderedRef.current) {
+          const verses = await loadVerseIndex();
+          followOrderedRef.current = buildOrderedVerses(verses);
+        }
+      } catch {
+        try { rec.stop(); } catch {}
+        recognitionRef.current = null;
         followListeningRef.current = false;
+        setFollowReady(true);
+        setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+      } finally {
+        setFollowIndexLoading(false);
       }
       return;
     }
+    // Whisper path (Safari): mic FIRST, inside the tap gesture.
     setFollowEngine('whisper');
+    if (!window.MediaRecorder) {
+      setFollowError('هذا المتصفح لا يدعم التسجيل — اكتب الكلمات يدوياً بالأسفل');
+      return;
+    }
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
+      return;
+    }
+    followStreamRef.current = stream;
+    const uid = session?.user?.id;
+    if (!uid) {
+      stream.getTracks().forEach((t) => t.stop());
+      followStreamRef.current = null;
+      setFollowError('الاستماع عبر الخادم يحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
+      return;
+    }
+    followListeningRef.current = true;
+    setFollowReady(false);
+    setFollowStatus('listening');
+    followStatusRef.current = 'listening';
+    ensureWakeLockTracking();
+    setFollowIndexLoading(true);
+    try {
+      if (!followOrderedRef.current) {
+        const verses = await loadVerseIndex();
+        followOrderedRef.current = buildOrderedVerses(verses);
+      }
+    } catch {
+      followListeningRef.current = false;
+      stream.getTracks().forEach((t) => t.stop());
+      followStreamRef.current = null;
+      setFollowReady(true);
+      setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+      setFollowIndexLoading(false);
+      return;
+    }
+    setFollowIndexLoading(false);
+    if (!followListeningRef.current) {
+      // Stopped while the index was loading: never start the loop.
+      stream.getTracks().forEach((t) => t.stop());
+      followStreamRef.current = null;
+      return;
+    }
     void runWhisperLoop();
-  }, [runWhisperLoop, ensureWakeLockTracking]);
+  }, [runWhisperLoop, ensureWakeLockTracking, session]);
 
   const manualFollowLock = useCallback(async () => {
     const words = heardWords(followManual);
@@ -1008,6 +1134,7 @@ export default function QuranMushafPage({
       setFollowError('اكتب كلمات أكثر — كلمتين على الأقل');
       return;
     }
+    setFollowIndexLoading(true);
     try {
       if (!followOrderedRef.current) {
         const verses = await loadVerseIndex();
@@ -1015,8 +1142,10 @@ export default function QuranMushafPage({
       }
     } catch {
       setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+      setFollowIndexLoading(false);
       return;
     }
+    setFollowIndexLoading(false);
     const lock = findLock(words, followOrderedRef.current, Math.min(4, words.length));
     if (!lock) {
       setFollowError('لم أجد آية مطابقة — جرّب كلمات أخرى سمعتها بوضوح');
@@ -1687,15 +1816,18 @@ export default function QuranMushafPage({
                         or status bar. Entering first is harmless on a
                         fresh entry (it only resets an empty state). */}
                     <button onClick={() => { enterFollowMode(); startFollowListening(); }}
-                      className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                      disabled={followIndexLoading}
+                      className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
+                    {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     <div className="flex gap-2 mt-3">
                       <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
                         placeholder="أو اكتب كلمات سمعتها من الإمام..."
                         className="flex-1 px-3 py-2.5 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
                       <button onClick={() => { enterFollowMode(); manualFollowLock(); }}
-                        className="px-4 py-2.5 bg-white text-emerald-800 text-sm font-bold rounded-xl">ابحث</button>
+                        disabled={followIndexLoading}
+                        className="px-4 py-2.5 bg-white disabled:opacity-60 text-emerald-800 text-sm font-bold rounded-xl">ابحث</button>
                     </div>
                   </>
                 ) : (
@@ -1703,6 +1835,15 @@ export default function QuranMushafPage({
                     <p className="text-sm font-bold mt-4">
                       {followStatus === 'lost' ? 'فقدت الإمام مؤقتاً — بستنى كلمات أوضح لإعادة القفل...' : 'جارٍ الاستماع للإمام...'}
                     </p>
+                    {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
+                    {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
+                    {followEngine === 'whisper' && (
+                      <p className="text-xs text-emerald-200 mt-2">
+                        المحرك: عبر الخادم (Whisper) — تأخير ~١٠ ثوانٍ
+                        {followChunkPhase !== 'idle' && ` • ${followChunkPhase === 'recording' ? 'بتسجّل المقطع…' : followChunkPhase === 'uploading' ? 'برفع المقطع…' : 'بفرّغ الصوت…'} (المقطع ${followChunkCount})`}
+                        {followChunkFails > 0 && ` • فشل ${followChunkFails}/٣`}
+                      </p>
+                    )}
                     {followHeard && <p className="text-xs text-emerald-200 mt-1 truncate">سمعت: {followHeard}</p>}
                     <div className="flex gap-2 mt-4">
                       <button onClick={resyncFollow}
