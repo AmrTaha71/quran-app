@@ -15,7 +15,7 @@ import AdminLogin from './AdminLogin';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
 const PAGE_SIZE = 25;
 

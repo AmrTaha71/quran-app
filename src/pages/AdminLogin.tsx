@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Lock, User, ArrowRight } from 'lucide-react';
 
-type Route = 'home' | 'admin' | 'app' | 'auth';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
 
 export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [username, setUsername] = useState('');

@@ -8,7 +8,7 @@ import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import ShareButton from '../components/ShareButton';
 import QRCodeSection from '../components/QRCodeSection';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
 export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const { t, lang, setLang } = useLang();

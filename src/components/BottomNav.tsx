@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bookmark, BookOpen, Home, Mic, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
 /**
  * Bottom navigation, in logical RTL order.
@@ -14,7 +14,7 @@ export default function BottomNav({
   current,
   onNavigate,
 }: {
-  current: 'app' | 'mushaf' | 'settings';
+  current: 'app' | 'mushaf' | 'settings' | 'follow';
   onNavigate: (r: Route) => void;
 }) {
   // The board's name is the user's kunya when they set one
@@ -36,7 +36,7 @@ export default function BottomNav({
   const items = [
     { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
-    { id: 'imam' as const, label: 'الحق الإمام', icon: <Mic className="w-7 h-7" /> },
+    { id: 'follow' as const, label: 'الحق الإمام', icon: <Mic className="w-7 h-7" /> },
     { id: 'app' as const, label: appLabel, icon: <Bookmark className="w-7 h-7" /> },
     { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
@@ -52,17 +52,6 @@ export default function BottomNav({
             <button
               key={item.id}
               onClick={() => {
-                if (item.id === 'imam') {
-                  // Follow-the-imam is a mode of the Mushaf page, not a
-                  // route: flag it (session-scoped, so closing the tab
-                  // never leaves a stale panel behind), wake the page
-                  // (whether it mounts now or is already mounted), and
-                  // go there.
-                  try { sessionStorage.setItem('quran-follow-mode', '1'); } catch {}
-                  window.dispatchEvent(new Event('quran:follow-imam'));
-                  onNavigate('mushaf');
-                  return;
-                }
                 onNavigate(item.id);
               }}
               className={`icon-action flex-1 flex-col py-2 text-sm font-bold transition-smooth ${

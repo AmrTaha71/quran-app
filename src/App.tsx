@@ -10,7 +10,7 @@ import QuranMushafPage from './pages/QuranMushafPage';
 import SettingsPage from './pages/SettingsPage';
 import SplashScreen from './components/SplashScreen';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
 function getRouteFromHash(): Route {
   const hash = window.location.hash.replace('#', '').replace('/', '');
@@ -18,6 +18,7 @@ function getRouteFromHash(): Route {
   if (hash === 'app') return 'app';
   if (hash === 'auth') return 'auth';
   if (hash === 'mushaf') return 'mushaf';
+  if (hash === 'follow') return 'follow';
   if (hash === 'settings') return 'settings';
   return 'home';
 }
@@ -95,8 +96,11 @@ function AppContent() {
   if (route === 'app') {
     return <UserAppPage session={session} onNavigate={navigate} />;
   }
-  if (route === 'mushaf') {
-    return <QuranMushafPage session={session} onNavigate={navigate} />;
+  // One branch for mushaf|follow: the same instance serves both
+  // routes, so a live follow session survives switching between them
+  // without remounting and losing the lock.
+  if (route === 'mushaf' || route === 'follow') {
+    return <QuranMushafPage session={session} onNavigate={navigate} startInFollow={route === 'follow'} />;
   }
   if (route === 'settings') {
     return <SettingsPage onNavigate={navigate} />;

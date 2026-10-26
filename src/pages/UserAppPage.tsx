@@ -20,7 +20,7 @@ import QRCodeSection from '../components/QRCodeSection';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
 import ProgressWidget from '../components/ProgressWidget';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 const PAGE_SIZE = 15;
 
 export default function UserAppPage({ session, onNavigate }: { session: import('@supabase/supabase-js').Session | null; onNavigate: (r: Route) => void }) {

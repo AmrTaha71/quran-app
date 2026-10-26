@@ -7,7 +7,7 @@ import {
   Globe, ArrowRight, Shield, Heart, RotateCcw,
 } from 'lucide-react';
 
-type Route = 'home' | 'admin' | 'app' | 'auth';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
 type AuthMode = 'login' | 'signup' | 'recover';
 type LoginMethod = 'username' | 'phone';
 

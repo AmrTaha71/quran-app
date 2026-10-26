@@ -6,7 +6,7 @@ import { LANGUAGES } from '../lib/translations';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
 const EDITION_NOTES: Record<string, string> = {
   madinah: 'الصفحات المصورة الكاملة بالخط العثماني والإطار المزخرف',
@@ -47,6 +47,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     } catch { return null; }
   });
   const [savedTick, setSavedTick] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const saved = () => {
     setSavedTick(true);
@@ -55,6 +56,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   const pickEdition = (i: number) => {
     setEditionIdx(i);
+    setPreviewFailed(false);
     try { localStorage.setItem('quran-mushaf-edition', String(i)); } catch {}
     saved();
   };
@@ -127,6 +129,28 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             ))}
           </div>
+          {/* Live preview: the chosen page itself, right here — it
+              updates on every choice (edition card or gold toggle),
+              so the user sees exactly what the Mushaf will open with. */}
+          <div className="mt-4">
+            <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {EDITIONS[editionIdx].name}</p>
+            <div className="relative mx-auto w-full max-w-[300px] rounded-lg overflow-hidden shadow-lg bg-amber-50">
+              {previewFailed ? (
+                <p className="text-sm text-accent-500 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
+              ) : (
+                <>
+                  <img key={EDITIONS[editionIdx].id} src={EDITIONS[editionIdx].imageUrl(2)} alt="معاينة صفحة المصحف"
+                    onError={() => setPreviewFailed(true)}
+                    className="w-full block" style={{ aspectRatio: '0.707' }} />
+                  {goldFrame && (
+                    <div className="absolute inset-0 pointer-events-none"
+                      style={{ boxShadow: 'inset 0 0 0 3px #b48214, inset 0 0 0 8px #f0c85a' }} />
+                  )}
+                </>
+              )}
+            </div>
+            <p className="text-xs text-accent-400 text-center mt-2">صفحة الفاتحة — نفس الشكل اللي هيتفتح بيه المصحف</p>
+          </div>
           <button onClick={toggleGold}
             className={`mt-4 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${goldFrame ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:border-amber-200'}`}>
             <span className="text-right">
@@ -158,7 +182,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div className="flex gap-2">
             <button onClick={() => pickVoice('female')}
               className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${voicePref === 'female' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
-              صوت نسائي — صوت رنا الأصلي
+              صوت نسائي
             </button>
             <button onClick={() => pickVoice('male')}
               className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${voicePref === 'male' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
