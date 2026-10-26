@@ -7,8 +7,8 @@ type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow
 /**
  * Bottom navigation, in logical RTL order.
  * In an RTL flex row the first DOM item is the rightmost one, so
- * الرئيسية comes first (rightmost), then المصحف, then الحق الإمام,
- * then لوحتي, then الإعدادات (leftmost).
+ * الرئيسية comes first (rightmost), then لوحتي right after it, then
+ * المصحف, then الحق الإمام, then الإعدادات (leftmost).
  */
 export default function BottomNav({
   current,
@@ -35,9 +35,9 @@ export default function BottomNav({
   }, []);
   const items = [
     { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
+    { id: 'app' as const, label: appLabel, icon: <Bookmark className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
     { id: 'follow' as const, label: 'الحق الإمام', icon: <Mic className="w-7 h-7" /> },
-    { id: 'app' as const, label: appLabel, icon: <Bookmark className="w-7 h-7" /> },
     { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
   return (
