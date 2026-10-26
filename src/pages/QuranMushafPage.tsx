@@ -7,13 +7,14 @@ import { LANGUAGES } from '../lib/translations';
 import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
+import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers,
-  LayoutGrid, List, BookMarked, Hash,
+  LayoutGrid, List, BookMarked, Hash, Heart,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
@@ -823,6 +824,11 @@ export default function QuranMushafPage({
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* A personal word before reading — a daily dua for the reader */}
+        <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-4">
+          <Heart className="w-4 h-4" /> {dailyDua()}
+        </p>
+
         {/* Index info bar — Juz / Hizb / Surah */}
         <div className="bg-gradient-to-r from-amber-100 to-stone-100 rounded-2xl border border-amber-200 p-4 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">

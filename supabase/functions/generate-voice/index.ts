@@ -106,6 +106,17 @@ Deno.serve(async (req: Request) => {
       .from("rana-audio")
       .getPublicUrl(fileName);
 
+    // Best-effort usage log for the Admin balance monitor (OpenAI path
+    // only; Azure billing is separate and not tracked here).
+    // tts-1-hd list price: $0.030 per 1,000 characters.
+    if (!azureKey) {
+      try {
+        await supabaseClient.from("ai_usage_events").insert({
+          function_name: "generate-voice", model: "tts-1-hd", cost_usd: (text.length / 1000) * 0.030,
+        });
+      } catch { /* ignore logging errors */ }
+    }
+
     return new Response(
       JSON.stringify({ audioUrl: urlData.publicUrl, voice }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

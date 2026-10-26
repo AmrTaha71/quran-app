@@ -22,6 +22,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
   const [emailConfirm, setEmailConfirm] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
+  const [preferredName, setPreferredName] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [gender, setGender] = useState<'male' | 'female' | ''>('');
@@ -118,6 +119,12 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
         phone: phone || null,
         preferred_language: lang,
       }).then(() => {});
+
+      // Best-effort: save the name they like to be called by. Kept
+      // separate so signup never breaks if the column is missing.
+      if (preferredName.trim()) {
+        await supabase.from('user_profiles').update({ preferred_name: preferredName.trim() }).eq('user_id', data.user.id).then(() => {});
+      }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: signupEmail, password });
       if (signInError) {
@@ -339,6 +346,17 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                   placeholder={t('enterUsername')}
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">تحب أناديك بإيه؟ <span className="font-normal text-accent-400">(اختياري)</span></label>
+                <div className="relative">
+                  <Heart className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
+                  <input type="text" value={preferredName} onChange={(e) => setPreferredName(e.target.value)}
+                  placeholder="مثال: أم يوسف، دكتور محمد"
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                </div>
+                <p className="text-xs text-accent-400 mt-1">الاسم اللي هناديك بيه في التطبيق — تقدر تغيره بعد كده من لوحتك.</p>
               </div>
 
               <div>

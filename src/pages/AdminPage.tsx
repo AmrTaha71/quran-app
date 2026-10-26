@@ -19,6 +19,13 @@ type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
 
 const PAGE_SIZE = 25;
 
+// Arabic labels for the OpenAI usage monitor.
+const USAGE_LABELS: Record<string, string> = {
+  'smart-rephrase': 'إعادة الصياغة',
+  'transcribe-audio': 'تحويل الصوت لنص',
+  'generate-voice': 'توليد الصوت',
+};
+
 export default function AdminPage({ session, onNavigate }: { session: Session | null; onNavigate: (r: Route) => void }) {
   const [verses, setVerses] = useState<QuranVerse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +35,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [surahFilter, setSurahFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<VerseFilter>('all');
   const [stats, setStats] = useState({ withLinks: 0, withoutLinks: 0 });
+  // OpenAI balance monitor (estimated from app-side usage logging).
+  const [usage, setUsage] = useState<{ total: number; calls: number; byFn: Record<string, { calls: number; cost: number }> } | null>(null);
+  const [startingBalance, setStartingBalance] = useState(5);
+  const [balanceDraft, setBalanceDraft] = useState('5');
+  const [editingBalance, setEditingBalance] = useState(false);
+  const [usageError, setUsageError] = useState('');
   const [linkModalVerse, setLinkModalVerse] = useState<QuranVerse | null>(null);
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [showLinksFor, setShowLinksFor] = useState<number | null>(null);
@@ -71,6 +84,37 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
 
     return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
   }, [search]);
+
+  const loadUsage = useCallback(async () => {
+    const { data, error } = await supabase.from('ai_usage_events').select('function_name, cost_usd');
+    if (error || !data) { setUsage(null); return; }
+    const byFn: Record<string, { calls: number; cost: number }> = {};
+    let total = 0;
+    data.forEach((r) => {
+      const cost = Number(r.cost_usd || 0);
+      total += cost;
+      const f = byFn[r.function_name] || { calls: 0, cost: 0 };
+      f.calls += 1; f.cost += cost; byFn[r.function_name] = f;
+    });
+    setUsage({ total, calls: data.length, byFn });
+    const { data: setting } = await supabase.from('app_settings').select('value').eq('key', 'openai_starting_balance').single();
+    const parsed = setting ? parseFloat(setting.value) : NaN;
+    const bal = isNaN(parsed) ? 5 : parsed;
+    setStartingBalance(bal);
+    setBalanceDraft(String(bal));
+  }, []);
+
+  useEffect(() => { loadUsage(); }, [loadUsage]);
+
+  const saveStartingBalance = async () => {
+    const v = parseFloat(balanceDraft);
+    if (isNaN(v) || v < 0) { setUsageError('اكتب رقم صحيح للرصيد'); return; }
+    const { error } = await supabase.from('app_settings').upsert({ key: 'openai_starting_balance', value: String(v) });
+    if (error) { setUsageError('تعذر حفظ الرصيد'); return; }
+    setStartingBalance(v);
+    setEditingBalance(false);
+    setUsageError('');
+  };
 
   const fetchVerses = useCallback(async () => {
     setLoading(true);
@@ -339,6 +383,61 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           </div>
           <StatCard label="آيات لها رابط" value={stats.withLinks} color="emerald" icon={<Bookmark className="w-5 h-5" />} />
           <StatCard label="آيات بدون روابط" value={stats.withoutLinks} color="red" icon={<X className="w-5 h-5" />} />
+        </div>
+
+        {/* OpenAI balance monitor — estimated from app-side usage logging */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-accent-800">رصيد OpenAI (تقديري)</p>
+              <p className="text-xs text-accent-500 mt-0.5">من سجل استخدام التطبيق فقط — الرقم الدقيق في صفحة Usage على OpenAI</p>
+            </div>
+            {usage && (
+              <button onClick={loadUsage} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-smooth">
+                <RefreshCw className="w-3.5 h-3.5" /> تحديث
+              </button>
+            )}
+          </div>
+          {usage ? (
+            <div className="mt-4">
+              <div className="flex flex-wrap gap-6">
+                <div>
+                  <p className="text-xs text-accent-500 font-semibold">المتبقي التقديري</p>
+                  <p className="text-2xl font-bold text-emerald-700">${Math.max(0, startingBalance - usage.total).toFixed(2)}</p>
+                  <p className="text-xs text-accent-400">من ${startingBalance.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-accent-500 font-semibold">المصروف التقديري</p>
+                  <p className="text-2xl font-bold text-accent-800">${usage.total.toFixed(4)}</p>
+                  <p className="text-xs text-accent-400">عبر {usage.calls.toLocaleString('ar-EG')} مكالمة</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                {Object.entries(usage.byFn).map(([fn, v]) => (
+                  <span key={fn} className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-accent-600">
+                    {USAGE_LABELS[fn] || fn}: {v.calls.toLocaleString('ar-EG')} مكالمة — ${v.cost.toFixed(4)}
+                  </span>
+                ))}
+              </div>
+              {editingBalance ? (
+                <div className="flex gap-2 mt-4">
+                  <input value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} inputMode="decimal"
+                    placeholder="5.00"
+                    className="w-32 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500" />
+                  <button onClick={saveStartingBalance} className="px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">حفظ</button>
+                  <button onClick={() => setEditingBalance(false)} className="px-3 py-2 text-sm text-accent-500">إلغاء</button>
+                </div>
+              ) : (
+                <button onClick={() => { setBalanceDraft(String(startingBalance)); setUsageError(''); setEditingBalance(true); }}
+                  className="mt-4 text-xs text-accent-500 underline underline-offset-2 hover:text-accent-700">
+                  تعديل الرصيد الابتدائي (لو شحنت رصيد جديد)
+                </button>
+              )}
+              {usageError && <p className="text-xs text-red-500 mt-2">{usageError}</p>}
+            </div>
+          ) : (
+            <p className="text-sm text-accent-500 mt-3">لا توجد بيانات استخدام بعد — تبدأ مع أول استخدام للذكاء بعد التحديث.</p>
+          )}
         </div>
 
         {/* Toolbar — beautified */}

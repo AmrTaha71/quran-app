@@ -6,6 +6,7 @@ import type { QuranVerse, AyahLink } from '../lib/types';
 import { LINK_TYPES } from '../lib/types';
 import { SURAHS } from '../lib/surahs';
 import { useLang, speechLocale } from '../lib/LanguageContext';
+import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -42,6 +43,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   // and the user can switch between the two choices at any time; the
   // choice persists.
   const [profileGender, setProfileGender] = useState<'male' | 'female' | null>(null);
+  const [profileName, setProfileName] = useState<string | null>(null);
+  const [preferredName, setPreferredName] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameError, setNameError] = useState('');
   const [voicePref, setVoicePref] = useState<'male' | 'female' | null>(() => {
     const saved = localStorage.getItem('quran-link-voice');
     return saved === 'male' || saved === 'female' ? saved : null;
@@ -87,12 +93,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const voiceInterimRef = useRef('');
 
   // Load the user's registered gender once: it sets the default link voice.
+  // Also loads the name they like to be called by (preferred_name first).
   useEffect(() => {
     const loadGender = async () => {
       const userId = session?.user?.id;
       if (!userId) return;
-      const { data } = await supabase.from('user_profiles').select('gender').eq('user_id', userId).single();
-      if (data?.gender === 'male' || data?.gender === 'female') setProfileGender(data.gender);
+      const { data, error } = await supabase.from('user_profiles').select('username, preferred_name, gender').eq('user_id', userId).single();
+      const profile = error ? (await supabase.from('user_profiles').select('username, gender').eq('user_id', userId).single()).data : data;
+      if (profile?.gender === 'male' || profile?.gender === 'female') setProfileGender(profile.gender);
+      if (profile?.username) setProfileName(profile.username);
+      if ((profile as { preferred_name?: string | null } | null)?.preferred_name) setPreferredName((profile as { preferred_name: string }).preferred_name);
     };
     loadGender();
   }, [session]);
@@ -307,6 +317,17 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   };
   const handleLinkLongPressClear = () => { if (linkLongPressTimer.current) clearTimeout(linkLongPressTimer.current); };
 
+  const savePreferredName = async () => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const value = nameDraft.trim() || null;
+    const { error } = await supabase.from('user_profiles').update({ preferred_name: value }).eq('user_id', userId);
+    if (error) { setNameError('تعذر حفظ الاسم، حاول تاني'); return; }
+    setPreferredName(value);
+    setNameError('');
+    setEditingName(false);
+  };
+
   const listCounts = {
     favorites: lists.favorites.size,
     read_later: lists.read_later.size,
@@ -369,6 +390,44 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
+        {/* Personal greeting — Islamic greeting by the name they chose,
+            celebrates their effort from their own lists, and closes with
+            a personal dua */}
+        <div className="mb-5 bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-5 shadow-lg text-white">
+          <div className="flex items-center gap-2">
+            <Heart className="w-5 h-5 flex-shrink-0 text-emerald-100" />
+            <p className="text-lg font-bold leading-relaxed">
+              {(preferredName || profileName)
+                ? `${ISLAMIC_GREETING} يا ${preferredName || profileName}`
+                : `${ISLAMIC_GREETING}، أهلاً ${profileGender === 'female' ? 'بيكي' : 'بيك'} في لوحتك`}
+            </p>
+            {session && !editingName && (
+              <button onClick={() => { setNameDraft(preferredName || ''); setNameError(''); setEditingName(true); }}
+                className="mr-auto text-xs text-emerald-100 underline underline-offset-2 hover:text-white flex-shrink-0">
+                تعديل الاسم
+              </button>
+            )}
+          </div>
+          {session && editingName && (
+            <div className="flex gap-2 mt-3">
+              <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
+                placeholder="تحب أناديك بإيه؟ مثال: أم يوسف، دكتور محمد"
+                className="flex-1 px-3 py-2 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
+              <button onClick={savePreferredName} className="px-3 py-2 bg-white text-emerald-700 text-sm font-bold rounded-xl">حفظ</button>
+              <button onClick={() => setEditingName(false)} className="px-3 py-2 text-sm text-emerald-100">إلغاء</button>
+            </div>
+          )}
+          {nameError && <p className="text-xs text-red-200 mt-2">{nameError}</p>}
+          <p className="text-sm text-emerald-50 leading-relaxed mt-2">
+            {(listCounts.favorites + listCounts.read_later + listCounts.difficult) > 0
+              ? `ما شاء الله، بارك الله فيك — جمعت ${(listCounts.favorites + listCounts.read_later + listCounts.difficult).toLocaleString('ar-EG')} آية في قوائمك، تقبل الله منك وثبّتها في قلبك`
+              : 'بارك الله فيك — رحلتك بتبدأ من هنا: اختر آية، اسمع رابطها، وثبّتها في قلبك. أول خطوة هي أهم خطوة، وتقبل الله سعيك'}
+          </p>
+          <p className="text-sm text-amber-100 font-semibold leading-relaxed mt-3 pt-3 border-t border-white/20">
+            {(preferredName || profileName) ? `${dailyDua()} يا ${preferredName || profileName}` : dailyDua()}
+          </p>
+        </div>
+
         {/* Progress Widget */}
         <div className="mb-5">
           <ProgressWidget />
