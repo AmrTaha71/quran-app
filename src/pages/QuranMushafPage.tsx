@@ -1780,7 +1780,11 @@ export default function QuranMushafPage({
                   }}
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd}>
-                  <img src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
+                  {/* key: remount on page change (like the normal view) so the
+                      previous page's image is never shown for a frame at the
+                      new page's position while the new image loads — that
+                      one-frame jump read as a slight shake on every turn. */}
+                  <img key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
                     className={`${madinahNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
                     style={madinahNorm ? { left: `${madinahNorm.imgL}%`, top: `${madinahNorm.imgT}%`, width: `${madinahNorm.imgW}%`, height: `${madinahNorm.imgH}%` } : undefined}
                     draggable={false}
@@ -1854,7 +1858,7 @@ export default function QuranMushafPage({
                 className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 group">
                 {!facingOnLeft && hasFacingPage && (
                   <div className="absolute inset-y-0 left-0 overflow-hidden pointer-events-none border-l border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W }} title="الصفحة المقابلة">
-                    <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
+                    <img key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Madinah: a window into the facing page at the
                       // main page's scale and vertical alignment, with
@@ -1884,7 +1888,7 @@ export default function QuranMushafPage({
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
                 {facingOnLeft && hasFacingPage && (
                   <div className="absolute inset-y-0 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W }} title="الصفحة المقابلة">
-                    <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
+                    <img key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Madinah: same normalized peek as the other
                       // sliver, but the facing page's spine edge here
