@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
-import { SURAHS, getGlobalAyahNumber } from '../lib/surahs';
+import { SURAHS } from '../lib/surahs';
+import { RECITERS, DEFAULT_RECITER_ID, type Reciter } from '../lib/reciters';
 import { useLang } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
 import { LINK_TYPES } from '../lib/types';
@@ -128,21 +129,34 @@ export default function QuranMushafPage({
   const surahPageListCache = useRef<Record<number, { number: number; page_number: number }[]>>({});
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
-  // Ayah recitation (Mishary Alafasy via the open islamic.network CDN),
+  // Ayah recitation (open audio CDNs, see lib/reciters.ts),
   // with a repeat switch for memorization. Stops when the popup ayah changes.
   const reciteRef = useRef<HTMLAudioElement | null>(null);
   const [reciting, setReciting] = useState(false);
   const [reciteLoop, setReciteLoop] = useState(false);
   const [reciteError, setReciteError] = useState('');
+  const [reciterId, setReciterId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quran-reciter') || '';
+      return RECITERS.some((r) => r.id === saved) ? saved : DEFAULT_RECITER_ID;
+    } catch { return DEFAULT_RECITER_ID; }
+  });
+  const reciter = RECITERS.find((r) => r.id === reciterId) ?? RECITERS[0];
+  const [showReciters, setShowReciters] = useState(false);
   const stopRecitation = useCallback(() => {
     if (reciteRef.current) { reciteRef.current.pause(); reciteRef.current = null; }
     setReciting(false);
   }, []);
-  useEffect(() => { stopRecitation(); }, [selectedVerse?.id, stopRecitation]);
-  const toggleRecitation = (verse: QuranVerse) => {
-    if (reciting) { stopRecitation(); return; }
+  const changeReciter = (id: string) => {
+    setReciterId(id);
+    try { localStorage.setItem('quran-reciter', id); } catch { /* ignore */ }
+  };
+  useEffect(() => { stopRecitation(); setShowReciters(false); }, [selectedVerse?.id, stopRecitation]);
+  const startRecitation = (verse: QuranVerse, r: Reciter) => {
+    stopRecitation();
+    changeReciter(r.id);
     setReciteError('');
-    const audio = new Audio(`https://cdn.islamic.network/quran/audio/128/ar.alafasy/${getGlobalAyahNumber(verse.surah_no, verse.ayah_no)}.mp3`);
+    const audio = new Audio(r.audioUrl(verse.surah_no, verse.ayah_no));
     audio.loop = reciteLoop;
     audio.onended = () => { if (!audio.loop) setReciting(false); };
     audio.onerror = () => { setReciteError('تعذرت التلاوة — تحقق من الاتصال وحاول تاني'); setReciting(false); };
@@ -151,6 +165,14 @@ export default function QuranMushafPage({
       if (reciteRef.current === audio) reciteRef.current = null;
       setReciteError('تعذرت التلاوة — تحقق من الاتصال وحاول تاني'); setReciting(false);
     });
+  };
+  // Two-step listen flow: first tap on "استمع للآية" reveals the reciter
+  // names, picking one starts playback; while playing the button stops
+  // and hides the names again.
+  const handleListenButton = (verse: QuranVerse) => {
+    if (reciting) { stopRecitation(); setShowReciters(false); return; }
+    if (!showReciters) { setShowReciters(true); return; }
+    startRecitation(verse, reciter);
   };
   const [loadingLinks, setLoadingLinks] = useState(false);
   // Ayah popup tabs, in the order the user asked for: mutashabihat,
@@ -1473,11 +1495,11 @@ export default function QuranMushafPage({
                     </div>
                     <div className="p-4 overflow-y-auto">
                       <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
-                      <div className="flex items-center gap-2 mb-4">
-                        <button onClick={() => selectedVerse && toggleRecitation(selectedVerse)}
+                      <div className="flex items-center gap-2 mb-3">
+                        <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
                           className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciting ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
                           {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                          {reciting ? 'إيقاف التلاوة' : 'استمع لتلاوة الآية — العفاسي'}
+                          {reciting ? `إيقاف التلاوة — ${reciter.name}` : 'استمع للآية'}
                         </button>
                         <button onClick={() => {
                           const next = !reciteLoop;
@@ -1489,6 +1511,19 @@ export default function QuranMushafPage({
                           <Repeat className="w-4 h-4" /> تكرار
                         </button>
                       </div>
+                      {showReciters && (
+                        <div className="mb-4">
+                          <p className="text-xs text-accent-400 text-center mb-2">اختر القارئ</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {RECITERS.map((r) => (
+                              <button key={r.id} onClick={() => selectedVerse && startRecitation(selectedVerse, r)}
+                                className={`px-3 py-1.5 rounded-full text-sm font-bold transition-smooth ${r.id === reciterId ? 'bg-amber-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                                {r.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {reciteError && <p className="text-xs text-red-500 text-center mb-3">{reciteError}</p>}
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
