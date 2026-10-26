@@ -33,20 +33,28 @@ async function generateAzureTTS(text: string, voice: "male" | "female", apiKey: 
   return response.arrayBuffer();
 }
 
-async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey: string): Promise<ArrayBuffer> {
+async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey: string): Promise<{ buffer: ArrayBuffer; model: string }> {
   const ttsVoice = voice === "female" ? "nova" : "onyx";
-  const response = await fetch("https://api.openai.com/v1/audio/speech", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "tts-1-hd", input: text, voice: ttsVoice, response_format: "mp3", speed: 0.9 }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`OpenAI TTS error: ${response.status} - ${errText}`);
+  // gpt-4o-mini-tts first: far more natural prosody than tts-1-hd, and it
+  // accepts style instructions. Falls back to tts-1-hd if it ever fails.
+  const instructions = voice === "female"
+    ? "A warm, gentle female voice, like a kind Quran teacher: natural pace, clear Arabic pronunciation, soft pauses between phrases, calm and reverent tone, human and expressive, never robotic."
+    : "A dignified, warm male voice, like a respected Quran teacher: natural pace, clear Arabic pronunciation, gentle pauses between phrases, calm and reverent tone, human and expressive, never robotic.";
+  const attempts = [
+    { model: "gpt-4o-mini-tts", body: { model: "gpt-4o-mini-tts", input: text, voice: ttsVoice, response_format: "mp3", speed: 1.0, instructions } },
+    { model: "tts-1-hd", body: { model: "tts-1-hd", input: text, voice: ttsVoice, response_format: "mp3", speed: 1.0 } },
+  ];
+  let lastError = "";
+  for (const a of attempts) {
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(a.body),
+    });
+    if (response.ok) return { buffer: await response.arrayBuffer(), model: a.model };
+    lastError = await response.text();
   }
-
-  return response.arrayBuffer();
+  throw new Error(`OpenAI TTS error: ${lastError}`);
 }
 
 Deno.serve(async (req: Request) => {
@@ -82,11 +90,14 @@ Deno.serve(async (req: Request) => {
     }
 
     let audioBuffer: ArrayBuffer;
+    let ttsModel = "azure";
 
     if (azureKey) {
       audioBuffer = await generateAzureTTS(text, voice || "male", azureKey, azureRegion);
     } else {
-      audioBuffer = await generateOpenAITTS(text, voice || "male", openaiKey!);
+      const result = await generateOpenAITTS(text, voice || "male", openaiKey!);
+      audioBuffer = result.buffer;
+      ttsModel = result.model;
     }
 
     const audioBlob = new Blob([audioBuffer], { type: "audio/mp3" });
@@ -108,11 +119,14 @@ Deno.serve(async (req: Request) => {
 
     // Best-effort usage log for the Admin balance monitor (OpenAI path
     // only; Azure billing is separate and not tracked here).
-    // tts-1-hd list price: $0.030 per 1,000 characters.
+    // gpt-4o-mini-tts ≈ $0.015/min at ~1000 chars/min; tts-1-hd $0.030/1k chars.
     if (!azureKey) {
       try {
+        const cost = ttsModel === "gpt-4o-mini-tts"
+          ? (text.length / 1000) * 0.015
+          : (text.length / 1000) * 0.030;
         await supabaseClient.from("ai_usage_events").insert({
-          function_name: "generate-voice", model: "tts-1-hd", cost_usd: (text.length / 1000) * 0.030,
+          function_name: "generate-voice", model: ttsModel, cost_usd: cost,
         });
       } catch { /* ignore logging errors */ }
     }

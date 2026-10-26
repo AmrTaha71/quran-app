@@ -5,8 +5,8 @@ import type { QuranVerse } from '../lib/types';
 import { LINK_TYPES, LINK_TYPE_HINTS } from '../lib/types';
 import {
   X, Bookmark, Lightbulb, Mic, MicOff, Upload, Loader2,
-  Volume2, Check, RefreshCw, FileText, Sparkles, AlertCircle,
-  AudioLines, User, Heart,
+  Check, RefreshCw, FileText, Sparkles, AlertCircle,
+  User, Heart,
 } from 'lucide-react';
 
 type Phase = 'input' | 'confirm_recording' | 'processing' | 'review' | 'generating_voice' | 'saving' | 'done';
@@ -558,7 +558,7 @@ export default function LinkModal({
                     </button>
                     <button onClick={() => { setOriginalTranscript(''); setRephrasedText(linkContent.trim()); setReviewMode('keep_original'); setPhase('review'); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-smooth">
-                      <AudioLines className="w-3.5 h-3.5" /> تحويل لصوت
+                      <Mic className="w-3.5 h-3.5" /> تحويل لصوت
                     </button>
                   </div>
                 )}
@@ -574,7 +574,7 @@ export default function LinkModal({
                 {audioPublicUrl && (
                   <button onClick={() => playAudio(audioPublicUrl)}
                     className="flex items-center justify-center gap-2 mx-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
-                    <Volume2 className="w-4 h-4" /> تشغيل المقطع (صوت رنا)
+                    <Mic className="w-4 h-4" /> تشغيل المقطع (صوت رنا)
                   </button>
                 )}
                 <p className="text-[11px] text-accent-400 mt-3">بعد الاعتماد ح نحوّل التسجيل لنص مكتوب، وتقدري تحوّلي نسخة منه لصوت رجالي من شاشة المراجعة</p>
@@ -617,7 +617,7 @@ export default function LinkModal({
               {/* Rana's original audio */}
               {audioPublicUrl && (
                 <div className="flex items-center gap-2 bg-emerald-50 rounded-lg p-2.5">
-                  <Volume2 className="w-4 h-4 text-emerald-600" />
+                  <Mic className="w-4 h-4 text-emerald-600" />
                   <button onClick={() => playAudio(audioPublicUrl)} className="text-xs font-semibold text-emerald-700 hover:underline">
                     تشغيل المقطع الأصلي (صوت رنا)
                   </button>
@@ -634,7 +634,7 @@ export default function LinkModal({
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-accent-500">النص المنطوق الأصلي</span>
-                    <button onClick={() => playBrowserTTS(originalTranscript, voiceType)} className="text-accent-400 hover:text-emerald-600"><Volume2 className="w-4 h-4" /></button>
+                    <button onClick={() => playBrowserTTS(originalTranscript, voiceType)} className="text-accent-400 hover:text-emerald-600"><Mic className="w-4 h-4" /></button>
                   </div>
                   <p className="text-sm text-accent-600 leading-relaxed">{originalTranscript}</p>
                 </div>
@@ -644,7 +644,7 @@ export default function LinkModal({
               <div className="bg-violet-50 rounded-lg p-3 border border-violet-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-violet-600">{reviewMode === 'keep_original' ? 'النص المنقّى' : 'النص المعاد صياغته'}</span>
-                  <button onClick={() => playTTS(rephrasedText)} className="text-violet-400 hover:text-violet-600"><Volume2 className="w-4 h-4" /></button>
+                  <button onClick={() => playTTS(rephrasedText)} className="text-violet-400 hover:text-violet-600"><Mic className="w-4 h-4" /></button>
                 </div>
                 <textarea value={rephrasedText} onChange={(e) => { setRephrasedText(e.target.value); setSyntheticAudioUrl(null); }}
                   rows={4}
@@ -670,13 +670,13 @@ export default function LinkModal({
                 </div>
                 <button onClick={generateVoice}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-smooth">
-                  <AudioLines className="w-4 h-4" /> {voiceType === 'male' ? 'يلا حوّل نسخة منه لصوت رجالي' : 'حوّل نسخة منه لصوت نسائي'}
+                  <Mic className="w-4 h-4" /> {voiceType === 'male' ? 'يلا حوّل نسخة منه لصوت رجالي' : 'حوّل نسخة منه لصوت نسائي'}
                 </button>
                 {/* Browser TTS fallback button */}
                 {!syntheticAudioUrl && (
                   <button onClick={() => playBrowserTTS(rephrasedText, voiceType)}
                     className="w-full flex items-center justify-center gap-2 py-2 mt-2 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg transition-smooth">
-                    <Volume2 className="w-3.5 h-3.5" /> استماع عبر المتصفح ({voiceType === 'male' ? 'رجالي' : 'نسائي'})
+                    <Mic className="w-3.5 h-3.5" /> استماع عبر المتصفح ({voiceType === 'male' ? 'رجالي' : 'نسائي'})
                   </button>
                 )}
               </div>
@@ -686,13 +686,13 @@ export default function LinkModal({
                 <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-3 border border-blue-200 animate-slide-up">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <AudioLines className="w-4 h-4 text-blue-600" />
+                      <Mic className="w-4 h-4 text-blue-600" />
                       <span className="text-xs font-semibold text-blue-700">
                         الصوت المولّد ({voiceType === 'male' ? 'رجالي' : 'نسائي'})
                       </span>
                     </div>
                     <button onClick={() => playAudio(syntheticAudioUrl)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-smooth">
-                      <Volume2 className="w-3.5 h-3.5" /> تشغيل
+                      <Mic className="w-3.5 h-3.5" /> تشغيل
                     </button>
                   </div>
                 </div>
@@ -708,18 +708,22 @@ export default function LinkModal({
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
                   <p className="text-xs font-semibold text-accent-500 mb-2">نسخ الصياغة يا رنا — اختاري أي نسخة لعرضها، وبعدين وافقي واحفظي أو اطلبي تعديل جديد</p>
                   <div className="space-y-1.5">
-                    {versions.map((v, i) => (
-                      <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2.5 py-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-semibold text-violet-600">{v.label}</p>
-                          <p className="text-xs text-accent-600 truncate">{v.text}</p>
+                    {versions.map((v, i) => {
+                      const isActive = v.text === rephrasedText;
+                      return (
+                        <div key={i} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 border ${isActive ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50 border-transparent'}`}>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold text-violet-600">{v.label}</p>
+                            <p className="text-xs text-accent-600 truncate">{v.text}</p>
+                            {isActive && <p className="text-[11px] font-bold text-emerald-600 mt-0.5">✓ النسخة المعروضة حالياً</p>}
+                          </div>
+                          <button onClick={() => { setRephrasedText(v.text); setSyntheticAudioUrl(null); }}
+                            className={`flex-shrink-0 px-2.5 py-1.5 text-white text-[11px] font-semibold rounded-lg ${isActive ? 'bg-emerald-600' : 'bg-violet-600 hover:bg-violet-700'}`}>
+                            استخدام هذه النسخة
+                          </button>
                         </div>
-                        <button onClick={() => { setRephrasedText(v.text); setSyntheticAudioUrl(null); }}
-                          className="flex-shrink-0 px-2.5 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-semibold rounded-lg">
-                          استخدام هذه النسخة
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
