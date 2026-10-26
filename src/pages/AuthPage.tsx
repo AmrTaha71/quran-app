@@ -411,7 +411,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 {birthDate && (
-                  <p className="text-xs text-accent-400 mt-1">{t('age')}: {calculateAge(birthDate)} {lang === 'ar' ? 'سنة' : ''}</p>
+                  <p className="text-xs text-accent-400 mt-1">{t('age')}: {calculateAge(birthDate)} {(lang === 'ar' || lang === 'ar-EG') ? 'سنة' : ''}</p>
                 )}
               </div>
 

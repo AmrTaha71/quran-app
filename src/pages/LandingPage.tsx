@@ -96,7 +96,7 @@ export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => 
             {t('appName')}
           </h2>
           <p className="text-xl text-accent-600 mb-10 max-w-2xl mx-auto leading-relaxed">
-            {lang === 'ar'
+            {(lang === 'ar' || lang === 'ar-EG')
               ? 'تطبيق لربط آيات القرآن ببعضها ومحاولة تيسير حفظ القرآن عبر تربيطات متنوعة.'
               : 'An app for linking Quran verses together to facilitate memorization through various connections.'}
           </p>
@@ -108,7 +108,7 @@ export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => 
                 {stats.withLinks.toLocaleString()} {t('indexedVerses')}
               </p>
               <p className="text-base text-accent-500">
-                {lang === 'ar' ? 'من أصل' : 'out of'} {stats.total.toLocaleString()} {t('verse')}
+                {(lang === 'ar' || lang === 'ar-EG') ? 'من أصل' : 'out of'} {stats.total.toLocaleString()} {t('verse')}
               </p>
               <p className="text-sm text-amber-600 mt-1">{(stats.total - stats.withLinks).toLocaleString()} {t('remaining')}</p>
             </div>

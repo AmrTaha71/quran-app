@@ -136,6 +136,10 @@ export default function QuranMushafPage({
   const facingPage = currentPage % 2 === 1 ? currentPage + 1 : currentPage - 1;
   const facingOnLeft = currentPage % 2 === 1;
   const hasFacingPage = facingPage >= 1 && facingPage <= TOTAL_PAGES;
+  // Framed facing-page strip: a wide, full-opacity slice of the facing page
+  // with a spine shadow, so it reads as part of the neighbouring page of an
+  // open book (not a ghost sliver) and visually anchors the main page.
+  const FACING_STRIP_W = 'min(22vw, 170px)';
   const currentJuz = getJuzFromPage(currentPage);
   const currentHizb = getHizbFromPage(currentPage);
   // The strip shows only this page's ayahs (in page order) once their
@@ -1303,15 +1307,16 @@ export default function QuranMushafPage({
               {/* Page-turn zones: full-height side strips with a large,
                   always-visible arrow + label, so the target is easy to
                   find and to press anywhere along the edge. The strip on
-                  the facing-page side also carries a thin sliver of that
-                  page (its spine-side edge), so the user always sees
-                  whether the open page sits on the right or the left of
-                  the spread — while the main page itself stays fixed. */}
+                  the facing-page side also carries a framed slice of that
+                  page (its spine-side edge, full opacity, spine shadow),
+                  so it reads as part of the facing page of an open book
+                  and the main page stays visually anchored — while the
+                  main page itself stays fixed. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
                 aria-label="الصفحة السابقة"
                 className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 group">
                 {!facingOnLeft && hasFacingPage && (
-                  <div className="absolute inset-y-0 left-0 w-8 overflow-hidden pointer-events-none border-l border-white/30" title="الصفحة المقابلة">
+                  <div className="absolute inset-y-0 left-0 overflow-hidden pointer-events-none border-l border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W }} title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Madinah: a window into the facing page at the
@@ -1320,13 +1325,14 @@ export default function QuranMushafPage({
                       // to the window's edge — so the peek no longer
                       // jumps against the pinned main page. Other
                       // editions keep the old centered full-height sliver.
-                      className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 left-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`}
+                      className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 left-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-100 [-webkit-touch-callout:none]`}
                       style={facingNorm ? {
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: `calc(0px - ${(facingNorm.pl / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(-facingNorm.imgT / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
+                    <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-black/30 to-transparent pointer-events-none" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
@@ -1340,20 +1346,21 @@ export default function QuranMushafPage({
                 aria-label="الصفحة التالية"
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
                 {facingOnLeft && hasFacingPage && (
-                  <div className="absolute inset-y-0 right-0 w-8 overflow-hidden pointer-events-none border-r border-white/30" title="الصفحة المقابلة">
+                  <div className="absolute inset-y-0 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W }} title="الصفحة المقابلة">
                     <img src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Madinah: same normalized peek as the other
                       // sliver, but the facing page's spine edge here
                       // is its RIGHT edge, pinned to the window's right
                       // edge. See the other sliver's note.
-                      className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 right-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-70 [-webkit-touch-callout:none]`}
+                      className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 right-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-100 [-webkit-touch-callout:none]`}
                       style={facingNorm ? {
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
-                        left: `calc(32px - ${(facingNorm.pr / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
+                        left: `calc(${FACING_STRIP_W} - ${(facingNorm.pr / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(-facingNorm.imgT / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
+                    <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">

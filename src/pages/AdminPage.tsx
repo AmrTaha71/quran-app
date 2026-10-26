@@ -391,7 +391,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             </div>
             <div className="flex items-center gap-1.5">
               <Bookmark className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-xs text-accent-500">سجلي هنا يا رنا — تسجيل رابط</span>
+              <span className="text-xs text-accent-500">سجلي المقطع يا رنا — تسجيل رابط</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Settings className="w-3.5 h-3.5 text-emerald-500" />
@@ -417,7 +417,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <div key={verse.id} className={`p-4 ${bgClass} ${isRanaTarget ? 'ring-2 ring-amber-400 ring-offset-1' : ''} hover:shadow-sm transition-smooth animate-fade-in relative`}>
                     {isRanaTarget && (
                       <div className="absolute -top-2 right-4 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg animate-bounce-slow">
-                        <span className="text-xs font-bold whitespace-nowrap">من هنا يا رنا</span>
+                        <span className="text-xs font-bold whitespace-nowrap">سجلي من هنا يا رنا</span>
                         <svg className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
@@ -468,10 +468,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       {/* Large save button + show links */}
                       <div className="flex flex-col items-center gap-2 flex-shrink-0">
                         <button onClick={() => setLinkModalVerse(verse)}
-                          title="سجلي هنا يا رنا"
+                          title="سجلي المقطع يا رنا"
                           className="flex flex-col items-center justify-center gap-1 w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-2xl shadow-lg hover:shadow-xl transition-smooth">
                           <Mic className="w-6 h-6" />
-                          <span className="text-[10px] font-bold leading-tight text-center">سجلي هنا<br />يا رنا</span>
+                          <span className="text-[10px] font-bold leading-tight text-center">سجلي المقطع<br />يا رنا</span>
                         </button>
                         <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
                           title="عرض الروابط"
@@ -611,20 +611,20 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <p className="text-xs font-semibold text-violet-700 mb-1">صياغة مقترحة بالذكاء الاصطناعي{proposals[link.id].command ? ` (طلب: ${proposals[link.id].command})` : ''}</p>
                           <p className="text-sm text-accent-700 leading-relaxed mb-2">{proposals[link.id].text}</p>
                           <div className="flex gap-2">
-                            <button onClick={() => applyProposal(link.id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">اعتماد المقترح</button>
-                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-500 text-xs hover:bg-gray-100 rounded-lg">تجاهل</button>
+                            <button onClick={() => applyProposal(link.id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">اعتمديه يا رنا</button>
+                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-500 text-xs hover:bg-gray-100 rounded-lg">تجاهليه يا رنا</button>
                           </div>
-                          <p className="text-[11px] text-accent-400 mt-1.5">النص الأصلي محفوظ كما هو حتى الاعتماد — اطلب تعديلاً آخر من الحقل أعلاه وكرر حتى ترضى، ثم اعتمد.</p>
+                          <p className="text-[11px] text-accent-400 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي يا رنا — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
                         </div>
                       )}
                                             <div className="flex gap-2 mt-3">
                         <button onClick={() => approveLink(link.id)}
                           className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-smooth">
-                          <Check className="w-4 h-4" /> قبول ونشر
+                          <Check className="w-4 h-4" /> اقبلي وانشري يا رنا
                         </button>
                         <button onClick={() => rejectLink(link.id)}
                           className="flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth">
-                          <X className="w-4 h-4" /> رفض
+                          <X className="w-4 h-4" /> ارفضيه يا رنا
                         </button>
                       </div>
                     </div>

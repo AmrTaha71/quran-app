@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Volume2, VolumeX, Settings2 } from 'lucide-react';
 import { VOICE_OPTIONS, type VoiceType } from '../lib/types';
+import { currentSpeechLocale } from '../lib/LanguageContext';
 
 const STORAGE_KEY = 'quran-voice-preference';
 
@@ -25,7 +26,7 @@ export default function VoiceSelector({ text }: { text: string }) {
     }
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ar-SA';
+    utterance.lang = currentSpeechLocale();
 
     // Voice settings based on selection
     const voiceConfig: Record<VoiceType, { rate: number; pitch: number }> = {

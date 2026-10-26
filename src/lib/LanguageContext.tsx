@@ -2,6 +2,18 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import type { Lang } from './translations';
 import { T } from './translations';
 
+// Speech locale follows the chosen UI language: Egyptian dialect uses
+// ar-EG recognition/TTS (better for Egyptian speech); everything else
+// keeps the existing ar-SA behaviour.
+export function speechLocale(lang: Lang): string {
+  return lang === 'ar-EG' ? 'ar-EG' : 'ar-SA';
+}
+
+// Same as speechLocale, for components that don't use the lang context.
+export function currentSpeechLocale(): string {
+  return speechLocale((localStorage.getItem('app-lang') as Lang) || 'ar');
+}
+
 type TK = keyof typeof T.ar;
 
 interface LangCtx {

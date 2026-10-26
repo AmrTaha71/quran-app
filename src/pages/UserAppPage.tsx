@@ -5,7 +5,7 @@ import { signOut } from '../lib/auth';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { LINK_TYPES } from '../lib/types';
 import { SURAHS } from '../lib/surahs';
-import { useLang } from '../lib/LanguageContext';
+import { useLang, speechLocale } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -37,6 +37,35 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const [showFilters, setShowFilters] = useState(true);
   const [verseLinks, setVerseLinks] = useState<Record<number, AyahLink[]>>({});
   const [showLinksFor, setShowLinksFor] = useState<number | null>(null);
+  // Link audio voice: follows the user's registered gender by default
+  // (female → Rana's original recording, male → dignified male synthetic),
+  // and the user can switch between the two choices at any time; the
+  // choice persists.
+  const [profileGender, setProfileGender] = useState<'male' | 'female' | null>(null);
+  const [voicePref, setVoicePref] = useState<'male' | 'female' | null>(() => {
+    const saved = localStorage.getItem('quran-link-voice');
+    return saved === 'male' || saved === 'female' ? saved : null;
+  });
+  const effectiveVoice: 'male' | 'female' = voicePref ?? profileGender ?? 'female';
+  const setLinkVoice = (v: 'male' | 'female') => {
+    setVoicePref(v);
+    localStorage.setItem('quran-link-voice', v);
+  };
+  // Resolve which audio a link plays for a voice choice, labeled by the
+  // choice names: female plays Rana's original voice, male plays the
+  // dignified human-sounding male synthetic; either falls back to
+  // whatever audio the link has, labeled by what it actually is.
+  const resolveLinkAudio = (link: AyahLink, voice: 'male' | 'female'): { url: string; label: string } | null => {
+    if (voice === 'female') {
+      if (link.audio_url) return { url: link.audio_url, label: 'صوت نسائي' };
+      if (link.synthetic_audio_url) return { url: link.synthetic_audio_url, label: link.voice_type === 'male' ? 'صوت رجالي' : 'صوت نسائي' };
+      return null;
+    }
+    if (link.synthetic_audio_url && link.voice_type === 'male') return { url: link.synthetic_audio_url, label: 'صوت رجالي' };
+    if (link.synthetic_audio_url) return { url: link.synthetic_audio_url, label: 'صوت نسائي' };
+    if (link.audio_url) return { url: link.audio_url, label: 'صوت نسائي' };
+    return null;
+  };
   const [longPressVerse, setLongPressVerse] = useState<QuranVerse | null>(null);
   const [longPressLink, setLongPressLink] = useState<{ verse: QuranVerse; link: AyahLink } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,7 +73,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searchHint, setSearchHint] = useState('');
-  // Voice search: browser SpeechRecognition (ar-SA), same pattern as
+  // Voice search: browser SpeechRecognition, locale follows the chosen UI
+  // language (ar-EG for Egyptian dialect, ar-SA otherwise), same pattern as
   // LinkModal. The transcript is written into `search`, so the same
   // search path and diacritic-clean match (ayah_text_clean) apply to
   // voice exactly as they do to typed text — no separate search path.
@@ -55,6 +85,17 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const recognitionRef = useRef<any>(null);
   const voiceFinalRef = useRef('');
   const voiceInterimRef = useRef('');
+
+  // Load the user's registered gender once: it sets the default link voice.
+  useEffect(() => {
+    const loadGender = async () => {
+      const userId = session?.user?.id;
+      if (!userId) return;
+      const { data } = await supabase.from('user_profiles').select('gender').eq('user_id', userId).single();
+      if (data?.gender === 'male' || data?.gender === 'female') setProfileGender(data.gender);
+    };
+    loadGender();
+  }, [session]);
 
   const { lists, toggleList: toggleListRaw } = useUserLists();
 
@@ -93,7 +134,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
     const rec = new SR();
-    rec.lang = 'ar-SA';
+    rec.lang = speechLocale(lang);
     rec.continuous = false;
     rec.interimResults = true;
     rec.onresult = (e: any) => {
@@ -542,6 +583,18 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     {/* Links display */}
                     {showLinksFor === verse.id && links.length > 0 && (
                       <div className="mt-4 space-y-2 animate-slide-up">
+                        <div className="flex items-center gap-2 flex-wrap bg-white rounded-lg px-3 py-2 border border-gray-100">
+                          <span className="text-xs font-semibold text-accent-500">اسمع بـ:</span>
+                          <button onClick={() => setLinkVoice('female')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-smooth ${effectiveVoice === 'female' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-accent-600 hover:bg-gray-100'}`}>
+                            صوت نسائي
+                          </button>
+                          <button onClick={() => setLinkVoice('male')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-smooth ${effectiveVoice === 'male' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-accent-600 hover:bg-gray-100'}`}>
+                            صوت رجالي
+                          </button>
+                          <span className="text-[11px] text-accent-400">الافتراضي حسب حسابك، وتقدر تغيّره في أي وقت</span>
+                        </div>
                         {links.map((link) => (
                           <div
                             key={link.id}
@@ -560,17 +613,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                 <p className="font-semibold text-accent-700 mb-1 text-base">{link.link_title}</p>
                               )}
                               <p className="text-accent-600 leading-relaxed text-base">{link.link_content}</p>
-                              {link.audio_url && (
-                                <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-600 hover:underline mt-1 inline-block">
-                                  مقطع صوتي
-                                </a>
-                              )}
-                              {link.synthetic_audio_url && (
-                                <button onClick={() => new Audio(link.synthetic_audio_url!).play()}
-                                  className="flex items-center gap-1 text-xs text-blue-600 hover:underline mt-1 ml-3">
-                                  <Volume2 className="w-4 h-4" /> استماع ({link.voice_type === 'female' ? 'نسائي' : 'رجالي'})
-                                </button>
-                              )}
+                              {(() => {
+                                const audio = resolveLinkAudio(link, effectiveVoice);
+                                if (!audio) return null;
+                                return (
+                                  <button onClick={() => new Audio(audio.url).play()}
+                                    className="flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-1">
+                                    <Volume2 className="w-4 h-4" /> استماع ({audio.label})
+                                  </button>
+                                );
+                              })()}
                             </div>
                             <span className="text-xs text-gray-300 hidden sm:inline">اضغط مطولاً للقائمة</span>
                           </div>

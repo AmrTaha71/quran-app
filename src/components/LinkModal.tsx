@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { currentSpeechLocale } from '../lib/LanguageContext';
 import type { QuranVerse } from '../lib/types';
 import { LINK_TYPES, LINK_TYPE_HINTS } from '../lib/types';
 import {
@@ -8,7 +9,7 @@ import {
   AudioLines, User, Heart,
 } from 'lucide-react';
 
-type Phase = 'input' | 'processing' | 'review' | 'generating_voice' | 'saving' | 'done';
+type Phase = 'input' | 'confirm_recording' | 'processing' | 'review' | 'generating_voice' | 'saving' | 'done';
 
 interface SpeechRecognitionResult { transcript: string; isFinal: boolean; }
 interface SpeechRecognitionAlternative { 0: SpeechRecognitionResult; }
@@ -78,6 +79,9 @@ export default function LinkModal({
   const [originalTranscript, setOriginalTranscript] = useState('');
   const [rephrasedText, setRephrasedText] = useState('');
   const [audioPublicUrl, setAudioPublicUrl] = useState<string | null>(null);
+  // A recorded/uploaded take waiting for Rana's approval before it
+  // becomes text: the blob plus any live transcript captured with it.
+  const [pendingRecording, setPendingRecording] = useState<{ blob: Blob; transcript: string } | null>(null);
   const [syntheticAudioUrl, setSyntheticAudioUrl] = useState<string | null>(null);
   const [voiceType, setVoiceType] = useState<'male' | 'female'>('male');
   const [rephraseCommand, setRephraseCommand] = useState('');
@@ -102,7 +106,7 @@ export default function LinkModal({
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SR) {
       recognitionRef.current = new SR();
-      recognitionRef.current.lang = 'ar-SA';
+      recognitionRef.current.lang = currentSpeechLocale();
       recognitionRef.current.continuous = true;
       recognitionRef.current.interimResults = true;
       recognitionRef.current.onresult = (e: SpeechRecognitionEvent) => {
@@ -181,17 +185,20 @@ export default function LinkModal({
           await supabase.storage.from('rana-audio').upload(fileName, blob);
           const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
           setAudioPublicUrl(urlData.publicUrl);
+          // Rana approves the take first ("كويس التسجيل كده؟") — only
+          // then does it become written text.
+          setPendingRecording({ blob, transcript: transcriptText });
+          setPhase('confirm_recording');
         } catch {
           // Was silently swallowed: the recording would vanish with no
           // trace. Surface it; the transcript flow below still proceeds.
-          setAudioError('تعذر رفع المقطع الصوتي — سيُحفظ النص فقط، وستحتاج لإعادة رفع الملف لاحقاً.');
-        }
-
-        if (transcriptText) {
-          setOriginalTranscript(transcriptText);
-          await doRephrase(transcriptText, '', 'rephrase');
-        } else {
-          await uploadAndTranscribeEdge(blob);
+          setAudioError('تعذر رفع المقطع يا رنا — سيُحفظ النص فقط، وهتحتاجي ترفعي الملف تاني بعدين.');
+          if (transcriptText) {
+            setOriginalTranscript(transcriptText);
+            await doRephrase(transcriptText, '', 'rephrase');
+          } else {
+            await uploadAndTranscribeEdge(blob);
+          }
         }
       };
       recorder.start();
@@ -217,24 +224,30 @@ export default function LinkModal({
   }, []);
 
   // --- Fallback: edge function transcription ---
-  const uploadAndTranscribeEdge = async (audioBlob: Blob) => {
+  // With existingUrl the audio is already uploaded (approved take), so it
+  // is transcribed directly instead of being uploaded a second time.
+  const uploadAndTranscribeEdge = async (audioBlob: Blob, existingUrl?: string) => {
     setPhase('processing');
     setError('');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setError('يجب تسجيل الدخول'); setPhase('input'); return; }
 
-      const fileName = `rana-${Date.now()}.webm`;
-      const { error: upErr } = await supabase.storage.from('rana-audio').upload(fileName, audioBlob);
-      if (upErr) throw new Error('فشل رفع الملف الصوتي');
+      let audioUrl = existingUrl;
+      if (!audioUrl) {
+        const fileName = `rana-${Date.now()}.webm`;
+        const { error: upErr } = await supabase.storage.from('rana-audio').upload(fileName, audioBlob);
+        if (upErr) throw new Error('فشل رفع الملف الصوتي');
 
-      const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
-      setAudioPublicUrl(urlData.publicUrl);
+        const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
+        setAudioPublicUrl(urlData.publicUrl);
+        audioUrl = urlData.publicUrl;
+      }
 
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ audioUrl: urlData.publicUrl }),
+        body: JSON.stringify({ audioUrl }),
       });
 
       if (!res.ok) {
@@ -274,7 +287,47 @@ export default function LinkModal({
       setError('صيغة الملف غير مدعومة.');
       return;
     }
-    await uploadAndTranscribeEdge(file);
+    // Upload first so Rana can hear it back and approve it, like a
+    // recording, before it becomes text.
+    try {
+      const fileName = `rana-${Date.now()}.webm`;
+      const { error: upErr } = await supabase.storage.from('rana-audio').upload(fileName, file);
+      if (upErr) throw new Error('فشل رفع الملف الصوتي');
+      const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
+      setAudioPublicUrl(urlData.publicUrl);
+      setPendingRecording({ blob: file, transcript: '' });
+      setPhase('confirm_recording');
+    } catch {
+      setError('تعذر رفع الملف الصوتي. حاولي مرة أخرى.');
+      setPhase('input');
+    }
+  };
+
+  // --- Recording approval: the approved take becomes written text ---
+  const approveRecording = async () => {
+    const rec = pendingRecording;
+    setPendingRecording(null);
+    if (!rec) return;
+    if (rec.transcript) {
+      setOriginalTranscript(rec.transcript);
+      await doRephrase(rec.transcript, '', 'rephrase');
+    } else if (audioPublicUrl) {
+      await uploadAndTranscribeEdge(rec.blob, audioPublicUrl);
+    } else {
+      await uploadAndTranscribeEdge(rec.blob);
+    }
+  };
+
+  // Re-record: drop this take and go back to a fresh recording.
+  const discardRecording = () => {
+    setPendingRecording(null);
+    setAudioPublicUrl(null);
+    setAudioError('');
+    setOriginalTranscript('');
+    setLiveTranscript('');
+    liveTranscriptRef.current = '';
+    finalTranscriptRef.current = '';
+    setPhase('input');
   };
 
   // --- Rephrase ---
@@ -404,7 +457,7 @@ export default function LinkModal({
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'ar-SA';
+      u.lang = currentSpeechLocale();
       u.rate = 0.85;
       const voices = window.speechSynthesis.getVoices();
       const arVoice = voices.find((v) => v.lang.startsWith('ar'));
@@ -466,15 +519,15 @@ export default function LinkModal({
           {phase === 'input' && (
             <div className="space-y-3">
               <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
-                <p className="text-sm font-semibold text-accent-700 mb-3 text-center">تسجيل صوتي مباشر</p>
-                <p className="text-xs text-accent-500 mb-4 text-center">سجلي المقطع — سيتم تحويله لنص أثناء التسجيل</p>
+                <p className="text-sm font-semibold text-accent-700 mb-3 text-center">تسجيل صوتي مباشر يا رنا</p>
+                <p className="text-xs text-accent-500 mb-4 text-center">سجلي المقطع يا رنا — سيتم تحويله لنص أثناء التسجيل</p>
                 <div className="flex flex-col gap-2.5">
                   <button onClick={isRecording ? stopRecording : startRecording}
                     className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-smooth ${
                       isRecording ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
                     }`}>
                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isRecording ? 'إيقاف التسجيل' : 'تسجيل مباشر'}
+                    {isRecording ? 'وقفي التسجيل يا رنا' : 'سجلي مباشر يا رنا'}
                   </button>
                   {isRecording && liveTranscript && (
                     <div className="bg-white rounded-lg p-3 border border-emerald-200 animate-fade-in">
@@ -501,7 +554,7 @@ export default function LinkModal({
                   <div className="flex gap-2 mt-2">
                     <button onClick={() => { setOriginalTranscript(linkContent.trim()); doRephrase(linkContent.trim(), '', 'rephrase'); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-smooth">
-                      <Sparkles className="w-3.5 h-3.5" /> إعادة صياغة بلغة سهلة
+                      <Sparkles className="w-3.5 h-3.5" /> إعادة صياغة بلغة سهلة يا رنا
                     </button>
                     <button onClick={() => { setOriginalTranscript(''); setRephrasedText(linkContent.trim()); setReviewMode('keep_original'); setPhase('review'); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-smooth">
@@ -509,6 +562,32 @@ export default function LinkModal({
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Phase: Confirm recording — Rana approves the take first */}
+          {phase === 'confirm_recording' && (
+            <div className="space-y-3 animate-slide-up">
+              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 text-center">
+                <p className="text-sm font-bold text-accent-800 mb-3">كويس التسجيل كده؟</p>
+                {audioPublicUrl && (
+                  <button onClick={() => playAudio(audioPublicUrl)}
+                    className="flex items-center justify-center gap-2 mx-auto px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+                    <Volume2 className="w-4 h-4" /> تشغيل المقطع (صوت رنا)
+                  </button>
+                )}
+                <p className="text-[11px] text-accent-400 mt-3">بعد الاعتماد ح نحوّل التسجيل لنص مكتوب، وتقدري تحوّلي نسخة منه لصوت رجالي من شاشة المراجعة</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={approveRecording}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-smooth text-sm shadow-md">
+                  <Check className="w-5 h-5" /> تمام اعتمد التسجيل
+                </button>
+                <button onClick={discardRecording}
+                  className="flex-1 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-xl transition-smooth text-sm">
+                  لا ح أعيد التسجيل
+                </button>
               </div>
             </div>
           )}
@@ -574,7 +653,7 @@ export default function LinkModal({
 
               {/* Voice type selection + generate */}
               <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-                <p className="text-xs font-semibold text-accent-600 mb-2">توليد صوت للقارئ</p>
+                <p className="text-xs font-semibold text-accent-600 mb-2">حوّل نسخة من النص لصوت</p>
                 <div className="flex gap-2 mb-2">
                   <button onClick={() => setVoiceType('male')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border transition-smooth ${
@@ -591,7 +670,7 @@ export default function LinkModal({
                 </div>
                 <button onClick={generateVoice}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-smooth">
-                  <AudioLines className="w-4 h-4" /> حول النص إلى مقطع صوتي
+                  <AudioLines className="w-4 h-4" /> {voiceType === 'male' ? 'يلا حوّل نسخة منه لصوت رجالي' : 'حوّل نسخة منه لصوت نسائي'}
                 </button>
                 {/* Browser TTS fallback button */}
                 {!syntheticAudioUrl && (
@@ -627,7 +706,7 @@ export default function LinkModal({
               {/* AI version history: the approve-or-re-request loop */}
               {versions.length > 1 && (
                 <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <p className="text-xs font-semibold text-accent-500 mb-2">نسخ الصياغة — اختر أي نسخة لعرضها، ثم وافق واحفظ أو اطلب تعديلاً جديداً</p>
+                  <p className="text-xs font-semibold text-accent-500 mb-2">نسخ الصياغة يا رنا — اختاري أي نسخة لعرضها، وبعدين وافقي واحفظي أو اطلبي تعديل جديد</p>
                   <div className="space-y-1.5">
                     {versions.map((v, i) => (
                       <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2.5 py-2">
@@ -652,7 +731,7 @@ export default function LinkModal({
                   className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 <button onClick={() => doRephrase(originalTranscript || linkContent, rephraseCommand, 'rephrase')}
                   className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-smooth whitespace-nowrap">
-                  <RefreshCw className="w-3.5 h-3.5" /> صياغة بتعديل
+                  <RefreshCw className="w-3.5 h-3.5" /> حاول تصيغ بصورة أفضل
                 </button>
               </div>
 
@@ -662,19 +741,20 @@ export default function LinkModal({
                 </div>
               )}
 
-              {/* Actions */}
+              {/* Actions: Rana's own words for the written text */}
+              <p className="text-sm font-bold text-emerald-700 text-center pt-1">النص المكتوب حلو كده يا رنا؟</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <button onClick={handleSave}
                   className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-smooth text-sm shadow-md hover:shadow-lg">
-                  <Check className="w-5 h-5" /> الموافقة وحفظ الرابط
+                  <Check className="w-5 h-5" /> اه ده كويس كده
                 </button>
                 <button onClick={() => doRephrase(originalTranscript || linkContent, rephraseCommand, 'rephrase')}
                   className="flex items-center gap-1.5 px-3 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-lg transition-smooth">
-                  <RefreshCw className="w-4 h-4" /> إعادة صياغة
+                  <RefreshCw className="w-4 h-4" /> لا مش حلو، حاول تاني
                 </button>
                 <button onClick={() => doRephrase(originalTranscript || linkContent, '', 'keep_original')}
                   className="flex items-center gap-1.5 px-3 py-2.5 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition-smooth">
-                  <FileText className="w-4 h-4" /> الالتزام بالنص
+                  <FileText className="w-4 h-4" /> لا خلاص التزم بالنص الأصلي
                 </button>
               </div>
               <p className="text-[11px] text-accent-400 text-center">سيتم إرسال الرابط للمراجعة من قبل الإدارة قبل نشره</p>
@@ -695,7 +775,7 @@ export default function LinkModal({
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
                 <Check className="w-8 h-8 text-emerald-600" />
               </div>
-              <p className="text-sm font-bold text-accent-800">تم إرسال الرابط للمراجعة بنجاح</p>
+              <p className="text-sm font-bold text-accent-800">تم يا رنا — اتبعت الرابط للمراجعة بنجاح</p>
               <p className="text-xs text-accent-400">سيظهر للمستخدمين بعد موافقة الإدارة</p>
             </div>
           )}
