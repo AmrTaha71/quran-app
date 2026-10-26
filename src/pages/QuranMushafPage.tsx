@@ -646,6 +646,71 @@ export default function QuranMushafPage({
     setCleanMode(false);
   };
 
+  // Follow-the-imam state + wake-lock helpers. These MUST sit above the
+  // follow-functions block: useCallback deps arrays are evaluated eagerly
+  // during render, so a deps entry referencing a const declared below
+  // throws a TDZ ReferenceError on first render and blanks the page
+  // (no error boundary) — that is exactly what broke #/mushaf in c9587b5.
+  // Follow-the-imam mode ("الحق الإمام"): listen to the imam, lock onto
+  // the ayah being recited, open its Mushaf page fullscreen, and move a
+  // clear amber highlight along with the recitation. Listening runs on
+  // the browser's live speech recognition where available (free, instant)
+  // and falls back to 8-second Whisper chunks via the transcribe-audio
+  // edge function where it is not (Safari) — the fallback lags ~10s and
+  // spends OpenAI balance, and is labelled as such in the panel.
+  const [followOn, setFollowOn] = useState(false);
+  const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
+  const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | null>(null);
+  const [followStatus, setFollowStatus] = useState<'listening' | 'locked' | 'lost'>('listening');
+  const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
+  const [followHeard, setFollowHeard] = useState('');
+  const [followError, setFollowError] = useState<string | null>(null);
+  const [followManual, setFollowManual] = useState('');
+  const followOrderedRef = useRef<OrderedVerse[] | null>(null);
+  const followBufferRef = useRef<string[]>([]);
+  const followListeningRef = useRef(false);
+  const followMissRef = useRef(0);
+  const followPosRef = useRef<TrackedPosition | null>(null);
+  const followStatusRef = useRef<'listening' | 'locked' | 'lost'>('listening');
+  const recognitionRef = useRef<any>(null);
+  const followStreamRef = useRef<MediaStream | null>(null);
+  const followWakeLockRef = useRef<any>(null);
+  const followActiveRef = useRef(false);
+  const followVisListenerRef = useRef(false);
+  const srAvailable = typeof window !== 'undefined'
+    && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  // The screen must NEVER sleep during a prayer. Browsers release wake
+  // locks when the tab hides and sometimes when the system intervenes,
+  // so a single request is not enough: re-acquire on visibility return
+  // and on release while still following. A denied request just throws
+  // and is swallowed, so the release handler cannot spin.
+  const acquireWakeLock = useCallback(async () => {
+    if (!followActiveRef.current) return;
+    const nav = navigator as any;
+    if (!nav.wakeLock?.request) return;
+    try {
+      const wl = await nav.wakeLock.request('screen');
+      followWakeLockRef.current = wl;
+      wl.addEventListener('release', () => {
+        followWakeLockRef.current = null;
+        if (followActiveRef.current && document.visibilityState === 'visible') {
+          setTimeout(() => { void acquireWakeLock(); }, 1000);
+        }
+      });
+    } catch {}
+  }, []);
+  const handleFollowVisibility = useCallback(() => {
+    if (document.visibilityState === 'visible') void acquireWakeLock();
+  }, [acquireWakeLock]);
+  const ensureWakeLockTracking = useCallback(() => {
+    if (!followVisListenerRef.current) {
+      document.addEventListener('visibilitychange', handleFollowVisibility);
+      followVisListenerRef.current = true;
+    }
+    void acquireWakeLock();
+  }, [handleFollowVisibility, acquireWakeLock]);
+
   // --- Follow-the-imam mode ---
   const enterFollowMode = useCallback(() => {
     setFollowOn(true);
@@ -781,14 +846,19 @@ export default function QuranMushafPage({
       followListeningRef.current = false;
       return;
     }
-    const path = `follow/${uid}/current.webm`; // one reused object per user, overwritten each chunk
+    let consecutiveFails = 0;
     while (followListeningRef.current) {
+      // A fresh path per chunk: storage has an INSERT policy but NO
+      // UPDATE policy, so re-uploading one path (upsert) fails from the
+      // second chunk on and freezes tracking. Delete after transcribing
+      // so chunks don't pile up in the bucket.
+      const chunkPath = `follow/${uid}/${Date.now()}.webm`;
       try {
         const blob = await recordChunk(8000);
         if (!followListeningRef.current) break;
-        const { error: upErr } = await supabase.storage.from('rana-audio').upload(path, blob, { upsert: true });
+        const { error: upErr } = await supabase.storage.from('rana-audio').upload(chunkPath, blob);
         if (upErr) throw upErr;
-        const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(path);
+        const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(chunkPath);
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
@@ -800,9 +870,18 @@ export default function QuranMushafPage({
           setFollowHeard(data.transcript);
           followFinalRef.current(data.transcript);
         }
+        consecutiveFails = 0;
+        setFollowError(null);
       } catch {
-        // One failed chunk must not kill the session — wait a beat and retry.
+        // One failed chunk must not kill the session — but after several
+        // in a row, say so instead of looking frozen.
+        consecutiveFails += 1;
+        if (consecutiveFails >= 3) {
+          setFollowError('تعذر الاستماع عبر الخادم — تأكد من الاتصال، أو اكتب الكلمات يدوياً بالأسفل');
+        }
         await new Promise((r) => setTimeout(r, 1500));
+      } finally {
+        try { await supabase.storage.from('rana-audio').remove([chunkPath]); } catch {}
       }
     }
   }, [session]);
@@ -951,66 +1030,6 @@ export default function QuranMushafPage({
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
   const [tapFlash, setTapFlash] = useState<WordBox | null>(null);
   const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Follow-the-imam mode ("الحق الإمام"): listen to the imam, lock onto
-  // the ayah being recited, open its Mushaf page fullscreen, and move a
-  // clear amber highlight along with the recitation. Listening runs on
-  // the browser's live speech recognition where available (free, instant)
-  // and falls back to 8-second Whisper chunks via the transcribe-audio
-  // edge function where it is not (Safari) — the fallback lags ~10s and
-  // spends OpenAI balance, and is labelled as such in the panel.
-  const [followOn, setFollowOn] = useState(false);
-  const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
-  const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | null>(null);
-  const [followStatus, setFollowStatus] = useState<'listening' | 'locked' | 'lost'>('listening');
-  const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
-  const [followHeard, setFollowHeard] = useState('');
-  const [followError, setFollowError] = useState<string | null>(null);
-  const [followManual, setFollowManual] = useState('');
-  const followOrderedRef = useRef<OrderedVerse[] | null>(null);
-  const followBufferRef = useRef<string[]>([]);
-  const followListeningRef = useRef(false);
-  const followMissRef = useRef(0);
-  const followPosRef = useRef<TrackedPosition | null>(null);
-  const followStatusRef = useRef<'listening' | 'locked' | 'lost'>('listening');
-  const recognitionRef = useRef<any>(null);
-  const followStreamRef = useRef<MediaStream | null>(null);
-  const followWakeLockRef = useRef<any>(null);
-  const followActiveRef = useRef(false);
-  const followVisListenerRef = useRef(false);
-  const srAvailable = typeof window !== 'undefined'
-    && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-
-  // The screen must NEVER sleep during a prayer. Browsers release wake
-  // locks when the tab hides and sometimes when the system intervenes,
-  // so a single request is not enough: re-acquire on visibility return
-  // and on release while still following. A denied request just throws
-  // and is swallowed, so the release handler cannot spin.
-  const acquireWakeLock = useCallback(async () => {
-    if (!followActiveRef.current) return;
-    const nav = navigator as any;
-    if (!nav.wakeLock?.request) return;
-    try {
-      const wl = await nav.wakeLock.request('screen');
-      followWakeLockRef.current = wl;
-      wl.addEventListener('release', () => {
-        followWakeLockRef.current = null;
-        if (followActiveRef.current && document.visibilityState === 'visible') {
-          setTimeout(() => { void acquireWakeLock(); }, 1000);
-        }
-      });
-    } catch {}
-  }, []);
-  const handleFollowVisibility = useCallback(() => {
-    if (document.visibilityState === 'visible') void acquireWakeLock();
-  }, [acquireWakeLock]);
-  const ensureWakeLockTracking = useCallback(() => {
-    if (!followVisListenerRef.current) {
-      document.addEventListener('visibilitychange', handleFollowVisibility);
-      followVisListenerRef.current = true;
-    }
-    void acquireWakeLock();
-  }, [handleFollowVisibility, acquireWakeLock]);
 
   useEffect(() => {
     if (edition.id !== 'madinah') { setPageWordBoxes(null); return; }

@@ -321,7 +321,10 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     const userId = session?.user?.id;
     if (!userId) return;
     const value = nameDraft.trim() || null;
-    const { error } = await supabase.from('user_profiles').update({ preferred_name: value }).eq('user_id', userId);
+    // Upsert, not update: a user whose signup-time profile insert failed
+    // (no session before email confirmation, so RLS denied it) has no
+    // row, and a plain update would silently affect zero rows.
+    const { error } = await supabase.from('user_profiles').upsert({ user_id: userId, preferred_name: value }, { onConflict: 'user_id' });
     if (error) { setNameError('تعذر حفظ الاسم، حاول تاني'); return; }
     setPreferredName(value);
     setNameError('');
