@@ -1,4 +1,4 @@
-import { Bookmark, BookOpen, Home } from 'lucide-react';
+import { Bookmark, BookOpen, Home, Mic } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
 
@@ -17,6 +17,7 @@ export default function BottomNav({
   const items = [
     { id: 'app' as const, label: 'لوحتي', icon: <Bookmark className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
+    { id: 'imam' as const, label: 'الحق الإمام', icon: <Mic className="w-7 h-7" /> },
     { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
   ];
   return (
@@ -30,7 +31,20 @@ export default function BottomNav({
           return (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => {
+                if (item.id === 'imam') {
+                  // Follow-the-imam is a mode of the Mushaf page, not a
+                  // route: flag it (session-scoped, so closing the tab
+                  // never leaves a stale panel behind), wake the page
+                  // (whether it mounts now or is already mounted), and
+                  // go there.
+                  try { sessionStorage.setItem('quran-follow-mode', '1'); } catch {}
+                  window.dispatchEvent(new Event('quran:follow-imam'));
+                  onNavigate('mushaf');
+                  return;
+                }
+                onNavigate(item.id);
+              }}
               className={`icon-action flex-1 flex-col py-2 text-sm font-bold transition-smooth ${
                 active ? 'text-emerald-700 bg-emerald-50' : 'text-accent-500 hover:bg-gray-50'
               }`}

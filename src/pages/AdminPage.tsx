@@ -412,6 +412,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <p className="text-xs text-accent-400">عبر {usage.calls.toLocaleString('ar-EG')} مكالمة</p>
                 </div>
               </div>
+              {Math.max(0, startingBalance - usage.total) < 1 && (
+                <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg text-xs font-semibold text-amber-800">
+                  تنبيه: الرصيد المتبقي أقل من $1 — اشحن رصيد OpenAI قبل ما تتوقف خدمات الذكاء والصوت.
+                </div>
+              )}
               <div className="flex flex-wrap gap-2 mt-3">
                 {Object.entries(usage.byFn).map(([fn, v]) => (
                   <span key={fn} className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-accent-600">

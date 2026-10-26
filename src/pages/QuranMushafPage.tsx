@@ -10,12 +10,14 @@ import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
 import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
+import { loadVerseIndex } from '../lib/searchIndex';
+import { buildOrderedVerses, findLock, advanceTracking, heardWords, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat,
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, RefreshCw,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
@@ -25,6 +27,7 @@ const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
 const EDITION_STORAGE_KEY = 'quran-mushaf-edition';
 const PAGE_STORAGE_KEY = 'quran-mushaf-page';
 const TARGET_STORAGE_KEY = 'quran-mushaf-target';
+const FOLLOW_STORAGE_KEY = 'quran-follow-mode';
 const PAGE_LIST_STORAGE_KEY = 'quran-mushaf-page-lists';
 
 function readStoredEdition(): number {
@@ -643,6 +646,279 @@ export default function QuranMushafPage({
     setCleanMode(false);
   };
 
+  // --- Follow-the-imam mode ---
+  const enterFollowMode = useCallback(() => {
+    setFollowOn(true);
+    followActiveRef.current = true;
+    setFollowReady(true);
+    setFollowStatus('listening');
+    followStatusRef.current = 'listening';
+    setFollowPos(null);
+    followPosRef.current = null;
+    setFollowHeard('');
+    setFollowError(null);
+    followBufferRef.current = [];
+    followMissRef.current = 0;
+    setCleanMode(false);
+    // Word-level highlighting needs the Madinah word boxes, so follow
+    // mode always uses the Madinah edition (harmless if already selected).
+    const madinahIdx = EDITIONS.findIndex((e) => e.id === 'madinah');
+    if (madinahIdx >= 0) setSelectedEdition(madinahIdx);
+    try { sessionStorage.setItem(FOLLOW_STORAGE_KEY, '1'); } catch {}
+  }, []);
+
+  const stopFollow = useCallback(() => {
+    followListeningRef.current = false;
+    followActiveRef.current = false;
+    if (followVisListenerRef.current) {
+      document.removeEventListener('visibilitychange', handleFollowVisibility);
+      followVisListenerRef.current = false;
+    }
+    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
+    followStreamRef.current?.getTracks().forEach((t) => t.stop());
+    followStreamRef.current = null;
+    try { followWakeLockRef.current?.release(); } catch {}
+    followWakeLockRef.current = null;
+    setFollowOn(false);
+    setFollowReady(false);
+    setFollowPos(null);
+    followPosRef.current = null;
+    setFollowEngine(null);
+    try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
+  }, []);
+
+  const jumpToTracked = useCallback(async (pos: TrackedPosition) => {
+    try {
+      const list = await loadSurahPageList(pos.surah);
+      const entry = list.find((a) => a.number === pos.ayah);
+      const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
+      goToPage(page);
+      setSelectedVerse(null);
+      setShowFullscreen(true);
+      requestNativeFullscreen();
+    } catch {
+      setFollowError('تعذر تحديد صفحة الآية — تأكد من الاتصال بالإنترنت');
+    }
+    // goToPage / setters are stable enough here; loadSurahPageList is memoized.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadSurahPageList]);
+
+  const onFollowFinal = useCallback((text: string) => {
+    const words = heardWords(text);
+    if (words.length === 0) return;
+    const ordered = followOrderedRef.current;
+    if (!ordered) return;
+    const buffer = [...followBufferRef.current, ...words].slice(-80);
+    followBufferRef.current = buffer;
+    const pos = followPosRef.current;
+    if (!pos || followStatusRef.current === 'lost') {
+      const lock = findLock(buffer, ordered);
+      if (lock) {
+        followPosRef.current = lock;
+        setFollowPos(lock);
+        followStatusRef.current = 'locked';
+        setFollowStatus('locked');
+        followMissRef.current = 0;
+        void jumpToTracked(lock);
+      }
+      return;
+    }
+    const adv = advanceTracking(pos, words, ordered);
+    if (adv && (adv.surah !== pos.surah || adv.ayah !== pos.ayah || adv.word !== pos.word)) {
+      followPosRef.current = adv;
+      setFollowPos(adv);
+      followMissRef.current = 0;
+      void jumpToTracked(adv);
+    } else {
+      followMissRef.current += 1;
+      if (followMissRef.current >= 4) {
+        followStatusRef.current = 'lost';
+        setFollowStatus('lost');
+      }
+    }
+  }, [jumpToTracked]);
+
+  // Engine callbacks are registered once at start; they always call the
+  // latest onFollowFinal through this ref so they never go stale.
+  const followFinalRef = useRef(onFollowFinal);
+  useEffect(() => { followFinalRef.current = onFollowFinal; });
+
+  const recordChunk = (ms: number): Promise<Blob> => new Promise((resolve, reject) => {
+    const stream = followStreamRef.current;
+    if (!stream) { reject(new Error('no stream')); return; }
+    const mime = MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks: BlobPart[] = [];
+    rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+    rec.onstop = () => resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
+    rec.onerror = () => reject(new Error('record failed'));
+    rec.start();
+    setTimeout(() => { try { rec.stop(); } catch {} }, ms);
+  });
+
+  const runWhisperLoop = useCallback(async () => {
+    if (!window.MediaRecorder) {
+      setFollowError('هذا المتصفح لا يدعم التسجيل — اكتب الكلمات يدوياً بالأسفل');
+      setFollowReady(true);
+      followListeningRef.current = false;
+      return;
+    }
+    try {
+      followStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
+      setFollowReady(true);
+      followListeningRef.current = false;
+      return;
+    }
+    const uid = session?.user?.id;
+    if (!uid) {
+      setFollowError('الاستماع عبر الخادم يحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
+      setFollowReady(true);
+      followListeningRef.current = false;
+      return;
+    }
+    const path = `follow/${uid}/current.webm`; // one reused object per user, overwritten each chunk
+    while (followListeningRef.current) {
+      try {
+        const blob = await recordChunk(8000);
+        if (!followListeningRef.current) break;
+        const { error: upErr } = await supabase.storage.from('rana-audio').upload(path, blob, { upsert: true });
+        if (upErr) throw upErr;
+        const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(path);
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          body: JSON.stringify({ audioUrl: urlData.publicUrl }),
+        });
+        if (!res.ok) throw new Error('transcribe failed');
+        const data = await res.json();
+        if (data.transcript) {
+          setFollowHeard(data.transcript);
+          followFinalRef.current(data.transcript);
+        }
+      } catch {
+        // One failed chunk must not kill the session — wait a beat and retry.
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+  }, [session]);
+
+  const startFollowListening = useCallback(async () => {
+    setFollowError(null);
+    try {
+      if (!followOrderedRef.current) {
+        const verses = await loadVerseIndex();
+        followOrderedRef.current = buildOrderedVerses(verses);
+      }
+    } catch {
+      setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+      return;
+    }
+    followListeningRef.current = true;
+    setFollowReady(false);
+    setFollowStatus('listening');
+    followStatusRef.current = 'listening';
+    // Keep the screen on through a long Taraweeh (re-acquired if lost).
+    ensureWakeLockTracking();
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SR) {
+      setFollowEngine('live');
+      const rec = new SR();
+      rec.lang = 'ar-SA';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onresult = (e: any) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const r = e.results[i][0];
+          if (r.isFinal) followFinalRef.current(r.transcript);
+          else interim += r.transcript + ' ';
+        }
+        if (interim.trim()) setFollowHeard(interim.trim());
+      };
+      rec.onerror = (e: any) => {
+        if (e.error === 'not-allowed') {
+          setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
+          followListeningRef.current = false;
+          setFollowReady(true);
+        } else if (e.error === 'network') {
+          setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت');
+        }
+      };
+      rec.onend = () => {
+        if (followListeningRef.current) { try { rec.start(); } catch {} }
+      };
+      recognitionRef.current = rec;
+      try {
+        rec.start();
+      } catch {
+        setFollowError('تعذر بدء الاستماع — جرّب الإدخال اليدوي بالأسفل');
+        setFollowReady(true);
+        followListeningRef.current = false;
+      }
+      return;
+    }
+    setFollowEngine('whisper');
+    void runWhisperLoop();
+  }, [runWhisperLoop, ensureWakeLockTracking]);
+
+  const manualFollowLock = useCallback(async () => {
+    const words = heardWords(followManual);
+    if (words.length < 2) {
+      setFollowError('اكتب كلمات أكثر — كلمتين على الأقل');
+      return;
+    }
+    try {
+      if (!followOrderedRef.current) {
+        const verses = await loadVerseIndex();
+        followOrderedRef.current = buildOrderedVerses(verses);
+      }
+    } catch {
+      setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+      return;
+    }
+    const lock = findLock(words, followOrderedRef.current, Math.min(4, words.length));
+    if (!lock) {
+      setFollowError('لم أجد آية مطابقة — جرّب كلمات أخرى سمعتها بوضوح');
+      return;
+    }
+    followPosRef.current = lock;
+    setFollowPos(lock);
+    followStatusRef.current = 'locked';
+    setFollowStatus('locked');
+    followMissRef.current = 0;
+    setFollowReady(false);
+    // Even a manual lock follows a whole prayer, so the screen stays on.
+    ensureWakeLockTracking();
+    void jumpToTracked(lock);
+  }, [followManual, jumpToTracked, ensureWakeLockTracking]);
+
+  const resyncFollow = useCallback(() => {
+    followPosRef.current = null;
+    setFollowPos(null);
+    followMissRef.current = 0;
+    followStatusRef.current = 'listening';
+    setFollowStatus('listening');
+  }, []);
+
+  // Enter follow mode from the BottomNav icon (navigating here, or already
+  // here) — the panel's big start button then takes the mic permission
+  // from a real tap, which is the only gesture browsers reliably honour.
+  useEffect(() => {
+    const onFollowEvent = () => { enterFollowMode(); };
+    window.addEventListener('quran:follow-imam', onFollowEvent);
+    try {
+      if (sessionStorage.getItem(FOLLOW_STORAGE_KEY) === '1') enterFollowMode();
+    } catch {}
+    return () => window.removeEventListener('quran:follow-imam', onFollowEvent);
+    // Only on mount; enterFollowMode is stable (no state deps).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openFullscreen = () => {
     setShowRatelIntro(true);
     setShowFullscreen(true);
@@ -675,6 +951,66 @@ export default function QuranMushafPage({
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
   const [tapFlash, setTapFlash] = useState<WordBox | null>(null);
   const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Follow-the-imam mode ("الحق الإمام"): listen to the imam, lock onto
+  // the ayah being recited, open its Mushaf page fullscreen, and move a
+  // clear amber highlight along with the recitation. Listening runs on
+  // the browser's live speech recognition where available (free, instant)
+  // and falls back to 8-second Whisper chunks via the transcribe-audio
+  // edge function where it is not (Safari) — the fallback lags ~10s and
+  // spends OpenAI balance, and is labelled as such in the panel.
+  const [followOn, setFollowOn] = useState(false);
+  const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
+  const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | null>(null);
+  const [followStatus, setFollowStatus] = useState<'listening' | 'locked' | 'lost'>('listening');
+  const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
+  const [followHeard, setFollowHeard] = useState('');
+  const [followError, setFollowError] = useState<string | null>(null);
+  const [followManual, setFollowManual] = useState('');
+  const followOrderedRef = useRef<OrderedVerse[] | null>(null);
+  const followBufferRef = useRef<string[]>([]);
+  const followListeningRef = useRef(false);
+  const followMissRef = useRef(0);
+  const followPosRef = useRef<TrackedPosition | null>(null);
+  const followStatusRef = useRef<'listening' | 'locked' | 'lost'>('listening');
+  const recognitionRef = useRef<any>(null);
+  const followStreamRef = useRef<MediaStream | null>(null);
+  const followWakeLockRef = useRef<any>(null);
+  const followActiveRef = useRef(false);
+  const followVisListenerRef = useRef(false);
+  const srAvailable = typeof window !== 'undefined'
+    && Boolean((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+
+  // The screen must NEVER sleep during a prayer. Browsers release wake
+  // locks when the tab hides and sometimes when the system intervenes,
+  // so a single request is not enough: re-acquire on visibility return
+  // and on release while still following. A denied request just throws
+  // and is swallowed, so the release handler cannot spin.
+  const acquireWakeLock = useCallback(async () => {
+    if (!followActiveRef.current) return;
+    const nav = navigator as any;
+    if (!nav.wakeLock?.request) return;
+    try {
+      const wl = await nav.wakeLock.request('screen');
+      followWakeLockRef.current = wl;
+      wl.addEventListener('release', () => {
+        followWakeLockRef.current = null;
+        if (followActiveRef.current && document.visibilityState === 'visible') {
+          setTimeout(() => { void acquireWakeLock(); }, 1000);
+        }
+      });
+    } catch {}
+  }, []);
+  const handleFollowVisibility = useCallback(() => {
+    if (document.visibilityState === 'visible') void acquireWakeLock();
+  }, [acquireWakeLock]);
+  const ensureWakeLockTracking = useCallback(() => {
+    if (!followVisListenerRef.current) {
+      document.addEventListener('visibilitychange', handleFollowVisibility);
+      followVisListenerRef.current = true;
+    }
+    void acquireWakeLock();
+  }, [handleFollowVisibility, acquireWakeLock]);
 
   useEffect(() => {
     if (edition.id !== 'madinah') { setPageWordBoxes(null); return; }
@@ -883,6 +1219,66 @@ export default function QuranMushafPage({
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
+        {/* Follow-the-imam panel */}
+        {followOn && (
+          <div className="bg-emerald-900 rounded-2xl p-4 mb-4 shadow-sm text-white">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-bold flex items-center gap-2"><Mic className="w-5 h-5 text-amber-300" /> الحق الإمام</p>
+              <button onClick={stopFollow}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-white/10 hover:bg-white/20 rounded-lg transition-smooth">
+                <Square className="w-4 h-4" /> إيقاف
+              </button>
+            </div>
+            {followReady ? (
+              <>
+                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
+                  اضغط بدء الاستماع، وقرّب الجوال منك، وأول ما يلاقي الإمام الآية هيفتح المصحف ملء الشاشة ويظللها بتظليل واضح يمشي مع صوته.
+                </p>
+                <p className="text-xs text-emerald-200/80 mt-1">
+                  {srAvailable
+                    ? 'الاستماع مباشر من المتصفح (بدون تكلفة).'
+                    : 'متصفحك لا يدعم الاستماع المباشر — سيتم الاستماع عبر الخادم (يتأخر ~10 ثوانٍ ويستهلك رصيد OpenAI).'}
+                </p>
+                <button onClick={startFollowListening}
+                  className="mt-3 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                  <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
+                </button>
+                <div className="flex gap-2 mt-3">
+                  <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
+                    placeholder="أو اكتب كلمات سمعتها من الإمام..."
+                    className="flex-1 px-3 py-2.5 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
+                  <button onClick={manualFollowLock}
+                    className="px-4 py-2.5 bg-white text-emerald-800 text-sm font-bold rounded-xl">ابحث</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold mt-2">
+                  {followStatus === 'locked' && followPos
+                    ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
+                    : followStatus === 'lost'
+                      ? 'فقدت الإمام مؤقتاً — بستنى كلمات أوضح لإعادة القفل...'
+                      : 'جارٍ الاستماع للإمام...'}
+                </p>
+                {followEngine === 'whisper' && (
+                  <p className="text-xs text-emerald-200/80 mt-1">وضع الخادم: التظليل يتأخر ~10 ثوانٍ عن الإمام ويستهلك رصيد OpenAI.</p>
+                )}
+                {followHeard && <p className="text-xs text-emerald-200 mt-1 truncate">سمعت: {followHeard}</p>}
+                <div className="flex gap-2 mt-3">
+                  <button onClick={resyncFollow}
+                    className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-1.5">
+                    <RefreshCw className="w-4 h-4" /> إعادة المزامنة
+                  </button>
+                  <button onClick={() => { if (followPos) void jumpToTracked(followPos); }}
+                    className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-sm font-bold rounded-xl transition-smooth">
+                    ارجع لملء الشاشة
+                  </button>
+                </div>
+              </>
+            )}
+            {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
+          </div>
+        )}
         {/* A personal word before reading — a daily dua for the reader */}
         <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-4">
           <Heart className="w-4 h-4" /> {dailyDua()}
@@ -945,6 +1341,10 @@ export default function QuranMushafPage({
                 className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
               <button onClick={openFullscreen}
                 className="p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
+              <button onClick={enterFollowMode} title="تتبع الإمام في الصلاة"
+                className={`px-2.5 py-2 text-sm font-bold rounded-lg transition-smooth flex items-center gap-1.5 ${followOn ? 'bg-emerald-600 text-white' : 'text-accent-600 hover:bg-emerald-50'}`}>
+                <Mic className="w-4 h-4" /> الحق الإمام
+              </button>
               <button onClick={toggleGoldFrame} title="إطار ذهبي حول الصفحة"
                 className={`px-2.5 py-2 text-sm font-bold rounded-lg transition-smooth ${goldFrame ? 'bg-amber-200 text-amber-800 ring-1 ring-amber-400' : 'text-accent-600 hover:bg-amber-100'}`}>
                 إطار ذهبي
@@ -1226,7 +1626,10 @@ export default function QuranMushafPage({
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
             if (cleanMode) { setCleanMode(false); return; }
-            if (!showRatelIntro && !showEditionPickerInFullscreen && !selectedVerse) exitFullscreenView();
+            // While following the imam, a band tap must not drop the
+            // fullscreen view (the phone is held through a long prayer);
+            // the X button and the follow bar's stop button still exit.
+            if (!showRatelIntro && !showEditionPickerInFullscreen && !selectedVerse && !followOn) exitFullscreenView();
           }}>
 
           {showRatelIntro && (
@@ -1371,6 +1774,29 @@ export default function QuranMushafPage({
                         style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
                     );
                   })()}
+                  {/* Follow-the-imam highlight: the whole tracked ayah is
+                      marked amber, the word being recited right now is
+                      strongest with a ring, words already recited are a
+                      solid amber, words ahead are faint — so the eye
+                      follows the imam at a glance, even on a phone. */}
+                  {followOn && followPos && pageWordBoxes && (() => {
+                    const boxes = pageWordBoxes
+                      .filter((b) => b.surah === followPos.surah && b.ayah === followPos.ayah)
+                      .map((b) => ({ ...b, wordNo: Number(b.key.split(':')[2]) || 0 }))
+                      .sort((a, b) => a.wordNo - b.wordNo);
+                    if (boxes.length === 0) return null;
+                    return (<>
+                      {boxes.map((b) => {
+                        const f = imageBoxToContainer(b);
+                        const isCurrent = b.wordNo - 1 === followPos.word;
+                        const isPassed = b.wordNo - 1 < followPos.word;
+                        return (
+                          <div key={b.key} className={`absolute rounded-sm pointer-events-none ${isCurrent ? 'bg-amber-400/70 ring-2 ring-amber-500' : isPassed ? 'bg-amber-400/40' : 'bg-amber-300/25'}`}
+                            style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
+                        );
+                      })}
+                    </>);
+                  })()}
                 </div>
               ) : (
                 <div className="text-center touch-none" onClick={(e) => e.stopPropagation()}
@@ -1456,12 +1882,27 @@ export default function QuranMushafPage({
               {/* Verse selector — only the ayahs printed on this page */}
               <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(1rem_+_env(safe-area-inset-bottom))] pointer-events-auto px-4"
                 onClick={(e) => e.stopPropagation()}>
+                {followOn && (
+                  <div className="mb-2 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
+                    <Mic className="w-4 h-4 flex-shrink-0" />
+                    <span className="truncate">
+                      {followStatus === 'locked' && followPos
+                        ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
+                        : followStatus === 'lost' ? 'فقدت الإمام مؤقتاً…' : 'جارٍ الاستماع للإمام…'}
+                    </span>
+                    <button onClick={resyncFollow} title="إعادة المزامنة"
+                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><RefreshCw className="w-4 h-4" /></button>
+                    <button onClick={stopFollow} title="إيقاف المتابعة"
+                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
+                  </div>
+                )}
                 <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح المتشابهات والروابط والإعراب والتفسير</p>
                 <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
                   <div className="flex gap-2">
                     {stripVerses.map((v) => (
                       <button key={v.id} onClick={() => handleVerseClick(v)}
                         className={`flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
+                          followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
                           v.has_links ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50' : 'bg-white/20 text-white hover:bg-white/30'
                         }`}>

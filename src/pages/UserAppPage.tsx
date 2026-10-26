@@ -10,7 +10,7 @@ import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
-  Heart, Bookmark, AlertTriangle, X, BookMarked, AlertCircle,
+  Heart, Bookmark, AlertTriangle, BadgeCheck, X, BookMarked, AlertCircle,
   Volume2, Filter, Layers, Mic,
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
@@ -332,6 +332,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     favorites: lists.favorites.size,
     read_later: lists.read_later.size,
     difficult: lists.difficult.size,
+    memorized: lists.memorized.size,
   };
 
   const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter ? 1 : 0) + (debouncedSearch ? 1 : 0);
@@ -419,8 +420,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           )}
           {nameError && <p className="text-xs text-red-200 mt-2">{nameError}</p>}
           <p className="text-sm text-emerald-50 leading-relaxed mt-2">
-            {(listCounts.favorites + listCounts.read_later + listCounts.difficult) > 0
-              ? `ما شاء الله، بارك الله فيك — جمعت ${(listCounts.favorites + listCounts.read_later + listCounts.difficult).toLocaleString('ar-EG')} آية في قوائمك، تقبل الله منك وثبّتها في قلبك`
+            {(listCounts.favorites + listCounts.read_later + listCounts.difficult + listCounts.memorized) > 0
+              ? `ما شاء الله، بارك الله فيك — جمعت ${(listCounts.favorites + listCounts.read_later + listCounts.difficult + listCounts.memorized).toLocaleString('ar-EG')} آية في قوائمك${listCounts.memorized > 0 ? `، وحفظت ${listCounts.memorized.toLocaleString('ar-EG')} آية` : ''}، تقبل الله منك وثبّتها في قلبك`
               : 'بارك الله فيك — رحلتك بتبدأ من هنا: اختر آية، اسمع رابطها، وثبّتها في قلبك. أول خطوة هي أهم خطوة، وتقبل الله سعيك'}
           </p>
           <p className="text-sm text-amber-100 font-semibold leading-relaxed mt-3 pt-3 border-t border-white/20">
@@ -444,6 +445,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               label={t('readLater')} icon={<Bookmark className="w-5 h-5" />} count={listCounts.read_later} />
             <ListFilterTab active={listFilter === 'difficult'} onClick={() => { setListFilter('difficult'); setPage(0); }}
               label={t('difficult')} icon={<AlertTriangle className="w-5 h-5" />} count={listCounts.difficult} />
+            <ListFilterTab active={listFilter === 'memorized'} onClick={() => { setListFilter('memorized'); setPage(0); }}
+              label="تم الحفظ" icon={<BadgeCheck className="w-5 h-5" />} count={listCounts.memorized} />
           </div>
         )}
 

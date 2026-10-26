@@ -23,7 +23,7 @@ export default function ShareButton({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const appUrl = 'https://quran-links.app';
+  const appUrl = 'https://rawabit-alziker-alhakim.vercel.app';
   const shareText = `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${appUrl}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(appUrl);
