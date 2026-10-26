@@ -16,7 +16,7 @@ import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT } from '../lib/madinahPa
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
-  ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers,
+  ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
   LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, RefreshCw,
 } from 'lucide-react';
 
@@ -80,7 +80,9 @@ export default function QuranMushafPage({
   const [currentPage, setCurrentPage] = useState(readStoredPage);
   const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
   const [ayahFilter, setAyahFilter] = useState('');
-  const [pendingAyah, setPendingAyah] = useState<number | null>(null);
+  // Search-jump highlight: the ayah tapped in لوحتي, marked amber on
+  // its exact words until the page turns or fullscreen exits.
+  const [searchHighlight, setSearchHighlight] = useState<{ surah: number; ayah: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showRatelIntro, setShowRatelIntro] = useState(false);
@@ -178,10 +180,12 @@ export default function QuranMushafPage({
     startRecitation(verse, reciter);
   };
   const [loadingLinks, setLoadingLinks] = useState(false);
-  // Ayah popup tabs, in the order the user asked for: mutashabihat,
-  // then links, then irab, then tafsir (with a choice of three
-  // published tafsirs inside it). Mutashabihat is the default tab.
-  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'tafsir'>('mutashabihat');
+  // Ayah popup tabs: links first, biggest and clearest (the app is
+  // about the links), then mutashabihat, then irab, then tafsir
+  // (with a choice of three published tafsirs inside it). Links is
+  // the default tab; hopping between similar ayahs keeps the
+  // mutashabihat tab so verses can still be compared by hopping.
+  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'tafsir'>('links');
   const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
   const [tafsirText, setTafsirText] = useState<string | null>(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
@@ -547,38 +551,40 @@ export default function QuranMushafPage({
   useEffect(() => {
     localStorage.setItem(PAGE_STORAGE_KEY, String(currentPage));
   }, [currentPage]);
+  // A jump from لوحتي (stored as { surah, ayah }): go to the ayah's
+  // ACTUAL page (not the surah's first page), open the Mushaf fullscreen
+  // at once (no intro), and highlight the ayah's words exactly — no
+  // popup until the user taps a highlighted word.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(TARGET_STORAGE_KEY);
       if (!raw) return;
       const target = JSON.parse(raw) as { surah?: number; ayah?: number };
       localStorage.removeItem(TARGET_STORAGE_KEY);
-      if (target.surah) {
-        setCurrentPage(getSurahStartPage(target.surah));
-        if (target.ayah) setPendingAyah(target.ayah);
-      }
+      if (!target.surah) return;
+      const startPage = getSurahStartPage(target.surah);
+      const go = (page: number) => {
+        setCurrentPage(page);
+        if (target.ayah) setSearchHighlight({ surah: target.surah as number, ayah: target.ayah });
+        setShowFullscreen(true);
+        requestNativeFullscreen();
+      };
+      if (!target.ayah) { go(startPage); return; }
+      loadSurahPageList(target.surah)
+        .then((list) => {
+          const entry = list.find((a) => a.number === target.ayah);
+          go(entry ? entry.page_number : startPage);
+        })
+        .catch(() => go(startPage));
     } catch { /* ignore a malformed stored target */ }
     // Only on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => {
-    if (pendingAyah === null) return;
-    const verse = surahVerses.find((v) => v.ayah_no === pendingAyah);
-    if (verse) {
-      setSelectedVerse(verse);
-      setPopupTab('mutashabihat');
-      fetchVerseLinks(verse.id);
-      setPendingAyah(null);
-    } else if (surahVerses.length > 0) {
-      // Target ayah is not on this surah's list (e.g. a page spanning two
-      // surahs) — drop the stale target instead of firing it later.
-      setPendingAyah(null);
-    }
-  }, [pendingAyah, surahVerses, fetchVerseLinks]);
 
   const goToPage = (page: number) => {
     const clamped = Math.max(1, Math.min(TOTAL_PAGES, page));
     setCurrentPage(clamped);
+    setSearchHighlight(null);
   };
 
   // Fullscreen swipe navigation (touch): swipe left = next page, swipe
@@ -644,6 +650,7 @@ export default function QuranMushafPage({
     } catch {}
     setShowFullscreen(false);
     setCleanMode(false);
+    setSearchHighlight(null);
   };
 
   // Follow-the-imam state + wake-lock helpers. These MUST sit above the
@@ -714,6 +721,11 @@ export default function QuranMushafPage({
   // --- Follow-the-imam mode ---
   const enterFollowMode = useCallback(() => {
     setFollowOn(true);
+    // Follow mode gets its own fullscreen page at once (no intro, no
+    // normal-view panel): the start button lives in the fullscreen
+    // lobby below, which is also the gesture browsers honour for mic.
+    setShowFullscreen(true);
+    requestNativeFullscreen();
     followActiveRef.current = true;
     setFollowReady(true);
     setFollowStatus('listening');
@@ -1011,19 +1023,20 @@ export default function QuranMushafPage({
       return;
     }
     setSelectedVerse(verse);
-    setPopupTab('mutashabihat');
+    setPopupTab('links');
     fetchVerseLinks(verse.id);
   };
 
   // Word taps (Madinah edition only): per-page word boxes from qurancoor
   // (MIT), remapped from its tight text-block crop onto the app's framed
-  // page image — calibration verified against the sufone page 7 overlay
-  // test (vertical alignment exact on every line, horizontal within ~1/4
-  // word). Boxes whose calibrated left edge is >= 88% are the dataset's
-  // spurious border boxes (no word under them) and are dropped, so taps
-  // on the border open nothing. A tap only needs ayah-level accuracy:
-  // words of one ayah are adjacent, so edge errors matter only at ayah
-  // boundaries, and the popup shows the ayah text on top for confirmation.
+  // page image. PARITY-AWARE calibration: the old single mapping (A=11)
+  // was the average of the two parities, so boxes sat ~5% off on every
+  // page — tolerable for ayah-level taps, visibly wrong for word-level
+  // highlights. Frame-masked ink fit on real scans (pages 42/43) gives
+  // odd text [6,83], even [17,94] (same 77 width, gutter-shifted),
+  // top 14, height 74. Raw h.x >= 880 boxes are the dataset's spurious
+  // border boxes (no word under them) and are dropped, so taps on the
+  // border open nothing.
   type WordBox = { key: string; surah: number; ayah: number; left: number; top: number; width: number; height: number };
   const [pageWordBoxes, setPageWordBoxes] = useState<WordBox[] | null>(null);
   const wordBoxCache = useRef<Record<number, WordBox[]>>({});
@@ -1055,19 +1068,23 @@ export default function QuranMushafPage({
         if (cancelled) return;
         if (!j || !j.coords) { setPageWordBoxes(null); return; }
         const boxes: WordBox[] = [];
+        // Parity-aware calibration (see the note above the loader):
+        // odd pages text [6,83], even [17,94]; raw h.x >= 880 is the
+        // dataset's spurious border box, dropped for both parities.
+        const calA = currentPage % 2 === 1 ? 6 : 17;
         for (const [key, v] of Object.entries<any>(j.coords)) {
           const h = v?.h;
           if (!h) continue;
-          const left = 11 + ((h.x - 40) / 840) * 77;
-          if (left >= 88) continue;
+          if (h.x >= 880) continue;
           const parts = key.split(':').map(Number);
           if (parts.length < 2 || !parts[0] || !parts[1]) continue;
+          const left = calA + ((h.x - 40) / 840) * 77;
           boxes.push({
             key,
             surah: parts[0],
             ayah: parts[1],
             left,
-            top: 13 + ((h.y - 25) / 1380) * 74,
+            top: 14 + ((h.y - 25) / 1380) * 74,
             width: (h.w / 840) * 77,
             height: (h.h / 1380) * 74,
           });
@@ -1247,66 +1264,6 @@ export default function QuranMushafPage({
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Follow-the-imam panel */}
-        {followOn && (
-          <div className="bg-emerald-900 rounded-2xl p-4 mb-4 shadow-sm text-white">
-            <div className="flex items-center justify-between gap-3">
-              <p className="font-bold flex items-center gap-2"><Mic className="w-5 h-5 text-amber-300" /> الحق الإمام</p>
-              <button onClick={stopFollow}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-white/10 hover:bg-white/20 rounded-lg transition-smooth">
-                <Square className="w-4 h-4" /> إيقاف
-              </button>
-            </div>
-            {followReady ? (
-              <>
-                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
-                  اضغط بدء الاستماع، وقرّب الجوال منك، وأول ما يلاقي الإمام الآية هيفتح المصحف ملء الشاشة ويظللها بتظليل واضح يمشي مع صوته.
-                </p>
-                <p className="text-xs text-emerald-200/80 mt-1">
-                  {srAvailable
-                    ? 'الاستماع مباشر من المتصفح (بدون تكلفة).'
-                    : 'متصفحك لا يدعم الاستماع المباشر — سيتم الاستماع عبر الخادم (يتأخر ~10 ثوانٍ ويستهلك رصيد OpenAI).'}
-                </p>
-                <button onClick={startFollowListening}
-                  className="mt-3 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
-                  <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
-                </button>
-                <div className="flex gap-2 mt-3">
-                  <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
-                    placeholder="أو اكتب كلمات سمعتها من الإمام..."
-                    className="flex-1 px-3 py-2.5 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
-                  <button onClick={manualFollowLock}
-                    className="px-4 py-2.5 bg-white text-emerald-800 text-sm font-bold rounded-xl">ابحث</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-bold mt-2">
-                  {followStatus === 'locked' && followPos
-                    ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
-                    : followStatus === 'lost'
-                      ? 'فقدت الإمام مؤقتاً — بستنى كلمات أوضح لإعادة القفل...'
-                      : 'جارٍ الاستماع للإمام...'}
-                </p>
-                {followEngine === 'whisper' && (
-                  <p className="text-xs text-emerald-200/80 mt-1">وضع الخادم: التظليل يتأخر ~10 ثوانٍ عن الإمام ويستهلك رصيد OpenAI.</p>
-                )}
-                {followHeard && <p className="text-xs text-emerald-200 mt-1 truncate">سمعت: {followHeard}</p>}
-                <div className="flex gap-2 mt-3">
-                  <button onClick={resyncFollow}
-                    className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-1.5">
-                    <RefreshCw className="w-4 h-4" /> إعادة المزامنة
-                  </button>
-                  <button onClick={() => { if (followPos) void jumpToTracked(followPos); }}
-                    className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-sm font-bold rounded-xl transition-smooth">
-                    ارجع لملء الشاشة
-                  </button>
-                </div>
-              </>
-            )}
-            {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
-          </div>
-        )}
         {/* A personal word before reading — a daily dua for the reader */}
         <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-4">
           <Heart className="w-4 h-4" /> {dailyDua()}
@@ -1427,18 +1384,6 @@ export default function QuranMushafPage({
               <span>الحزب {currentHizb.number}</span>
             </div>
 
-            {/* Quick page jumps */}
-            <div className="mt-4 bg-white rounded-2xl border border-gray-200 p-4 shadow-sm w-full">
-              <p className="text-sm font-semibold text-accent-500 mb-3">انتقال سريع</p>
-              <div className="flex flex-wrap gap-2">
-                <QuickJumpBtn label="الفاتحة" onClick={() => goToPage(1)} />
-                <QuickJumpBtn label="آية الكرسي" onClick={() => goToPage(24)} />
-                <QuickJumpBtn label="جزء عمّ" onClick={() => goToPage(582)} />
-                <QuickJumpBtn label="جزء تبارك" onClick={() => goToPage(562)} />
-                <QuickJumpBtn label="سورة الكهف" onClick={() => goToPage(293)} />
-                <QuickJumpBtn label="آخر الصفحة" onClick={() => goToPage(TOTAL_PAGES)} />
-              </div>
-            </div>
           </div>
 
           {/* Verses list with tap-to-show-links */}
@@ -1557,7 +1502,7 @@ export default function QuranMushafPage({
         </div>
       </div>
 
-      {/* Bottom nav: لوحتي first (rightmost in RTL), then المصحف. */}
+      {/* Bottom nav: الرئيسية first (rightmost in RTL). */}
       <BottomNav current="mushaf" onNavigate={onNavigate} />
 
       {/* Index modal — Surah / Juz / Hizb */}
@@ -1670,10 +1615,60 @@ export default function QuranMushafPage({
                 <div className="w-24 h-24 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center shadow-2xl mb-8 border border-white/20">
                   <BookOpen className="w-12 h-12 text-emerald-300" />
                 </div>
-                <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
-                  اقرأ وارتق، ورتل كما كنت ترتل في الدنيا، فإن منزلتك عند آخر آية تقرؤها
+                <h2 className="text-4xl sm:text-5xl font-bold text-white mb-3 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
+                  اقرأ وارتق، ورتل
                 </h2>
+                <p className="text-xl sm:text-2xl text-white/90 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
+                  كما كنت ترتل في الدنيا، فإن منزلتك عند آخر آية تقرؤها
+                </p>
 
+              </div>
+            </div>
+          )}
+
+          {/* Follow lobby: follow mode's own fullscreen page. The start
+              button and manual input live here now (not on the normal
+              Mushaf page). Hides once the imam locks onto an ayah. */}
+          {followOn && !followPos && !showRatelIntro && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
+                <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
+                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
+                  اضغط بدء الاستماع، وقرّب الجوال منك، وأول ما يلاقي الإمام الآية هيفتح المصحف ويظللها بتظليل واضح يمشي مع صوته.
+                </p>
+                {followReady ? (
+                  <>
+                    <button onClick={startFollowListening}
+                      className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                      <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
+                    </button>
+                    <div className="flex gap-2 mt-3">
+                      <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
+                        placeholder="أو اكتب كلمات سمعتها من الإمام..."
+                        className="flex-1 px-3 py-2.5 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
+                      <button onClick={manualFollowLock}
+                        className="px-4 py-2.5 bg-white text-emerald-800 text-sm font-bold rounded-xl">ابحث</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold mt-4">
+                      {followStatus === 'lost' ? 'فقدت الإمام مؤقتاً — بستنى كلمات أوضح لإعادة القفل...' : 'جارٍ الاستماع للإمام...'}
+                    </p>
+                    {followHeard && <p className="text-xs text-emerald-200 mt-1 truncate">سمعت: {followHeard}</p>}
+                    <div className="flex gap-2 mt-4">
+                      <button onClick={resyncFollow}
+                        className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-1.5">
+                        <RefreshCw className="w-4 h-4" /> إعادة المزامنة
+                      </button>
+                      <button onClick={stopFollow}
+                        className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-1.5">
+                        <Square className="w-4 h-4" /> إيقاف
+                      </button>
+                    </div>
+                  </>
+                )}
+                {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
               </div>
             </div>
           )}
@@ -1773,7 +1768,10 @@ export default function QuranMushafPage({
                         ((e.clientX - rect.left) / rect.width) * 100,
                         ((e.clientY - rect.top) / rect.height) * 100,
                       );
-                      if (px < 11 || px > 88 || py < 13 || py > 87) { setCleanMode(false); return; }
+                      // Margins are judged against the parity-aware
+                      // text block (odd [6,83], even [17,94], y [14,88]).
+                      const tbL = currentPage % 2 === 1 ? 6 : 17;
+                      if (px < tbL || px > tbL + 77 || py < 14 || py > 88) { setCleanMode(false); return; }
                     }
                     if (Date.now() - lastSwipeAt.current < 500) return;
                     void handleWordTap(e.clientX, e.clientY);
@@ -1830,6 +1828,22 @@ export default function QuranMushafPage({
                       })}
                     </>);
                   })()}
+                  {/* Search-jump highlight: the ayah tapped in لوحتي,
+                      marked amber exactly on its words until the page
+                      turns or fullscreen exits. */}
+                  {!followOn && searchHighlight && pageWordBoxes && (() => {
+                    const boxes = pageWordBoxes.filter((b) => b.surah === searchHighlight.surah && b.ayah === searchHighlight.ayah);
+                    if (boxes.length === 0) return null;
+                    return (<>
+                      {boxes.map((b) => {
+                        const f = imageBoxToContainer(b);
+                        return (
+                          <div key={b.key} className="absolute rounded-sm pointer-events-none bg-amber-400/50 ring-1 ring-amber-400"
+                            style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
+                        );
+                      })}
+                    </>);
+                  })()}
                 </div>
               ) : (
                 <div className="text-center touch-none" onClick={(e) => e.stopPropagation()}
@@ -1857,7 +1871,7 @@ export default function QuranMushafPage({
                 aria-label="الصفحة السابقة"
                 className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 group">
                 {!facingOnLeft && hasFacingPage && (
-                  <div className="absolute inset-y-0 left-0 overflow-hidden pointer-events-none border-l border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W }} title="الصفحة المقابلة">
+                  <div className="absolute top-1/2 -translate-y-1/2 left-0 overflow-hidden pointer-events-none border-l border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? `calc(min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})` : '100%' }} title="الصفحة المقابلة">
                     <img key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Madinah: a window into the facing page at the
@@ -1871,7 +1885,7 @@ export default function QuranMushafPage({
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: `calc(0px - ${(facingNorm.pl / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
-                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        top: `calc(0px - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
                     <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-black/30 to-transparent pointer-events-none" />
                   </div>
@@ -1887,7 +1901,7 @@ export default function QuranMushafPage({
                 aria-label="الصفحة التالية"
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
                 {facingOnLeft && hasFacingPage && (
-                  <div className="absolute inset-y-0 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W }} title="الصفحة المقابلة">
+                  <div className="absolute top-1/2 -translate-y-1/2 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? `calc(min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})` : '100%' }} title="الصفحة المقابلة">
                     <img key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} alt="" draggable={false}
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       // Madinah: same normalized peek as the other
@@ -1899,7 +1913,7 @@ export default function QuranMushafPage({
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: `calc(${FACING_STRIP_W} - ${(facingNorm.pr / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
-                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        top: `calc(0px - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>
@@ -2000,13 +2014,14 @@ export default function QuranMushafPage({
                       )}
                       {reciteError && <p className="text-xs text-red-500 text-center mb-3">{reciteError}</p>}
                       <div className="flex gap-2 mb-4">
+                        <button onClick={() => setPopupTab('links')}
+                          className={`flex-[1.5] py-3 rounded-lg text-base font-bold transition-smooth flex items-center justify-center gap-1.5 ${popupTab === 'links' ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-amber-100 text-amber-800 ring-1 ring-amber-300 hover:bg-amber-200'}`}>
+                          <Link className="w-5 h-5" />
+                          الروابط
+                        </button>
                         <button onClick={() => setPopupTab('mutashabihat')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           المتشابهات
-                        </button>
-                        <button onClick={() => setPopupTab('links')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'links' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
-                          الروابط
                         </button>
                         <button onClick={() => setPopupTab('irab')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
@@ -2189,14 +2204,5 @@ export default function QuranMushafPage({
         </div>
       )}
     </div>
-  );
-}
-
-function QuickJumpBtn({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick}
-      className="px-4 py-2 bg-gray-50 hover:bg-amber-50 text-accent-600 hover:text-amber-700 text-sm font-semibold rounded-lg border border-gray-200 hover:border-amber-200 transition-smooth">
-      {label}
-    </button>
   );
 }

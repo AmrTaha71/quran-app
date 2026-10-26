@@ -351,7 +351,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </div>
             <div>
               <h1 className="text-lg font-bold text-accent-800">{t('appName')}</h1>
-              <p className="text-sm text-accent-500">لوحتي — روابط الآيات</p>
+              <p className="text-sm text-accent-500">{(preferredName || profileName) ? `لوحة ${preferredName || profileName} — روابط الآيات` : 'لوحتي — روابط الآيات'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -402,20 +402,20 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <Heart className="w-5 h-5 flex-shrink-0 text-emerald-100" />
             <p className="text-lg font-bold leading-relaxed">
               {(preferredName || profileName)
-                ? `${ISLAMIC_GREETING} يا ${preferredName || profileName}`
+                ? `${ISLAMIC_GREETING}، أهلاً ${profileGender === 'female' ? 'بيكي' : 'بيك'} في لوحة ${preferredName || profileName}`
                 : `${ISLAMIC_GREETING}، أهلاً ${profileGender === 'female' ? 'بيكي' : 'بيك'} في لوحتك`}
             </p>
             {session && !editingName && (
               <button onClick={() => { setNameDraft(preferredName || ''); setNameError(''); setEditingName(true); }}
                 className="mr-auto text-xs text-emerald-100 underline underline-offset-2 hover:text-white flex-shrink-0">
-                تعديل الاسم
+                تعديل الكنية
               </button>
             )}
           </div>
           {session && editingName && (
             <div className="flex gap-2 mt-3">
               <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
-                placeholder="تحب أناديك بإيه؟ مثال: أم يوسف، دكتور محمد"
+                placeholder="اكتب كنيتك (مثال: أبو …)"
                 className="flex-1 px-3 py-2 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
               <button onClick={savePreferredName} className="px-3 py-2 bg-white text-emerald-700 text-sm font-bold rounded-xl">حفظ</button>
               <button onClick={() => setEditingName(false)} className="px-3 py-2 text-sm text-emerald-100">إلغاء</button>
@@ -726,7 +726,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         </div>
       </div>
 
-      {/* Bottom nav: لوحتي first (rightmost in RTL), then المصحف. */}
+      {/* Bottom nav: الرئيسية first (rightmost in RTL). */}
       <BottomNav current="app" onNavigate={onNavigate} />
 
       {/* Long press menus */}

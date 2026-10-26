@@ -39,10 +39,14 @@ async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey:
   // accepts style instructions. Falls back to tts-1-hd if it ever fails.
   const instructions = voice === "female"
     ? "A warm, gentle female voice, like a kind Quran teacher: natural pace, clear Arabic pronunciation, soft pauses between phrases, calm and reverent tone, human and expressive, never robotic."
-    : "A dignified, warm male voice, like a respected Quran teacher: natural pace, clear Arabic pronunciation, gentle pauses between phrases, calm and reverent tone, human and expressive, never robotic.";
+    : "A dignified, warm male voice, like a respected Quran teacher: a flowing, lively pace — not slow or dragging — clear Arabic pronunciation, brief pauses between phrases, calm and reverent tone, human and expressive, never robotic.";
+  // Male delivery was reported slow: 1.15 keeps it dignified without
+  // dragging. Female stays 1.0 (no complaint). Cost is per character,
+  // so speed changes nothing on billing.
+  const speed = voice === "male" ? 1.15 : 1.0;
   const attempts = [
-    { model: "gpt-4o-mini-tts", body: { model: "gpt-4o-mini-tts", input: text, voice: ttsVoice, response_format: "mp3", speed: 1.0, instructions } },
-    { model: "tts-1-hd", body: { model: "tts-1-hd", input: text, voice: ttsVoice, response_format: "mp3", speed: 1.0 } },
+    { model: "gpt-4o-mini-tts", body: { model: "gpt-4o-mini-tts", input: text, voice: ttsVoice, response_format: "mp3", speed, instructions } },
+    { model: "tts-1-hd", body: { model: "tts-1-hd", input: text, voice: ttsVoice, response_format: "mp3", speed } },
   ];
   let lastError = "";
   for (const a of attempts) {

@@ -1,24 +1,44 @@
-import { Bookmark, BookOpen, Home, Mic } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bookmark, BookOpen, Home, Mic, Settings } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings';
 
 /**
  * Bottom navigation, in logical RTL order.
  * In an RTL flex row the first DOM item is the rightmost one, so
- * لوحتي comes first (rightmost), then المصحف, then الرئيسية.
+ * الرئيسية comes first (rightmost), then المصحف, then الحق الإمام,
+ * then لوحتي, then الإعدادات (leftmost).
  */
 export default function BottomNav({
   current,
   onNavigate,
 }: {
-  current: 'app' | 'mushaf';
+  current: 'app' | 'mushaf' | 'settings';
   onNavigate: (r: Route) => void;
 }) {
+  // The board's name is the user's kunya when they set one
+  // ("لوحة أبو …"), otherwise the plain "لوحتي". Loaded here so the
+  // label matches on every page that shows this bar.
+  const [appLabel, setAppLabel] = useState('لوحتي');
+  useEffect(() => {
+    const loadLabel = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id;
+        if (!userId) return;
+        const { data } = await supabase.from('user_profiles').select('preferred_name').eq('user_id', userId).single();
+        if (data?.preferred_name) setAppLabel(`لوحة ${data.preferred_name}`);
+      } catch {}
+    };
+    loadLabel();
+  }, []);
   const items = [
-    { id: 'app' as const, label: 'لوحتي', icon: <Bookmark className="w-7 h-7" /> },
+    { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
     { id: 'imam' as const, label: 'الحق الإمام', icon: <Mic className="w-7 h-7" /> },
-    { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
+    { id: 'app' as const, label: appLabel, icon: <Bookmark className="w-7 h-7" /> },
+    { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
   return (
     <nav

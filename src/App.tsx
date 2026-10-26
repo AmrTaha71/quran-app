@@ -7,9 +7,10 @@ import UserAppPage from './pages/UserAppPage';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import QuranMushafPage from './pages/QuranMushafPage';
+import SettingsPage from './pages/SettingsPage';
 import SplashScreen from './components/SplashScreen';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings';
 
 function getRouteFromHash(): Route {
   const hash = window.location.hash.replace('#', '').replace('/', '');
@@ -17,6 +18,7 @@ function getRouteFromHash(): Route {
   if (hash === 'app') return 'app';
   if (hash === 'auth') return 'auth';
   if (hash === 'mushaf') return 'mushaf';
+  if (hash === 'settings') return 'settings';
   return 'home';
 }
 
@@ -95,6 +97,9 @@ function AppContent() {
   }
   if (route === 'mushaf') {
     return <QuranMushafPage session={session} onNavigate={navigate} />;
+  }
+  if (route === 'settings') {
+    return <SettingsPage onNavigate={navigate} />;
   }
   return <LandingPage onNavigate={navigate} />;
 }
