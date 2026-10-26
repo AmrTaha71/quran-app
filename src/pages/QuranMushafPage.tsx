@@ -1095,18 +1095,25 @@ export default function QuranMushafPage({
   // the tap flash go through the same mapping, so word taps stay
   // calibrated on the normalized image. Other editions are untouched
   // (their scans never danced).
-  const MADINAH_IMG_ASPECT = 0.7070; // sufone png-d150 natural 1240x1754
+  // Fit + center normalization (dance fix 2026-10-26). The wrapper
+  // aspect equals the image aspect (0.7070), so one uniform scale
+  // fits the box in both dims: s = min(1/pw, 1/ph). The box is
+  // centered horizontally (its center lands at 50% of the wrapper
+  // on every page) and its top is pinned at the wrapper top. The
+  // old width-fill + left-pin version made the alternating gutter
+  // (odd frames left, even frames right) show up as a ~10% sideways
+  // jump of the text on every page turn.
   const normForPaperBox = (box: number[] | undefined) => {
     if (!box) return null;
     const [pl, pt, pr, pb] = box;
     const pw = (pr - pl) / 100;
     const ph = (pb - pt) / 100;
     if (pw <= 0 || ph <= 0) return null;
-    const imgW = 100 / pw; // % of wrapper width
-    const imgH = (MADINAH_NORMALIZED_ASPECT / (pw * MADINAH_IMG_ASPECT)) * 100; // % of wrapper height
-    const imgL = -pl / pw; // % of wrapper width
-    // Top-pinned: the paper's top edge sits at the wrapper's top edge.
-    const imgT = -imgH * (pt / 100); // % of wrapper height
+    const s = Math.min(1 / pw, 1 / ph);
+    const imgW = s * 100; // % of wrapper width
+    const imgH = s * 100; // % of wrapper height
+    const imgL = 50 - ((pl + pr) / 2) * s; // % of wrapper width
+    const imgT = -pt * s; // % of wrapper height
     return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
   };
   const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
@@ -1121,18 +1128,20 @@ export default function QuranMushafPage({
     ? normForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1])
     : null;
   // Container % -> full-image % (identity when not normalized).
+  // Displayed position of image point X is imgL + X * imgW / 100,
+  // so the inverse is X = (displayed - imgL) * 100 / imgW.
   const containerToImagePercent = (fx: number, fy: number): [number, number] => {
     if (!madinahNorm) return [fx, fy];
-    return [madinahNorm.pl + fx * madinahNorm.pw, ((fy - madinahNorm.imgT) / madinahNorm.imgH) * 100];
+    return [(fx - madinahNorm.imgL) * 100 / madinahNorm.imgW, (fy - madinahNorm.imgT) * 100 / madinahNorm.imgH];
   };
   // Full-image % word box -> container % rect (for the tap flash).
   const imageBoxToContainer = (b: WordBox) => {
     if (!madinahNorm) return b;
     return {
       ...b,
-      left: (b.left - madinahNorm.pl) / madinahNorm.pw,
+      left: madinahNorm.imgL + (b.left * madinahNorm.imgW) / 100,
       top: madinahNorm.imgT + (b.top * madinahNorm.imgH) / 100,
-      width: b.width / madinahNorm.pw,
+      width: (b.width * madinahNorm.imgW) / 100,
       height: (b.height * madinahNorm.imgH) / 100,
     };
   };
@@ -1726,11 +1735,12 @@ export default function QuranMushafPage({
                 // scale: a scaled layer re-rasterizes in Safari on every
                 // image swap, which read as dancing on page turns.
                 // Madinah paper-box normalization (see madinahNorm):
-                // the wrapper aspect is the fixed minimum paper aspect
-                // and the image is absolutely positioned per page so
-                // its paper box fills the wrapper width exactly — the
-                // scan framing can no longer shift the page between
-                // turns. Other editions keep exact fit + adaptive aspect.
+                // fit + center — the image is scaled so its paper box
+                // fits the wrapper and centered on the box, so the
+                // frame lands on the same screen rect on every page
+                // despite the alternating gutter (odd frames left,
+                // even frames right). Other editions keep exact fit
+                // + adaptive aspect.
                 // CRITICAL for tap precision: the wrapper aspect must
                 // actually HOLD on every screen. A definite height
                 // (h-[115vh]) plus max-w-[100vw] breaks it on narrow
@@ -1857,7 +1867,7 @@ export default function QuranMushafPage({
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: `calc(0px - ${(facingNorm.pl / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
-                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(-facingNorm.imgT / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
                     <div className="absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-black/30 to-transparent pointer-events-none" />
                   </div>
@@ -1885,7 +1895,7 @@ export default function QuranMushafPage({
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: `calc(${FACING_STRIP_W} - ${(facingNorm.pr / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh))`,
-                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(-facingNorm.imgT / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        top: `calc((100vh - min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT}) / 2 - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${115 * MADINAH_NORMALIZED_ASPECT}vh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>
