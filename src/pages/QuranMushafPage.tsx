@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
-import { SURAHS } from '../lib/surahs';
+import { SURAHS, getGlobalAyahNumber } from '../lib/surahs';
 import { useLang } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
 import { LINK_TYPES } from '../lib/types';
@@ -14,7 +14,7 @@ import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers,
-  LayoutGrid, List, BookMarked, Hash, Heart,
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf';
@@ -87,6 +87,19 @@ export default function QuranMushafPage({
   // chips, side strips, verse strip) so only the page shows. Word taps
   // and swipes keep working; tapping the page margin restores controls.
   const [cleanMode, setCleanMode] = useState(false);
+  // Golden frame: a pointer-events-none overlay above the page image.
+  // It never touches layout, so tap mapping and the no-dance geometry
+  // are unaffected. Persisted across visits.
+  const [goldFrame, setGoldFrame] = useState(() => {
+    try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
+  });
+  const toggleGoldFrame = () => {
+    setGoldFrame((v) => {
+      const next = !v;
+      try { localStorage.setItem('quran-gold-frame', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
   const [showCleanHint, setShowCleanHint] = useState(false);
   useEffect(() => {
     if (!cleanMode) return;
@@ -115,6 +128,30 @@ export default function QuranMushafPage({
   const surahPageListCache = useRef<Record<number, { number: number; page_number: number }[]>>({});
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
+  // Ayah recitation (Mishary Alafasy via the open islamic.network CDN),
+  // with a repeat switch for memorization. Stops when the popup ayah changes.
+  const reciteRef = useRef<HTMLAudioElement | null>(null);
+  const [reciting, setReciting] = useState(false);
+  const [reciteLoop, setReciteLoop] = useState(false);
+  const [reciteError, setReciteError] = useState('');
+  const stopRecitation = useCallback(() => {
+    if (reciteRef.current) { reciteRef.current.pause(); reciteRef.current = null; }
+    setReciting(false);
+  }, []);
+  useEffect(() => { stopRecitation(); }, [selectedVerse?.id, stopRecitation]);
+  const toggleRecitation = (verse: QuranVerse) => {
+    if (reciting) { stopRecitation(); return; }
+    setReciteError('');
+    const audio = new Audio(`https://cdn.islamic.network/quran/audio/128/ar.alafasy/${getGlobalAyahNumber(verse.surah_no, verse.ayah_no)}.mp3`);
+    audio.loop = reciteLoop;
+    audio.onended = () => { if (!audio.loop) setReciting(false); };
+    audio.onerror = () => { setReciteError('تعذرت التلاوة — تحقق من الاتصال وحاول تاني'); setReciting(false); };
+    reciteRef.current = audio;
+    audio.play().then(() => setReciting(true)).catch(() => {
+      if (reciteRef.current === audio) reciteRef.current = null;
+      setReciteError('تعذرت التلاوة — تحقق من الاتصال وحاول تاني'); setReciting(false);
+    });
+  };
   const [loadingLinks, setLoadingLinks] = useState(false);
   // Ayah popup tabs, in the order the user asked for: mutashabihat,
   // then links, then irab, then tafsir (with a choice of three
@@ -886,6 +923,10 @@ export default function QuranMushafPage({
                 className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
               <button onClick={openFullscreen}
                 className="p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
+              <button onClick={toggleGoldFrame} title="إطار ذهبي حول الصفحة"
+                className={`px-2.5 py-2 text-sm font-bold rounded-lg transition-smooth ${goldFrame ? 'bg-amber-200 text-amber-800 ring-1 ring-amber-400' : 'text-accent-600 hover:bg-amber-100'}`}>
+                إطار ذهبي
+              </button>
             </div>
           </div>
         </div>
@@ -921,6 +962,9 @@ export default function QuranMushafPage({
                   onError={() => { setImageError(true); setImageLoading(false); }}
                   className="max-w-full h-auto rounded-lg shadow-md transition-transform duration-300 origin-top [-webkit-touch-callout:none]"
                   style={{ transform: `scale(${zoom})` }} loading="eager" />
+              )}
+              {goldFrame && (
+                <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] rounded-2xl" />
               )}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-accent-600 font-semibold">
@@ -1210,6 +1254,13 @@ export default function QuranMushafPage({
             </button>
           )}
 
+          {!showRatelIntro && !cleanMode && (
+            <button onClick={(e) => { e.stopPropagation(); toggleGoldFrame(); }}
+              className={`absolute top-[68px] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${goldFrame ? 'bg-amber-500/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
+              إطار ذهبي
+            </button>
+          )}
+
           {/* Juz / Hizb info in fullscreen */}
           {!showRatelIntro && !cleanMode && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-none">
@@ -1288,6 +1339,9 @@ export default function QuranMushafPage({
                     // silent blank page: imageError drives the error
                     // block with its retry button, in both views.
                     onError={() => setImageError(true)} />
+                  {goldFrame && (
+                    <div className="absolute inset-0 z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a]" />
+                  )}
                   {tapFlash && (() => {
                     const f = imageBoxToContainer(tapFlash);
                     return (
@@ -1419,6 +1473,23 @@ export default function QuranMushafPage({
                     </div>
                     <div className="p-4 overflow-y-auto">
                       <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
+                      <div className="flex items-center gap-2 mb-4">
+                        <button onClick={() => selectedVerse && toggleRecitation(selectedVerse)}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciting ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
+                          {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          {reciting ? 'إيقاف التلاوة' : 'استمع لتلاوة الآية — العفاسي'}
+                        </button>
+                        <button onClick={() => {
+                          const next = !reciteLoop;
+                          setReciteLoop(next);
+                          if (reciteRef.current) reciteRef.current.loop = next;
+                        }}
+                          title="تكرار الآية للحفظ"
+                          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciteLoop ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          <Repeat className="w-4 h-4" /> تكرار
+                        </button>
+                      </div>
+                      {reciteError && <p className="text-xs text-red-500 text-center mb-3">{reciteError}</p>}
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
