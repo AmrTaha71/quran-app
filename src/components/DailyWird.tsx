@@ -41,9 +41,20 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
     });
   }
 
+  // Full required wird, written out in front of the user on لوحتي:
+  // type + page count with correct Arabic plural, always visible
+  // whether today is done or not (done state keeps the requirement
+  // text and adds the completion note, it never replaces it).
+  const pagesText =
+    wird.target === 1
+      ? 'صفحة واحدة'
+      : wird.target === 2
+        ? 'صفحتين'
+        : `${wird.target.toLocaleString('ar-EG')} صفحات`;
+
   return (
     <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
-      <div className="flex items-center gap-2 mb-1">
+      <div className="flex items-center gap-2 mb-3">
         <CalendarDays className="w-5 h-5 text-amber-600" />
         <h2 className="font-bold text-accent-800">وردك اليومي</h2>
         {wird.streak > 0 && (
@@ -52,11 +63,14 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
           </span>
         )}
       </div>
-      <p className="text-sm text-accent-500 mb-4">
-        {doneToday
-          ? `تم ورد اليوم (${WIRD_TYPE_LABEL[wird.type]} — ${wird.target.toLocaleString('ar-EG')} صفحة). تقبل الله منك.`
-          : `ورد اليوم: ${WIRD_TYPE_LABEL[wird.type]} — ${wird.target.toLocaleString('ar-EG')} صفحة. اقرأها ثم علّمها منجزة.`}
-      </p>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+        <p className="font-bold text-accent-800">
+          المطلوب اليوم: {WIRD_TYPE_LABEL[wird.type]} — {pagesText}
+        </p>
+        <p className="text-sm text-accent-600 mt-1">
+          {doneToday ? 'تم ✓ تقبل الله منك.' : 'اقرأها ثم علّمها منجزة.'}
+        </p>
+      </div>
 
       {/* Configuration moved to Settings: the card shows the wird and
           its start/complete actions; type + pages are chosen in

@@ -4,6 +4,7 @@ import { LanguageProvider, useLang } from './lib/LanguageContext';
 import type { Session } from '@supabase/supabase-js';
 import AdminPage from './pages/AdminPage';
 import UserAppPage from './pages/UserAppPage';
+import HomeStartPage from './pages/HomeStartPage';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import QuranMushafPage from './pages/QuranMushafPage';
@@ -112,12 +113,15 @@ function AppContent() {
     return <SelfTestPage onNavigate={navigate} />;
   }
   // Logged-in users never see the landing page: it is a poster with a
-  // login button that is meaningless once you already have a session,
-  // and لوحتي is already the personal home. الرئيسية goes straight to
-  // لوحتي. The landing stays only as the logged-out entry point — and
-  // for admin sessions (@quran-app.user), which enter الإدارة from it.
+  // login button that is meaningless once you already have a session.
+  // الرئيسية is now its own light start page (resume + quick buttons),
+  // distinct from لوحتي, which keeps the full dashboard. Login and
+  // returning sessions still open on لوحتي (see above) — the start
+  // page is reached from the الرئيسية tab. The landing stays only as
+  // the logged-out entry point — and for admin sessions
+  // (@quran-app.user), which enter الإدارة from it.
   if (route === 'home' && session && !session.user.email?.endsWith('@quran-app.user')) {
-    return <UserAppPage session={session} onNavigate={navigate} />;
+    return <HomeStartPage session={session} onNavigate={navigate} />;
   }
   return <LandingPage session={session} onNavigate={navigate} />;
 }

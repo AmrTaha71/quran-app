@@ -14,7 +14,7 @@ export default function BottomNav({
   current,
   onNavigate,
 }: {
-  current: 'app' | 'mushaf' | 'settings' | 'follow' | 'test';
+  current: 'home' | 'app' | 'mushaf' | 'settings' | 'follow' | 'test';
   onNavigate: (r: Route) => void;
 }) {
   // The board's name is the user's kunya when they set one
