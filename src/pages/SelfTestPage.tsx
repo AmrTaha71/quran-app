@@ -372,6 +372,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Manual v1 grading (fallback path + manual override): grades the
   // current ayah and advances, or finishes on the last one.
   const grade = (ok: boolean) => {
+    // Manual grading was silent while the mic path plays sounds —
+    // parity: the same chime/buzzer, fired from the tap gesture so
+    // autoplay policies allow it.
+    if (ok) playCorrectChime(); else playWrongBuzzer();
     const next = [...liveRef.current.grades];
     next[index] = ok;
     liveRef.current.grades = next;
