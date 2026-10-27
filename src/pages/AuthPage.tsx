@@ -342,10 +342,10 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                 <div className="relative">
                   <Heart className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="text" value={preferredName} onChange={(e) => setPreferredName(e.target.value)}
-                  placeholder="مثال: أبو آية، أبو عمر، أم مريم، أم آية"
+                  placeholder="مثال: أبو آية، أبو عمر، أم مريم، أم يوسف"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-                <p className="text-xs text-accent-400 mt-1">الكنية اللي هناديك بيها في التطبيق — مثال: أبو آية، أبو عمر، أم مريم، أم آية. وتقدر تغيرها بعد كده من لوحتك.</p>
+                <p className="text-xs text-accent-400 mt-1">الكنية اللي هناديك بيها في التطبيق — مثال: أبو آية، أبو عمر، أم مريم، أم يوسف. وتقدر تغيرها بعد كده من لوحتك.</p>
               </div>
 
               <div>
