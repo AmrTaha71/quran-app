@@ -12,7 +12,7 @@ import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, advanceTracking, heardWords, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
-import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
+import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -1473,14 +1473,18 @@ export default function QuranMushafPage({
     return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
   };
   const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
-  // Edge-to-edge cover (2026-10-27 audit): on portrait / squarish
-  // screens the Madinah page uses the cover norm with a full-viewport
-  // wrapper, so the paper fills the screen with only the scan's own
-  // white margin at the edges. On wider screens (true landscape) the
-  // cover crop would eat text, so the fit+center norm stays.
+  // Edge-to-edge cover (2026-10-27 audit, revised after the user's
+  // iPad video): on portrait screens the Madinah page uses the
+  // adaptive cover norm with a full-viewport wrapper, so the paper
+  // fills the screen with no visible margin at any aspect — the old
+  // 0.75 gate disabled cover exactly in Safari-with-chrome states
+  // (aspect 0.78-0.85), which is the black bar in the video. The
+  // adaptive norm caps image height per page so the frame band
+  // never crops (paper narrows at high aspects instead). On wider
+  // screens (true landscape, aspect > 0.90) the fit+center norm stays.
   const useMadinahCover = edition.id === 'madinah' && !!madinahPaperBox && viewportAspect <= MADINAH_COVER_MAX_ASPECT;
   const madinahNorm = useMadinahCover
-    ? coverNormForPaperBox(madinahPaperBox, viewportAspect)
+    ? coverNormForPaperBox(madinahPaperBox, viewportAspect, madinahFrameBand(currentPage))
     : normForPaperBox(madinahPaperBox);
   // Main paper's top edge in viewport-height % (cover mode only), used
   // to vertically align the facing sliver with the main page.
@@ -1494,7 +1498,7 @@ export default function QuranMushafPage({
   // scale and vertical alignment, so the peek stays stable too.
   const facingNorm = edition.id === 'madinah' && hasFacingPage
     ? (useMadinahCover
-      ? coverNormForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1], viewportAspect)
+      ? coverNormForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1], viewportAspect, madinahFrameBand(facingPage))
       : normForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1]))
     : null;
   // Container % -> full-image % (identity when not normalized).

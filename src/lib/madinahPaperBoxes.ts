@@ -634,44 +634,84 @@ export const MADINAH_PAPER_BOXES: [number, number, number, number][] = [
 // Normalized wrapper aspect = the image aspect (1240/1754).
 export const MADINAH_NORMALIZED_ASPECT = 0.7070;
 
-// COVER NORMALIZATION 2026-10-27 (edge-to-edge fullscreen; audit of all
-// 604 pages): the paper is scaled to a fixed fraction k of the viewport
-// width and centered on the paper's center, so the paper lands on the
-// same screen rect on every page AND fills the screen edge to edge.
-// k = 0.94: the paper spans [3%, 97%] of the viewport width; the 3%
-// bars on each side are the scan's own white margin, so on a white
-// background they blend to invisible — visually margin-free with the
-// frame and the text fully intact (text rows start at >=12.6% of image
-// height and end at <=88.4%, far from the crop lines at k = 0.94).
-// The dataset -> image calibration (qurancoor mapping in
-// QuranMushafPage) is UNCHANGED: only this image -> screen transform
-// changes. The returned percentages are % of VIEWPORT width (imgW,
-// imgL) and % of VIEWPORT height (imgH, imgT), so they are only valid
-// when the wrapper IS the viewport (100vw x 100svh); in that case
-// wrapper-% and viewport-% coincide and every existing call site
-// (image style, tap mapping, word-box overlays) works unchanged.
-// Cover applies only for viewportAspect <= 0.75: the binding
-// constraint is the LAST text row (88.9% of image height in the most
-// conservative measurement), which must stay inside the viewport:
-// imgH <= 128% of viewport height, i.e. aspect <= 0.765; the 0.75
-// threshold keeps ~1pp of margin and covers every portrait iPad
-// (0.695 on newer screens, 0.75 on 4:3 screens). Beyond it (wider
-// windows, true landscape) the crop would eat text, so callers must
-// fall back to the fit+center norm above. MADINAH_IMAGE_ASPECT is the
-// raw scan aspect (1240/1754).
+// ADAPTIVE COVER NORMALIZATION 2026-10-27 (edge-to-edge fullscreen,
+// revised after the user's iPad video showed the old cover silently
+// OFF): the old cover used a fixed paper fraction k = 0.94 and only
+// applied at viewportAspect <= 0.75. But portrait iPad Safari WITH
+// its chrome visible runs at aspect 0.78-0.85 (820px wide over
+// ~1050px of visible height, 0.75-0.85 on 4:3 iPads), so the gate
+// disabled cover exactly when the user was looking — and the
+// fallback fit+center on a black container is the black bar in the
+// video. The fix has two parts:
+//  (1) The gate moves to 0.90: every portrait iPad Safari state
+//      (0.65-0.85, plus margin) uses cover; true landscape (>= 1.0)
+//      keeps the fit+center norm above.
+//  (2) k is no longer fixed: the image height h is capped so the
+//      page's own green frame band stays on screen. At low aspects
+//      the cap does not bind and k = 0.94 holds (paper [3%, 97%]).
+//      At high aspects the cap binds and the paper narrows —
+//      87.2% wide at 0.75, 77.0% at 0.85 — but the image stays
+//      >= 97.8% of viewport width on a WHITE container, and the
+//      scan's own edge columns are pure white (measured on pages
+//      3-4), so there is NO visible margin at any aspect: white on
+//      white is invisible, unlike the old black bar. This is the
+//      mathematical maximum: at aspect 0.85 no geometry shows the
+//      frame band with a wider paper (frame height alone forces
+//      h <= 1.18, hence paper <= 77%). Going wider would crop the
+//      frame's top/bottom braid (at full image width the frame
+//      clips ~1% of viewport height top and bottom at 0.85).
+// The frame band is exact, not approximate: the all-604-page audit
+// (frames_full.csv) shows frame_top/frame_bottom = 8.352/92.987 on
+// every page 3-604, and pages 1-2 are the only exceptions
+// ([4.789, 95.154] and [4.903, 95.154]). The band below is checked
+// per page by the verification script against that CSV, all 604
+// pages x aspects 0.65-0.85. A 0.15pp safety margin keeps the frame
+// a pixel inside the viewport instead of exactly on its edge.
+// Vertical placement stays paper-centered, horizontal placement
+// stays paper-centered, so the no-dance property (same screen rect
+// every page) is preserved. The returned percentages are % of
+// VIEWPORT width (imgW, imgL) and % of VIEWPORT height (imgH,
+// imgT), valid only when the wrapper IS the viewport (100vw x
+// 100svh); every existing call site (image style, tap mapping,
+// word-box overlays, gold frame, facing strip) works unchanged,
+// because they all read this same object.
+// Out-of-frame marginal ornaments (ink above the frame band, down
+// to image-y 5.2% on rare pages) can clip at aspects above ~0.65
+// — inherent to any edge-to-edge geometry, and unchanged from the
+// previous cover. Quran text and the frame band itself never clip.
 export const MADINAH_COVER_K = 0.94;
-export const MADINAH_COVER_MAX_ASPECT = 0.75;
+export const MADINAH_COVER_MAX_ASPECT = 0.90;
 export const MADINAH_IMAGE_ASPECT = 1240 / 1754;
-export function coverNormForPaperBox(box: number[] | undefined, viewportAspect: number) {
-  if (!box) return null;
+export const MADINAH_FRAME_BAND_DEFAULT: [number, number] = [8.352, 92.987];
+export const MADINAH_FRAME_BANDS: Record<number, [number, number]> = {
+  1: [4.789, 95.154],
+  2: [4.903, 95.154],
+};
+export function madinahFrameBand(page: number): [number, number] {
+  return MADINAH_FRAME_BANDS[page] ?? MADINAH_FRAME_BAND_DEFAULT;
+}
+const MADINAH_COVER_EDGE_SAFETY = 0.15; // viewport-height % kept clear
+export function coverNormForPaperBox(box: number[] | undefined, viewportAspect: number, frameBand: [number, number] = MADINAH_FRAME_BAND_DEFAULT) {
+  if (!box || viewportAspect <= 0) return null;
   const [pl, pt, pr, pb] = box;
   const pw = (pr - pl) / 100;
   const ph = (pb - pt) / 100;
   if (pw <= 0 || ph <= 0) return null;
-  const k = MADINAH_COVER_K;
-  const imgW = (k / pw) * 100; // % of viewport width
-  const imgH = ((k * viewportAspect) / (pw * MADINAH_IMAGE_ASPECT)) * 100; // % of viewport height
+  const [ft, fb] = frameBand;
+  const cy = (pt + pb) / 2; // paper vertical center, image-%
+  // Tallest image (viewport-height units) that keeps the whole frame
+  // band inside [safety, 100 - safety] with paper-centered placement:
+  // top: 50 - cy*h + ft*h >= safety; bottom: 50 - cy*h + fb*h <= 100-safety.
+  const hMax = Math.min(
+    (50 - MADINAH_COVER_EDGE_SAFETY) / (cy - ft),
+    (50 - MADINAH_COVER_EDGE_SAFETY) / (fb - cy),
+  );
+  // Height the fixed-k geometry would need (k = paper fraction of width).
+  const hK = (MADINAH_COVER_K * viewportAspect) / (pw * MADINAH_IMAGE_ASPECT);
+  const h = Math.min(hK, hMax); // 1.0 = 100% of viewport height
+  const imgH = h * 100; // % of viewport height
+  const imgW = (h / viewportAspect) * MADINAH_IMAGE_ASPECT * 100; // % of viewport width
   const imgL = 50 - ((pl + pr) / 2) * (imgW / 100); // % of viewport width
-  const imgT = 50 - ((pt + pb) / 2) * (imgH / 100); // % of viewport height
+  const imgT = 50 - cy * h; // % of viewport height
   return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
 }
