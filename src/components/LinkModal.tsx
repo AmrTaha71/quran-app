@@ -112,8 +112,11 @@ export default function LinkModal({
       recognitionRef.current.onresult = (e: SpeechRecognitionEvent) => {
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          const result = e.results[i][0];
-          if (result.isFinal) {
+          // isFinal lives on the RESULT, not its first alternative
+          // (same bug as follow/self-test: finals were never counted).
+          const res = e.results[i] as any;
+          const result = res[0];
+          if (res.isFinal || result.isFinal) {
             finalTranscriptRef.current += result.transcript + ' ';
           } else {
             interim += result.transcript + ' ';

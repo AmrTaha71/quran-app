@@ -151,8 +151,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     rec.onresult = (e: any) => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i][0];
-        if (r.isFinal) voiceFinalRef.current += r.transcript + ' ';
+        // isFinal lives on the RESULT, not its first alternative
+        // (same bug as follow/self-test: finals were never counted).
+        const res = e.results[i];
+        const r = res[0];
+        if (res.isFinal || r.isFinal) voiceFinalRef.current += r.transcript + ' ';
         else interim += r.transcript + ' ';
       }
       voiceInterimRef.current = interim;

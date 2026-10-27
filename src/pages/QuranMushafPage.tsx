@@ -1508,7 +1508,15 @@ export default function QuranMushafPage({
         liveRestartWindowRef.current = Date.now();
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i][0];
+          // isFinal lives on the RESULT (e.results[i]), NOT on its
+          // first alternative (e.results[i][0]) — the old check read
+          // it off the alternative, so it was always undefined and
+          // every final was treated as interim: the lobby showed the
+          // transcript growing forever while the matcher never got a
+          // single word, so follow could never lock. Check both so a
+          // quirk engine that sets it on the alternative still works.
+          const res = e.results[i];
+          const r = res[0];
           // MERGED interim decision (trigger role wins over live
           // role's interim-feeding): ONLY finals are fed to the
           // matcher. Interim text is display-only (followHeard):
@@ -1517,7 +1525,7 @@ export default function QuranMushafPage({
           // counting them would double-count words, and with no
           // confirmation step left, an interim guess could yank the
           // page to a wrong ayah with no veto.
-          if (r.isFinal) followFinalRef.current(r.transcript);
+          if (res.isFinal || r.isFinal) followFinalRef.current(r.transcript);
           else interim += r.transcript + ' ';
         }
         if (interim.trim()) setFollowHeard(interim.trim());

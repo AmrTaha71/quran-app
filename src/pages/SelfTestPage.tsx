@@ -600,8 +600,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     rec.onresult = (e: any) => {
       let interimText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i][0];
-        if (r.isFinal) {
+        // isFinal lives on the RESULT, not its first alternative —
+        // reading it off the alternative made every final look
+        // interim, so mic grading could never fire (same bug as
+        // follow-the-imam). Check both for quirk engines.
+        const res = e.results[i];
+        const r = res[0];
+        if (res.isFinal || r.isFinal) {
           liveRef.current.finals = `${liveRef.current.finals} ${r.transcript}`.trim();
           setTranscript(liveRef.current.finals);
           // Spoken enough words to cover the ayah? Judge at once.
