@@ -182,16 +182,33 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   }, []);
 
   const fetchPendingLinks = useCallback(async () => {
-    const { data } = await supabase
-      .from('ayah_links')
-      .select(`*, quran_verses!inner(id, surah_no, surah_name, ayah_no, ayah_text)`)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-
-    if (data) {
-      setPendingLinks(data as unknown as AyahLink[]);
+    // WHY THE QUEUE SHOWED ONLY 1000 (2026-10-27): Supabase/PostgREST
+    // caps a single query at 1000 rows by default, and this fetch had
+    // no .range(), so it silently returned only the newest 1000 of
+    // the 6236 pending drafts — nothing was lost, the rest were just
+    // never fetched. Fetch in 1000-row pages until a short page ends
+    // the loop, so the header count and the "عرض المزيد" list cover
+    // all 6236. Rendering still slices to pendingVisible (50) at a
+    // time, so the page itself does not try to render thousands of
+    // cards at once.
+    const all: any[] = [];
+    let from = 0;
+    for (;;) {
+      const { data } = await supabase
+        .from('ayah_links')
+        .select(`*, quran_verses!inner(id, surah_no, surah_name, ayah_no, ayah_text)`)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .range(from, from + 999);
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+    if (all.length > 0) {
+      setPendingLinks(all as unknown as AyahLink[]);
       const verseMap: Record<number, QuranVerse> = {};
-      (data as any[]).forEach((d) => {
+      all.forEach((d) => {
         const v = d.quran_verses;
         if (v) verseMap[d.verse_id] = v;
       });
