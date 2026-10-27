@@ -39,7 +39,7 @@ async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey:
   // accepts style instructions. Falls back to tts-1-hd if it ever fails.
   const instructions = voice === "female"
     ? "A warm, gentle female voice, like a kind Quran teacher: natural pace, clear Arabic pronunciation, soft pauses between phrases, calm and reverent tone, human and expressive, never robotic."
-    : "A dignified, warm male voice, like a respected Quran teacher: a flowing, lively pace — not slow or dragging — clear Arabic pronunciation, brief pauses between phrases, calm and reverent tone, human and expressive, never robotic.";
+    : "A dignified, warm male voice, like a respected Quran teacher speaking to a student face to face: unhurried and natural, with real pauses between phrases, as if breathing between sentences; clear Arabic pronunciation, calm and reverent tone, gentle variation in pace, human and conversational, never rushed, never monotone, never like a news announcer or a robot.";
   // Male delivery was reported slow: 1.15 keeps it dignified without
   // dragging. Female stays 1.0 (no complaint). Cost is per character,
   // so speed changes nothing on billing.
