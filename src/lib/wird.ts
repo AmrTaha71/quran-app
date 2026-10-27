@@ -9,12 +9,12 @@ export type WirdType = 'sabaq' | 'murajaa' | 'manzil';
 export const WIRD_KEY = 'quran-wird-v1';
 
 export const WIRD_TYPE_LABEL: Record<WirdType, string> = {
-  sabaq: 'سبق (جديد)',
-  murajaa: 'مراجعة',
-  // Display name only (the stored key stays 'manzil'): "المحفوظ القديم"
-  // reads clearly, unlike "منزل" which users did not understand, and
-  // unlike "ما تم مراجعته من قبل" which would collide with مراجعة.
-  manzil: 'المحفوظ القديم',
+  // Labels renamed 2026-10-27 per Amr (stored keys unchanged, so saved
+  // data keeps working): "سبق" dropped, "جديد" for new memorization,
+  // and مراجعة split into الحفظ الحديث vs المحفوظ القديم for clarity.
+  sabaq: 'جديد',
+  murajaa: 'مراجعة الحفظ الحديث',
+  manzil: 'مراجعة المحفوظ القديم',
 };
 
 export interface WirdState {

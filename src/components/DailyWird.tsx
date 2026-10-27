@@ -9,7 +9,7 @@ function todayStr(d = new Date()): string {
 }
 
 // Daily wird card (v1, localStorage only): a pages-per-day target, a
-// simple type (سبق / مراجعة / المحفوظ القديم), a done button, a streak counter
+// simple type (جديد / مراجعة الحفظ الحديث / مراجعة المحفوظ القديم), a done button, a streak counter
 // and a 7-day history strip. No server, no notifications in v1.
 export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [wird, setWird] = useState<WirdState>(loadWird);
