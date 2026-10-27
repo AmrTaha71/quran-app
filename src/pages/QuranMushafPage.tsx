@@ -2136,14 +2136,27 @@ export default function QuranMushafPage({
                       // window is pinned to the LEFT on every page (the
                       // old alternating side read as a shake), and the
                       // image inside pins the facing page's SPINE edge
-                      // to the window's right edge: its right edge for
-                      // odd current pages, its left edge for even ones.
+                      // to the window edge the interior extends from:
+                      // its right edge at the window's right edge for
+                      // odd current pages (interior lies left of the
+                      // spine), its left edge at the window's LEFT edge
+                      // for even current pages (interior lies right of
+                      // the spine). Pinning the left edge to the right
+                      // edge instead put the whole cream interior
+                      // outside the window on even pages — the visible
+                      // sliver showed only black scan margin + a
+                      // hairline of frame, which is why the strip
+                      // "disappeared" on every even page even though
+                      // the image had loaded fine (so no retry or
+                      // placeholder ever triggered).
                       // Other editions keep the old centered sliver.
                       className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 right-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-100 [-webkit-touch-callout:none]`}
                       style={facingNorm ? {
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
-                        left: `calc(${FACING_STRIP_W} - ${((facingOnLeft ? facingNorm.pr : facingNorm.pl) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
+                        left: facingOnLeft
+                          ? `calc(${FACING_STRIP_W} - ${((facingNorm.pr) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`
+                          : `calc(0px - ${((facingNorm.pl) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
                         top: `calc(0px - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       } : undefined} />
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
@@ -2408,9 +2421,14 @@ export default function QuranMushafPage({
                 </div>
               )}
 
-              {/* Page indicator */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/0 text-xs pointer-events-none">
-                {currentPage}
+              {/* Page number — always visible (even in clean mode),
+                  never blocking taps. It used to render as invisible
+                  text (text-white/0) at screen center, which is why the
+                  number seemed to disappear in fullscreen. It now sits
+                  below the top-center timer/info row, over the page's
+                  top ornament, as a small dark pill like the others. */}
+              <div className="absolute top-[68px] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-bold rounded-lg ring-1 ring-white/30 shadow">صفحة {currentPage}</span>
               </div>
             </>
           )}
