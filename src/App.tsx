@@ -112,15 +112,11 @@ function AppContent() {
   if (route === 'test') {
     return <SelfTestPage onNavigate={navigate} />;
   }
-  // Logged-in users never see the landing page: it is a poster with a
-  // login button that is meaningless once you already have a session.
-  // الرئيسية is now its own light start page (resume + quick buttons),
-  // distinct from لوحتي, which keeps the full dashboard. Login and
-  // returning sessions still open on لوحتي (see above) — the start
-  // page is reached from the الرئيسية tab. The landing stays only as
-  // the logged-out entry point — and for admin sessions
-  // (@quran-app.user), which enter الإدارة from it.
-  if (route === 'home' && session && !session.user.email?.endsWith('@quran-app.user')) {
+  // Logged-in users never see the landing page — admins included
+  // (2026-10-27: admins are users too, same account, same start
+  // page; الإدارة is reached from Settings, not from the landing).
+  // The landing stays only as the logged-out entry point.
+  if (route === 'home' && session) {
     return <HomeStartPage session={session} onNavigate={navigate} />;
   }
   return <LandingPage session={session} onNavigate={navigate} />;

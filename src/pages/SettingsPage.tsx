@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
@@ -49,6 +50,29 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   });
   const [savedTick, setSavedTick] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
+  // ADMIN ENTRY (2026-10-27): shown ONLY to users in admin_users.
+  // Normal users never see this section — and BottomNav stays at
+  // its final 5 items, so الإدارة lives here, not as a tab.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data.session?.user?.id;
+      if (!uid) return;
+      supabase.from('admin_users').select('user_id').eq('user_id', uid).single()
+        .then(({ data: row }) => { if (row) setIsAdmin(true); });
+    });
+  }, []);
+  // EASY PASSWORD CHANGE while logged in (2026-10-27): no email
+  // link needed — the logged-in user sets a new password directly.
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState('');
+  const changePassword = async () => {
+    if (newPassword.length < 6) { setPasswordMsg('كلمة المرور لازم تكون ٦ أحرف على الأقل.'); return; }
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) { setPasswordMsg(error.message); return; }
+    setPasswordMsg('تم تغيير كلمة المرور.'); setNewPassword('');
+  };
 
   const saved = () => {
     setSavedTick(true);
@@ -264,6 +288,41 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             ))}
           </div>
         </section>
+
+        {/* Password — logged-in change, no email link needed */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+            <Lock className="w-5 h-5 text-emerald-600" /> كلمة السر
+          </h2>
+          <p className="text-sm text-accent-500 mb-4">غيّر كلمة السر من هنا على طول، من غير ما تستنى رابط إيميل.</p>
+          <div className="relative">
+            <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="كلمة سر جديدة (٦ أحرف على الأقل)"
+              className="w-full pr-4 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+            <button type="button" onClick={() => setShowNewPassword(!showNewPassword)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
+              {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </button>
+          </div>
+          {passwordMsg && <p className="text-xs text-accent-500 mt-2">{passwordMsg}</p>}
+          <button onClick={changePassword}
+            className="mt-3 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+            حفظ كلمة السر الجديدة
+          </button>
+        </section>
+
+        {isAdmin && (
+          <section className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5">
+            <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+              <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
+            </h2>
+            <p className="text-sm text-accent-500 mb-4">القسم ده بيظهر للأدمن بس — المستخدم العادي مش بيشوفه.</p>
+            <button onClick={() => onNavigate('admin')}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+              افتح لوحة الإدارة
+            </button>
+          </section>
+        )}
 
         <button onClick={resetDefaults}
           className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-bold rounded-xl border border-gray-200 transition-smooth">

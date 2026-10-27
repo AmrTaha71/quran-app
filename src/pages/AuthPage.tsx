@@ -19,7 +19,6 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   const [email, setEmail] = useState('');
-  const [emailConfirm, setEmailConfirm] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [preferredName, setPreferredName] = useState('');
@@ -75,11 +74,6 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
       setError(t('enterUsername'));
       return;
     }
-    if (email.trim() && email !== emailConfirm) {
-      setError('البريد الإلكتروني وتأكيده غير متطابقين');
-      return;
-    }
-
     setLoading(true);
     // The real email field, when filled, is the account email: the old
     // username-derived address (username@quran-app.user) is not a real
@@ -110,6 +104,10 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
     }
 
     if (data.user) {
+      // Username-first signup (2026-10-27): email is optional and is
+      // used ONLY for password recovery when given. No verification
+      // email is required — Supabase mailer_autoconfirm is on, so a
+      // username-only account signs in immediately.
       await supabase.from('user_profiles').insert({
         user_id: data.user.id,
         username,
@@ -118,13 +116,8 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
         country_code: countryCode,
         phone: phone || null,
         preferred_language: lang,
+        preferred_name: preferredName.trim() || null,
       }).then(() => {});
-
-      // Best-effort: save the name they like to be called by. Kept
-      // separate so signup never breaks if the column is missing.
-      if (preferredName.trim()) {
-        await supabase.from('user_profiles').update({ preferred_name: preferredName.trim() }).eq('user_id', data.user.id).then(() => {});
-      }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: signupEmail, password });
       if (signInError) {
@@ -139,18 +132,25 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
     setError('');
     setLoading(true);
 
-    const recoverEmail = email || (phone ? `${phone.replace(/[^0-9]/g, '')}@quran-app.user` : '');
+    // EASY RECOVERY (2026-10-27): recovery works ONLY with a real
+    // email the user gave at signup — a username-only account has no
+    // mailbox to send a link to, so the old phone-derived fake email
+    // path (which could never deliver) is removed and said plainly
+    // in the UI instead of silently failing.
+    const recoverEmail = email.trim();
     if (!recoverEmail) {
-      setError(t('enterPhone'));
+      setError('اكتب الإيميل الحقيقي اللي سجلت بيه. لو حسابك باسم مستخدم بس من غير إيميل، استرجاع كلمة السر من هنا مش ممكن — سجل دخول من جهاز لسه فاتح فيه وغيّر كلمة السر من الإعدادات.');
       setLoading(false);
       return;
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(recoverEmail);
+    const { error } = await supabase.auth.resetPasswordForEmail(recoverEmail, {
+      redirectTo: `${window.location.origin}/#/auth`,
+    });
     if (error) {
       setError(error.message);
     } else {
-      setSuccess('تم إرسال رابط استرجاع كلمة المرور');
+      setSuccess('تم إرسال رابط استرجاع كلمة المرور لإيميلك — افتحه واختر كلمة سر جديدة.');
     }
     setLoading(false);
   };
@@ -225,6 +225,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
           {mode === 'recover' ? (
             <form onSubmit={handleRecover} className="space-y-3">
               <p className="text-sm text-accent-600 text-center mb-4">{t('recoverPassword')}</p>
+              <p className="text-xs text-accent-500 text-center">اكتب الإيميل الحقيقي اللي سجلت بيه، وهنبعت لك رابط تختار بيه كلمة سر جديدة. من غير إيميل حقيقي، الرابط مالوش مكان يروح له.</p>
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')}</label>
                 <div className="relative">
@@ -233,18 +234,6 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                     placeholder="email@example.com"
                     className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-              </div>
-              <div className="text-center text-xs text-accent-400">— أو —</div>
-              <div className="flex gap-2">
-                <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)}
-                  className="px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500">
-                  {COUNTRY_CODES.map((c) => (
-                    <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
-                  ))}
-                </select>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
-                  placeholder={t('phone')}
-                  className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
               </div>
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
               {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-600 text-center">{success}</div>}
@@ -349,40 +338,25 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">كنيتك إيه؟ <span className="font-normal text-accent-400">(اختياري)</span></label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">تحب أناديك بإيه؟ <span className="font-normal text-accent-400">(الكنية — اختياري)</span></label>
                 <div className="relative">
                   <Heart className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="text" value={preferredName} onChange={(e) => setPreferredName(e.target.value)}
-                  placeholder="مثال: أبو …"
+                  placeholder="مثال: أبو آية، أبو عمر، أم مريم، أم آية"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-                <p className="text-xs text-accent-400 mt-1">الكنية اللي هناديك بيها في التطبيق — وتقدر تغيرها بعد كده من لوحتك.</p>
+                <p className="text-xs text-accent-400 mt-1">الكنية اللي هناديك بيها في التطبيق — مثال: أبو آية، أبو عمر، أم مريم، أم آية. وتقدر تغيرها بعد كده من لوحتك.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')}</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-400">(اختياري)</span></label>
                 <div className="relative">
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="email@example.com (اختياري)"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-              </div>
-
-              {/* Email confirmation */}
-              <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">تأكيد {t('email')}</label>
-                <div className="relative">
-                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="email" value={emailConfirm} onChange={(e) => setEmailConfirm(e.target.value)}
-                  placeholder="email@example.com"
-                  className={`w-full pr-10 pl-4 py-2.5 bg-gray-50 border rounded-xl text-sm focus:outline-none transition-smooth ${
-                    emailConfirm && email !== emailConfirm ? 'border-red-300 focus:border-red-500' : 'border-gray-200 focus:border-emerald-500'
-                  }`} />
-                </div>
-                {emailConfirm && email !== emailConfirm && (
-                  <p className="text-xs text-red-500 mt-1">البريد الإلكتروني غير متطابق</p>
-                )}
+                <p className="text-xs text-accent-400 mt-1">مش مطلوب للتسجيل، ومفيش تحقق بالإيميل. بس لو حطيت إيميل حقيقي، تقدر ترجع كلمة السر بيه بعد كده.</p>
               </div>
 
               <div>
@@ -466,11 +440,9 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
           </button>
         </div>
 
-        {/* Admin link */}
-        <button onClick={() => onNavigate('admin')}
-          className="w-full mt-3 text-xs text-accent-400 hover:text-accent-600 py-2 text-center">
-          {t('adminPanel')}
-        </button>
+        {/* No admin link here on purpose (2026-10-27): normal users
+            never see an admin entry. Admins log in with their normal
+            account and reach الإدارة from Settings only. */}
       </div>
     </div>
   );

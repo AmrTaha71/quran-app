@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Shield, Headphones, Globe, BookMarked, Share2 } from 'lucide-react';
+import { BookOpen, Headphones, Globe, BookMarked, Share2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { TOTAL_VERSES } from '../lib/types';
@@ -72,12 +72,8 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
             >
               {session ? 'لوحتي' : t('login')}
             </button>
-            <button
-              onClick={() => onNavigate('admin')}
-              className="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-smooth shadow-md"
-            >
-              {t('adminPanel')}
-            </button>
+            {/* No admin button here on purpose (2026-10-27): normal
+                users never see an admin entry. */}
           </div>
         </div>
       </header>
@@ -129,13 +125,6 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
             >
               <BookMarked className="w-6 h-6" />
               المصحف الشريف
-            </button>
-            <button
-              onClick={() => onNavigate('admin')}
-              className="flex items-center gap-2 px-8 py-4 bg-white hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl border-2 border-accent-200 hover:border-accent-300 shadow-md transition-smooth"
-            >
-              <Shield className="w-6 h-6" />
-              {t('adminPanel')}
             </button>
           </div>
 

@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Lock, User, ArrowRight } from 'lucide-react';
+import { BookOpen, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
 
 export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -61,13 +62,17 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••"
-                  className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
+                  className="w-full pr-10 pl-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
                 />
+                <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
             </div>
 
@@ -95,10 +100,9 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
           </button>
         </div>
 
-        <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 text-center">
-          <p className="font-semibold mb-1">بيانات دخول الإدارة:</p>
-          <p>المستخدم: <span className="font-bold">admin</span> — كلمة المرور: <span className="font-bold">Quran@Admin2026</span></p>
-        </div>
+        {/* SECURITY (2026-10-27): no credentials are shown here anymore.
+            The shared admin account is retired — admins log in with
+            their normal user account and are granted via admin_users. */}
       </div>
     </div>
   );

@@ -11,7 +11,6 @@ import {
   ChevronRight, ChevronLeft, Download, Filter, X,
   Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Heart, Loader2, Mic,
 } from 'lucide-react';
-import AdminLogin from './AdminLogin';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
 
@@ -315,7 +314,45 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     URL.revokeObjectURL(url);
   };
 
-  if (!session) return <AdminLogin onNavigate={onNavigate} />;
+  // ADMINS ARE USERS TOO (2026-10-27): there is no separate admin
+  // account anymore. Access is granted per user in admin_users
+  // (SQL only — no user can grant themselves, and the table has no
+  // write policy for authenticated users). A logged-in admin uses
+  // the normal app and reaches here from Settings; a normal user
+  // never sees an admin entry and, even if they type #/admin,
+  // gets this plain message instead of the admin UI.
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!session?.user?.id) { setIsAdmin(false); return; }
+    supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).single()
+      .then(({ data }) => setIsAdmin(!!data));
+  }, [session?.user?.id]);
+  if (!session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
+          <h1 className="text-xl font-bold text-accent-800 mb-2">لوحة الإدارة</h1>
+          <p className="text-sm text-accent-500 mb-5">سجل دخول بحسابك العادي أولاً — لو حسابك أدمن، الإدارة هتفتح لك من الإعدادات.</p>
+          <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">تسجيل الدخول</button>
+          <button onClick={() => onNavigate('home')} className="w-full text-sm text-accent-500 hover:text-accent-700 py-3">العودة للرئيسية</button>
+        </div>
+      </div>
+    );
+  }
+  if (isAdmin === null) {
+    return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" /></div>;
+  }
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
+          <h1 className="text-xl font-bold text-accent-800 mb-2">الصفحة دي للأدمن بس</h1>
+          <p className="text-sm text-accent-500 mb-5">حسابك شغال كمستخدم عادي تماماً، وده مقصود — الإدارة مش بتظهر للمستخدم العادي.</p>
+          <button onClick={() => onNavigate('app')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">العودة للوحتي</button>
+        </div>
+      </div>
+    );
+  }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const linkedPercentage = Math.round((stats.withLinks / TOTAL_VERSES) * 100);
