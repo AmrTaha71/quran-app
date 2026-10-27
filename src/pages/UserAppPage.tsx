@@ -395,16 +395,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Personal greeting — Islamic greeting by the name they chose,
-            celebrates their effort from their own lists, and closes with
-            a personal dua */}
+        {/* Personal greeting — just the salam (the board name is
+            already clear in the header above, so it is not repeated
+            here), a one-line reminder, and a personal dua */}
         <div className="mb-5 bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-5 shadow-lg text-white">
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 flex-shrink-0 text-emerald-100" />
             <p className="text-lg font-bold leading-relaxed">
-              {(preferredName || profileName)
-                ? `${ISLAMIC_GREETING}، أهلاً ${profileGender === 'female' ? 'بيكي' : 'بيك'} في لوحة ${preferredName || profileName}`
-                : `${ISLAMIC_GREETING}، أهلاً ${profileGender === 'female' ? 'بيكي' : 'بيك'} في لوحتك`}
+              {ISLAMIC_GREETING}
             </p>
             {session && !editingName && (
               <button onClick={() => { setNameDraft(preferredName || ''); setNameError(''); setEditingName(true); }}
@@ -426,7 +424,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <p className="text-sm text-emerald-50 leading-relaxed mt-2">
             {(listCounts.favorites + listCounts.read_later + listCounts.difficult + listCounts.memorized) > 0
               ? `ما شاء الله، بارك الله فيك — جمعت ${(listCounts.favorites + listCounts.read_later + listCounts.difficult + listCounts.memorized).toLocaleString('ar-EG')} آية في قوائمك${listCounts.memorized > 0 ? `، وحفظت ${listCounts.memorized.toLocaleString('ar-EG')} آية` : ''}، تقبل الله منك وثبّتها في قلبك`
-              : 'بارك الله فيك — رحلتك بتبدأ من هنا: اختر آية، اسمع رابطها، وثبّتها في قلبك. أول خطوة هي أهم خطوة، وتقبل الله سعيك'}
+              : 'استحضر النية'}
           </p>
           <p className="text-sm text-amber-100 font-semibold leading-relaxed mt-3 pt-3 border-t border-white/20">
             {(preferredName || profileName) ? `${dailyDua()} يا ${preferredName || profileName}` : dailyDua()}
