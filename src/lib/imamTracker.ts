@@ -3,9 +3,12 @@
 // and walk forward with the recitation.
 //
 // Two phases:
-//  1. LOCK — find the ayah containing a run of >= 4 consecutive heard
+//  1. LOCK — find the ayah containing a run of >= 3 consecutive heard
 //     words, preferring runs that end closest to the most recent word
-//     (the imam's current position), then longer runs.
+//     (the imam's current position), then longer runs. Three words is
+//     deliberately fast: the caller shows a "لقيتها!" confirmation and
+//     the user taps OK before any jump is tracked, so a wrong 3-word
+//     lock is rejected instead of yanking the page.
 //  2. TRACK — once locked, Taraweeh recitation proceeds in order, so the
 //     tracker only walks forward through the current ayah and the next
 //     few ayahs, tolerating ASR drops (a heard word may skip up to 2
@@ -40,7 +43,7 @@ export function heardWords(text: string): string[] {
   return normalizeWords(text);
 }
 
-export function findLock(heard: string[], ordered: OrderedVerse[], minRun = 4): TrackedPosition | null {
+export function findLock(heard: string[], ordered: OrderedVerse[], minRun = 3): TrackedPosition | null {
   if (heard.length < minRun) return null;
   let best: { pos: TrackedPosition; end: number; run: number } | null = null;
   for (const v of ordered) {

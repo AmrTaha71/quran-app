@@ -111,7 +111,15 @@ function AppContent() {
   if (route === 'test') {
     return <SelfTestPage onNavigate={navigate} />;
   }
-  return <LandingPage onNavigate={navigate} />;
+  // Logged-in users never see the landing page: it is a poster with a
+  // login button that is meaningless once you already have a session,
+  // and لوحتي is already the personal home. الرئيسية goes straight to
+  // لوحتي. The landing stays only as the logged-out entry point — and
+  // for admin sessions (@quran-app.user), which enter الإدارة from it.
+  if (route === 'home' && session && !session.user.email?.endsWith('@quran-app.user')) {
+    return <UserAppPage session={session} onNavigate={navigate} />;
+  }
+  return <LandingPage session={session} onNavigate={navigate} />;
 }
 
 export default function App() {

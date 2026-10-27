@@ -98,7 +98,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       localStorage.setItem('quran-reciter', DEFAULT_RECITER_ID);
       localStorage.removeItem('quran-link-voice');
     } catch {}
-    setLang('ar');
+    setLang('ar-EG');
     saved();
   };
 

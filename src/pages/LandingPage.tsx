@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, Shield, Headphones, Globe, BookMarked, Share2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 import { TOTAL_VERSES } from '../lib/types';
 import { useLang } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
@@ -10,7 +11,7 @@ import QRCodeSection from '../components/QRCodeSection';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
-export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
+export default function LandingPage({ session, onNavigate }: { session: Session | null; onNavigate: (r: Route) => void }) {
   const { t, lang, setLang } = useLang();
   const [stats, setStats] = useState({ total: TOTAL_VERSES, withLinks: 0 });
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -66,10 +67,10 @@ export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => 
               )}
             </div>
             <button
-              onClick={() => onNavigate('auth')}
+              onClick={() => onNavigate(session ? 'app' : 'auth')}
               className="px-5 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth"
             >
-              {t('login')}
+              {session ? 'لوحتي' : t('login')}
             </button>
             <button
               onClick={() => onNavigate('admin')}
@@ -116,11 +117,11 @@ export default function LandingPage({ onNavigate }: { onNavigate: (r: Route) => 
 
           <div className="flex flex-wrap justify-center gap-4 mb-10">
             <button
-              onClick={() => onNavigate('auth')}
+              onClick={() => onNavigate(session ? 'app' : 'auth')}
               className="flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-smooth"
             >
               <Headphones className="w-6 h-6" />
-              {t('userApp')}
+              {session ? 'لوحتي' : t('userApp')}
             </button>
             <button
               onClick={() => onNavigate('mushaf')}

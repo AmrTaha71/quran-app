@@ -17,7 +17,7 @@ import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, RefreshCw, Clock,
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, RefreshCw, Clock, Check,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
@@ -844,7 +844,7 @@ export default function QuranMushafPage({
   const [followOn, setFollowOn] = useState(false);
   const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
   const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | null>(null);
-  const [followStatus, setFollowStatus] = useState<'listening' | 'locked' | 'lost'>('listening');
+  const [followStatus, setFollowStatus] = useState<'listening' | 'locked' | 'lost' | 'found'>('listening');
   const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
   const [followHeard, setFollowHeard] = useState('');
   const [followError, setFollowError] = useState<string | null>(null);
@@ -861,7 +861,14 @@ export default function QuranMushafPage({
   const followListeningRef = useRef(false);
   const followMissRef = useRef(0);
   const followPosRef = useRef<TrackedPosition | null>(null);
-  const followStatusRef = useRef<'listening' | 'locked' | 'lost'>('listening');
+  // First-lock confirmation (user spec): a fresh auto-lock opens the
+  // page in fullscreen and shows "لقيتها!" instead of jumping straight
+  // into tracking — the user taps OK to stay + highlight, or "مش دي"
+  // to reject and keep listening. Until OK, followPos stays unset, so
+  // no highlight shows and no auto-advance happens.
+  const [pendingLock, setPendingLock] = useState<TrackedPosition | null>(null);
+  const pendingLockRef = useRef<TrackedPosition | null>(null);
+  const followStatusRef = useRef<'listening' | 'locked' | 'lost' | 'found'>('listening');
   const recognitionRef = useRef<any>(null);
   const followStreamRef = useRef<MediaStream | null>(null);
   const followWakeLockRef = useRef<any>(null);
@@ -913,6 +920,8 @@ export default function QuranMushafPage({
     followStatusRef.current = 'listening';
     setFollowPos(null);
     followPosRef.current = null;
+    setPendingLock(null);
+    pendingLockRef.current = null;
     setFollowHeard('');
     setFollowError(null);
     setFollowIndexLoading(false);
@@ -953,6 +962,8 @@ export default function QuranMushafPage({
     setFollowChunkFails(0);
     setFollowPos(null);
     followPosRef.current = null;
+    setPendingLock(null);
+    pendingLockRef.current = null;
     setFollowEngine(null);
     try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
   }, []);
@@ -983,14 +994,25 @@ export default function QuranMushafPage({
     const pos = followPosRef.current;
     if (!pos || followStatusRef.current === 'lost') {
       const lock = findLock(buffer, ordered);
-      if (lock) {
-        followPosRef.current = lock;
-        setFollowPos(lock);
-        followStatusRef.current = 'locked';
-        setFollowStatus('locked');
-        followMissRef.current = 0;
+      if (!lock) return;
+      if (!pos) {
+        // First lock: open the page fullscreen and ask — don't track yet.
+        // While waiting for OK/reject, later transcripts must not
+        // re-lock or re-jump (that would yank the page from under him).
+        if (pendingLockRef.current) return;
+        pendingLockRef.current = lock;
+        setPendingLock(lock);
+        followStatusRef.current = 'found';
+        setFollowStatus('found');
         void jumpToTracked(lock);
+        return;
       }
+      followPosRef.current = lock;
+      setFollowPos(lock);
+      followStatusRef.current = 'locked';
+      setFollowStatus('locked');
+      followMissRef.current = 0;
+      void jumpToTracked(lock);
       return;
     }
     const adv = advanceTracking(pos, words, ordered);
@@ -1250,7 +1272,34 @@ export default function QuranMushafPage({
   const resyncFollow = useCallback(() => {
     followPosRef.current = null;
     setFollowPos(null);
+    pendingLockRef.current = null;
+    setPendingLock(null);
     followMissRef.current = 0;
+    followStatusRef.current = 'listening';
+    setFollowStatus('listening');
+  }, []);
+
+  // First-lock confirmation actions (see pendingLock above). OK: the
+  // page is already open in fullscreen from lock time, so confirming
+  // only lights the ayah highlight and lets tracking continue from
+  // here with the existing advance path. Reject: drop the lock and the
+  // heard buffer (so the same wrong ayah is not instantly re-locked)
+  // and keep listening.
+  const confirmFollowLock = useCallback(() => {
+    const lock = pendingLockRef.current;
+    if (!lock) return;
+    pendingLockRef.current = null;
+    setPendingLock(null);
+    followPosRef.current = lock;
+    setFollowPos(lock);
+    followStatusRef.current = 'locked';
+    setFollowStatus('locked');
+    followMissRef.current = 0;
+  }, []);
+  const rejectFollowLock = useCallback(() => {
+    pendingLockRef.current = null;
+    setPendingLock(null);
+    followBufferRef.current = [];
     followStatusRef.current = 'listening';
     setFollowStatus('listening');
   }, []);
@@ -1892,7 +1941,7 @@ export default function QuranMushafPage({
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
                 <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-2">
-                  اضغط بدء الاستماع، وقرّب الجوال منك، وأول ما يلاقي الإمام الآية هيفتح المصحف ويظللها بتظليل واضح يمشي مع صوته.
+                  اضغط بدء الاستماع، وقرّب الجوال منك، وأول ما يلقط الإمام ٣ أو ٤ كلمات هيفتح المصحف على الصفحة ويقولك لقيتها — دوس OK عشان يظلل الآية ويمشي مع صوته.
                 </p>
                 {followReady ? (
                   <>
@@ -1944,6 +1993,37 @@ export default function QuranMushafPage({
                   </>
                 )}
                 {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* First-lock confirmation: renders above the lobby (z-40 over
+              z-30) once a fresh auto-lock opens the page fullscreen.
+              OK keeps him on this fullscreen page and lights the ayah
+              highlight; "مش دي" rejects and keeps listening; إيقاف
+              stops follow entirely. */}
+          {pendingLock && (followOn || startInFollow) && (
+            <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
+              <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white text-center">
+                <p className="font-bold text-2xl">لقيتها!</p>
+                <p className="text-base text-emerald-100 mt-2">
+                  سورة {SURAHS.find((s) => s.no === pendingLock.surah)?.name || ''} — آية {pendingLock.ayah.toLocaleString('ar-EG')}
+                </p>
+                <p className="text-xs text-emerald-200 mt-1 leading-relaxed">دوس OK عشان أفضل على الصفحة دي وأظلل الآية اللي بيقرأها الإمام</p>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={confirmFollowLock}
+                    className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-white font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                    <Check className="w-5 h-5" /> OK
+                  </button>
+                  <button onClick={rejectFollowLock}
+                    className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-smooth">
+                    لا، مش دي
+                  </button>
+                </div>
+                <button onClick={stopFollow}
+                  className="mt-3 text-xs text-emerald-200 hover:text-white font-semibold">
+                  إيقاف المتابعة
+                </button>
               </div>
             </div>
           )}

@@ -11,7 +11,7 @@ export function speechLocale(lang: Lang): string {
 
 // Same as speechLocale, for components that don't use the lang context.
 export function currentSpeechLocale(): string {
-  return speechLocale((localStorage.getItem('app-lang') as Lang) || 'ar');
+  return speechLocale((localStorage.getItem('app-lang') as Lang) || 'ar-EG');
 }
 
 type TK = keyof typeof T.ar;
@@ -24,7 +24,7 @@ interface LangCtx {
 }
 
 const LanguageContext = createContext<LangCtx>({
-  lang: 'ar',
+  lang: 'ar-EG',
   setLang: () => {},
   t: (key) => T.ar[key],
   dir: 'rtl',
@@ -33,7 +33,7 @@ const LanguageContext = createContext<LangCtx>({
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(() => {
     const saved = localStorage.getItem('app-lang') as Lang;
-    return saved || 'ar';
+    return saved || 'ar-EG';
   });
 
   const setLang = (l: Lang) => {
