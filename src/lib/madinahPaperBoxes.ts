@@ -633,3 +633,45 @@ export const MADINAH_PAPER_BOXES: [number, number, number, number][] = [
 
 // Normalized wrapper aspect = the image aspect (1240/1754).
 export const MADINAH_NORMALIZED_ASPECT = 0.7070;
+
+// COVER NORMALIZATION 2026-10-27 (edge-to-edge fullscreen; audit of all
+// 604 pages): the paper is scaled to a fixed fraction k of the viewport
+// width and centered on the paper's center, so the paper lands on the
+// same screen rect on every page AND fills the screen edge to edge.
+// k = 0.94: the paper spans [3%, 97%] of the viewport width; the 3%
+// bars on each side are the scan's own white margin, so on a white
+// background they blend to invisible — visually margin-free with the
+// frame and the text fully intact (text rows start at >=12.6% of image
+// height and end at <=88.4%, far from the crop lines at k = 0.94).
+// The dataset -> image calibration (qurancoor mapping in
+// QuranMushafPage) is UNCHANGED: only this image -> screen transform
+// changes. The returned percentages are % of VIEWPORT width (imgW,
+// imgL) and % of VIEWPORT height (imgH, imgT), so they are only valid
+// when the wrapper IS the viewport (100vw x 100svh); in that case
+// wrapper-% and viewport-% coincide and every existing call site
+// (image style, tap mapping, word-box overlays) works unchanged.
+// Cover applies only for viewportAspect <= 0.75: the binding
+// constraint is the LAST text row (88.9% of image height in the most
+// conservative measurement), which must stay inside the viewport:
+// imgH <= 128% of viewport height, i.e. aspect <= 0.765; the 0.75
+// threshold keeps ~1pp of margin and covers every portrait iPad
+// (0.695 on newer screens, 0.75 on 4:3 screens). Beyond it (wider
+// windows, true landscape) the crop would eat text, so callers must
+// fall back to the fit+center norm above. MADINAH_IMAGE_ASPECT is the
+// raw scan aspect (1240/1754).
+export const MADINAH_COVER_K = 0.94;
+export const MADINAH_COVER_MAX_ASPECT = 0.75;
+export const MADINAH_IMAGE_ASPECT = 1240 / 1754;
+export function coverNormForPaperBox(box: number[] | undefined, viewportAspect: number) {
+  if (!box) return null;
+  const [pl, pt, pr, pb] = box;
+  const pw = (pr - pl) / 100;
+  const ph = (pb - pt) / 100;
+  if (pw <= 0 || ph <= 0) return null;
+  const k = MADINAH_COVER_K;
+  const imgW = (k / pw) * 100; // % of viewport width
+  const imgH = ((k * viewportAspect) / (pw * MADINAH_IMAGE_ASPECT)) * 100; // % of viewport height
+  const imgL = 50 - ((pl + pr) / 2) * (imgW / 100); // % of viewport width
+  const imgT = 50 - ((pt + pb) / 2) * (imgH / 100); // % of viewport height
+  return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
+}

@@ -12,7 +12,7 @@ import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, advanceTracking, heardWords, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
-import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT } from '../lib/madinahPaperBoxes';
+import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -119,6 +119,16 @@ function WorshipTimer({ dark }: { dark?: boolean }) {
 // a placeholder with the facing page number instead of vanishing,
 // so the strip is always present. Keyed by facing page at the call
 // site, so the attempt state resets on every page turn.
+// jsdelivr occasionally answers "Package size exceeded" 404 for files
+// that exist (measured ~12% of first attempts from one network); the
+// same file is also served from raw.githubusercontent, so after the
+// jsdelivr retries the image falls back to the other host instead of
+// failing. Only the Madinah sufone path has a known mirror.
+function madinahFallbackSrc(src: string): string | null {
+  const prefix = 'https://cdn.jsdelivr.net/gh/sufone/medina-mushaf@master/';
+  return src.startsWith(prefix) ? src.replace(prefix, 'https://raw.githubusercontent.com/sufone/medina-mushaf/master/') : null;
+}
+
 function FacingStripImg({ src, pageNo, className, style }: {
   src: string;
   pageNo: number;
@@ -134,13 +144,14 @@ function FacingStripImg({ src, pageNo, className, style }: {
       </div>
     );
   }
-  const url = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}sw-retry=1`;
+  const fallback = madinahFallbackSrc(src);
+  const url = attempt === 0 ? src : attempt === 1 ? `${src}${src.includes('?') ? '&' : '?'}sw-retry=1` : fallback!;
   return (
     <img
       src={url}
       alt=""
       draggable={false}
-      onError={() => { if (attempt === 0) setAttempt(1); else setFailed(true); }}
+      onError={() => { if (attempt === 0) setAttempt(1); else if (attempt === 1 && fallback) setAttempt(2); else setFailed(true); }}
       className={className}
       style={style}
     />
@@ -153,7 +164,8 @@ function FacingStripImg({ src, pageNo, className, style }: {
 // session ended up "not loaded", each waiting for a manual retry tap.
 // Now the image retries twice on its own — first immediately with a
 // cache-busting URL, then once more after a short delay for brief
-// network drops — and only then reports failure, so the existing
+// network drops — then falls back to the raw.githubusercontent mirror
+// for Madinah pages, and only then reports failure, so the existing
 // error block + manual retry stay as the last resort, not the first
 // response. Keyed by page at the call site, so attempts reset on
 // every turn, and the delay timer is cleared on unmount.
@@ -169,7 +181,8 @@ function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalErro
   const [attempt, setAttempt] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
-  const url = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}img-retry=${attempt}`;
+  const fallback = madinahFallbackSrc(src);
+  const url = attempt === 0 ? src : attempt === 3 && fallback ? fallback : `${src}${src.includes('?') ? '&' : '?'}img-retry=${attempt}`;
   return (
     <img
       src={url}
@@ -181,6 +194,7 @@ function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalErro
       onError={() => {
         if (attempt === 0) setAttempt(1);
         else if (attempt === 1) timerRef.current = setTimeout(() => setAttempt(2), 1200);
+        else if (attempt === 2 && fallback) setAttempt(3);
         else onFinalError();
       }}
       className={className}
@@ -209,6 +223,24 @@ export default function QuranMushafPage({
   // its exact words until the page turns or fullscreen exits.
   const [searchHighlight, setSearchHighlight] = useState<{ surah: number; ayah: number } | null>(null);
   const [zoom, setZoom] = useState(1);
+  // Viewport aspect (width / height) for the Madinah cover geometry:
+  // the cover norm needs the real viewport ratio. window.innerHeight
+  // is the stable layout viewport on iOS Safari (it does not dance
+  // with the chrome), so a resize listener is enough. Precision here
+  // only affects bars vs crop, never tap precision: the tap mapping
+  // is self-consistent with the rendered percentages.
+  const [viewportAspect, setViewportAspect] = useState(() =>
+    typeof window !== 'undefined' && window.innerHeight > 0
+      ? window.innerWidth / window.innerHeight : 0.695);
+  useEffect(() => {
+    const update = () => setViewportAspect(window.innerWidth / Math.max(1, window.innerHeight));
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [showRatelIntro, setShowRatelIntro] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -1441,7 +1473,19 @@ export default function QuranMushafPage({
     return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
   };
   const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
-  const madinahNorm = normForPaperBox(madinahPaperBox);
+  // Edge-to-edge cover (2026-10-27 audit): on portrait / squarish
+  // screens the Madinah page uses the cover norm with a full-viewport
+  // wrapper, so the paper fills the screen with only the scan's own
+  // white margin at the edges. On wider screens (true landscape) the
+  // cover crop would eat text, so the fit+center norm stays.
+  const useMadinahCover = edition.id === 'madinah' && !!madinahPaperBox && viewportAspect <= MADINAH_COVER_MAX_ASPECT;
+  const madinahNorm = useMadinahCover
+    ? coverNormForPaperBox(madinahPaperBox, viewportAspect)
+    : normForPaperBox(madinahPaperBox);
+  // Main paper's top edge in viewport-height % (cover mode only), used
+  // to vertically align the facing sliver with the main page.
+  const coverMainPaperTop = useMadinahCover && madinahNorm
+    ? madinahNorm.imgT + (madinahNorm.pt * madinahNorm.imgH) / 100 : 0;
   // Same normalization for the FACING page (the peek sliver): the old
   // sliver rendered the facing image unnormalized at 115vh, so its
   // paper jumped against the pinned main page on every turn. The
@@ -1449,7 +1493,9 @@ export default function QuranMushafPage({
   // not the raw image edge) at the window's edge, at the main page's
   // scale and vertical alignment, so the peek stays stable too.
   const facingNorm = edition.id === 'madinah' && hasFacingPage
-    ? normForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1])
+    ? (useMadinahCover
+      ? coverNormForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1], viewportAspect)
+      : normForPaperBox(MADINAH_PAPER_BOXES[facingPage - 1]))
     : null;
   // Container % -> full-image % (identity when not normalized).
   // Displayed position of image point X is imgL + X * imgW / 100,
@@ -1900,7 +1946,7 @@ export default function QuranMushafPage({
 
       {/* Fullscreen viewer with intro */}
       {showFullscreen && (
-        <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none overflow-hidden overscroll-contain"
+        <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-black'} flex items-center justify-center select-none overflow-hidden overscroll-contain`}
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
             if (cleanMode) { setCleanMode(false); return; }
@@ -2124,7 +2170,9 @@ export default function QuranMushafPage({
                 <div ref={pageWrapRef}
                   className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
-                    ? { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh)` }
+                    ? (useMadinahCover
+                      ? { width: '100vw', height: '100svh', background: '#ffffff' }
+                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh)` })
                     : { aspectRatio: String(imgAspect) }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2168,7 +2216,13 @@ export default function QuranMushafPage({
                     }}
                     onFinalError={() => setImageError(true)} />
                   {goldFrame && (
-                    <div className="absolute inset-0 z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a]" />
+                    <div className={`absolute z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] ${madinahNorm && useMadinahCover ? '' : 'inset-0'}`}
+                      style={madinahNorm && useMadinahCover ? {
+                        left: `${madinahNorm.imgL + (madinahNorm.pl * madinahNorm.imgW) / 100}%`,
+                        top: `${madinahNorm.imgT + (madinahNorm.pt * madinahNorm.imgH) / 100}%`,
+                        width: `${(madinahNorm.pw * madinahNorm.imgW) / 100}%`,
+                        height: `${(madinahNorm.ph * madinahNorm.imgH) / 100}%`,
+                      } : undefined} />
                   )}
                   {tapFlash && (() => {
                     const f = imageBoxToContainer(tapFlash);
@@ -2253,7 +2307,7 @@ export default function QuranMushafPage({
                 aria-label="الصفحة التالية"
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
                 {hasFacingPage && (
-                  <div className="absolute top-1/2 -translate-y-1/2 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? `calc(min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})` : '100%' }} title="الصفحة المقابلة">
+                  <div className="absolute top-1/2 -translate-y-1/2 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? (useMadinahCover ? '100svh' : `calc(min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`) : '100%' }} title="الصفحة المقابلة">
                     <FacingStripImg key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} pageNo={facingPage}
                       // Madinah: a window into the facing page at the
                       // main page's scale and vertical alignment. The
@@ -2275,14 +2329,21 @@ export default function QuranMushafPage({
                       // placeholder ever triggered).
                       // Other editions keep the old centered sliver.
                       className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 right-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-100 [-webkit-touch-callout:none]`}
-                      style={facingNorm ? {
+                      style={facingNorm ? (useMadinahCover ? {
+                        width: `${facingNorm.imgW}vw`,
+                        height: `${facingNorm.imgH}svh`,
+                        left: facingOnLeft
+                          ? `calc(${FACING_STRIP_W} - ${((facingNorm.pr * facingNorm.imgW) / 100).toFixed(4)}vw)`
+                          : `calc(0px - ${((facingNorm.pl * facingNorm.imgW) / 100).toFixed(4)}vw)`,
+                        top: `calc(${coverMainPaperTop.toFixed(4)}svh - ${((facingNorm.pt * facingNorm.imgH) / 100).toFixed(4)}svh)`,
+                      } : {
                         width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
                         height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: facingOnLeft
                           ? `calc(${FACING_STRIP_W} - ${((facingNorm.pr) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`
                           : `calc(0px - ${((facingNorm.pl) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
                         top: `calc(0px - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
-                      } : undefined} />
+                      }) : undefined} />
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>
                 )}
