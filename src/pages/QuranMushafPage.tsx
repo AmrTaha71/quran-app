@@ -11,13 +11,13 @@ import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } fr
 import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
-import { buildOrderedVerses, findLock, advanceTracking, heardWords, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
+import { buildOrderedVerses, findLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, RefreshCw, Clock, Check,
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
@@ -28,6 +28,15 @@ const EDITION_STORAGE_KEY = 'quran-mushaf-edition';
 const PAGE_STORAGE_KEY = 'quran-mushaf-page';
 const TARGET_STORAGE_KEY = 'quran-mushaf-target';
 const FOLLOW_STORAGE_KEY = 'quran-follow-mode';
+// Live-engine restart budget (merged live-engine role): SpeechRecognition
+// fires onend on every pause/network blip, so a plain "restart on end"
+// loop is normal — until the mic is dead, when onend fires immediately
+// and forever. More than LIVE_RESTART_MAX restarts inside
+// LIVE_RESTART_WINDOW_MS with no speech received means the mic is dead:
+// stop and prompt the user to tap ابدأ الاستماع again instead of looping
+// silently. Any onresult resets the budget (speech heard = mic alive).
+const LIVE_RESTART_MAX = 5;
+const LIVE_RESTART_WINDOW_MS = 10000;
 const PAGE_LIST_STORAGE_KEY = 'quran-mushaf-page-lists';
 
 function readStoredEdition(): number {
@@ -843,6 +852,12 @@ export default function QuranMushafPage({
   // in recent versions): removes Safari's own chrome entirely so the page
   // truly fills the screen. Silently ignored where unsupported, where the
   // app-level fullscreen view below still applies.
+  // MERGED auto-fullscreen rule: an auto-lock fires from a transcript
+  // callback, NOT a gesture, so mobile browsers may refuse this native
+  // request (iPhone Safari: element fullscreen unsupported; Android
+  // Chrome: gesture-gated). That refusal must NEVER gate the page open:
+  // the app-level fullscreen view (fixed overlay) is the real fullscreen
+  // and opens regardless; this call is fire-and-forget on top of it.
   const requestNativeFullscreen = () => {
     try {
       const el = document.documentElement as any;
@@ -876,7 +891,11 @@ export default function QuranMushafPage({
   const [followOn, setFollowOn] = useState(false);
   const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
   const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | null>(null);
-  const [followStatus, setFollowStatus] = useState<'listening' | 'locked' | 'lost' | 'found'>('listening');
+  // MERGED followStatus: listening | locked ONLY. 'found' (pending
+  // confirmation) and 'lost' (re-lock after tracking) are both deleted:
+  // there is no confirmation card and no tracking after a lock, so a
+  // wrong lock is escaped via إيقاف / X + a fresh start, not resync.
+  const [followStatus, setFollowStatus] = useState<'listening' | 'locked'>('listening');
   const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
   const [followHeard, setFollowHeard] = useState('');
   const [followError, setFollowError] = useState<string | null>(null);
@@ -901,26 +920,45 @@ export default function QuranMushafPage({
   // longer matches must abort instead of starting a stale loop.
   const followStartingRef = useRef(false);
   const followStartGenRef = useRef(0);
-  const followMissRef = useRef(0);
   const followPosRef = useRef<TrackedPosition | null>(null);
-  // First-lock confirmation (user spec): a fresh auto-lock opens the
-  // page in fullscreen and shows "لقيتها!" instead of jumping straight
-  // into tracking — the user taps OK to stay + highlight, or "مش دي"
-  // to reject and keep listening. Until OK, followPos stays unset, so
-  // no highlight shows and no auto-advance happens.
-  const [pendingLock, setPendingLock] = useState<TrackedPosition | null>(null);
-  const pendingLockRef = useRef<TrackedPosition | null>(null);
+  // MERGED auto-lock: there is NO confirmation card, NO pending lock,
+  // and NO tracking after a lock. The single lock callback is
+  // handleFollowAutoLock (below, next to onFollowFinal): both engines
+  // report a lock only through it, and it stops the engines, sets
+  // followPos + 'locked' (which hides the lobby), and jumps to the
+  // ayah's page fullscreen with searchHighlight. followAutoLockedRef
+  // is the latch: once set, the lock can never re-fire and every later
+  // transcript is dropped. enterFollowMode resets it for a fresh
+  // session; stopFollow resets it on exit. (followMiss tracking is
+  // deleted with tracking itself: misses after a lock cannot happen,
+  // because listening has stopped.)
+  const followAutoLockedRef = useRef(false);
+  // Live-engine restart budget state (see LIVE_RESTART_MAX above).
+  const liveRestartCountRef = useRef(0);
+  const liveRestartWindowRef = useRef(0);
   // Jump generation: jumpToTracked awaits the network, so a slow jump
   // can resolve AFTER the user rejected, stopped, or resynced. Each of
   // those actions bumps this counter, and a jump whose generation is
   // stale drops itself instead of yanking the page from under him.
   const followJumpGenRef = useRef(0);
-  const followStatusRef = useRef<'listening' | 'locked' | 'lost' | 'found'>('listening');
+  const followStatusRef = useRef<'listening' | 'locked'>('listening');
   const recognitionRef = useRef<any>(null);
   const followStreamRef = useRef<MediaStream | null>(null);
   const followWakeLockRef = useRef<any>(null);
   const followActiveRef = useRef(false);
   const followVisListenerRef = useRef(false);
+  // MERGED single declarations (entry + device-honesty + exit roles all
+  // fixed these same base bugs — exactly ONE declaration each, here,
+  // above every user, so no TDZ and no duplicate):
+  // - wakeLockPendingRef: base used it in acquireWakeLock but never
+  //   declared it, so every wake-lock request threw and the screen
+  //   lock was silently never held. Declared here.
+  // - followRecorderRef / followTranscribeAbortRef (auto-stop role):
+  //   handles for the in-flight Whisper chunk recorder and transcribe
+  //   fetch, so teardown / auto-lock can stop/abort them mid-flight.
+  const wakeLockPendingRef = useRef(false);
+  const followRecorderRef = useRef<MediaRecorder | null>(null);
+  const followTranscribeAbortRef = useRef<AbortController | null>(null);
   // Guards a wake-lock request already in flight: without it, two
   // concurrent requests (visibility return + release-handler timer, or
   // two start paths) each create their own sentinel, the ref keeps only
@@ -973,25 +1011,57 @@ export default function QuranMushafPage({
     void acquireWakeLock();
   }, [handleFollowVisibility, acquireWakeLock]);
 
-  // Shared teardown for a follow session's live resources (mic,
-  // stream, wake lock, visibility listener). No setState here, so it
-  // is safe to run from the unmount cleanup, where state updates
-  // would be no-ops. stopFollow calls this, then resets the UI state.
-  // Idempotent: every step guards or nulls, so double-teardown is safe.
-  const teardownFollowResources = useCallback(() => {
+  // Engine-only stop, shared by auto-lock and full teardown (merged
+  // auto-stop + exit roles). Stops live recognition (handlers nulled
+  // BEFORE stopping, abort preferred over stop so no pending final
+  // transcript is delivered and Chrome's onend auto-restart cannot
+  // fire), the in-flight Whisper chunk recorder, the in-flight
+  // transcribe fetch, and the mic stream. Deliberately does NOT touch
+  // the wake lock, the visibility listener, or followActiveRef: the
+  // auto-lock path keeps all three (user still in prayer, screen must
+  // stay on), while full teardown releases them. No setState here.
+  const stopFollowEngines = useCallback(() => {
     followListeningRef.current = false;
+    followStartingRef.current = false;
+    const rec = recognitionRef.current;
+    if (rec) {
+      try { rec.onresult = null; rec.onerror = null; rec.onend = null; } catch {}
+      try { if (rec.abort) rec.abort(); else rec.stop(); } catch {}
+    }
+    recognitionRef.current = null;
+    const chunkRec = followRecorderRef.current;
+    if (chunkRec) {
+      try { chunkRec.stop(); } catch {}
+      followRecorderRef.current = null;
+    }
+    try { followTranscribeAbortRef.current?.abort(); } catch {}
+    followTranscribeAbortRef.current = null;
+    followStreamRef.current?.getTracks().forEach((t) => t.stop());
+    followStreamRef.current = null;
+  }, []);
+
+  // Shared FULL teardown for a follow session (mic, stream, recorder,
+  // wake lock, visibility listener). No setState here, so it is safe
+  // to run from the unmount cleanup, where state updates would be
+  // no-ops. stopFollow calls this, then resets the UI state.
+  // Idempotent: every step guards or nulls, so double-teardown is safe.
+  // Generation bumps come FIRST (exit role): they invalidate in-flight
+  // mic grants, index loads, jumps and Whisper chunks, so post-exit
+  // work can never re-open or re-lock anything.
+  const teardownFollowResources = useCallback(() => {
+    followStartGenRef.current += 1;
+    followJumpGenRef.current += 1;
+    followBufferRef.current = [];
+    stopFollowEngines();
     followActiveRef.current = false;
     if (followVisListenerRef.current) {
       document.removeEventListener('visibilitychange', handleFollowVisibility);
       followVisListenerRef.current = false;
     }
-    try { recognitionRef.current?.stop(); } catch {}
-    recognitionRef.current = null;
-    followStreamRef.current?.getTracks().forEach((t) => t.stop());
-    followStreamRef.current = null;
     try { followWakeLockRef.current?.release(); } catch {}
     followWakeLockRef.current = null;
-  }, [handleFollowVisibility]);
+    try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
+  }, [handleFollowVisibility, stopFollowEngines]);
 
   // --- Follow-the-imam mode ---
   const enterFollowMode = useCallback(() => {
@@ -1007,8 +1077,9 @@ export default function QuranMushafPage({
     followStatusRef.current = 'listening';
     setFollowPos(null);
     followPosRef.current = null;
-    setPendingLock(null);
-    pendingLockRef.current = null;
+    followAutoLockedRef.current = false;
+    liveRestartCountRef.current = 0;
+    liveRestartWindowRef.current = 0;
     followJumpGenRef.current += 1;
     setFollowHeard('');
     setFollowError(null);
@@ -1017,7 +1088,6 @@ export default function QuranMushafPage({
     setFollowChunkCount(0);
     setFollowChunkFails(0);
     followBufferRef.current = [];
-    followMissRef.current = 0;
     setCleanMode(false);
     // Word-level highlighting needs the Madinah word boxes, so follow
     // mode always uses the Madinah edition (harmless if already selected).
@@ -1031,11 +1101,10 @@ export default function QuranMushafPage({
   }, [ensureWakeLockTracking]);
 
   const stopFollow = useCallback(() => {
-    // Stale-start backstop (mic fix): a start whose mic grant or
-    // index load is still pending must abort instead of resurrecting
-    // listening after this stop — the generation bump enforces it.
-    followStartingRef.current = false;
-    followStartGenRef.current += 1;
+    // Full teardown already bumps both generations (stale-start
+    // backstop: a start whose mic grant or index load is still pending
+    // must abort instead of resurrecting listening after this stop),
+    // clears the heard buffer, and releases the wake lock.
     teardownFollowResources();
     setFollowOn(false);
     // Back to the START branch, not the listening branch: on the follow
@@ -1049,24 +1118,39 @@ export default function QuranMushafPage({
     setFollowChunkFails(0);
     setFollowPos(null);
     followPosRef.current = null;
-    setPendingLock(null);
-    pendingLockRef.current = null;
-    followJumpGenRef.current += 1;
-    // A stop must not leave a stale 'found'/'locked' status behind: the
-    // next session starts from 'listening', and no post-stop transcript
+    followAutoLockedRef.current = false;
+    liveRestartCountRef.current = 0;
+    liveRestartWindowRef.current = 0;
+    setFollowHeard('');
+    followBufferRef.current = [];
+    // A stop must not leave a stale 'locked' status behind: the next
+    // session starts from 'listening', and no post-stop transcript
     // (guarded in onFollowFinal) can ever read a dead status again.
+    // searchHighlight is deliberately NOT cleared here (highlight
+    // role): a locked ayah keeps its manual-style amber highlight
+    // until a page turn or fullscreen exit, exactly like a لوحتي jump.
     setFollowStatus('listening');
     followStatusRef.current = 'listening';
     setFollowEngine(null);
-    try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
   }, [teardownFollowResources]);
 
-  const jumpToTracked = useCallback(async (pos: TrackedPosition) => {
+  // MERGED auto-fullscreen + highlight: this is the ONLY page-open used
+  // by a follow lock, and it is the SAME fullscreen branch a manual open
+  // uses (goToPage + setShowFullscreen + best-effort native request) —
+  // no second fullscreen implementation exists, so the auto-opened page
+  // has the normal page controls, swipe/page-turn, edition/frame, clean
+  // mode and word taps exactly as a manual fullscreen open.
+  // opts.highlight (highlight role): when true, searchHighlight — the
+  // manual search-jump mechanism, stable and non-tracking — is set
+  // AFTER goToPage, because goToPage clears any search highlight, so a
+  // highlight set before the jump would be wiped before it renders.
+  // Callers that omit the flag behave exactly as before.
+  const jumpToTracked = useCallback(async (pos: TrackedPosition, opts?: { highlight?: boolean }) => {
     const gen = followJumpGenRef.current;
     try {
       const list = await loadSurahPageList(pos.surah);
-      // Superseded while the network was in flight (reject / stop /
-      // resync / a newer lock): do NOT yank the page to a stale ayah.
+      // Superseded while the network was in flight (stop / a newer
+      // lock): do NOT yank the page to a stale ayah.
       if (gen !== followJumpGenRef.current) return;
       const entry = list.find((a) => a.number === pos.ayah);
       const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
@@ -1074,63 +1158,110 @@ export default function QuranMushafPage({
       setSelectedVerse(null);
       setShowFullscreen(true);
       requestNativeFullscreen();
+      if (opts?.highlight) setSearchHighlight({ surah: pos.surah, ayah: pos.ayah });
     } catch {
       if (gen !== followJumpGenRef.current) return;
-      setFollowError('تعذر تحديد صفحة الآية — تأكد من الاتصال بالإنترنت');
+      // MERGED auto-fullscreen fallback (REVERTIBLE — see integration
+      // report): if the page list fails (offline / network error), do
+      // NOT strand the user on the lobby with an error — open the
+      // surah's first page fullscreen, the same fallback the لوحتي
+      // search-jump uses. Trade-off, stated plainly: the follow bar
+      // still names the locked surah/ayah, but the word highlight shows
+      // only if that ayah happens to be on the surah's first page, and
+      // the user may need to turn pages manually to reach it. To revert:
+      // replace this catch body with the old setFollowError line.
+      goToPage(getSurahStartPage(pos.surah));
+      setSelectedVerse(null);
+      setShowFullscreen(true);
+      requestNativeFullscreen();
+      if (opts?.highlight) setSearchHighlight({ surah: pos.surah, ayah: pos.ayah });
     }
     // goToPage / setters are stable enough here; loadSurahPageList is memoized.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadSurahPageList]);
 
+  // THE single lock callback (merged live + whisper + auto-stop +
+  // auto-fullscreen roles; their names were onFollowAutoLock /
+  // handleFollowAutoLock / autoStopFollowOnLock — this one function is
+  // all three). EVERY lock — live engine, Whisper fallback, and manual
+  // ابحث — reports ONLY through here; nothing else in this file may
+  // lock. In order, synchronously (no await between killing the engines
+  // and setting the highlight, so no transcript can slip in mid-teardown):
+  // (1) latch, so this can never fire twice; (2) generation bumps, so a
+  // pending mic grant / index load / older jump aborts instead of
+  // resurrecting listening or yanking the page; (3) engine-only stop —
+  // live recognizer, Whisper recorder, transcribe fetch, mic stream —
+  // via stopFollowEngines, which deliberately does NOT release the wake
+  // lock (MERGE OVERRIDE of auto-stop's release choice, parent-
+  // confirmable: the user is still in prayer following the page, and
+  // the screen must not sleep mid-prayer; the wake lock is released by
+  // stopFollow / route-exit / unmount only. One-line change to flip:
+  // call teardownFollowResources() here instead — but that also clears
+  // followActiveRef, which the wake re-acquire and route-exit gates
+  // need, so flip it only together with those gates); (4) buffer
+  // cleared, so nothing can re-lock the same ayah; (5) followPos +
+  // 'locked' + followOn=false: the lobby hides (it renders only while
+  // !followPos), the follow bar hides (it needs followOn), and the
+  // searchHighlight render gate opens (it needs !followOn), so exactly
+  // ONE highlight renders — the stable searchHighlight, never the
+  // live-tracking word highlight on top of it; (6) jump with
+  // { highlight: true }, which opens the page fullscreen.
+  // followActiveRef deliberately STAYS true: the wake lock must keep
+  // re-acquiring on visibility return, and the route-exit effect must
+  // still see an active session to stop on leave.
+  const handleFollowAutoLock = useCallback((lock: TrackedPosition) => {
+    if (followAutoLockedRef.current) return;
+    followAutoLockedRef.current = true;
+    followStartGenRef.current += 1;
+    followJumpGenRef.current += 1;
+    stopFollowEngines();
+    followBufferRef.current = [];
+    liveRestartCountRef.current = 0;
+    liveRestartWindowRef.current = 0;
+    followPosRef.current = lock;
+    setFollowPos(lock);
+    followStatusRef.current = 'locked';
+    setFollowStatus('locked');
+    setFollowOn(false);
+    setFollowReady(false);
+    setFollowEngine(null);
+    setFollowChunkPhase('idle');
+    void jumpToTracked(lock, { highlight: true });
+  }, [jumpToTracked, stopFollowEngines]);
+
   const onFollowFinal = useCallback((text: string) => {
-    // Transcripts delivered after a stop (e.g. a Whisper chunk that was
-    // mid-transcribe when the user stopped) must not lock, advance, or
-    // jump anything on a dead session.
-    if (!followListeningRef.current) return;
+    // Transcripts delivered after a stop, an X, a route leave, an
+    // unmount, or an auto-lock (a Whisper chunk mid-transcribe when the
+    // user stopped, a live engine's trailing final) must not lock,
+    // advance, or jump anything on a dead or already-locked session —
+    // and must never re-open the Mushaf. The latch + listening flag +
+    // active flag together enforce that.
+    if (!followListeningRef.current || followAutoLockedRef.current || !followActiveRef.current) return;
     const words = heardWords(text);
     if (words.length === 0) return;
     const ordered = followOrderedRef.current;
     if (!ordered) return;
+    // Cumulative buffer (trigger role): words are HELD here, never
+    // discarded below threshold — a 2-word final followed by a 3-word
+    // final still reaches the gate, on either engine. Counting uses
+    // normalized words (heardWords → normalizeWords), so rasm variants
+    // count the same way on live and Whisper. Capped at the last 80.
     const buffer = [...followBufferRef.current, ...words].slice(-80);
     followBufferRef.current = buffer;
-    const pos = followPosRef.current;
-    if (!pos || followStatusRef.current === 'lost') {
-      const lock = findLock(buffer, ordered);
-      if (!lock) return;
-      if (!pos) {
-        // First lock: open the page fullscreen and ask — don't track yet.
-        // While waiting for OK/reject, later transcripts must not
-        // re-lock or re-jump (that would yank the page from under him).
-        if (pendingLockRef.current) return;
-        pendingLockRef.current = lock;
-        setPendingLock(lock);
-        followStatusRef.current = 'found';
-        setFollowStatus('found');
-        void jumpToTracked(lock);
-        return;
-      }
-      followPosRef.current = lock;
-      setFollowPos(lock);
-      followStatusRef.current = 'locked';
-      setFollowStatus('locked');
-      followMissRef.current = 0;
-      void jumpToTracked(lock);
-      return;
-    }
-    const adv = advanceTracking(pos, words, ordered);
-    if (adv && (adv.surah !== pos.surah || adv.ayah !== pos.ayah || adv.word !== pos.word)) {
-      followPosRef.current = adv;
-      setFollowPos(adv);
-      followMissRef.current = 0;
-      void jumpToTracked(adv);
-    } else {
-      followMissRef.current += 1;
-      if (followMissRef.current >= 4) {
-        followStatusRef.current = 'lost';
-        setFollowStatus('lost');
-      }
-    }
-  }, [jumpToTracked]);
+    // Tracking after a lock does not exist in the merged spec: once
+    // followPos is set, the lock callback has already stopped
+    // listening, so this branch is a guard, not a tracker.
+    if (followPosRef.current) return;
+    // TRIGGER GATE (shared constant, both engines): search runs only
+    // once the cumulative buffer reaches FOLLOW_TRIGGER_WORDS (5).
+    // The tracking branch that used to follow this gate is deleted:
+    // after a lock there is no advanceTracking, no miss count, no
+    // 'lost', no re-lock.
+    if (buffer.length < FOLLOW_TRIGGER_WORDS) return;
+    const lock = findLock(buffer, ordered, FOLLOW_LOCK_MIN_WORDS);
+    if (!lock) return;
+    handleFollowAutoLock(lock);
+  }, [handleFollowAutoLock]);
 
   // Engine callbacks are registered once at start; they always call the
   // latest onFollowFinal through this ref so they never go stale.
@@ -1146,8 +1277,9 @@ export default function QuranMushafPage({
     const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     const chunks: BlobPart[] = [];
     rec.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-    rec.onstop = () => resolve(new Blob(chunks, { type: mime || 'audio/webm' }));
-    rec.onerror = () => reject(new Error('record failed'));
+    followRecorderRef.current = rec;
+    rec.onstop = () => { if (followRecorderRef.current === rec) followRecorderRef.current = null; resolve(new Blob(chunks, { type: mime || 'audio/webm' })); };
+    rec.onerror = () => { if (followRecorderRef.current === rec) followRecorderRef.current = null; reject(new Error('record failed')); };
     rec.start();
     setTimeout(() => { try { rec.stop(); } catch {} }, ms);
   });
@@ -1157,17 +1289,37 @@ export default function QuranMushafPage({
   // gesture) — see below — so by the time this runs, the stream exists
   // and the loop just records, uploads, transcribes, and reports its
   // phase, so the lobby never looks frozen while chunks are in flight.
+  // Whisper chunk loop only (merged whisper + auto-stop roles). The mic
+  // stream and the login check are done by startFollowListening BEFORE
+  // the verse-index await (inside the tap gesture), so by the time this
+  // runs, the stream exists and the loop just records, uploads,
+  // transcribes, and reports its phase, so the lobby never looks frozen
+  // while chunks are in flight.
+  // MERGED gate decision: this loop does NOT count words itself. Every
+  // chunk transcript is forwarded whole to onFollowFinal, whose
+  // cumulative buffer + FOLLOW_TRIGGER_WORDS (5) gate governs both
+  // engines alike — the whisper role's local 4-word held-words gate was
+  // a duplicate of that shared gate and is deleted; holding
+  // sub-threshold words is already what followBufferRef does (it is
+  // cumulative and only cleared on lock/stop/entry). The loop's own
+  // guards are: a generation capture (stop-then-restart can no longer
+  // resurrect an old loop beside the new session's loop), the
+  // listening flag, and the auto-lock latch — a chunk still recording
+  // when a lock/stop lands is dropped BEFORE upload/transcribe, and an
+  // in-flight transcribe fetch is aborted via followTranscribeAbortRef.
   const runWhisperLoop = useCallback(async () => {
     const uid = session?.user?.id;
     if (!uid || !followStreamRef.current) return;
+    const loopGen = followStartGenRef.current;
     let consecutiveFails = 0;
-    while (followListeningRef.current) {
+    while (followListeningRef.current && !followAutoLockedRef.current && loopGen === followStartGenRef.current) {
       let chunkPath = '';
+      let aborter: AbortController | null = null;
       try {
         setFollowChunkCount((c) => c + 1);
         setFollowChunkPhase('recording');
         const blob = await recordChunk(8000);
-        if (!followListeningRef.current) break;
+        if (!followListeningRef.current || followAutoLockedRef.current || loopGen !== followStartGenRef.current) break;
         // The chunk file's extension matches its real bytes (iOS records
         // mp4, desktop webm) so stored chunks are honestly named.
         const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
@@ -1175,16 +1327,23 @@ export default function QuranMushafPage({
         setFollowChunkPhase('uploading');
         const { error: upErr } = await supabase.storage.from('rana-audio').upload(chunkPath, blob);
         if (upErr) throw upErr;
+        if (!followListeningRef.current || followAutoLockedRef.current || loopGen !== followStartGenRef.current) break;
         const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(chunkPath);
         setFollowChunkPhase('transcribing');
+        aborter = new AbortController();
+        followTranscribeAbortRef.current = aborter;
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
           body: JSON.stringify({ audioUrl: urlData.publicUrl }),
+          signal: aborter.signal,
         });
         if (!res.ok) throw new Error('transcribe failed');
         const data = await res.json();
-        if (data.transcript) {
+        // Pre-forward guard (third drop point, after the loop condition
+        // and onFollowFinal's own guard): a transcript that lands after
+        // a lock/stop must never be delivered to the matcher.
+        if (data.transcript && followListeningRef.current && !followAutoLockedRef.current && loopGen === followStartGenRef.current) {
           setFollowHeard(data.transcript);
           followFinalRef.current(data.transcript);
         }
@@ -1192,6 +1351,9 @@ export default function QuranMushafPage({
         setFollowChunkFails(0);
         setFollowError(null);
       } catch {
+        // A lock/stop abort must break silently: no "mic disconnected"
+        // prompt, no failure count, no retry sleep over a locked page.
+        if (!followListeningRef.current || followAutoLockedRef.current || loopGen !== followStartGenRef.current) break;
         // A gone mic stream (revoked, device lost) can never record
         // again — stop cleanly with a restart prompt instead of
         // retrying forever with no mic. (A stop-pressed exit takes
@@ -1213,6 +1375,7 @@ export default function QuranMushafPage({
         }
         await new Promise((r) => setTimeout(r, 1500));
       } finally {
+        if (aborter && followTranscribeAbortRef.current === aborter) followTranscribeAbortRef.current = null;
         if (chunkPath) {
           try { await supabase.storage.from('rana-audio').remove([chunkPath]); } catch {}
         }
@@ -1236,85 +1399,235 @@ export default function QuranMushafPage({
   // tap looked dead. Now followIndexLoading shows "loading the ayah
   // index…" in the lobby, and the listening branch shows the engine
   // (live vs Whisper), the chunk phase, and the failure count.
+  // Two iOS-Safari failure modes lived here, both looking exactly like
+  // "listening doesn't work":
+  // (1) The old order awaited the verse index (7 sequential queries,
+  // seconds on mobile) BEFORE requesting the mic — and iOS Safari
+  // rejects getUserMedia requested outside the tap gesture with
+  // NotAllowedError and NO permission prompt, so the user got a
+  // misleading "allow the mic in browser settings" error for a
+  // permission they never denied. Now the mic (Whisper path) and the
+  // live recognizer (live path) start FIRST, inside the tap, and the
+  // index loads after — onFollowFinal safely drops transcripts until
+  // the index is ready.
+  // (2) During the index load the lobby showed no change at all, so a
+  // tap looked dead. Now followIndexLoading shows "loading the ayah
+  // index…" in the lobby, and the listening branch shows the engine
+  // (live vs Whisper), the chunk phase, and the failure count.
+  // GESTURE RULE (device-honesty): the start button handler calls
+  // enterFollowMode(); startFollowListening(); synchronously in one
+  // tap handler, and NOTHING is awaited before either engine start
+  // below (live: rec.start() with no await before it; Whisper:
+  // getUserMedia invoked synchronously before its first await). The
+  // #/follow route effect must NEVER call this function — entering the
+  // route only shows the lobby; the tap is the only start.
   const startFollowListening = useCallback(async () => {
-    if (followListeningRef.current) return; // double-tap guard: one loop only
+    // Double-tap guard, covering the permission-prompt window too:
+    // followListeningRef is set only AFTER rec.start()/getUserMedia,
+    // so followStartingRef (set synchronously here, cleared on every
+    // early return and once listening starts) is what blocks a second
+    // tap during a non-modal prompt from starting a second stream/loop.
+    if (followListeningRef.current || followStartingRef.current) return;
     setFollowError(null);
+    // MERGED single startGen fix (entry + live + whisper + device-
+    // honesty roles all found it): the base referenced startGen on the
+    // Whisper path but never declared it, so on Safari the function
+    // threw a ReferenceError right after a successful mic grant, before
+    // listening was ever set — stream left open, no error shown, lobby
+    // unchanged. Captured here, at the top, before any await, so the
+    // stale-start checks below work on both paths.
+    const startGen = followStartGenRef.current;
+    followStartingRef.current = true;
+    // Locale captured at tap time from the same source the language
+    // provider uses (localStorage 'app-lang'): ar-EG -> ar-EG, anything
+    // else -> ar-SA. A language change mid-session does NOT retune a
+    // running recognizer — the user must stop and tap again. The
+    // Whisper path has no client-side locale: the transcribe-audio edge
+    // function hardcodes language='ar'.
+    const speechLocaleNow = currentSpeechLocale();
+    // Honest mic-error wording (device-honesty): the old code showed
+    // the same "allow the mic" line for every failure, including a
+    // missing mic, a mic busy in another app, and a dismissed prompt —
+    // three different causes with three different fixes. Map by error
+    // name, never by guess.
+    const micErrorMessage = (err: any): string => {
+      const name = err?.name as string | undefined;
+      if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+        return 'مفيش ميكروفون متاح على الجهاز ده — اكتب الكلمات يدوياً بالأسفل';
+      }
+      if (name === 'NotReadableError' || name === 'AbortError') {
+        return 'الميكروفون مشغول بتطبيق تاني — اقفله ثم اضغط «ابدأ الاستماع» من جديد';
+      }
+      if (name === 'SecurityError') {
+        return 'الصفحة دي مش مسموح لها تستخدم الميكروفون هنا — افتح الرابط في المتصفح نفسه مش داخل تطبيق تاني';
+      }
+      return 'تم رفض إذن الميكروفون — اسمح به من إعدادات المتصفح ثم اضغط «ابدأ الاستماع» من جديد';
+    };
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SR) {
       setFollowEngine('live');
       const rec = new SR();
-      rec.lang = currentSpeechLocale();
+      rec.lang = speechLocaleNow;
       rec.continuous = true;
       rec.interimResults = true;
+      // Stops the live session with an honest prompt and returns the
+      // user to the start branch (never a silent dead "listening").
+      const stopLiveWithPrompt = (message: string) => {
+        try { rec.stop(); } catch {}
+        recognitionRef.current = null;
+        followListeningRef.current = false;
+        followStartingRef.current = false;
+        liveRestartCountRef.current = 0;
+        liveRestartWindowRef.current = 0;
+        setFollowReady(true);
+        setFollowError(message);
+      };
       rec.onresult = (e: any) => {
+        // Post-lock/post-stop queued results neither deliver finals
+        // (also guarded in onFollowFinal) nor update interim UI.
+        if (!followListeningRef.current || followAutoLockedRef.current) return;
+        // Any result resets the dead-mic restart budget (speech heard
+        // = mic alive).
+        liveRestartCountRef.current = 0;
+        liveRestartWindowRef.current = Date.now();
         let interim = '';
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const r = e.results[i][0];
+          // MERGED interim decision (trigger role wins over live
+          // role's interim-feeding): ONLY finals are fed to the
+          // matcher. Interim text is display-only (followHeard):
+          // interim transcripts are unstable — the engine revises
+          // them and re-delivers the same words as a final — so
+          // counting them would double-count words, and with no
+          // confirmation step left, an interim guess could yank the
+          // page to a wrong ayah with no veto.
           if (r.isFinal) followFinalRef.current(r.transcript);
           else interim += r.transcript + ' ';
         }
         if (interim.trim()) setFollowHeard(interim.trim());
       };
       rec.onerror = (e: any) => {
+        if (!followListeningRef.current || followAutoLockedRef.current) return;
+        // Only fatal errors stop the session with a message.
+        // 'no-speech' (imam silent) and 'aborted' are transient: the
+        // onend restart below retries them silently, and showing an
+        // error for silence would be a false alarm. Previously every
+        // other error was silently swallowed while the lobby kept
+        // saying "listening" on a dead engine.
         if (e.error === 'not-allowed') {
-          setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
-          followListeningRef.current = false;
-          recognitionRef.current = null;
-          setFollowReady(true);
+          stopLiveWithPrompt(micErrorMessage({ name: 'NotAllowedError' }));
+        } else if (e.error === 'audio-capture') {
+          stopLiveWithPrompt('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط «ابدأ الاستماع» من جديد');
+        } else if (e.error === 'service-not-allowed') {
+          stopLiveWithPrompt('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب الإدخال اليدوي بالأسفل، أو متصفح تاني');
+        } else if (e.error === 'language-not-supported') {
+          stopLiveWithPrompt('الاستماع المباشر مش بيدعم لغة الواجهة الحالية على الجهاز ده — جرّب الإدخال اليدوي بالأسفل');
         } else if (e.error === 'network') {
-          setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت');
+          // Transient: the engine auto-restarts from onend, so this
+          // message must NOT tell the user to re-tap or to go back
+          // to the start branch — it clears on the next good result.
+          setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت — بيحاول تاني لوحده');
         }
       };
       rec.onend = () => {
-        if (followListeningRef.current) { try { rec.start(); } catch {} }
+        // Programmatic restart (no gesture needed for recognition once
+        // the mic is granted — unlike getUserMedia). Budgeted: past
+        // LIVE_RESTART_MAX restarts in LIVE_RESTART_WINDOW_MS with no
+        // speech, the mic is dead — stop honestly instead of looping.
+        // A failed restart used to be swallowed by an empty catch
+        // while the lobby still said "listening".
+        if (!followListeningRef.current || followAutoLockedRef.current) return;
+        const now = Date.now();
+        if (now - liveRestartWindowRef.current > LIVE_RESTART_WINDOW_MS) {
+          liveRestartWindowRef.current = now;
+          liveRestartCountRef.current = 0;
+        }
+        liveRestartCountRef.current += 1;
+        if (liveRestartCountRef.current > LIVE_RESTART_MAX) {
+          stopLiveWithPrompt('توقف الاستماع المباشر — اضغط «ابدأ الاستماع» من جديد');
+          return;
+        }
+        try {
+          rec.start();
+        } catch {
+          stopLiveWithPrompt('توقف الاستماع المباشر فجأة — اضغط «ابدأ الاستماع» من جديد');
+        }
       };
       recognitionRef.current = rec;
+      let liveStarted = false;
       try {
         rec.start();
+        liveStarted = true;
       } catch {
+        // MERGED live→Whisper fallback, SYNCHRONOUS-throw branch ONLY:
+        // rec.start() throwing happens inside the tap, so falling
+        // through to the Whisper path below (whose getUserMedia is
+        // still invoked in this same tap's synchronous prefix... in
+        // practice the Whisper branch awaits nothing before its
+        // getUserMedia call) keeps the gesture. Async live failures
+        // (onerror, after the tap) do NOT fall through — an async
+        // callback is outside the gesture, so a naive fallback risks
+        // the same silent mic refusal iOS shows — they keep their
+        // honest error above, and that gap is listed plainly in the
+        // integration report as a known remaining gap.
         recognitionRef.current = null;
+      }
+      if (liveStarted) {
+        followListeningRef.current = true;
         followStartingRef.current = false;
-        setFollowError('تعذر بدء الاستماع — جرّب الإدخال اليدوي بالأسفل');
-        setFollowReady(true);
+        setFollowReady(false);
+        setFollowStatus('listening');
+        followStatusRef.current = 'listening';
+        // Keep the screen on through a long Taraweeh (re-acquired if lost).
+        ensureWakeLockTracking();
+        setFollowIndexLoading(true);
+        try {
+          if (!followOrderedRef.current) {
+            const verses = await loadVerseIndex();
+            followOrderedRef.current = buildOrderedVerses(verses);
+          }
+        } catch {
+          try { rec.stop(); } catch {}
+          recognitionRef.current = null;
+          followListeningRef.current = false;
+          followStartingRef.current = false;
+          setFollowReady(true);
+          setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+        } finally {
+          setFollowIndexLoading(false);
+        }
         return;
       }
-      followListeningRef.current = true;
-      followStartingRef.current = false;
-      setFollowReady(false);
-      setFollowStatus('listening');
-      followStatusRef.current = 'listening';
-      // Keep the screen on through a long Taraweeh (re-acquired if lost).
-      ensureWakeLockTracking();
-      setFollowIndexLoading(true);
-      try {
-        if (!followOrderedRef.current) {
-          const verses = await loadVerseIndex();
-          followOrderedRef.current = buildOrderedVerses(verses);
-        }
-      } catch {
-        try { rec.stop(); } catch {}
-        recognitionRef.current = null;
-        followListeningRef.current = false;
-        setFollowReady(true);
-        setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
-      } finally {
-        setFollowIndexLoading(false);
-      }
-      return;
+      // Live start threw synchronously: fall through to Whisper below
+      // (same tap). The engine label is overwritten by the Whisper
+      // branch; the starting guard stays set until Whisper resolves.
     }
-    // Whisper path (Safari): mic FIRST, inside the tap gesture.
+    // Whisper path (Safari, and any browser without SpeechRecognition):
+    // mic FIRST, inside the tap gesture.
     setFollowEngine('whisper');
     if (!window.MediaRecorder) {
       followStartingRef.current = false;
       setFollowError('هذا المتصفح لا يدعم التسجيل — اكتب الكلمات يدوياً بالأسفل');
+      setFollowReady(true);
+      return;
+    }
+    // No mediaDevices at all (old browser, or the page opened inside
+    // an app webview that withholds the mic): getUserMedia would throw
+    // a TypeError, which the old generic catch misreported as a
+    // permission refusal. Say what is actually missing instead.
+    if (!navigator.mediaDevices?.getUserMedia) {
+      followStartingRef.current = false;
+      setFollowError('الجهاز/المتصفح ده مش بيسمح بالوصول للميكروفون من هنا — افتح الرابط في المتصفح نفسه، أو اكتب الكلمات يدوياً بالأسفل');
+      setFollowReady(true);
       return;
     }
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
+    } catch (err) {
       followStartingRef.current = false;
-      setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
+      setFollowError(micErrorMessage(err));
+      setFollowReady(true);
       return;
     }
     followStreamRef.current = stream;
@@ -1369,6 +1682,15 @@ export default function QuranMushafPage({
     void runWhisperLoop();
   }, [runWhisperLoop, ensureWakeLockTracking, session]);
 
+  // Manual ابحث (merged decision 5): typed input is NOT governed by
+  // the 5-word trigger gate (it is not an engine transcript), and it
+  // keeps its own match rule (min(4, words.length)). But it locks
+  // through the SAME single callback as auto locks — no separate
+  // tracked-lock path: the manual lock also opens fullscreen
+  // highlighted via handleFollowAutoLock, stops any listening, and
+  // keeps the wake lock held. The button already calls enterFollowMode
+  // first (fresh latch, wake lock acquired), so the callback's latch
+  // check passes and its jump generation is fresh.
   const manualFollowLock = useCallback(async () => {
     const words = heardWords(followManual);
     if (words.length < 2) {
@@ -1392,83 +1714,26 @@ export default function QuranMushafPage({
       setFollowError('لم أجد آية مطابقة — جرّب كلمات أخرى سمعتها بوضوح');
       return;
     }
-    followPosRef.current = lock;
-    setFollowPos(lock);
-    followStatusRef.current = 'locked';
-    setFollowStatus('locked');
-    followMissRef.current = 0;
-    setFollowReady(false);
-    // Even a manual lock follows a whole prayer, so the screen stays on.
-    ensureWakeLockTracking();
-    // Supersede any older in-flight jump (e.g. a double-tap on ابحث
-    // with edited input): only this lock's jump may land.
-    followJumpGenRef.current += 1;
-    void jumpToTracked(lock);
-  }, [followManual, jumpToTracked, ensureWakeLockTracking]);
+    handleFollowAutoLock(lock);
+  }, [followManual, handleFollowAutoLock]);
 
-  const resyncFollow = useCallback(() => {
-    followPosRef.current = null;
-    setFollowPos(null);
-    pendingLockRef.current = null;
-    setPendingLock(null);
-    // Same rule as reject: drop the heard buffer too, or the next
-    // transcript re-locks the very ayah the user just tried to escape
-    // from the stale tail of the buffer.
-    followBufferRef.current = [];
-    followJumpGenRef.current += 1;
-    followMissRef.current = 0;
-    followStatusRef.current = 'listening';
-    setFollowStatus('listening');
-  }, []);
-
-  // First-lock confirmation actions (see pendingLock above). OK: the
-  // page is already open in fullscreen from lock time, so confirming
-  // only lights the ayah highlight and lets tracking continue. But the
-  // imam kept reciting while the card was up, so the pending position
-  // is stale: re-lock from the heard buffer (the same rule the
-  // lost→re-lock path uses) so tracking resumes from the imam's
-  // current words instead of immediately missing 4 chunks, flashing
-  // 'lost', and re-locking anyway. Falls back to the confirmed lock
-  // if the buffer yields nothing. Reject: drop the lock and the
-  // heard buffer (so the same wrong ayah is not instantly re-locked)
-  // and keep listening.
-  const confirmFollowLock = useCallback(() => {
-    const lock = pendingLockRef.current;
-    if (!lock) return;
-    pendingLockRef.current = null;
-    setPendingLock(null);
-    let pos = lock;
-    const ordered = followOrderedRef.current;
-    if (ordered) {
-      const fresh = findLock(followBufferRef.current, ordered);
-      if (fresh) pos = fresh;
-    }
-    followPosRef.current = pos;
-    setFollowPos(pos);
-    followStatusRef.current = 'locked';
-    setFollowStatus('locked');
-    followMissRef.current = 0;
-    // A fresh lock on another ayah needs its page; a word-level move
-    // inside the confirmed ayah does not (the highlight follows pos).
-    if (pos.surah !== lock.surah || pos.ayah !== lock.ayah) void jumpToTracked(pos);
-  }, [jumpToTracked]);
-  const rejectFollowLock = useCallback(() => {
-    pendingLockRef.current = null;
-    setPendingLock(null);
-    followBufferRef.current = [];
-    // Bump the jump generation so a slow first-lock jump still in
-    // flight resolves into nothing instead of yanking the page after
-    // the user already rejected this ayah.
-    followJumpGenRef.current += 1;
-    followStatusRef.current = 'listening';
-    setFollowStatus('listening');
-  }, []);
+  // MERGED deletions (exit + auto-stop roles): resyncFollow (the old
+  // "re-lock after lost" control), confirmFollowLock and
+  // rejectFollowLock (the old "لقيتها!" OK / "مش دي" card) are DELETED,
+  // not kept. In the merged spec there is no confirmation to confirm
+  // or reject, and no 'lost' state to resync out of: tracking stops on
+  // lock. A wrong lock is escaped via إيقاف / X + a fresh ابدأ الاستماع
+  // tap — that is the only way out of a session, by design.
+  // (confirmFollowLock / rejectFollowLock deleted — see note above.)
 
   // Dedicated follow route (#/follow): opening it starts follow mode
   // at once, and re-opens fullscreen if a live session is already
   // running (so returning mid-prayer never loses the lock and never
   // strands a live mic with no UI). No flag, no event, no stale state
-  // from older sessions — the route itself is the entry point.
+  // from older sessions — the route itself is the entry point. A fresh
+  // entry ALWAYS goes through enterFollowMode (clean lobby; listening
+  // only after a fresh ابدأ الاستماع tap) — it never resumes a dead
+  // lock, because every exit below stops the session first.
   useEffect(() => {
     if (!startInFollow) return;
     if (!followActiveRef.current) enterFollowMode();
@@ -1477,15 +1742,47 @@ export default function QuranMushafPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startInFollow]);
 
+  // Route-exit effect (exit role — the core fix for the no-unmount
+  // leave): switching between #/mushaf and #/follow does NOT unmount
+  // this page (one App branch), so the unmount cleanup below cannot
+  // catch it — and before this effect, leaving #/follow for #/mushaf
+  // mid-listening left the session alive as a hidden mic + wake lock,
+  // and re-entering #/follow then resumed the dead session's
+  // fullscreen instead of a clean lobby. Now leaving #/follow ends the
+  // session outright (mid-listening or post-lock alike). The gate
+  // covers both states: a still-active session (followActiveRef) and a
+  // locked-highlight session (followOn with followPos — though the
+  // merged lock callback sets followOn false, the gate stays as a
+  // safety net). What persists is ordinary Mushaf memory (last page /
+  // edition storage), not follow state.
+  const prevStartInFollowRef = useRef(startInFollow);
+  useEffect(() => {
+    const wasFollow = prevStartInFollowRef.current;
+    prevStartInFollowRef.current = startInFollow;
+    if (wasFollow && !startInFollow && (followActiveRef.current || followOn)) {
+      stopFollow();
+    }
+  }, [startInFollow, followOn, stopFollow]);
+
   // Leaving the Mushaf/Follow routes unmounts this page, and a live
   // follow session must die with it: without this, leaving via the
   // bottom nav (not the X button, which stops cleanly) left the mic
   // listening, the Whisper loop recording, and the wake lock held —
   // and the leaked visibility listener re-acquired the lock on every
-  // tab-show. Switching between #/mushaf and #/follow does NOT unmount
-  // (one App branch), so a live session survives that switch untouched.
-  // Deps are stable, so this cleanup runs only on unmount.
-  useEffect(() => () => { teardownFollowResources(); }, [teardownFollowResources]);
+  // tab-show. The cleanup also exits native fullscreen (an SPA
+  // navigation alone does NOT drop it — the element is
+  // documentElement, which survives the route change), so leaving for
+  // another tab cannot strand لوحتي / الرئيسية in native fullscreen.
+  useEffect(() => () => {
+    teardownFollowResources();
+    try {
+      const d = document as any;
+      if (d.fullscreenElement || d.webkitFullscreenElement) {
+        const p = d.exitFullscreen?.() || d.webkitExitFullscreen?.();
+        (p as any)?.catch?.(() => {});
+      }
+    } catch {}
+  }, [teardownFollowResources]);
 
   const openFullscreen = () => {
     setShowRatelIntro(true);
@@ -1837,7 +2134,7 @@ export default function QuranMushafPage({
           <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 mb-6">
             <span className="flex items-center gap-2 text-sm font-bold text-emerald-800">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              الحق الإمام شغال — الميكروفون بيسمع
+              الحق الإمام شغال
             </span>
             <button onClick={() => setShowFullscreen(true)}
               className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg">
@@ -2136,17 +2433,21 @@ export default function QuranMushafPage({
             </div>
           )}
 
-          {/* Follow lobby: follow mode's own fullscreen page. The start
-              button and manual input live here now (not on the normal
-              Mushaf page). Hides once the imam locks onto an ayah. On
+          {/* Follow lobby (merged entry role): follow mode's own
+              fullscreen page, ONE required tap. Entering #/follow shows
+              only this lobby; the mic never starts on route entry (iOS
+              Safari requires the tap gesture). The start button and the
+              manual fallback live here (not on the normal Mushaf page).
+              Hides once the imam locks onto an ayah (followPos set). On
               the dedicated follow route it also shows after a stop, so
-              the user can always start again from here. */}
+              the user can always start again from here. Stop returns to
+              this lobby; one tap restarts. */}
           {(followOn || startInFollow) && !followPos && !showRatelIntro && (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
                 <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-2">
-                  اضغط بدء الاستماع، وقرّب الجوال منك، وأول ما يلقط الإمام ٣ أو ٤ كلمات هيفتح المصحف على الصفحة ويقولك لقيتها — دوس OK عشان يظلل الآية ويمشي مع صوته.
+                  اضغط بدء الاستماع، وقرّب الجهاز منك. أول ما يلقط الإمام ٥ كلمات، المصحف هيفتح لوحده على الصفحة ويظلّل الآية — من غير ما تدوس حاجة تانية. هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.
                 </p>
                 {followReady ? (
                   <>
@@ -2161,20 +2462,19 @@ export default function QuranMushafPage({
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
-                    <div className="flex gap-2 mt-3">
+                    <p className="text-xs text-emerald-200 mt-4">لو الميكروفون مش شغال — بديل يدوي (اختياري):</p>
+                    <div className="flex gap-2 mt-2">
                       <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
-                        placeholder="أو اكتب كلمات سمعتها من الإمام..."
+                        placeholder="اكتب كلمات سمعتها من الإمام..."
                         className="flex-1 px-3 py-2.5 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
                       <button onClick={() => { enterFollowMode(); manualFollowLock(); }}
                         disabled={followIndexLoading}
-                        className="px-4 py-2.5 bg-white disabled:opacity-60 text-emerald-800 text-sm font-bold rounded-xl">ابحث</button>
+                        className="px-4 py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl">ابحث</button>
                     </div>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-bold mt-4">
-                      {followStatus === 'lost' ? 'فقدت الإمام مؤقتاً — بستنى كلمات أوضح لإعادة القفل...' : 'جارٍ الاستماع للإمام...'}
-                    </p>
+                    <p className="text-sm font-bold mt-4">جارٍ الاستماع للإمام...</p>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
@@ -2186,10 +2486,6 @@ export default function QuranMushafPage({
                     )}
                     {followHeard && <p className="text-xs text-emerald-200 mt-1 truncate">سمعت: {followHeard}</p>}
                     <div className="flex gap-2 mt-4">
-                      <button onClick={resyncFollow}
-                        className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-1.5">
-                        <RefreshCw className="w-4 h-4" /> إعادة المزامنة
-                      </button>
                       <button onClick={stopFollow}
                         className="flex-1 py-2.5 bg-white/10 hover:bg-white/20 text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-1.5">
                         <Square className="w-4 h-4" /> إيقاف
@@ -2202,39 +2498,13 @@ export default function QuranMushafPage({
             </div>
           )}
 
-          {/* First-lock confirmation: renders above the lobby (z-40 over
-              z-30) once a fresh auto-lock opens the page fullscreen.
-              OK keeps him on this fullscreen page and lights the ayah
-              highlight; "مش دي" rejects and keeps listening; إيقاف
-              stops follow entirely. */}
-          {pendingLock && (followOn || startInFollow) && (
-            <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
-              <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white text-center">
-                <p className="font-bold text-2xl">لقيتها!</p>
-                <p className="text-base text-emerald-100 mt-2">
-                  سورة {SURAHS.find((s) => s.no === pendingLock.surah)?.name || ''} — آية {pendingLock.ayah.toLocaleString('ar-EG')}
-                </p>
-                <p className="text-xs text-emerald-200 mt-1 leading-relaxed">دوس OK عشان أفضل على الصفحة دي وأظلل الآية اللي بيقرأها الإمام</p>
-                <div className="flex gap-2 mt-4">
-                  <button onClick={confirmFollowLock}
-                    className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-white font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
-                    <Check className="w-5 h-5" /> OK
-                  </button>
-                  <button onClick={rejectFollowLock}
-                    className="flex-1 py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-smooth">
-                    لا، مش دي
-                  </button>
-                </div>
-                <button onClick={stopFollow}
-                  className="mt-3 text-xs text-emerald-200 hover:text-white font-semibold">
-                  إيقاف المتابعة
-                </button>
-              </div>
-            </div>
-          )}
+          {/* MERGED: the old "لقيتها!" confirmation card (OK / "مش دي")
+              is DELETED and must not be re-added. A lock now opens the
+              page fullscreen with the ayah highlighted by itself, with
+              no tap after ابدأ الاستماع. */}
 
           {!showRatelIntro && !cleanMode && (
-            <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); onNavigate('app'); } else { exitFullscreenView(); } }}
+            <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
               title="إغلاق"
               className="absolute top-4 right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
               <X className="w-7 h-7" />
@@ -2416,7 +2686,7 @@ export default function QuranMushafPage({
                   {/* Search-jump highlight: the ayah tapped in لوحتي,
                       marked amber exactly on its words until the page
                       turns or fullscreen exits. */}
-                  {!followOn && searchHighlight && pageWordBoxes && (() => {
+                  {searchHighlight && (!followOn || !followPos) && pageWordBoxes && (() => {
                     const boxes = pageWordBoxes.filter((b) => b.surah === searchHighlight.surah && b.ayah === searchHighlight.ayah);
                     if (boxes.length === 0) return null;
                     return (<>
@@ -2523,10 +2793,8 @@ export default function QuranMushafPage({
                     <span className="truncate">
                       {followStatus === 'locked' && followPos
                         ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
-                        : followStatus === 'lost' ? 'فقدت الإمام مؤقتاً…' : 'جارٍ الاستماع للإمام…'}
+                        : 'جارٍ الاستماع للإمام…'}
                     </span>
-                    <button onClick={resyncFollow} title="إعادة المزامنة"
-                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><RefreshCw className="w-4 h-4" /></button>
                     <button onClick={stopFollow} title="إيقاف المتابعة"
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
                   </div>
@@ -2538,6 +2806,7 @@ export default function QuranMushafPage({
                       <button key={v.id} onClick={() => handleVerseClick(v)}
                         className={`flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
                           followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
+                          searchHighlight && searchHighlight.surah === v.surah_no && searchHighlight.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
                           v.has_links ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50' : 'bg-white/20 text-white hover:bg-white/30'
                         }`}>

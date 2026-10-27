@@ -2,18 +2,24 @@
 // Quran text (normalized, so IndoPak/Uthmani/imla'i spellings all match)
 // and walk forward with the recitation.
 //
-// Two phases:
-//  1. LOCK — find the ayah containing a run of >= 3 consecutive heard
-//     words, preferring runs that end closest to the most recent word
-//     (the imam's current position), then longer runs. Three words is
-//     deliberately fast: the caller shows a "لقيتها!" confirmation and
-//     the user taps OK before any jump is tracked, so a wrong 3-word
-//     lock is rejected instead of yanking the page.
-//  2. TRACK — once locked, Taraweeh recitation proceeds in order, so the
-//     tracker only walks forward through the current ayah and the next
-//     few ayahs, tolerating ASR drops (a heard word may skip up to 2
-//     expected words) and extra words. If it stops matching for several
-//     chunks, the caller falls back to a fresh lock.
+// MERGED follow-auto spec (2026-10-27, base 20fbad1): the user taps
+// الحق الإمام then ابدأ الاستماع and nothing else. Two constants
+// govern the lock, and BOTH engines read these same two — no per-engine
+// numbers, no duplicates (trigger + live + whisper roles merged):
+//  - FOLLOW_TRIGGER_WORDS = 5: normalized words CAPTURED (cumulative
+//    buffer in onFollowFinal) before ANY search runs. Top of the user's
+//    4–5 range: safer now that the confirmation step is gone, because a
+//    false lock now yanks the page with no user veto.
+//  - FOLLOW_LOCK_MIN_WORDS = 4: CONSECUTIVE matching words inside those
+//    5 captured words needed to name an ayah (findLock minRun). The 1
+//    word of slack tolerates one ASR error / extra word.
+// There is NO confirmation card and NO tracking after a lock: on lock,
+// search and recording stop by themselves and the page opens fullscreen
+// with the ayah highlighted (searchHighlight, the manual-jump mechanism).
+// advanceTracking is kept exported for a possible future tracking mode
+// but is NOT called by the merged flow.
+export const FOLLOW_TRIGGER_WORDS = 5;
+export const FOLLOW_LOCK_MIN_WORDS = 4;
 import { normalizeWords } from './arabicNormalize';
 import type { VerseIndexEntry } from './searchIndex';
 
@@ -43,7 +49,7 @@ export function heardWords(text: string): string[] {
   return normalizeWords(text);
 }
 
-export function findLock(heard: string[], ordered: OrderedVerse[], minRun = 3): TrackedPosition | null {
+export function findLock(heard: string[], ordered: OrderedVerse[], minRun = FOLLOW_LOCK_MIN_WORDS): TrackedPosition | null {
   if (heard.length < minRun) return null;
   let best: { pos: TrackedPosition; end: number; run: number } | null = null;
   for (const v of ordered) {
