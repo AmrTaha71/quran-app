@@ -147,6 +147,48 @@ function FacingStripImg({ src, pageNo, className, style }: {
   );
 }
 
+// Main page image with automatic retries. A single transient failure
+// (a network wobble while flipping fast) used to flip the whole page
+// straight into the error block, so several pages in one flipping
+// session ended up "not loaded", each waiting for a manual retry tap.
+// Now the image retries twice on its own — first immediately with a
+// cache-busting URL, then once more after a short delay for brief
+// network drops — and only then reports failure, so the existing
+// error block + manual retry stay as the last resort, not the first
+// response. Keyed by page at the call site, so attempts reset on
+// every turn, and the delay timer is cleared on unmount.
+function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalError }: {
+  src: string;
+  alt: string;
+  className: string;
+  style: CSSProperties | undefined;
+  loading?: 'eager' | 'lazy';
+  onLoad?: (e: { currentTarget: HTMLImageElement }) => void;
+  onFinalError: () => void;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  const url = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}img-retry=${attempt}`;
+  return (
+    <img
+      src={url}
+      alt={alt}
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
+      loading={loading ?? 'eager'}
+      onLoad={onLoad}
+      onError={() => {
+        if (attempt === 0) setAttempt(1);
+        else if (attempt === 1) timerRef.current = setTimeout(() => setAttempt(2), 1200);
+        else onFinalError();
+      }}
+      className={className}
+      style={style}
+    />
+  );
+}
+
 export default function QuranMushafPage({
   session,
   onNavigate,
@@ -1577,12 +1619,10 @@ export default function QuranMushafPage({
                   </button>
                 </div>
               ) : (
-                <img key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)}
+                <RetryPageImg key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)}
                   alt={`صفحة ${currentPage} — ${edition.name}`}
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
                   onLoad={() => setImageLoading(false)}
-                  onError={() => { setImageError(true); setImageLoading(false); }}
+                  onFinalError={() => { setImageError(true); setImageLoading(false); }}
                   className="max-w-full h-auto rounded-lg shadow-md transition-transform duration-300 origin-top [-webkit-touch-callout:none]"
                   style={{ transform: `scale(${zoom})` }} loading="eager" />
               )}
@@ -2034,19 +2074,19 @@ export default function QuranMushafPage({
                       previous page's image is never shown for a frame at the
                       new page's position while the new image loads — that
                       one-frame jump read as a slight shake on every turn. */}
-                  <img key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
+                  {/* Automatic retries before giving up: a transient
+                      failure while flipping fast no longer flips the
+                      page straight into the error block (see
+                      RetryPageImg above). Key remounts per page, so
+                      attempts reset on every turn. */}
+                  <RetryPageImg key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
                     className={`${madinahNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
                     style={madinahNorm ? { left: `${madinahNorm.imgL}%`, top: `${madinahNorm.imgT}%`, width: `${madinahNorm.imgW}%`, height: `${madinahNorm.imgH}%` } : undefined}
-                    draggable={false}
-                    onDragStart={(e) => e.preventDefault()}
                     onLoad={(e) => {
                       const im = e.currentTarget;
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
                     }}
-                    // Without this, a failed fullscreen image was a
-                    // silent blank page: imageError drives the error
-                    // block with its retry button, in both views.
-                    onError={() => setImageError(true)} />
+                    onFinalError={() => setImageError(true)} />
                   {goldFrame && (
                     <div className="absolute inset-0 z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a]" />
                   )}
