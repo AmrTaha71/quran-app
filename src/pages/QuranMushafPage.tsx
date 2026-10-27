@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
 import { SURAHS } from '../lib/surahs';
@@ -107,6 +107,43 @@ function WorshipTimer({ dark }: { dark?: boolean }) {
       <Clock className="w-4 h-4" />
       بقالك {formatWorship(total)} بتتعبد بحفظ كتاب الله
     </span>
+  );
+}
+
+// Facing-page strip image with deterministic presence. A transient
+// load failure used to hide the strip silently (onError ->
+// display:none), so the strip popped in and out page by page and
+// read as a shake while flipping. Now a first failure retries once
+// with a cache-busting URL (bypasses any bad cache entry and
+// re-attempts transient network failures); a second failure renders
+// a placeholder with the facing page number instead of vanishing,
+// so the strip is always present. Keyed by facing page at the call
+// site, so the attempt state resets on every page turn.
+function FacingStripImg({ src, pageNo, className, style }: {
+  src: string;
+  pageNo: number;
+  className: string;
+  style: CSSProperties | undefined;
+}) {
+  const [attempt, setAttempt] = useState(0);
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-[#f5f0e1]">
+        <span className="text-[#8a7a4a] font-bold text-2xl">{pageNo}</span>
+      </div>
+    );
+  }
+  const url = attempt === 0 ? src : `${src}${src.includes('?') ? '&' : '?'}sw-retry=1`;
+  return (
+    <img
+      src={url}
+      alt=""
+      draggable={false}
+      onError={() => { if (attempt === 0) setAttempt(1); else setFailed(true); }}
+      className={className}
+      style={style}
+    />
   );
 }
 
@@ -2093,8 +2130,7 @@ export default function QuranMushafPage({
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
                 {hasFacingPage && (
                   <div className="absolute top-1/2 -translate-y-1/2 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? `calc(min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})` : '100%' }} title="الصفحة المقابلة">
-                    <img key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} alt="" draggable={false}
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    <FacingStripImg key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} pageNo={facingPage}
                       // Madinah: a window into the facing page at the
                       // main page's scale and vertical alignment. The
                       // window is pinned to the LEFT on every page (the

@@ -8,14 +8,16 @@
    - Mushaf page images (cdn.jsdelivr.net, both sufone + QuranHub):
      cache-first, bounded (only pages the user actually visited — the
      full 604 pages are NEVER prefetched). Cache-first also means a
-     visited page opens instantly on later visits.
+     visited page opens instantly on later visits. NOTE: <img>
+     responses are opaque (ok is false), so the cache rule accepts
+     opaque responses — a res.ok-only check would cache nothing.
    - Everything else (Supabase API, storage audio, third-party): network
      only, never cached — auth and fresh data must not go stale.
    A new deploy ships a new file (new cache names on version bump), and
    skipWaiting + clients.claim make the update take effect promptly. */
 
 const SHELL_CACHE = 'quran-shell-v1';
-const IMG_CACHE = 'quran-pages-v1';
+const IMG_CACHE = 'quran-pages-v2';
 const MAX_IMG_ENTRIES = 150;
 
 async function trimCache(cacheName, maxEntries) {
@@ -69,21 +71,32 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Mushaf page images: cache-first, bounded.
+  // Mushaf page images: cache-first, bounded. Two rules that matter:
+  // (1) <img> requests are no-cors, so their responses are OPAQUE
+  // (status 0, ok false) — checking res.ok alone would cache nothing
+  // and offline pages could never load; opaque responses ARE
+  // cacheable, so they are stored too. (2) A cache failure must
+  // never break the image: every cache step is guarded and any
+  // failure falls through to a plain network fetch.
   if (url.hostname === 'cdn.jsdelivr.net') {
     event.respondWith(
-      caches.match(req).then((cached) => {
-        if (cached) return cached;
-        return fetch(req).then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(IMG_CACHE).then((cache) => {
-              cache.put(req, copy).then(() => trimCache(IMG_CACHE, MAX_IMG_ENTRIES));
-            }).catch(() => {});
+      (async () => {
+        try {
+          const cached = await caches.match(req);
+          if (cached) return cached;
+          const res = await fetch(req);
+          if (res.ok || res.type === 'opaque') {
+            caches.open(IMG_CACHE).then((cache) =>
+              cache.put(req, res.clone())
+                .then(() => trimCache(IMG_CACHE, MAX_IMG_ENTRIES))
+                .catch(() => {})
+            ).catch(() => {});
           }
           return res;
-        });
-      })
+        } catch {
+          return fetch(req);
+        }
+      })()
     );
     return;
   }
