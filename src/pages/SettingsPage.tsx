@@ -77,14 +77,21 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { localStorage.setItem('quran-link-voice', v); } catch {}
     saved();
   };
-  // Daily wird configuration (same storage the لوحتي card reads, so a
-  // change here shows on the card at once; streak and done days are
-  // untouched — this only changes type + pages per day).
+  // Daily wird configuration: the FIRST section in Settings. The
+  // controls edit a draft only; nothing reaches the لوحتي card
+  // until the user presses حفظ. Streak and done days are untouched
+  // — this only changes type + pages per day.
   const [wird, setWird] = useState(loadWird);
-  const updateWird = (patch: Partial<WirdState>) => {
-    const next = { ...wird, ...patch };
-    setWird(next);
-    saveWird(next);
+  const [draftWird, setDraftWird] = useState(wird);
+  const [justSavedWird, setJustSavedWird] = useState(false);
+  const updateDraftWird = (patch: Partial<WirdState>) => {
+    setDraftWird((d) => ({ ...d, ...patch }));
+    setJustSavedWird(false);
+  };
+  const saveWirdChoice = () => {
+    saveWird(draftWird);
+    setWird(draftWird);
+    setJustSavedWird(true);
     saved();
   };
   const resetDefaults = () => {
@@ -122,6 +129,46 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {/* Daily wird — FIRST section by request: the user picks
+            type + pages, presses حفظ, and the saved wird shows in a
+            line right under the button. The لوحتي card reads the
+            saved value, so it only changes on save. */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+            <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
+          </h2>
+          <p className="text-sm text-accent-500 mb-4">اختار نوع الورد وعدد صفحات اليوم، وبعدين اضغط حفظ — وهيظهر لك وردك المسجل في سطر تحت الزرار.</p>
+          <p className="text-sm font-semibold text-accent-700 mb-2">نوع الورد</p>
+          <div className="flex gap-2 mb-5 flex-wrap">
+            {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
+              <button key={k} onClick={() => updateDraftWird({ type: k })}
+                className={`px-3 py-1.5 text-sm font-bold rounded-full transition-smooth ${draftWird.type === k ? 'bg-amber-500 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                {WIRD_TYPE_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm font-semibold text-accent-700 mb-2">صفحات اليوم</p>
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => updateDraftWird({ target: Math.max(1, draftWird.target - 1) })}
+              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
+            <span className="text-lg font-bold text-accent-800 w-8 text-center">{draftWird.target.toLocaleString('ar-EG')}</span>
+            <button onClick={() => updateDraftWird({ target: Math.min(10, draftWird.target + 1) })}
+              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
+          </div>
+          <button onClick={saveWirdChoice}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl transition-smooth">
+            حفظ
+          </button>
+          {justSavedWird && (
+            <p className="mt-3 flex items-center gap-1.5 text-sm font-bold text-emerald-700">
+              <Check className="w-4 h-4" /> تم الحفظ
+            </p>
+          )}
+          <p className="mt-2 text-sm font-semibold text-accent-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            وردك اليومي المسجل: {WIRD_TYPE_LABEL[wird.type]} — {wird.target.toLocaleString('ar-EG')} {wird.target === 1 ? 'صفحة' : wird.target === 2 ? 'صفحتين' : 'صفحات'} يوميًا
+          </p>
+        </section>
+
         {/* Page look — the section the user asked for by name */}
         <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
@@ -201,33 +248,6 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </div>
           {!voicePref && <p className="text-xs text-accent-400 mt-2">لم تختر بعد — التطبيق يستخدم الصوت الافتراضي حسب الجنس المسجل.</p>}
-        </section>
-
-        {/* Daily wird configuration — the لوحتي card shows the wird
-            and its start/complete actions; the type + pages choice
-            lives here, in Settings. */}
-        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
-            <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
-          </h2>
-          <p className="text-sm text-accent-500 mb-4">نوع الورد وعدد صفحات اليوم — بيتطبق على بطاقة وردك اليومي في لوحتي.</p>
-          <p className="text-sm font-semibold text-accent-700 mb-2">نوع الورد</p>
-          <div className="flex gap-2 mb-5 flex-wrap">
-            {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
-              <button key={k} onClick={() => updateWird({ type: k })}
-                className={`px-3 py-1.5 text-sm font-bold rounded-full transition-smooth ${wird.type === k ? 'bg-amber-500 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
-                {WIRD_TYPE_LABEL[k]}
-              </button>
-            ))}
-          </div>
-          <p className="text-sm font-semibold text-accent-700 mb-2">صفحات اليوم</p>
-          <div className="flex items-center gap-3">
-            <button onClick={() => updateWird({ target: Math.max(1, wird.target - 1) })}
-              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
-            <span className="text-lg font-bold text-accent-800 w-8 text-center">{wird.target.toLocaleString('ar-EG')}</span>
-            <button onClick={() => updateWird({ target: Math.min(10, wird.target + 1) })}
-              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
-          </div>
         </section>
 
         {/* Language */}
