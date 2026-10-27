@@ -633,7 +633,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <p>لا توجد روابط بانتظار المراجعة</p>
                 </div>
               ) : (
-                pendingLinks.slice(0, pendingVisible).map((link) => {
+                <>
+                  {pendingLinks.slice(0, pendingVisible).map((link) => {
                   const verse = pendingVerses[link.verse_id];
                   return (
                     <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
@@ -738,13 +739,14 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       </div>
                     </div>
                   );
-                })}
-                {pendingVisible < pendingLinks.length && (
+                  })}
+                  {pendingVisible < pendingLinks.length && (
                   <button onClick={() => setPendingVisible((v) => v + 50)}
                     className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-semibold rounded-lg border border-amber-200">
                     عرض المزيد ({pendingLinks.length - pendingVisible} متبقية)
                   </button>
                 )}
+                </>
               )}
             </div>
           </div>
