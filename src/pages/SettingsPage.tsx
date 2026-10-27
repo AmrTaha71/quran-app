@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays } from 'lucide-react';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
+import { loadWird, saveWird, WIRD_TYPE_LABEL, type WirdState, type WirdType } from '../lib/wird';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
 
@@ -74,6 +75,16 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const pickVoice = (v: 'male' | 'female') => {
     setVoicePref(v);
     try { localStorage.setItem('quran-link-voice', v); } catch {}
+    saved();
+  };
+  // Daily wird configuration (same storage the لوحتي card reads, so a
+  // change here shows on the card at once; streak and done days are
+  // untouched — this only changes type + pages per day).
+  const [wird, setWird] = useState(loadWird);
+  const updateWird = (patch: Partial<WirdState>) => {
+    const next = { ...wird, ...patch };
+    setWird(next);
+    saveWird(next);
     saved();
   };
   const resetDefaults = () => {
@@ -190,6 +201,33 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </div>
           {!voicePref && <p className="text-xs text-accent-400 mt-2">لم تختر بعد — التطبيق يستخدم الصوت الافتراضي حسب الجنس المسجل.</p>}
+        </section>
+
+        {/* Daily wird configuration — the لوحتي card shows the wird
+            and its start/complete actions; the type + pages choice
+            lives here, in Settings. */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+            <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
+          </h2>
+          <p className="text-sm text-accent-500 mb-4">نوع الورد وعدد صفحات اليوم — بيتطبق على بطاقة وردك اليومي في لوحتي.</p>
+          <p className="text-sm font-semibold text-accent-700 mb-2">نوع الورد</p>
+          <div className="flex gap-2 mb-5 flex-wrap">
+            {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
+              <button key={k} onClick={() => updateWird({ type: k })}
+                className={`px-3 py-1.5 text-sm font-bold rounded-full transition-smooth ${wird.type === k ? 'bg-amber-500 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                {WIRD_TYPE_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm font-semibold text-accent-700 mb-2">صفحات اليوم</p>
+          <div className="flex items-center gap-3">
+            <button onClick={() => updateWird({ target: Math.max(1, wird.target - 1) })}
+              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
+            <span className="text-lg font-bold text-accent-800 w-8 text-center">{wird.target.toLocaleString('ar-EG')}</span>
+            <button onClick={() => updateWird({ target: Math.min(10, wird.target + 1) })}
+              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
+          </div>
         </section>
 
         {/* Language */}

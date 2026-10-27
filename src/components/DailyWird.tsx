@@ -1,48 +1,11 @@
 import { useState } from 'react';
-import { CalendarDays, Flame, BookOpen, Check } from 'lucide-react';
+import { CalendarDays, Flame, BookOpen, Check, Settings } from 'lucide-react';
+import { loadWird, saveWird, WIRD_TYPE_LABEL, type WirdState } from '../lib/wird';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
-type WirdType = 'sabaq' | 'murajaa' | 'manzil';
-
-const WIRD_KEY = 'quran-wird-v1';
-
-const TYPE_LABEL: Record<WirdType, string> = {
-  sabaq: 'سبق (جديد)',
-  murajaa: 'مراجعة',
-  // Display name only (the stored key stays 'manzil'): "المحفوظ القديم"
-  // reads clearly, unlike "منزل" which users did not understand, and
-  // unlike "ما تم مراجعته من قبل" which would collide with مراجعة.
-  manzil: 'المحفوظ القديم',
-};
-
-interface WirdState {
-  target: number;
-  type: WirdType;
-  streak: number;
-  lastDone: string; // YYYY-MM-DD local, '' when never
-  doneDays: string[]; // dates marked done
-}
-
 function todayStr(d = new Date()): string {
   return d.toLocaleDateString('en-CA');
-}
-
-function loadWird(): WirdState {
-  try {
-    const raw = localStorage.getItem(WIRD_KEY);
-    if (raw) {
-      const p = JSON.parse(raw);
-      if (typeof p.target === 'number' && typeof p.streak === 'number' && Array.isArray(p.doneDays)) {
-        return { target: p.target, type: p.type || 'sabaq', streak: p.streak, lastDone: p.lastDone || '', doneDays: p.doneDays };
-      }
-    }
-  } catch {}
-  return { target: 2, type: 'sabaq', streak: 0, lastDone: '', doneDays: [] };
-}
-
-function saveWird(s: WirdState) {
-  try { localStorage.setItem(WIRD_KEY, JSON.stringify(s)); } catch {}
 }
 
 // Daily wird card (v1, localStorage only): a pages-per-day target, a
@@ -91,30 +54,18 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
       </div>
       <p className="text-sm text-accent-500 mb-4">
         {doneToday
-          ? `تم ورد اليوم (${TYPE_LABEL[wird.type]} — ${wird.target.toLocaleString('ar-EG')} صفحة). تقبل الله منك.`
-          : `ورد اليوم: ${TYPE_LABEL[wird.type]} — ${wird.target.toLocaleString('ar-EG')} صفحة. اقرأها ثم علّمها منجزة.`}
+          ? `تم ورد اليوم (${WIRD_TYPE_LABEL[wird.type]} — ${wird.target.toLocaleString('ar-EG')} صفحة). تقبل الله منك.`
+          : `ورد اليوم: ${WIRD_TYPE_LABEL[wird.type]} — ${wird.target.toLocaleString('ar-EG')} صفحة. اقرأها ثم علّمها منجزة.`}
       </p>
 
-      {!doneToday && (
-        <>
-          <div className="flex gap-2 mb-3 flex-wrap">
-            {(Object.keys(TYPE_LABEL) as WirdType[]).map((k) => (
-              <button key={k} onClick={() => update({ type: k })}
-                className={`px-3 py-1.5 text-sm font-bold rounded-full transition-smooth ${wird.type === k ? 'bg-amber-500 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
-                {TYPE_LABEL[k]}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-sm font-bold text-accent-700">صفحات اليوم:</span>
-            <button onClick={() => update({ target: Math.max(1, wird.target - 1) })}
-              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
-            <span className="text-lg font-bold text-accent-800 w-8 text-center">{wird.target.toLocaleString('ar-EG')}</span>
-            <button onClick={() => update({ target: Math.min(10, wird.target + 1) })}
-              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
-          </div>
-        </>
-      )}
+      {/* Configuration moved to Settings: the card shows the wird and
+          its start/complete actions; type + pages are chosen in
+          الإعدادات (this link), always available — even after today
+          is marked done, so tomorrow's wird can be set any time. */}
+      <button onClick={() => onNavigate('settings')}
+        className="flex items-center gap-1.5 text-sm font-bold text-amber-700 hover:text-amber-800 mb-4">
+        <Settings className="w-4 h-4" /> تعديل الورد من الإعدادات
+      </button>
 
       <div className="flex gap-2">
         <button onClick={() => onNavigate('mushaf')}
