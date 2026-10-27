@@ -70,7 +70,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
           <div>
             <h1 className="text-lg font-bold text-accent-800">روابط الذكر الحكيم</h1>
-            <p className="text-sm text-accent-500">الرئيسية</p>
+            <p className="text-sm text-accent-500">للحفظ بالتربيطات</p>
           </div>
         </div>
       </header>
@@ -80,6 +80,9 @@ export default function HomeStartPage({ session, onNavigate }: {
           <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
           <p className="text-sm text-accent-500 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
+          </p>
+          <p className="text-sm text-emerald-700 font-semibold mt-2">
+            هنا بتحفظ بالتربيط: اضغط أي آية في المصحف وشوف روابطها.
           </p>
         </div>
 
@@ -96,7 +99,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2"
           >
             <BookOpen className="w-5 h-5" />
-            {lastPage.visited ? `أكمل القراءة — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف'}
+            {lastPage.visited ? `أكمل الحفظ — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف للحفظ'}
           </button>
         </div>
 

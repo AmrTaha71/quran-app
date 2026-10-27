@@ -94,8 +94,8 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
           </h2>
           <p className="text-xl text-accent-600 mb-10 max-w-2xl mx-auto leading-relaxed">
             {(lang === 'ar' || lang === 'ar-EG')
-              ? 'تطبيق لربط آيات القرآن ببعضها ومحاولة تيسير حفظ القرآن عبر تربيطات متنوعة.'
-              : 'An app for linking Quran verses together to facilitate memorization through various connections.'}
+              ? 'احفظ القرآن بالتربيطات: كل آية مربوطة بما قبلها وما بعدها، عشان تثبت في ذهنك.'
+              : 'Memorize the Quran through links: every ayah connected to what comes before and after it, so it sticks.'}
           </p>
 
           <div className="flex flex-col items-center gap-6 mb-10">
@@ -124,7 +124,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               className="flex items-center gap-2 px-8 py-4 bg-amber-600 hover:bg-amber-700 text-white text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-smooth"
             >
               <BookMarked className="w-6 h-6" />
-              المصحف الشريف
+              افتح المصحف للحفظ
             </button>
           </div>
 

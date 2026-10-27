@@ -239,13 +239,13 @@ export default function QuranMushafPage({
   // and when the native-fullscreen banner appears/disappears, so
   // every tap that toggled the chrome recomputed coverNorm and the
   // paper zoomed ~10% (at aspect 0.85 the frame-cap binds, at 0.70
-  // it does not) — and the cover wrapper is 100svh tall while the
+  // it does not) — and the cover wrapper is 100dvh tall while the
   // norm is in % of innerHeight, so the two disagreed whenever the
   // chrome was hidden. The aspect is therefore FROZEN: it is set
   // once when fullscreen opens (so entry geometry matches the
   // screen the user is actually looking at) and only on a real
   // rotation (orientationchange, width/height swap), never on a
-  // chrome resize. With a frozen aspect + a 100vw x 100svh wrapper,
+  // chrome resize. With a frozen aspect + a 100vw x 100dvh wrapper,
   // every page's paper rect is the same pixels on every turn,
   // chrome state or not. Tap precision is unaffected: the tap
   // mapping reads the same frozen norm as the rendered percentages.
@@ -263,6 +263,20 @@ export default function QuranMushafPage({
       window.removeEventListener('orientationchange', update);
     };
   }, []);
+  // FULLSCREEN 100%: entering/exiting NATIVE fullscreen changes the real
+  // viewport (chrome gone = taller viewport), unlike a chrome show/hide
+  // toggle — so the frozen aspect must re-freeze exactly here, or the
+  // paper keeps the pre-native size and a band is left on screen.
+  useEffect(() => {
+    if (!showFullscreen) return;
+    const update = () => setViewportAspect(window.innerWidth / Math.max(1, window.innerHeight));
+    document.addEventListener('fullscreenchange', update);
+    document.addEventListener('webkitfullscreenchange', update);
+    return () => {
+      document.removeEventListener('fullscreenchange', update);
+      document.removeEventListener('webkitfullscreenchange', update);
+    };
+  }, [showFullscreen]);
   const [showRatelIntro, setShowRatelIntro] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showEditionPicker, setShowEditionPicker] = useState(false);
@@ -1761,7 +1775,9 @@ export default function QuranMushafPage({
   useEffect(() => {
     if (!startInFollow) return;
     if (!followActiveRef.current) enterFollowMode();
-    else setShowFullscreen(true);
+    // Re-entry is not a gesture, so a native request here may be
+    // refused silently (fire-and-forget) — the app overlay still opens.
+    else { setShowFullscreen(true); requestNativeFullscreen(); }
     // Only when the route switches to follow; enterFollowMode is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startInFollow]);
@@ -2177,7 +2193,7 @@ export default function QuranMushafPage({
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               الحق الإمام شغال
             </span>
-            <button onClick={() => setShowFullscreen(true)}
+            <button onClick={() => { setShowFullscreen(true); requestNativeFullscreen(); }}
               className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg">
               العودة للمتابعة
             </button>
@@ -2646,8 +2662,8 @@ export default function QuranMushafPage({
                   className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
-                      ? { width: '100vw', height: '100svh', background: '#ffffff' }
-                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh)` })
+                      ? { width: '100vw', height: '100dvh', background: '#ffffff' }
+                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)` })
                     : { aspectRatio: String(imgAspect) }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2894,9 +2910,9 @@ export default function QuranMushafPage({
                           green button on top, not just a tab. Tapping it
                           always shows the links; the ring marks it active. */}
                       <button onClick={() => setPopupTab('links')}
-                        className={`w-full mb-3 py-3 rounded-xl text-base font-bold transition-smooth flex items-center justify-center gap-2 ${popupTab === 'links' ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
-                        <Link className="w-5 h-5" />
-                        الروابط
+                        className={`w-full mb-3 py-3 rounded-xl transition-smooth flex flex-col items-center justify-center gap-0.5 ${popupTab === 'links' ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                        <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
+                        <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
                       </button>
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
