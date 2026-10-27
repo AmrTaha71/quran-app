@@ -445,7 +445,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <h2 className="font-bold text-accent-800">سمّع لنفسك</h2>
             </div>
             <p className="text-sm text-accent-500 leading-relaxed flex-1">
-              بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٥ ثواني وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة.
+              بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٥ ثواني وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة. ولو المتصفح مش بيدعم الميكروفون، التقييم بيبقى يدوي.
             </p>
             <button onClick={() => onNavigate('test')}
               className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">

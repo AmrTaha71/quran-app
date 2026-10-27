@@ -40,10 +40,40 @@ function loadHistory(): TestRecord[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
     const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr : [];
+    if (!Array.isArray(arr)) return [];
+    // Shape-validate: a corrupt record used to render NaN% in the list.
+    return arr.filter((r) => r && typeof r.correct === 'number' && typeof r.total === 'number' && Number.isFinite(r.correct) && Number.isFinite(r.total));
   } catch {
     return [];
   }
+}
+
+// Unfinished-test progress (persist + resume): leaving mid-test
+// used to destroy the test silently, because progress lived only in
+// component state. Now every grade/skip/index change saves here, and
+// the setup screen offers to resume it.
+const PROGRESS_KEY = 'quran-test-progress';
+interface TestProgress {
+  surah: number;
+  from: number;
+  to: number;
+  index: number;
+  grades: boolean[];
+  skipped: boolean[];
+}
+function loadProgress(): TestProgress | null {
+  try {
+    const raw = localStorage.getItem(PROGRESS_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (typeof p.surah === 'number' && typeof p.from === 'number' && typeof p.to === 'number' && typeof p.index === 'number' && Array.isArray(p.grades) && Array.isArray(p.skipped)) return p as TestProgress;
+    return null;
+  } catch {
+    return null;
+  }
+}
+function saveProgress(p: TestProgress) {
+  try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch {}
 }
 
 // Expected ayah words, keeping the original (diacritized) form for
@@ -54,23 +84,56 @@ function expectedWordList(ayahText: string): { orig: string; norm: string }[] {
   return ayahText
     .split(/\s+/)
     .filter(Boolean)
-    .map((w) => ({ orig: w, norm: normalizeArabic(w) }))
+    .map((w) => ({ orig: w, norm: cleanToken(normalizeArabic(w)) }))
     .filter((x) => x.norm.length > 0 && /[\u0621-\u064A]/.test(x.norm));
+}
+
+// Spoken tokens for comparison: the normalizer strips diacritics but
+// NOT punctuation, so a transcript "والله،" never equaled "والله".
+// Strip every non-Arabic letter from both sides before aligning.
+function cleanToken(t: string): string {
+  return t.replace(/[^\u0621-\u064A]/g, '');
+}
+function spokenTokens(text: string): string[] {
+  return normalizeWords(text).map(cleanToken).filter(Boolean);
 }
 
 // Greedy in-order alignment: every expected word must appear in the
 // spoken words, in order. Extra spoken words (basmalah, isti'adha,
 // a repeated word) are ignored — they never consume an expected word.
 // A skipped or misspoken word stays unmatched: that is the wrong part.
+// Joined words: mushaf tokens are sometimes written joined
+// (يَـٰٓأَيُّهَا -> one token) while speech splits them (يا + أيها),
+// and vice versa (مِن + مَّا spoken as one مما, with the ن assimilated
+// into the م). A bounded 2-token lookahead on both sides handles
+// these without ever matching out of order.
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean } {
   const matched = new Array(expected.length).fill(false);
   let j = 0;
-  for (let i = 0; i < expected.length; i++) {
+  let i = 0;
+  while (i < expected.length) {
     let found = -1;
     for (let k = j; k < spoken.length; k++) {
       if (spoken[k] === expected[i]) { found = k; break; }
     }
-    if (found >= 0) { matched[i] = true; j = found + 1; }
+    if (found >= 0) { matched[i] = true; j = found + 1; i++; continue; }
+    let joined = -1;
+    for (let k = j; k + 1 < spoken.length; k++) {
+      if (spoken[k] + spoken[k + 1] === expected[i]) { joined = k; break; }
+    }
+    if (joined >= 0) { matched[i] = true; j = joined + 2; i++; continue; }
+    if (i + 1 < expected.length) {
+      const pair = expected[i] + expected[i + 1];
+      const assimilated = expected[i].endsWith('ن') && expected[i + 1].startsWith('م')
+        ? expected[i].slice(0, -1) + expected[i + 1]
+        : '';
+      let foundPair = -1;
+      for (let k = j; k < spoken.length; k++) {
+        if (spoken[k] === pair || (assimilated && spoken[k] === assimilated)) { foundPair = k; break; }
+      }
+      if (foundPair >= 0) { matched[i] = true; matched[i + 1] = true; j = foundPair + 1; i += 2; continue; }
+    }
+    i++;
   }
   return { matched, allMatched: matched.every(Boolean) };
 }
@@ -180,9 +243,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [countdown, setCountdown] = useState(CORRECT_WINDOW_S);
-  const [wrongOrigWords, setWrongOrigWords] = useState<string[]>([]);
+  const [wrongIndices, setWrongIndices] = useState<number[]>([]);
+  const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
+  const [skipped, setSkipped] = useState<boolean[]>([]);
   const [micError, setMicError] = useState('');
   const [manualMode, setManualMode] = useState(false);
+  const [savedProgress, setSavedProgress] = useState<TestProgress | null>(loadProgress);
+
+  // Manual preference survives ayah changes (the old code reset it
+  // every ayah, so a manual user had to re-tap it each time).
+  const manualPreferredRef = useRef(false);
 
   // Refs: the single source of truth inside recognition callbacks.
   const recRef = useRef<any>(null);
@@ -194,6 +264,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     finals: '',
     micState: 'idle' as MicState,
     grades: [] as boolean[],
+    skipped: [] as boolean[],
+    correctingTargets: [] as string[],
+    windowStartLen: 0,
   });
 
   const surahCount = SURAH_AYAH_COUNTS[surah - 1] || 1;
@@ -221,30 +294,37 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setTranscript('');
     setInterim('');
     setCountdown(CORRECT_WINDOW_S);
-    setWrongOrigWords([]);
+    setWrongIndices([]);
     setMicError('');
-    setManualMode(false);
+    setManualMode(manualPreferredRef.current);
   };
 
-  // Stop everything on unmount (mic, timers) so nothing keeps running
-  // after leaving the page. Deps [] on purpose: only refs are touched.
+  // Stop everything on unmount. This MUST go through stopRec (not a
+  // bare stop()): stop() fires onend asynchronously, and onend
+  // restarts recognition unless userStopRef is set — the old bare
+  // stop() here left the mic running on a detached page. Deps [] on
+  // purpose: only refs are touched.
   useEffect(() => () => {
-    try { recRef.current?.stop(); } catch {}
-    if (quietTimerRef.current) clearTimeout(quietTimerRef.current);
-    if (windowTimerRef.current) clearInterval(windowTimerRef.current);
+    stopRec();
+    clearTimers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startTest = async () => {
-    const lo = Math.max(1, Math.min(from, surahCount));
-    const hi = Math.max(lo, Math.min(to, surahCount));
+  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null) => {
+    // Swap-aware range: the old code clamped from/to independently,
+    // so من=10، إلى=5 tested only ayah 10 while the UI displayed
+    // "5 إلى 10". The display formula and the tested range now agree.
+    const count = SURAH_AYAH_COUNTS[surahNo - 1] || 1;
+    const lo = Math.max(1, Math.min(fromNo, toNo, count));
+    const hi = Math.min(Math.max(fromNo, toNo), count);
+    setSurah(surahNo);
     setError('');
     setLoading(true);
     try {
       const { data, error: qErr } = await supabase
         .from('quran_verses')
         .select('id, surah_no, ayah_no, ayah_text')
-        .eq('surah_no', surah)
+        .eq('surah_no', surahNo)
         .gte('ayah_no', lo)
         .lte('ayah_no', hi)
         .order('ayah_no', { ascending: true });
@@ -257,19 +337,36 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setFrom(lo);
       setTo(hi);
       setAyahs(data as TestAyah[]);
-      const fresh = new Array(data.length).fill(false);
-      setGrades(fresh);
-      liveRef.current.grades = fresh;
-      setIndex(0);
+      const n = data.length;
+      const fresh = new Array(n).fill(false);
+      const grades0 = restore && Array.isArray(restore.grades) && restore.grades.length === n ? restore.grades.map(Boolean) : fresh;
+      const skipped0 = restore && Array.isArray(restore.skipped) && restore.skipped.length === n ? restore.skipped.map(Boolean) : fresh.slice();
+      const index0 = restore ? Math.max(0, Math.min(restore.index, n - 1)) : 0;
+      setGrades(grades0);
+      liveRef.current.grades = grades0;
+      setSkipped(skipped0);
+      liveRef.current.skipped = skipped0;
+      setWrongByAyah({});
+      setWrongIndices([]);
+      setIndex(index0);
       setRevealed(false);
-      liveRef.current.ayah = (data as TestAyah[])[0];
+      liveRef.current.ayah = (data as TestAyah[])[index0];
       resetMicState();
+      const prog: TestProgress = { surah: surahNo, from: lo, to: hi, index: index0, grades: grades0, skipped: skipped0 };
+      saveProgress(prog);
+      setSavedProgress(prog);
       setPhase('testing');
     } catch {
       setError('تعذر تحميل الآيات — تأكد من الاتصال بالإنترنت');
     } finally {
       setLoading(false);
     }
+  };
+
+  const resumeTest = () => {
+    const p = savedProgress;
+    if (!p) return;
+    void startTest(p.surah, p.from, p.to, { index: p.index, grades: p.grades, skipped: p.skipped });
   };
 
   // Manual v1 grading (fallback path + manual override): grades the
@@ -279,12 +376,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     next[index] = ok;
     liveRef.current.grades = next;
     setGrades(next);
+    // Grading an ayah clears its skipped flag (e.g. going back to a
+    // skipped ayah and grading it must not leave it "skipped").
+    const nextSkipped = [...liveRef.current.skipped];
+    nextSkipped[index] = false;
+    liveRef.current.skipped = nextSkipped;
+    setSkipped(nextSkipped);
     if (index + 1 < ayahs.length) {
       const nextAyah = ayahs[index + 1];
       liveRef.current.ayah = nextAyah;
       setIndex(index + 1);
       setRevealed(false);
       resetMicState();
+      saveProgress({ surah, from, to, index: index + 1, grades: next, skipped: nextSkipped });
     } else {
       finishTest(next);
     }
@@ -294,19 +398,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     stopRec();
     clearTimers();
     const correct = finalGrades.filter(Boolean).length;
+    const skippedCount = liveRef.current.skipped.filter(Boolean).length;
+    const attempted = Math.max(0, ayahs.length - skippedCount);
     const rec: TestRecord = {
       date: new Date().toISOString().slice(0, 10),
       surah,
       surahName,
       from,
       to,
-      total: ayahs.length,
+      total: attempted,
       correct,
     };
     const nextHistory = [rec, ...history].slice(0, 20);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory)); } catch {}
     setHistory(nextHistory);
     setPhase('done');
+    try { localStorage.removeItem(PROGRESS_KEY); } catch {}
+    setSavedProgress(null);
   };
 
   // ---- Mic engine ----------------------------------------------------
@@ -319,6 +427,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     next[index] = ok;
     liveRef.current.grades = next;
     setGrades(next);
+    const nextSkipped = [...liveRef.current.skipped];
+    nextSkipped[index] = false;
+    liveRef.current.skipped = nextSkipped;
+    setSkipped(nextSkipped);
+    saveProgress({ surah, from, to, index, grades: next, skipped: nextSkipped });
     if (ok) {
       playCorrectChime();
       liveRef.current.micState = 'done-correct';
@@ -326,9 +439,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     } else {
       playWrongBuzzer();
       const expected = expectedWordList(ayah.ayah_text);
-      const spoken = normalizeWords(liveRef.current.finals);
+      const spoken = spokenTokens(liveRef.current.finals);
       const { matched } = alignWords(expected.map((w) => w.norm), spoken);
-      setWrongOrigWords(expected.filter((_, i) => !matched[i]).map((w) => w.orig));
+      setWrongIndices(expected.map((_, i) => i).filter((i) => !matched[i]));
+      setWrongByAyah((prev) => ({ ...prev, [index]: expected.filter((_, i) => !matched[i]).map((w) => w.orig) }));
       liveRef.current.micState = 'done-wrong';
       setMicState('done-wrong');
     }
@@ -339,17 +453,31 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!ayah) return;
     if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
     const expected = expectedWordList(ayah.ayah_text);
-    const spoken = normalizeWords(liveRef.current.finals);
+    const spoken = spokenTokens(liveRef.current.finals);
     if (spoken.length === 0) return;
-    const { allMatched } = alignWords(expected.map((w) => w.norm), spoken);
+    // During the correction window, only the words that were wrong
+    // count — and only from speech AFTER the window opened. The old
+    // code re-checked the whole accumulated transcript, so reciting
+    // in pieces across the window passed without a full reading.
+    if (liveRef.current.micState === 'correcting') {
+      const targets = liveRef.current.correctingTargets;
+      if (targets.length > 0) {
+        const { allMatched } = alignWords(targets, spoken.slice(liveRef.current.windowStartLen));
+        if (allMatched) gradeMic(true);
+      }
+      return;
+    }
+    const { allMatched, matched } = alignWords(expected.map((w) => w.norm), spoken);
     if (allMatched) {
       gradeMic(true);
       return;
     }
-    // Mismatch: if this is the first one, open the 5s correction
-    // window (still listening). If already correcting, the clock just
-    // keeps running — the next heard words re-evaluate through here.
+    // Mismatch: open the 5s correction window (still listening).
+    // Record what was wrong and where the transcript stood, so the
+    // window judges only the correction, not the old speech.
     if (liveRef.current.micState === 'listening') {
+      liveRef.current.correctingTargets = expected.filter((_, i) => !matched[i]).map((w) => w.norm);
+      liveRef.current.windowStartLen = spoken.length;
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
       setCountdown(CORRECT_WINDOW_S);
@@ -366,6 +494,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         }
       }, 1000);
     }
+  };
+
+  // The "خلصت، قيّمها" button: unlike the timer paths (which must
+  // stay silent), a tap with zero spoken words gets a hint instead
+  // of silently doing nothing.
+  const evaluatePressed = () => {
+    if (spokenTokens(liveRef.current.finals).length === 0 && (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting')) {
+      setMicError('لسه ما سمعت حاجة — اقرأ الآية الأول وبعدين اضغط "خلصت، قيّمها"');
+      return;
+    }
+    evaluateNow();
   };
 
   const scheduleQuietEvaluate = () => {
@@ -387,9 +526,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting') return;
     setMicError('');
     liveRef.current.finals = '';
+    liveRef.current.correctingTargets = [];
+    liveRef.current.windowStartLen = 0;
     setTranscript('');
     setInterim('');
-    setWrongOrigWords([]);
+    setWrongIndices([]);
     userStopRef.current = false;
     const rec = new SR();
     rec.lang = currentSpeechLocale();
@@ -404,7 +545,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           setTranscript(liveRef.current.finals);
           // Spoken enough words to cover the ayah? Judge at once.
           const expectedLen = expectedWordList(liveRef.current.ayah?.ayah_text || '').length;
-          if (normalizeWords(liveRef.current.finals).length >= expectedLen) {
+          if (spokenTokens(liveRef.current.finals).length >= expectedLen) {
             evaluateNow();
           } else {
             scheduleQuietEvaluate();
@@ -462,6 +603,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setIndex(index + 1);
       setRevealed(false);
       resetMicState();
+      saveProgress({ surah, from, to, index: index + 1, grades: liveRef.current.grades, skipped: liveRef.current.skipped });
     } else {
       finishTest(liveRef.current.grades);
     }
@@ -473,11 +615,30 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setIndex(i);
     setRevealed(false);
     resetMicState();
+    saveProgress({ surah, from, to, index: i, grades: liveRef.current.grades, skipped: liveRef.current.skipped });
+  };
+
+  // Skipping is its own state now: a skipped ayah is NOT a failed
+  // one — it leaves the missed list and the score, and is reported
+  // separately as "تخطيت".
+  const skipAyah = () => {
+    const nextSkipped = [...liveRef.current.skipped];
+    nextSkipped[index] = true;
+    liveRef.current.skipped = nextSkipped;
+    setSkipped(nextSkipped);
+    if (index + 1 < ayahs.length) {
+      saveProgress({ surah, from, to, index: index + 1, grades: liveRef.current.grades, skipped: nextSkipped });
+      goToAyah(index + 1);
+    } else {
+      finishTest(liveRef.current.grades);
+    }
   };
 
   const correct = grades.filter(Boolean).length;
-  const missed = ayahs.filter((_, i) => !grades[i]);
-  const pct = ayahs.length > 0 ? Math.round((correct / ayahs.length) * 100) : 0;
+  const skippedCount = skipped.filter(Boolean).length;
+  const attempted = Math.max(0, ayahs.length - skippedCount);
+  const missed = ayahs.filter((_, i) => !grades[i] && !skipped[i]);
+  const pct = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
   const currentDone = revealed || micState === 'done-correct' || micState === 'done-wrong';
 
   const openInMushaf = (ayahNo: number) => {
@@ -494,7 +655,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           </div>
           <div>
             <h1 className="text-lg font-bold text-accent-800">سمّع لنفسك</h1>
-            <p className="text-sm text-accent-500">سمّع من حفظك، والبرنامج يصحح لك بالميكروفون</p>
+            <p className="text-sm text-accent-500">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
           <button onClick={() => onNavigate('app')}
             className="mr-auto flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg">
@@ -506,6 +667,24 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       <div className="max-w-5xl mx-auto px-4 py-6">
         {phase === 'setup' && (
           <div className="space-y-5">
+            {savedProgress && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
+                <p className="font-bold text-accent-800 mb-1">عندك اختبار غير مكتمل</p>
+                <p className="text-sm text-accent-600 mb-3">
+                  سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} — من آية {savedProgress.from.toLocaleString('ar-EG')} إلى آية {savedProgress.to.toLocaleString('ar-EG')}، واقف عند الآية رقم {savedProgress.index + 1}
+                </p>
+                <div className="flex gap-3">
+                  <button onClick={resumeTest}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
+                    استكمال الاختبار
+                  </button>
+                  <button onClick={() => { try { localStorage.removeItem(PROGRESS_KEY); } catch {} setSavedProgress(null); }}
+                    className="px-5 py-2.5 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                    تجاهل
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
               <label className="block">
                 <span className="text-sm font-bold text-accent-700">السورة</span>
@@ -540,7 +719,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية — النطاق المختار: {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}
               </p>
               {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-              <button onClick={startTest} disabled={loading}
+              <button onClick={() => void startTest()} disabled={loading}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                 {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
               </button>
@@ -558,7 +737,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {history.slice(0, 5).map((h, i) => (
                     <li key={i} className="flex items-center justify-between text-sm gap-2">
                       <span className="text-accent-700">سورة {h.surahName} — آيات {h.from} إلى {h.to}</span>
-                      <span className="font-bold text-emerald-700 whitespace-nowrap">{h.correct}/{h.total} ({Math.round((h.correct / h.total) * 100)}٪)</span>
+                      <span className="font-bold text-emerald-700 whitespace-nowrap">{h.correct}/{h.total} ({h.total > 0 ? Math.round((h.correct / h.total) * 100) : 0}٪)</span>
                       <span className="text-accent-400 whitespace-nowrap">{h.date}</span>
                     </li>
                   ))}
@@ -599,6 +778,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         className="mt-5 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white text-lg font-bold rounded-xl shadow">
                         أظهر الآية
                       </button>
+                      {micSupported && (
+                        <button onClick={() => { manualPreferredRef.current = false; setManualMode(false); }}
+                          className="mt-3 block mx-auto text-sm font-bold text-accent-500 hover:text-accent-700 underline">
+                          أو سمّع بالميكروفون بدل كده
+                        </button>
+                      )}
                     </>
                   ) : (
                     <>
@@ -629,9 +814,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               ) : micState === 'done-wrong' ? (
                 <>
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
-                  <p className="text-sm text-accent-500 mb-4">الكلمات اللي غلطت فيها أو نسيتها — راجعها، وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
-                  <p className="text-2xl leading-[2.2] font-bold text-red-600 tasmii-flash" dir="rtl">
-                    {wrongOrigWords.length > 0 ? wrongOrigWords.join(' ') : '—'}
+                  <p className="text-sm text-accent-500 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
+                  <p className="text-2xl leading-[2.2] font-bold" dir="rtl">
+                    {expectedWordList(ayahs[index].ayah_text).map((w, i) => (
+                      <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
+                    ))}
                   </p>
                   <button onClick={nextAfterMic}
                     className="mt-5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow">
@@ -653,7 +840,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto">
                         <Mic className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
-                      <button onClick={() => setManualMode(true)}
+                      <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}
                         className="mt-3 text-sm font-bold text-accent-500 hover:text-accent-700 underline">
                         أو قيّم نفسك يدوي بدل الميكروفون
                       </button>
@@ -684,7 +871,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </p>
                       )}
                       <div className="flex gap-3 justify-center">
-                        <button onClick={() => evaluateNow()}
+                        <button onClick={() => evaluatePressed()}
                           className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
                           خلصت، قيّمها
                         </button>
@@ -699,7 +886,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
                   )}
                   {micError && (
-                    <button onClick={() => { stopRec(); clearTimers(); setManualMode(true); }}
+                    <button onClick={() => { stopRec(); clearTimers(); manualPreferredRef.current = true; setManualMode(true); }}
                       className="mt-2 text-sm font-bold text-accent-600 underline">
                       قيّم يدوي بدل كده
                     </button>
@@ -714,10 +901,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30">
                 <ChevronRight className="w-5 h-5" /> الآية السابقة
               </button>
-              <button onClick={() => {
-                if (index + 1 < ayahs.length) goToAyah(index + 1);
-                else finishTest(liveRef.current.grades);
-              }}
+              <button onClick={skipAyah}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-accent-600 hover:bg-gray-100 rounded-lg">
                 {index + 1 < ayahs.length ? (<>تخطي الآية <ChevronLeft className="w-5 h-5" /></>) : 'إنهاء التسميع'}
               </button>
@@ -730,25 +914,31 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div className="space-y-5">
             <div className="bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-6 shadow-lg text-white text-center">
               <Award className="w-12 h-12 mx-auto mb-2 text-amber-200" />
-              <p className="text-2xl font-bold">نتيجتك: {correct} من {ayahs.length} ({pct}٪)</p>
+              <p className="text-2xl font-bold">نتيجتك: {correct} من {attempted} ({pct}٪)</p>
               <p className="text-emerald-50 mt-2 leading-relaxed">
                 {pct >= 90 ? 'ما شاء الله — حفظ متقن، ثبّت الله ما حفظت' : pct >= 60 ? 'تقدّم طيب — راجع الآيات التي أخطأت فيها ثم أعد التسميع' : 'لا بأس — التعثر أول طريق الإتقان، راجع الآيات ثم أعد المحاولة'}
               </p>
+              {skippedCount > 0 && (
+                <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
+              )}
             </div>
 
             {missed.length > 0 && (
               <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-5">
                 <h2 className="font-bold text-accent-800 mb-3">آيات تحتاج مراجعة ({missed.length})</h2>
                 <ul className="space-y-2">
-                  {missed.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-accent-700">سورة {surahName} — آية {a.ayah_no}</span>
-                      <button onClick={() => openInMushaf(a.ayah_no)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
-                        <BookOpen className="w-4 h-4" /> افتح في المصحف
-                      </button>
+                  {ayahs.map((a, i) => (!grades[i] && !skipped[i] ? (
+                    <li key={a.id} className="text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-accent-700">سورة {surahName} — آية {a.ayah_no}</span>
+                        <button onClick={() => openInMushaf(a.ayah_no)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
+                          <BookOpen className="w-4 h-4" /> افتح في المصحف
+                        </button>
+                      </div>
+                      {wrongByAyah[i]?.length ? <p className="text-red-600 text-xs mt-1">الكلمات الغلط: {wrongByAyah[i].join(' ')}</p> : null}
                     </li>
-                  ))}
+                  ) : null))}
                 </ul>
               </div>
             )}
