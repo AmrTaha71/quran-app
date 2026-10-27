@@ -28,6 +28,7 @@ export interface AyahLink {
   rephrase_command: string | null;
   created_by: string | null;
   created_at: string;
+  is_ai_draft?: boolean;
 }
 
 export interface RephrasedContent {
