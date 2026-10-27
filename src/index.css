@@ -59,3 +59,13 @@ body {
 .transition-smooth {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* Tasmii wrong-part flash: the missed words pulse red so the eye
+   lands on them at once. Gentle opacity pulse only — no layout shift. */
+@keyframes tasmii-flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.tasmii-flash {
+  animation: tasmii-flash 0.9s ease-in-out infinite;
+}

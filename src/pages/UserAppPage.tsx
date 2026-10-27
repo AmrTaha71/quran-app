@@ -11,7 +11,7 @@ import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   Heart, Bookmark, AlertTriangle, BadgeCheck, X, BookMarked, AlertCircle,
-  Volume2, Filter, Layers, Mic, GraduationCap,
+  Volume2, Filter, Layers, Mic,
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
@@ -441,11 +441,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <DailyWird onNavigate={onNavigate} />
           <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-1">
-              <GraduationCap className="w-5 h-5 text-emerald-600" />
-              <h2 className="font-bold text-accent-800">وضع التسميع الذاتي</h2>
+              <Mic className="w-5 h-5 text-emerald-600" />
+              <h2 className="font-bold text-accent-800">سمّع لنفسك</h2>
             </div>
             <p className="text-sm text-accent-500 leading-relaxed flex-1">
-              اختر سورة ونطاق آيات، سمّع من حفظك والنص مخفي، ثم أظهر الآية وقيّم نفسك — وفي النهاية نتيجتك والآيات التي تحتاج مراجعة.
+              بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٥ ثواني وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة.
             </p>
             <button onClick={() => onNavigate('test')}
               className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">

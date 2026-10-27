@@ -1480,9 +1480,12 @@ export default function QuranMushafPage({
       </header>
 
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* A personal word before reading — a daily dua for the reader */}
+        {/* A personal word before reading — a daily dua for the reader.
+            Prefixed with the intention reminder: whoever opens the
+            Mushaf is here to memorize or link memorization. Same quiet
+            line, no new chrome. */}
         <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-4">
-          <Heart className="w-4 h-4" /> {dailyDua()}
+          <Heart className="w-4 h-4" /> استحضر النية · {dailyDua()}
         </p>
 
         {/* Index info bar — Juz / Hizb / Surah */}
@@ -1535,12 +1538,12 @@ export default function QuranMushafPage({
               </button>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+              <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="تصغير الصفحة" aria-label="تصغير الصفحة"
                 className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
               <span className="text-sm text-accent-500 w-14 text-center font-semibold">{Math.round(zoom * 100)}%</span>
-              <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))}
+              <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
                 className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
-              <button onClick={openFullscreen}
+              <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
                 className="p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
               <button onClick={toggleGoldFrame} title="إطار ذهبي حول الصفحة"
                 className={`px-2.5 py-2 text-sm font-bold rounded-lg transition-smooth ${goldFrame ? 'bg-amber-200 text-amber-800 ring-1 ring-amber-400' : 'text-accent-600 hover:bg-amber-100'}`}>
@@ -1907,6 +1910,7 @@ export default function QuranMushafPage({
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); onNavigate('app'); } else { exitFullscreenView(); } }}
+              title="إغلاق"
               className="absolute top-4 right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
               <X className="w-7 h-7" />
             </button>
