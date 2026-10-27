@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { normalizeArabic, normalizeWords } from '../lib/arabicNormalize';
 import { currentSpeechLocale } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
@@ -26,6 +27,12 @@ interface TestRecord {
   to: number;
   total: number;
   correct: number;
+  // Cross-surah ranges (unit mode): start = surah/from, end below.
+  startGlobal?: number;
+  endGlobal?: number;
+  endSurah?: number;
+  endSurahName?: string;
+  endAyah?: number;
 }
 
 const HISTORY_KEY = 'quran-test-history';
@@ -60,13 +67,26 @@ interface TestProgress {
   index: number;
   grades: boolean[];
   skipped: boolean[];
+  startGlobal?: number;
+  endGlobal?: number;
+  endSurah?: number;
+  endAyah?: number;
 }
 function loadProgress(): TestProgress | null {
   try {
     const raw = localStorage.getItem(PROGRESS_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (typeof p.surah === 'number' && typeof p.from === 'number' && typeof p.to === 'number' && typeof p.index === 'number' && Array.isArray(p.grades) && Array.isArray(p.skipped)) return p as TestProgress;
+    if (typeof p.surah === 'number' && typeof p.from === 'number' && typeof p.to === 'number' && typeof p.index === 'number' && Array.isArray(p.grades) && Array.isArray(p.skipped)) {
+      // Old records (single-surah) carry no globals: derive them so
+      // resume always runs on a global range.
+      const base = SURAH_START_GLOBAL[p.surah - 1] || 1;
+      if (typeof p.startGlobal !== 'number') p.startGlobal = base + p.from - 1;
+      if (typeof p.endGlobal !== 'number') p.endGlobal = base + p.to - 1;
+      if (typeof p.endSurah !== 'number') p.endSurah = p.surah;
+      if (typeof p.endAyah !== 'number') p.endAyah = p.to;
+      return p as TestProgress;
+    }
     return null;
   } catch {
     return null;
@@ -223,6 +243,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [surah, setSurah] = useState(2);
   const [from, setFrom] = useState(1);
   const [to, setTo] = useState(5);
+  // Unit mode: start at the beginning of a surah/juz/hizb/quarter and
+  // end at the end of that unit, or at the end of a juz/hizb/surah.
+  const [startKind, setStartKind] = useState<UnitKind>('surah');
+  const [startNum, setStartNum] = useState(2);
+  const [endKind, setEndKind] = useState<EndKind>('same');
+  const [endNum, setEndNum] = useState(2);
+  const [rangeStart, setRangeStart] = useState<RangePoint | null>(null);
+  const [rangeEnd, setRangeEnd] = useState<RangePoint | null>(null);
+  const unitPreview = resolveRange(startKind, startNum, endKind, endNum);
+  const unitPreviewValid = unitPreview.end.global >= unitPreview.start.global;
   const [ayahs, setAyahs] = useState<TestAyah[]>([]);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -310,32 +340,41 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null) => {
-    // Swap-aware range: the old code clamped from/to independently,
-    // so من=10، إلى=5 tested only ayah 10 while the UI displayed
-    // "5 إلى 10". The display formula and the tested range now agree.
-    const count = SURAH_AYAH_COUNTS[surahNo - 1] || 1;
-    const lo = Math.max(1, Math.min(fromNo, toNo, count));
-    const hi = Math.min(Math.max(fromNo, toNo), count);
-    setSurah(surahNo);
+  // Progress for the CURRENT range: globals are the truth (a range
+  // can span surahs), surah/from/to stay as the display start/end.
+  const makeProgress = (index0: number, grades0: boolean[], skipped0: boolean[]): TestProgress => {
+    const s = rangeStart || globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + from - 1);
+    const e = rangeEnd || globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + to - 1);
+    return { surah: s.surah, from: s.ayah, to: e.ayah, index: index0, grades: grades0, skipped: skipped0, startGlobal: s.global, endGlobal: e.global, endSurah: e.surah, endAyah: e.ayah };
+  };
+
+  // Global-range test (unit mode + resume): verse ids are sequential
+  // 1..6236 in surah order, so id range = global ayah range.
+  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null) => {
+    const lo = Math.max(1, Math.min(startGlobal, endGlobal, 6236));
+    const hi = Math.min(Math.max(startGlobal, endGlobal), 6236);
+    const startPt = globalToPoint(lo);
+    const endPt = globalToPoint(hi);
+    setSurah(startPt.surah);
     setError('');
     setLoading(true);
     try {
       const { data, error: qErr } = await supabase
         .from('quran_verses')
         .select('id, surah_no, ayah_no, ayah_text')
-        .eq('surah_no', surahNo)
-        .gte('ayah_no', lo)
-        .lte('ayah_no', hi)
-        .order('ayah_no', { ascending: true });
+        .gte('id', lo)
+        .lte('id', hi)
+        .order('id', { ascending: true });
       if (qErr) throw qErr;
       if (!data || data.length === 0) {
         setError('لم أجد آيات في هذا النطاق — جرّب نطاقًا آخر');
         setLoading(false);
         return;
       }
-      setFrom(lo);
-      setTo(hi);
+      setFrom(startPt.ayah);
+      setTo(endPt.ayah);
+      setRangeStart(startPt);
+      setRangeEnd(endPt);
       setAyahs(data as TestAyah[]);
       const n = data.length;
       const fresh = new Array(n).fill(false);
@@ -352,7 +391,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setRevealed(false);
       liveRef.current.ayah = (data as TestAyah[])[index0];
       resetMicState();
-      const prog: TestProgress = { surah: surahNo, from: lo, to: hi, index: index0, grades: grades0, skipped: skipped0 };
+      const prog: TestProgress = { surah: startPt.surah, from: startPt.ayah, to: endPt.ayah, index: index0, grades: grades0, skipped: skipped0, startGlobal: lo, endGlobal: hi, endSurah: endPt.surah, endAyah: endPt.ayah };
       saveProgress(prog);
       setSavedProgress(prog);
       setPhase('testing');
@@ -363,10 +402,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
   };
 
+  // Manual mode wrapper: single-surah ayah range -> global range.
+  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null) => {
+    const count = SURAH_AYAH_COUNTS[surahNo - 1] || 1;
+    const lo = Math.max(1, Math.min(fromNo, toNo, count));
+    const hi = Math.min(Math.max(fromNo, toNo), count);
+    const base = SURAH_START_GLOBAL[surahNo - 1] || 1;
+    return startTestGlobal(base + lo - 1, base + hi - 1, restore);
+  };
+
   const resumeTest = () => {
     const p = savedProgress;
     if (!p) return;
-    void startTest(p.surah, p.from, p.to, { index: p.index, grades: p.grades, skipped: p.skipped });
+    if (typeof p.startGlobal === 'number' && typeof p.endGlobal === 'number') {
+      void startTestGlobal(p.startGlobal, p.endGlobal, { index: p.index, grades: p.grades, skipped: p.skipped });
+    } else {
+      void startTest(p.surah, p.from, p.to, { index: p.index, grades: p.grades, skipped: p.skipped });
+    }
   };
 
   // Manual v1 grading (fallback path + manual override): grades the
@@ -392,7 +444,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setIndex(index + 1);
       setRevealed(false);
       resetMicState();
-      saveProgress({ surah, from, to, index: index + 1, grades: next, skipped: nextSkipped });
+      saveProgress(makeProgress(index + 1, next, nextSkipped));
     } else {
       finishTest(next);
     }
@@ -412,6 +464,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       to,
       total: attempted,
       correct,
+      startGlobal: rangeStart?.global,
+      endGlobal: rangeEnd?.global,
+      endSurah: rangeEnd?.surah,
+      endSurahName: rangeEnd ? (SURAHS.find((s) => s.no === rangeEnd.surah)?.name || '') : undefined,
+      endAyah: rangeEnd?.ayah,
     };
     const nextHistory = [rec, ...history].slice(0, 20);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory)); } catch {}
@@ -435,7 +492,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     nextSkipped[index] = false;
     liveRef.current.skipped = nextSkipped;
     setSkipped(nextSkipped);
-    saveProgress({ surah, from, to, index, grades: next, skipped: nextSkipped });
+    saveProgress(makeProgress(index, next, nextSkipped));
     if (ok) {
       playCorrectChime();
       liveRef.current.micState = 'done-correct';
@@ -607,7 +664,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setIndex(index + 1);
       setRevealed(false);
       resetMicState();
-      saveProgress({ surah, from, to, index: index + 1, grades: liveRef.current.grades, skipped: liveRef.current.skipped });
+      saveProgress(makeProgress(index + 1, liveRef.current.grades, liveRef.current.skipped));
     } else {
       finishTest(liveRef.current.grades);
     }
@@ -619,7 +676,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setIndex(i);
     setRevealed(false);
     resetMicState();
-    saveProgress({ surah, from, to, index: i, grades: liveRef.current.grades, skipped: liveRef.current.skipped });
+    saveProgress(makeProgress(i, liveRef.current.grades, liveRef.current.skipped));
   };
 
   // Skipping is its own state now: a skipped ayah is NOT a failed
@@ -631,7 +688,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     liveRef.current.skipped = nextSkipped;
     setSkipped(nextSkipped);
     if (index + 1 < ayahs.length) {
-      saveProgress({ surah, from, to, index: index + 1, grades: liveRef.current.grades, skipped: nextSkipped });
+      saveProgress(makeProgress(index + 1, liveRef.current.grades, nextSkipped));
       goToAyah(index + 1);
     } else {
       finishTest(liveRef.current.grades);
@@ -645,8 +702,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const pct = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
   const currentDone = revealed || micState === 'done-correct' || micState === 'done-wrong';
 
-  const openInMushaf = (ayahNo: number) => {
-    try { localStorage.setItem(TARGET_KEY, JSON.stringify({ surah, ayah: ayahNo })); } catch {}
+  const openInMushaf = (surahNo: number, ayahNo: number) => {
+    try { localStorage.setItem(TARGET_KEY, JSON.stringify({ surah: surahNo, ayah: ayahNo })); } catch {}
     onNavigate('mushaf');
   };
 
@@ -675,7 +732,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
                 <p className="font-bold text-accent-800 mb-1">عندك اختبار غير مكتمل</p>
                 <p className="text-sm text-accent-600 mb-3">
-                  سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} — من آية {savedProgress.from.toLocaleString('ar-EG')} إلى آية {savedProgress.to.toLocaleString('ar-EG')}، واقف عند الآية رقم {savedProgress.index + 1}
+                  {savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah
+                    ? <>من سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} آية {savedProgress.from.toLocaleString('ar-EG')} إلى سورة {SURAHS.find((s) => s.no === savedProgress.endSurah)?.name || ''} آية {(savedProgress.endAyah || savedProgress.to).toLocaleString('ar-EG')}</>
+                    : <>سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} — من آية {savedProgress.from.toLocaleString('ar-EG')} إلى آية {savedProgress.to.toLocaleString('ar-EG')}</>}
+                  ، واقف عند الآية رقم {savedProgress.index + 1}
                 </p>
                 <div className="flex gap-3">
                   <button onClick={resumeTest}
@@ -690,6 +750,91 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </div>
             )}
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
+              <h2 className="font-bold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
+              <p className="text-sm text-accent-500 leading-relaxed">
+                ابدأ من أول سورة أو جزء أو حزب أو ربع، واخلص عند نهاية نفس الوحدة، أو عند نهاية حزب أو جزء أو سورة.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-sm font-bold text-accent-700">يبدأ من أول</span>
+                  <select value={startKind}
+                    onChange={(e) => {
+                      const k = e.target.value as UnitKind;
+                      const n = k === 'surah' ? 2 : 1;
+                      setStartKind(k);
+                      setStartNum(n);
+                      if (endKind !== 'same') setEndNum(containingUnit(endKind, unitStartGlobal(k, n)));
+                    }}
+                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    <option value="surah">سورة</option>
+                    <option value="juz">جزء</option>
+                    <option value="hizb">حزب</option>
+                    <option value="quarter">ربع</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-sm font-bold text-accent-700">{startKind === 'surah' ? 'السورة' : startKind === 'juz' ? 'رقم الجزء' : startKind === 'hizb' ? 'رقم الحزب' : 'رقم الربع'}</span>
+                  {startKind === 'surah' ? (
+                    <select value={startNum} onChange={(e) => setStartNum(Number(e.target.value))}
+                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                      {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
+                    </select>
+                  ) : (
+                    <input type="number" min={1} max={unitMax(startKind)} value={startNum}
+                      onChange={(e) => setStartNum(Math.max(1, Math.min(unitMax(startKind), Number(e.target.value) || 1)))}
+                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                  )}
+                </label>
+              </div>
+              <p className="text-sm text-accent-500">
+                يبدأ من: سورة {SURAHS.find((s) => s.no === unitPreview.start.surah)?.name || ''} آية {unitPreview.start.ayah.toLocaleString('ar-EG')} ({unitLabel(startKind, startNum)})
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-sm font-bold text-accent-700">لغاية نهاية</span>
+                  <select value={endKind}
+                    onChange={(e) => {
+                      const k = e.target.value as EndKind;
+                      setEndKind(k);
+                      if (k !== 'same') setEndNum(containingUnit(k, unitStartGlobal(startKind, startNum)));
+                    }}
+                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    <option value="same">نفس الوحدة</option>
+                    <option value="hizb">حزب</option>
+                    <option value="juz">جزء</option>
+                    <option value="surah">سورة</option>
+                  </select>
+                </label>
+                {endKind !== 'same' && (
+                  <label className="block">
+                    <span className="text-sm font-bold text-accent-700">{endKind === 'surah' ? 'السورة' : endKind === 'juz' ? 'رقم الجزء' : 'رقم الحزب'}</span>
+                    {endKind === 'surah' ? (
+                      <select value={endNum} onChange={(e) => setEndNum(Number(e.target.value))}
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
+                      </select>
+                    ) : (
+                      <input type="number" min={1} max={unitMax(endKind)} value={endNum}
+                        onChange={(e) => setEndNum(Math.max(1, Math.min(unitMax(endKind), Number(e.target.value) || 1)))}
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                    )}
+                  </label>
+                )}
+              </div>
+              {unitPreviewValid ? (
+                <p className="text-sm font-bold text-emerald-700">{rangeSummary(unitPreview.start, unitPreview.end)}</p>
+              ) : (
+                <p className="text-sm text-red-600 font-semibold">نهاية النطاق قبل بدايته — اختر نهاية أبعد (جزء/حزب/سورة أكبر)</p>
+              )}
+              {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+              <button onClick={() => void startTestGlobal(unitPreview.start.global, unitPreview.end.global)} disabled={loading || !unitPreviewValid}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع من الوحدة'}
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
+              <h2 className="font-bold text-accent-800">أو يدوي: سورة وآيات</h2>
               <label className="block">
                 <span className="text-sm font-bold text-accent-700">السورة</span>
                 <select value={surah}
@@ -740,7 +885,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <ul className="space-y-2">
                   {history.slice(0, 5).map((h, i) => (
                     <li key={i} className="flex items-center justify-between text-sm gap-2">
-                      <span className="text-accent-700">سورة {h.surahName} — آيات {h.from} إلى {h.to}</span>
+                      <span className="text-accent-700">{h.endSurahName && h.endSurah !== h.surah ? <>من سورة {h.surahName} آية {h.from} إلى سورة {h.endSurahName} آية {h.endAyah}</> : <>سورة {h.surahName} — آيات {h.from} إلى {h.to}</>}</span>
                       <span className="font-bold text-emerald-700 whitespace-nowrap">{h.correct}/{h.total} ({h.total > 0 ? Math.round((h.correct / h.total) * 100) : 0}٪)</span>
                       <span className="text-accent-400 whitespace-nowrap">{h.date}</span>
                     </li>
@@ -754,7 +899,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         {phase === 'testing' && ayahs[index] && (
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm font-bold">
-              <span className="text-accent-700">سورة {surahName} — آية {ayahs[index].ayah_no}</span>
+              <span className="text-accent-700">سورة {SURAHS.find((s) => s.no === ayahs[index].surah_no)?.name || ''} — آية {ayahs[index].ayah_no}</span>
               <span className="text-emerald-700">آية {index + 1} من {ayahs.length}</span>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -934,8 +1079,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {ayahs.map((a, i) => (!grades[i] && !skipped[i] ? (
                     <li key={a.id} className="text-sm">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-accent-700">سورة {surahName} — آية {a.ayah_no}</span>
-                        <button onClick={() => openInMushaf(a.ayah_no)}
+                        <span className="text-accent-700">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
+                        <button onClick={() => openInMushaf(a.surah_no, a.ayah_no)}
                           className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
                           <BookOpen className="w-4 h-4" /> افتح في المصحف
                         </button>
