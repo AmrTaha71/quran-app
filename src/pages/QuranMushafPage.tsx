@@ -1421,7 +1421,11 @@ export default function QuranMushafPage({
   // getUserMedia invoked synchronously before its first await). The
   // #/follow route effect must NEVER call this function — entering the
   // route only shows the lobby; the tap is the only start.
-  const startFollowListening = useCallback(async () => {
+  // forceWhisper (2026-10-27): when the live engine fails fatally
+  // (async onerror, outside the tap gesture), it cannot fall through
+  // to Whisper by itself — so the lobby offers an explicit tap-gated
+  // Whisper start, which skips SpeechRecognition entirely.
+  const startFollowListening = useCallback(async (forceWhisper = false) => {
     // Double-tap guard, covering the permission-prompt window too:
     // followListeningRef is set only AFTER rec.start()/getUserMedia,
     // so followStartingRef (set synchronously here, cleared on every
@@ -1463,7 +1467,7 @@ export default function QuranMushafPage({
       }
       return 'تم رفض إذن الميكروفون — اسمح به من إعدادات المتصفح ثم اضغط «ابدأ الاستماع» من جديد';
     };
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SR = forceWhisper ? null : ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
     if (SR) {
       setFollowEngine('live');
       const rec = new SR();
@@ -1953,6 +1957,23 @@ export default function QuranMushafPage({
       width: (b.width * madinahNorm.imgW) / 100,
       height: (b.height * madinahNorm.imgH) / 100,
     };
+  };
+  // HIGHLIGHT CLAMP (2026-10-27, user screenshot p.42): the qurancoor
+  // dataset's edge word boxes overshoot the paper by up to ~6 image-%
+  // (rightmost words of a line), so an unclamped highlight spilled
+  // into the white scan margin past the green frame. Clamping to the
+  // measured paper box trims only that overshoot — it never moves a
+  // box, never changes tap calibration, and never hides an interior
+  // word (interior boxes are already inside the paper).
+  const clampBoxToPaper = (b: WordBox): WordBox => {
+    if (!madinahPaperBox) return b;
+    const [pl, pt, pr, pb] = madinahPaperBox;
+    const left = Math.max(b.left, pl);
+    const top = Math.max(b.top, pt);
+    const right = Math.min(b.left + b.width, pr);
+    const bottom = Math.min(b.top + b.height, pb);
+    if (right <= left || bottom <= top) return { ...b, width: 0, height: 0 };
+    return { ...b, left, top, width: right - left, height: bottom - top };
   };
 
   const handleWordTap = async (clientX: number, clientY: number) => {
@@ -2461,6 +2482,11 @@ export default function QuranMushafPage({
                       className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
+                    <button onClick={() => { enterFollowMode(); startFollowListening(true); }}
+                      disabled={followIndexLoading}
+                      className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                      <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
+                    </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     <p className="text-xs text-emerald-200 mt-4">لو الميكروفون مش شغال — بديل يدوي (اختياري):</p>
                     <div className="flex gap-2 mt-2">
@@ -2654,7 +2680,7 @@ export default function QuranMushafPage({
                       } : undefined} />
                   )}
                   {tapFlash && (() => {
-                    const f = imageBoxToContainer(tapFlash);
+                    const f = imageBoxToContainer(clampBoxToPaper(tapFlash));
                     return (
                       <div className="absolute rounded-md ring-2 ring-amber-300 bg-amber-300/20 pointer-events-none"
                         style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
@@ -2673,7 +2699,7 @@ export default function QuranMushafPage({
                     if (boxes.length === 0) return null;
                     return (<>
                       {boxes.map((b) => {
-                        const f = imageBoxToContainer(b);
+                        const f = imageBoxToContainer(clampBoxToPaper(b));
                         const isCurrent = b.wordNo - 1 === followPos.word;
                         const isPassed = b.wordNo - 1 < followPos.word;
                         return (
@@ -2691,7 +2717,7 @@ export default function QuranMushafPage({
                     if (boxes.length === 0) return null;
                     return (<>
                       {boxes.map((b) => {
-                        const f = imageBoxToContainer(b);
+                        const f = imageBoxToContainer(clampBoxToPaper(b));
                         return (
                           <div key={b.key} className="absolute rounded-sm pointer-events-none bg-amber-400/50 ring-1 ring-amber-400"
                             style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
@@ -2735,7 +2761,10 @@ export default function QuranMushafPage({
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
                 aria-label="الصفحة التالية"
                 className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
-                {hasFacingPage && (
+                {/* FACING STRIP REMOVED 2026-10-27 per user ("الغي الهوامش"):
+                    no side sliver in fullscreen — the main page only, so
+                    no second page's text ever overlaps its left edge. */}
+                {false && hasFacingPage && (
                   <div className="absolute top-1/2 -translate-y-1/2 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? (useMadinahCover ? '100svh' : `calc(min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`) : '100%' }} title="الصفحة المقابلة">
                     <FacingStripImg key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} pageNo={facingPage}
                       // Madinah: a window into the facing page at the

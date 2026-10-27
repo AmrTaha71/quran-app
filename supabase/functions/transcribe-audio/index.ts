@@ -60,7 +60,16 @@ Deno.serve(async (req: Request) => {
     const audioBlob = await audioResponse.blob();
 
     const formData = new FormData();
-    formData.append("file", audioBlob, "audio.webm");
+    // FILENAME BUG FIX (2026-10-27): the old code always named the
+    // file audio.webm, even when iOS recorded mp4 bytes — Whisper
+    // infers format from the filename, so mp4-in-webm could fail
+    // transcription and make "search via recording" look dead on
+    // iPhone/iPad while desktop webm worked. Name it by the real
+    // uploaded extension instead.
+    const urlPath = audioUrl.split("?")[0];
+    const rawExt = urlPath.includes(".") ? urlPath.split(".").pop()!.toLowerCase() : "webm";
+    const safeExt = ["webm", "mp4", "m4a", "mp3", "wav", "ogg"].includes(rawExt) ? rawExt : "webm";
+    formData.append("file", audioBlob, `audio.${safeExt}`);
     formData.append("model", "whisper-1");
     formData.append("language", "ar");
     formData.append("response_format", "verbose_json");
