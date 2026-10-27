@@ -10,7 +10,10 @@ const WIRD_KEY = 'quran-wird-v1';
 const TYPE_LABEL: Record<WirdType, string> = {
   sabaq: 'سبق (جديد)',
   murajaa: 'مراجعة',
-  manzil: 'منزل',
+  // Display name only (the stored key stays 'manzil'): "المحفوظ القديم"
+  // reads clearly, unlike "منزل" which users did not understand, and
+  // unlike "ما تم مراجعته من قبل" which would collide with مراجعة.
+  manzil: 'المحفوظ القديم',
 };
 
 interface WirdState {
@@ -43,7 +46,7 @@ function saveWird(s: WirdState) {
 }
 
 // Daily wird card (v1, localStorage only): a pages-per-day target, a
-// simple type (سبق / مراجعة / منزل), a done button, a streak counter
+// simple type (سبق / مراجعة / المحفوظ القديم), a done button, a streak counter
 // and a 7-day history strip. No server, no notifications in v1.
 export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [wird, setWird] = useState<WirdState>(loadWird);
