@@ -11,16 +11,17 @@ import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   Heart, Bookmark, AlertTriangle, BadgeCheck, X, BookMarked, AlertCircle,
-  Volume2, Filter, Layers, Mic,
+  Volume2, Filter, Layers, Mic, GraduationCap,
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
+import DailyWird from '../components/DailyWird';
 import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import QRCodeSection from '../components/QRCodeSection';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
 import ProgressWidget from '../components/ProgressWidget';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow' | 'test';
 const PAGE_SIZE = 15;
 
 export default function UserAppPage({ session, onNavigate }: { session: import('@supabase/supabase-js').Session | null; onNavigate: (r: Route) => void }) {
@@ -435,6 +436,24 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {/* Progress Widget */}
         <div className="mb-5">
           <ProgressWidget />
+        </div>
+
+        {/* Daily wird + self-test entry */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+          <DailyWird onNavigate={onNavigate} />
+          <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 flex flex-col">
+            <div className="flex items-center gap-2 mb-1">
+              <GraduationCap className="w-5 h-5 text-emerald-600" />
+              <h2 className="font-bold text-accent-800">وضع التسميع الذاتي</h2>
+            </div>
+            <p className="text-sm text-accent-500 leading-relaxed flex-1">
+              اختر سورة ونطاق آيات، سمّع من حفظك والنص مخفي، ثم أظهر الآية وقيّم نفسك — وفي النهاية نتيجتك والآيات التي تحتاج مراجعة.
+            </p>
+            <button onClick={() => onNavigate('test')}
+              className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
+              ابدأ التسميع
+            </button>
+          </div>
         </div>
 
         {/* List filter tabs */}

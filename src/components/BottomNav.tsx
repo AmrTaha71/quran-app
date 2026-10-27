@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bookmark, BookOpen, Home, Mic, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
 /**
  * Bottom navigation, in logical RTL order.
@@ -14,7 +14,7 @@ export default function BottomNav({
   current,
   onNavigate,
 }: {
-  current: 'app' | 'mushaf' | 'settings' | 'follow';
+  current: 'app' | 'mushaf' | 'settings' | 'follow' | 'test';
   onNavigate: (r: Route) => void;
 }) {
   // The board's name is the user's kunya when they set one
