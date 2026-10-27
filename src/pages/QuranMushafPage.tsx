@@ -232,25 +232,37 @@ export default function QuranMushafPage({
   // its exact words until the page turns or fullscreen exits.
   const [searchHighlight, setSearchHighlight] = useState<{ surah: number; ayah: number } | null>(null);
   const [zoom, setZoom] = useState(1);
-  // Viewport aspect (width / height) for the Madinah cover geometry:
-  // the cover norm needs the real viewport ratio. window.innerHeight
-  // is the stable layout viewport on iOS Safari (it does not dance
-  // with the chrome), so a resize listener is enough. Precision here
-  // only affects bars vs crop, never tap precision: the tap mapping
-  // is self-consistent with the rendered percentages.
+  // Viewport aspect (width / height) for the Madinah cover geometry.
+  // DANCE FIX 2026-10-27 (user video: pages zoom/shift on every
+  // turn): the old code updated this on every 'resize'. On iOS
+  // Safari window.innerHeight CHANGES when the chrome shows/hides
+  // and when the native-fullscreen banner appears/disappears, so
+  // every tap that toggled the chrome recomputed coverNorm and the
+  // paper zoomed ~10% (at aspect 0.85 the frame-cap binds, at 0.70
+  // it does not) — and the cover wrapper is 100svh tall while the
+  // norm is in % of innerHeight, so the two disagreed whenever the
+  // chrome was hidden. The aspect is therefore FROZEN: it is set
+  // once when fullscreen opens (so entry geometry matches the
+  // screen the user is actually looking at) and only on a real
+  // rotation (orientationchange, width/height swap), never on a
+  // chrome resize. With a frozen aspect + a 100vw x 100svh wrapper,
+  // every page's paper rect is the same pixels on every turn,
+  // chrome state or not. Tap precision is unaffected: the tap
+  // mapping reads the same frozen norm as the rendered percentages.
   const [viewportAspect, setViewportAspect] = useState(() =>
     typeof window !== 'undefined' && window.innerHeight > 0
       ? window.innerWidth / window.innerHeight : 0.695);
+  const [showFullscreen, setShowFullscreen] = useState(false);
+  useEffect(() => {
+    if (showFullscreen) setViewportAspect(window.innerWidth / Math.max(1, window.innerHeight));
+  }, [showFullscreen]);
   useEffect(() => {
     const update = () => setViewportAspect(window.innerWidth / Math.max(1, window.innerHeight));
-    window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
     return () => {
-      window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
   }, []);
-  const [showFullscreen, setShowFullscreen] = useState(false);
   const [showRatelIntro, setShowRatelIntro] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showEditionPicker, setShowEditionPicker] = useState(false);
@@ -2423,7 +2435,7 @@ export default function QuranMushafPage({
 
       {/* Fullscreen viewer with intro */}
       {showFullscreen && (
-        <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-black'} flex items-center justify-center select-none overflow-hidden overscroll-contain`}
+        <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-black'} flex ${useMadinahCover ? 'items-start' : 'items-center'} justify-center select-none overflow-hidden overscroll-contain`}
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
             if (cleanMode) { setCleanMode(false); return; }
