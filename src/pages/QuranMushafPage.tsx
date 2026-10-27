@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
 import { SURAHS } from '../lib/surahs';
 import { RECITERS, DEFAULT_RECITER_ID, type Reciter } from '../lib/reciters';
-import { useLang } from '../lib/LanguageContext';
+import { useLang, currentSpeechLocale } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
 import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
@@ -891,6 +891,16 @@ export default function QuranMushafPage({
   const followOrderedRef = useRef<OrderedVerse[] | null>(null);
   const followBufferRef = useRef<string[]>([]);
   const followListeningRef = useRef(false);
+  // Set synchronously at start-tap time and cleared once the engine is
+  // running (or on any early return): the listening flag alone is set
+  // only AFTER the mic-permission await on the Whisper path, so on a
+  // browser whose permission prompt is not modal (desktop Chrome) a
+  // second tap during the prompt used to start a second stream and a
+  // second chunk loop. The generation below is the backstop for
+  // stop-then-restart races: any continuation whose generation no
+  // longer matches must abort instead of starting a stale loop.
+  const followStartingRef = useRef(false);
+  const followStartGenRef = useRef(0);
   const followMissRef = useRef(0);
   const followPosRef = useRef<TrackedPosition | null>(null);
   // First-lock confirmation (user spec): a fresh auto-lock opens the
@@ -900,12 +910,22 @@ export default function QuranMushafPage({
   // no highlight shows and no auto-advance happens.
   const [pendingLock, setPendingLock] = useState<TrackedPosition | null>(null);
   const pendingLockRef = useRef<TrackedPosition | null>(null);
+  // Jump generation: jumpToTracked awaits the network, so a slow jump
+  // can resolve AFTER the user rejected, stopped, or resynced. Each of
+  // those actions bumps this counter, and a jump whose generation is
+  // stale drops itself instead of yanking the page from under him.
+  const followJumpGenRef = useRef(0);
   const followStatusRef = useRef<'listening' | 'locked' | 'lost' | 'found'>('listening');
   const recognitionRef = useRef<any>(null);
   const followStreamRef = useRef<MediaStream | null>(null);
   const followWakeLockRef = useRef<any>(null);
   const followActiveRef = useRef(false);
   const followVisListenerRef = useRef(false);
+  // Guards a wake-lock request already in flight: without it, two
+  // concurrent requests (visibility return + release-handler timer, or
+  // two start paths) each create their own sentinel, the ref keeps only
+  // the last, and the earlier sentinel stays held with no handle left
+  // to release it.
 
   // The screen must NEVER sleep during a prayer. Browsers release wake
   // locks when the tab hides and sometimes when the system intervenes,
@@ -914,10 +934,19 @@ export default function QuranMushafPage({
   // and is swallowed, so the release handler cannot spin.
   const acquireWakeLock = useCallback(async () => {
     if (!followActiveRef.current) return;
+    if (wakeLockPendingRef.current) return;
     const nav = navigator as any;
     if (!nav.wakeLock?.request) return;
+    wakeLockPendingRef.current = true;
     try {
       const wl = await nav.wakeLock.request('screen');
+      // The session may have stopped while the request was in flight
+      // (stopFollow already ran): never store a lock nobody will
+      // release — hand it straight back instead.
+      if (!followActiveRef.current) {
+        try { await wl.release(); } catch {}
+        return;
+      }
       followWakeLockRef.current = wl;
       wl.addEventListener('release', () => {
         followWakeLockRef.current = null;
@@ -925,7 +954,13 @@ export default function QuranMushafPage({
           setTimeout(() => { void acquireWakeLock(); }, 1000);
         }
       });
-    } catch {}
+    } catch {
+      // Swallowed on purpose: a denied request must not spin. The next
+      // visibility return or release event retries; no retry loop here,
+      // because a persistent denial would otherwise re-request forever.
+    } finally {
+      wakeLockPendingRef.current = false;
+    }
   }, []);
   const handleFollowVisibility = useCallback(() => {
     if (document.visibilityState === 'visible') void acquireWakeLock();
@@ -937,6 +972,26 @@ export default function QuranMushafPage({
     }
     void acquireWakeLock();
   }, [handleFollowVisibility, acquireWakeLock]);
+
+  // Shared teardown for a follow session's live resources (mic,
+  // stream, wake lock, visibility listener). No setState here, so it
+  // is safe to run from the unmount cleanup, where state updates
+  // would be no-ops. stopFollow calls this, then resets the UI state.
+  // Idempotent: every step guards or nulls, so double-teardown is safe.
+  const teardownFollowResources = useCallback(() => {
+    followListeningRef.current = false;
+    followActiveRef.current = false;
+    if (followVisListenerRef.current) {
+      document.removeEventListener('visibilitychange', handleFollowVisibility);
+      followVisListenerRef.current = false;
+    }
+    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
+    followStreamRef.current?.getTracks().forEach((t) => t.stop());
+    followStreamRef.current = null;
+    try { followWakeLockRef.current?.release(); } catch {}
+    followWakeLockRef.current = null;
+  }, [handleFollowVisibility]);
 
   // --- Follow-the-imam mode ---
   const enterFollowMode = useCallback(() => {
@@ -954,6 +1009,7 @@ export default function QuranMushafPage({
     followPosRef.current = null;
     setPendingLock(null);
     pendingLockRef.current = null;
+    followJumpGenRef.current += 1;
     setFollowHeard('');
     setFollowError(null);
     setFollowIndexLoading(false);
@@ -967,21 +1023,20 @@ export default function QuranMushafPage({
     // mode always uses the Madinah edition (harmless if already selected).
     const madinahIdx = EDITIONS.findIndex((e) => e.id === 'madinah');
     if (madinahIdx >= 0) setSelectedEdition(madinahIdx);
-  }, []);
+    // The wake lock belongs to the session, not just to listening: a
+    // user waiting in the lobby (imam hasn't started) must not have
+    // the screen sleep on them. WakeLock.request needs no user gesture
+    // (unlike getUserMedia), so this is safe from the route effect.
+    ensureWakeLockTracking();
+  }, [ensureWakeLockTracking]);
 
   const stopFollow = useCallback(() => {
-    followListeningRef.current = false;
-    followActiveRef.current = false;
-    if (followVisListenerRef.current) {
-      document.removeEventListener('visibilitychange', handleFollowVisibility);
-      followVisListenerRef.current = false;
-    }
-    try { recognitionRef.current?.stop(); } catch {}
-    recognitionRef.current = null;
-    followStreamRef.current?.getTracks().forEach((t) => t.stop());
-    followStreamRef.current = null;
-    try { followWakeLockRef.current?.release(); } catch {}
-    followWakeLockRef.current = null;
+    // Stale-start backstop (mic fix): a start whose mic grant or
+    // index load is still pending must abort instead of resurrecting
+    // listening after this stop — the generation bump enforces it.
+    followStartingRef.current = false;
+    followStartGenRef.current += 1;
+    teardownFollowResources();
     setFollowOn(false);
     // Back to the START branch, not the listening branch: on the follow
     // route the lobby stays visible after a stop, and showing "listening"
@@ -996,13 +1051,23 @@ export default function QuranMushafPage({
     followPosRef.current = null;
     setPendingLock(null);
     pendingLockRef.current = null;
+    followJumpGenRef.current += 1;
+    // A stop must not leave a stale 'found'/'locked' status behind: the
+    // next session starts from 'listening', and no post-stop transcript
+    // (guarded in onFollowFinal) can ever read a dead status again.
+    setFollowStatus('listening');
+    followStatusRef.current = 'listening';
     setFollowEngine(null);
     try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
-  }, []);
+  }, [teardownFollowResources]);
 
   const jumpToTracked = useCallback(async (pos: TrackedPosition) => {
+    const gen = followJumpGenRef.current;
     try {
       const list = await loadSurahPageList(pos.surah);
+      // Superseded while the network was in flight (reject / stop /
+      // resync / a newer lock): do NOT yank the page to a stale ayah.
+      if (gen !== followJumpGenRef.current) return;
       const entry = list.find((a) => a.number === pos.ayah);
       const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
       goToPage(page);
@@ -1010,6 +1075,7 @@ export default function QuranMushafPage({
       setShowFullscreen(true);
       requestNativeFullscreen();
     } catch {
+      if (gen !== followJumpGenRef.current) return;
       setFollowError('تعذر تحديد صفحة الآية — تأكد من الاتصال بالإنترنت');
     }
     // goToPage / setters are stable enough here; loadSurahPageList is memoized.
@@ -1017,6 +1083,10 @@ export default function QuranMushafPage({
   }, [loadSurahPageList]);
 
   const onFollowFinal = useCallback((text: string) => {
+    // Transcripts delivered after a stop (e.g. a Whisper chunk that was
+    // mid-transcribe when the user stopped) must not lock, advance, or
+    // jump anything on a dead session.
+    if (!followListeningRef.current) return;
     const words = heardWords(text);
     if (words.length === 0) return;
     const ordered = followOrderedRef.current;
@@ -1122,6 +1192,18 @@ export default function QuranMushafPage({
         setFollowChunkFails(0);
         setFollowError(null);
       } catch {
+        // A gone mic stream (revoked, device lost) can never record
+        // again — stop cleanly with a restart prompt instead of
+        // retrying forever with no mic. (A stop-pressed exit takes
+        // the same break without an error: the flag is already false.)
+        if (!followStreamRef.current) {
+          if (followListeningRef.current) {
+            followListeningRef.current = false;
+            setFollowReady(true);
+            setFollowError('انقطع الميكروفون — اضغط بدء الاستماع من جديد');
+          }
+          break;
+        }
         // One failed chunk must not kill the session — but after several
         // in a row, say so instead of looking frozen.
         consecutiveFails += 1;
@@ -1161,7 +1243,7 @@ export default function QuranMushafPage({
     if (SR) {
       setFollowEngine('live');
       const rec = new SR();
-      rec.lang = 'ar-SA';
+      rec.lang = currentSpeechLocale();
       rec.continuous = true;
       rec.interimResults = true;
       rec.onresult = (e: any) => {
@@ -1177,6 +1259,7 @@ export default function QuranMushafPage({
         if (e.error === 'not-allowed') {
           setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
           followListeningRef.current = false;
+          recognitionRef.current = null;
           setFollowReady(true);
         } else if (e.error === 'network') {
           setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت');
@@ -1189,11 +1272,14 @@ export default function QuranMushafPage({
       try {
         rec.start();
       } catch {
+        recognitionRef.current = null;
+        followStartingRef.current = false;
         setFollowError('تعذر بدء الاستماع — جرّب الإدخال اليدوي بالأسفل');
         setFollowReady(true);
         return;
       }
       followListeningRef.current = true;
+      followStartingRef.current = false;
       setFollowReady(false);
       setFollowStatus('listening');
       followStatusRef.current = 'listening';
@@ -1219,6 +1305,7 @@ export default function QuranMushafPage({
     // Whisper path (Safari): mic FIRST, inside the tap gesture.
     setFollowEngine('whisper');
     if (!window.MediaRecorder) {
+      followStartingRef.current = false;
       setFollowError('هذا المتصفح لا يدعم التسجيل — اكتب الكلمات يدوياً بالأسفل');
       return;
     }
@@ -1226,18 +1313,31 @@ export default function QuranMushafPage({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch {
+      followStartingRef.current = false;
       setFollowError('اسمح بالميكروفون من إعدادات المتصفح ثم اضغط بدء الاستماع');
       return;
     }
     followStreamRef.current = stream;
+    if (!followActiveRef.current || startGen !== followStartGenRef.current) {
+      // Stopped (or superseded by a newer start) while the permission
+      // prompt was up: never resurrect listening from this stale
+      // grant. Only null the ref if it still points at this stream,
+      // so a newer session's stream is never touched.
+      stream.getTracks().forEach((t) => t.stop());
+      if (followStreamRef.current === stream) followStreamRef.current = null;
+      followStartingRef.current = false;
+      return;
+    }
     const uid = session?.user?.id;
     if (!uid) {
       stream.getTracks().forEach((t) => t.stop());
       followStreamRef.current = null;
+      followStartingRef.current = false;
       setFollowError('الاستماع عبر الخادم يحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
       return;
     }
     followListeningRef.current = true;
+    followStartingRef.current = false;
     setFollowReady(false);
     setFollowStatus('listening');
     followStatusRef.current = 'listening';
@@ -1258,10 +1358,12 @@ export default function QuranMushafPage({
       return;
     }
     setFollowIndexLoading(false);
-    if (!followListeningRef.current) {
-      // Stopped while the index was loading: never start the loop.
+    if (!followListeningRef.current || startGen !== followStartGenRef.current) {
+      // Stopped (or superseded by a newer start) while the index was
+      // loading: never start a stale loop next to the new session.
+      // Only null the ref if it still points at this stream.
       stream.getTracks().forEach((t) => t.stop());
-      followStreamRef.current = null;
+      if (followStreamRef.current === stream) followStreamRef.current = null;
       return;
     }
     void runWhisperLoop();
@@ -1298,6 +1400,9 @@ export default function QuranMushafPage({
     setFollowReady(false);
     // Even a manual lock follows a whole prayer, so the screen stays on.
     ensureWakeLockTracking();
+    // Supersede any older in-flight jump (e.g. a double-tap on ابحث
+    // with edited input): only this lock's jump may land.
+    followJumpGenRef.current += 1;
     void jumpToTracked(lock);
   }, [followManual, jumpToTracked, ensureWakeLockTracking]);
 
@@ -1306,6 +1411,11 @@ export default function QuranMushafPage({
     setFollowPos(null);
     pendingLockRef.current = null;
     setPendingLock(null);
+    // Same rule as reject: drop the heard buffer too, or the next
+    // transcript re-locks the very ayah the user just tried to escape
+    // from the stale tail of the buffer.
+    followBufferRef.current = [];
+    followJumpGenRef.current += 1;
     followMissRef.current = 0;
     followStatusRef.current = 'listening';
     setFollowStatus('listening');
@@ -1313,8 +1423,13 @@ export default function QuranMushafPage({
 
   // First-lock confirmation actions (see pendingLock above). OK: the
   // page is already open in fullscreen from lock time, so confirming
-  // only lights the ayah highlight and lets tracking continue from
-  // here with the existing advance path. Reject: drop the lock and the
+  // only lights the ayah highlight and lets tracking continue. But the
+  // imam kept reciting while the card was up, so the pending position
+  // is stale: re-lock from the heard buffer (the same rule the
+  // lost→re-lock path uses) so tracking resumes from the imam's
+  // current words instead of immediately missing 4 chunks, flashing
+  // 'lost', and re-locking anyway. Falls back to the confirmed lock
+  // if the buffer yields nothing. Reject: drop the lock and the
   // heard buffer (so the same wrong ayah is not instantly re-locked)
   // and keep listening.
   const confirmFollowLock = useCallback(() => {
@@ -1322,16 +1437,29 @@ export default function QuranMushafPage({
     if (!lock) return;
     pendingLockRef.current = null;
     setPendingLock(null);
-    followPosRef.current = lock;
-    setFollowPos(lock);
+    let pos = lock;
+    const ordered = followOrderedRef.current;
+    if (ordered) {
+      const fresh = findLock(followBufferRef.current, ordered);
+      if (fresh) pos = fresh;
+    }
+    followPosRef.current = pos;
+    setFollowPos(pos);
     followStatusRef.current = 'locked';
     setFollowStatus('locked');
     followMissRef.current = 0;
-  }, []);
+    // A fresh lock on another ayah needs its page; a word-level move
+    // inside the confirmed ayah does not (the highlight follows pos).
+    if (pos.surah !== lock.surah || pos.ayah !== lock.ayah) void jumpToTracked(pos);
+  }, [jumpToTracked]);
   const rejectFollowLock = useCallback(() => {
     pendingLockRef.current = null;
     setPendingLock(null);
     followBufferRef.current = [];
+    // Bump the jump generation so a slow first-lock jump still in
+    // flight resolves into nothing instead of yanking the page after
+    // the user already rejected this ayah.
+    followJumpGenRef.current += 1;
     followStatusRef.current = 'listening';
     setFollowStatus('listening');
   }, []);
@@ -1348,6 +1476,16 @@ export default function QuranMushafPage({
     // Only when the route switches to follow; enterFollowMode is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startInFollow]);
+
+  // Leaving the Mushaf/Follow routes unmounts this page, and a live
+  // follow session must die with it: without this, leaving via the
+  // bottom nav (not the X button, which stops cleanly) left the mic
+  // listening, the Whisper loop recording, and the wake lock held —
+  // and the leaked visibility listener re-acquired the lock on every
+  // tab-show. Switching between #/mushaf and #/follow does NOT unmount
+  // (one App branch), so a live session survives that switch untouched.
+  // Deps are stable, so this cleanup runs only on unmount.
+  useEffect(() => () => { teardownFollowResources(); }, [teardownFollowResources]);
 
   const openFullscreen = () => {
     setShowRatelIntro(true);
@@ -1694,6 +1832,23 @@ export default function QuranMushafPage({
             </div>
           </div>
         </div>
+
+        {followOn && !showFullscreen && (
+          <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 mb-6">
+            <span className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              الحق الإمام شغال — الميكروفون بيسمع
+            </span>
+            <button onClick={() => setShowFullscreen(true)}
+              className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg">
+              العودة للمتابعة
+            </button>
+            <button onClick={stopFollow}
+              className="px-3 py-1.5 text-sm font-bold text-white bg-emerald-600 rounded-lg">
+              إيقاف
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Mushaf page image */}
