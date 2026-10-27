@@ -48,6 +48,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [pendingLinks, setPendingLinks] = useState<AyahLink[]>([]);
   const [pendingVerses, setPendingVerses] = useState<Record<number, QuranVerse>>({});
   const [showPending, setShowPending] = useState(false);
+  // Pending queue pagination: the queue renders cards with inputs and
+  // voice buttons, so showing hundreds at once would freeze the page.
+  // Rana sees 50 at a time and loads more on demand.
+  const [pendingVisible, setPendingVisible] = useState(50);
   const [rephrasingId, setRephrasingId] = useState<number | null>(null);
   const [rephraseCmd, setRephraseCmd] = useState('');
   // AI proposals awaiting the admin's decision (per pending link).
@@ -350,7 +354,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           </div>
           <div className="flex items-center gap-2">
             {pendingLinks.length > 0 && (
-              <button onClick={() => setShowPending(true)}
+              <button onClick={() => { setPendingVisible(50); setShowPending(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-smooth font-semibold border border-amber-200">
                 <Clock className="w-4 h-4" /> مراجعة ({pendingLinks.length})
               </button>
@@ -629,7 +633,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <p>لا توجد روابط بانتظار المراجعة</p>
                 </div>
               ) : (
-                pendingLinks.map((link) => {
+                pendingLinks.slice(0, pendingVisible).map((link) => {
                   const verse = pendingVerses[link.verse_id];
                   return (
                     <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
@@ -734,7 +738,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       </div>
                     </div>
                   );
-                })
+                })}
+                {pendingVisible < pendingLinks.length && (
+                  <button onClick={() => setPendingVisible((v) => v + 50)}
+                    className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-semibold rounded-lg border border-amber-200">
+                    عرض المزيد ({pendingLinks.length - pendingVisible} متبقية)
+                  </button>
+                )}
               )}
             </div>
           </div>
