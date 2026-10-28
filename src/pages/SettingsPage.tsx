@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
+import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages } from '../lib/pageDownload';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
 
@@ -50,6 +51,48 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   });
   const [savedTick, setSavedTick] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
+  // Mushaf pages on the device (one-tap full download, Hafidz
+  // pattern): state + handlers live here, the work in pageDownload.
+  const [dlSupported] = useState(pageDownloadSupported);
+  const [dlCached, setDlCached] = useState<number | null>(null);
+  const [dlRunning, setDlRunning] = useState(false);
+  const [dlDone, setDlDone] = useState(0);
+  const [dlFailed, setDlFailed] = useState<number[]>([]);
+  const [dlStopped, setDlStopped] = useState(false);
+  const [dlError, setDlError] = useState('');
+  const dlStopRef = useRef(false);
+  useEffect(() => {
+    if (dlSupported) void countCachedPages().then(setDlCached);
+  }, [dlSupported]);
+  const startDownload = async () => {
+    if (dlRunning) return;
+    dlStopRef.current = false;
+    setDlStopped(false);
+    setDlError('');
+    setDlRunning(true);
+    setDlFailed([]);
+    try {
+      try { await (navigator.storage as any)?.persist?.(); } catch {}
+      const { downloaded, failed } = await downloadAllPages(
+        (p) => { setDlDone(p.done); setDlFailed(p.failed); },
+        () => dlStopRef.current,
+      );
+      setDlCached(downloaded);
+      setDlFailed(failed);
+      setDlStopped(dlStopRef.current);
+    } catch {
+      setDlError('تعذر التحميل — تأكد من الاتصال بالإنترنت وحاول تاني');
+    } finally {
+      setDlRunning(false);
+    }
+  };
+  const stopDownload = () => { dlStopRef.current = true; };
+  const clearDownload = async () => {
+    await clearCachedPages();
+    setDlCached(0);
+    setDlDone(0);
+    setDlFailed([]);
+  };
   // ADMIN ENTRY (2026-10-27): shown ONLY to users in admin_users.
   // Normal users never see this section — and BottomNav stays at
   // its final 5 items, so الإدارة lives here, not as a tab.
@@ -247,6 +290,68 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${goldFrame ? 'mr-auto' : ''}`} />
             </span>
           </button>
+        </section>
+
+        {/* Mushaf pages on the device — one-tap full download (Hafidz
+            pattern): after this, every flip is a local read, instant
+            on any connection, even offline. Madinah edition only. */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+            <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
+          </h2>
+          <p className="text-sm text-accent-500 mb-4">
+            حمّل صفحات مصحف المدينة الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي.
+          </p>
+          {!dlSupported ? (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              جهازك مش بيدعم تحميل الصفحات على الجهاز — الصفحات هتفضل تتحمل من النت زي قبل كده.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-bold text-accent-700 mb-2">
+                {dlCached === null ? 'جارٍ فحص الصفحات المحملة…' : dlCached >= 604 ? 'كل الصفحات محملة على جهازك ✓' : `محمل منها ${dlCached.toLocaleString('ar-EG')} من ٦٠٤ صفحة`}
+              </p>
+              {dlRunning && (
+                <div className="mb-3">
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(dlDone / 604) * 100}%` }} />
+                  </div>
+                  <p className="text-sm text-accent-500 mt-1">جارٍ التحميل… {dlDone.toLocaleString('ar-EG')} من ٦٠٤</p>
+                </div>
+              )}
+              {dlFailed.length > 0 && !dlRunning && (
+                <p className="text-sm text-amber-700 mb-3">تعذر تحميل {dlFailed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
+              )}
+              {dlStopped && !dlRunning && (
+                <p className="text-sm text-accent-500 mb-3">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
+              )}
+              {dlError && !dlRunning && (
+                <p className="text-sm text-red-600 mb-3">{dlError}</p>
+              )}
+              <div className="flex gap-3">
+                {!dlRunning ? (
+                  <button onClick={startDownload} disabled={dlCached !== null && dlCached >= 604}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
+                    {dlCached !== null && dlCached > 0 && dlCached < 604 ? 'كمّل تحميل الناقص' : 'حمّل كل الصفحات'}
+                  </button>
+                ) : (
+                  <button onClick={stopDownload}
+                    className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-bold rounded-xl">
+                    إيقاف التحميل
+                  </button>
+                )}
+                {dlCached !== null && dlCached > 0 && !dlRunning && (
+                  <button onClick={clearDownload}
+                    className="px-5 py-2.5 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                    مسح المحمل
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-accent-400 mt-3 leading-relaxed">
+                ملحوظة: المتصفح ممكن يمسح الصفحات لو مساحة الجهاز ضاقت — العداد هنا هيبين الناقص، ودوسة واحدة ترجّعه.
+              </p>
+            </>
+          )}
         </section>
 
         {/* Recitation + voice defaults */}

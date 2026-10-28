@@ -18,6 +18,13 @@
 
 const SHELL_CACHE = 'quran-shell-v1';
 const IMG_CACHE = 'quran-pages-v2';
+// Full-download cache (Settings "صفحات المصحف على جهازك"): written
+// ONLY by the page's download UI, never by the fetch handler below
+// and never trimmed — the 150-entry cap applies to IMG_CACHE only.
+// The fetch handler's caches.match searches ALL caches, so pages in
+// here are served cache-first automatically. This name MUST stay in
+// the activate keep-list, or an update would wipe the user's download.
+const FULL_IMG_CACHE = 'quran-pages-full';
 const MAX_IMG_ENTRIES = 150;
 
 async function trimCache(cacheName, maxEntries) {
@@ -45,7 +52,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
-        keys.filter((k) => k !== SHELL_CACHE && k !== IMG_CACHE).map((k) => caches.delete(k))
+        keys.filter((k) => k !== SHELL_CACHE && k !== IMG_CACHE && k !== FULL_IMG_CACHE).map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
