@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, type CSSProperties } from 're
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
 import { SURAHS } from '../lib/surahs';
+import { formatAr } from '../lib/numerals';
 import { RECITERS, DEFAULT_RECITER_ID, type Reciter } from '../lib/reciters';
 import { useLang, currentSpeechLocale } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
@@ -14,6 +15,8 @@ import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
 import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
+import { parseHash } from '../lib/shareLinks';
+import { HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
 import {
@@ -235,10 +238,22 @@ export default function QuranMushafPage({
   // the verse strip still follow currentPage instantly (tap feedback).
   const [displayedPage, setDisplayedPage] = useState(readStoredPage);
   const displayedPageGenRef = useRef(0);
+  // Displayed-page load state (STREAM S2): pending while the requested
+  // page's image has not landed yet, slow once it passes ~5s (the
+  // fullscreen slow indicator appears), and gateNonce lets the slow
+  // indicator's retry button re-run the probe at once.
+  const [pageLoadPending, setPageLoadPending] = useState(false);
+  const [pageLoadSlow, setPageLoadSlow] = useState(false);
+  const [gateNonce, setGateNonce] = useState(0);
   // Book-slide direction for the fullscreen flip animation (RTL:
   // next page enters from the left). Updated in the gate below, so
   // every path (arrows, swipe, jumps, follow) gets the right direction.
   const [turnDir, setTurnDir] = useState<1 | -1>(1);
+  // Ref mirror of turnDir + the moment the displayed page last changed:
+  // slide-consistent tap math (below) needs both synchronously during
+  // the 300ms slide, not next render's state.
+  const turnDirRef = useRef<1 | -1>(1);
+  const slideStartRef = useRef<{ at: number; dir: 1 | -1 } | null>(null);
   const displayedPageRef = useRef(displayedPage);
   const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
   const [ayahFilter, setAyahFilter] = useState('');
@@ -416,15 +431,43 @@ export default function QuranMushafPage({
     if (reciteRef.current) { reciteRef.current.pause(); reciteRef.current = null; }
     setReciting(false);
   }, []);
+  // S4 voice safety: link audio owns ONE element (the old playAudio
+  // created an orphan Audio per tap — it kept playing after popup
+  // close / ayah change and overlapped recitation and corrections).
+  // stopLinkAudio is called on popup close, ayah change, recitation
+  // start, and page unmount; errors surface as text, never silence.
+  const linkAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [linkAudioError, setLinkAudioError] = useState('');
+  const stopLinkAudio = () => {
+    try { linkAudioRef.current?.pause(); } catch {}
+    linkAudioRef.current = null;
+  };
+  const playLinkAudio = (url: string) => {
+    stopLinkAudio();
+    setLinkAudioError('');
+    const a = new Audio(url);
+    linkAudioRef.current = a;
+    a.onended = () => { if (linkAudioRef.current === a) linkAudioRef.current = null; };
+    a.onerror = () => {
+      if (linkAudioRef.current === a) linkAudioRef.current = null;
+      setLinkAudioError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول تاني');
+    };
+    a.play().catch(() => {
+      if (linkAudioRef.current === a) linkAudioRef.current = null;
+      setLinkAudioError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول تاني');
+    });
+  };
   const changeReciter = (id: string) => {
     setReciterId(id);
     try { localStorage.setItem('quran-reciter', id); } catch { /* ignore */ }
   };
-  useEffect(() => { stopRecitation(); setShowReciters(false); setHifzRevealed(false); }, [selectedVerse?.id, stopRecitation]);
+  useEffect(() => { stopRecitation(); stopLinkAudio(); setShowReciters(false); setHifzRevealed(false); }, [selectedVerse?.id, stopRecitation]);
   // In وضع الحفظ the popup always opens on its links first.
   useEffect(() => { if (selectedVerse && hifzMode) setPopupTab('links'); }, [selectedVerse, hifzMode]);
   const startRecitation = (verse: QuranVerse, r: Reciter) => {
     stopRecitation();
+    // S4: recitation must never overlap a playing link voice.
+    stopLinkAudio();
     changeReciter(r.id);
     setReciteError('');
     const audio = new Audio(r.audioUrl(verse.surah_no, verse.ayah_no));
@@ -481,6 +524,16 @@ export default function QuranMushafPage({
   const FACING_STRIP_W = 'min(22vw, 170px)';
   const currentJuz = getJuzFromPage(currentPage);
   const currentHizb = getHizbFromPage(currentPage);
+  // STREAM S2 displayed-page-lag discipline: in fullscreen the image
+  // follows displayedPage, so every fullscreen LABEL (top chips, page
+  // pill) must follow displayedPage too while it lags currentPage —
+  // showing the new page's Juz/Surah over the old page's image was
+  // the defect. Normal view has no such split (its image is keyed on
+  // currentPage), so labels there stay on currentPage.
+  const labelPage = showFullscreen ? displayedPage : currentPage;
+  const labelSurahName = SURAHS.find((s) => s.no === getPageSurah(labelPage))?.name || '';
+  const labelJuz = getJuzFromPage(labelPage);
+  const labelHizb = getHizbFromPage(labelPage);
   // The strip shows only this page's ayahs (in page order) once their
   // refs have loaded; otherwise it falls back to the full surah list.
   const stripVerses: QuranVerse[] = pageAyahRefs
@@ -870,21 +923,36 @@ export default function QuranMushafPage({
     return () => clearTimeout(timer);
   }, [currentPage, edition]);
 
-  // Displayed-page gate (SHAKE FIX 2026-10-28, hardened 2026-10-28):
-  // advance displayedPage ONLY when the new page's image actually
-  // LOADS. The first version advanced on probe error too ("so the
-  // retries / error block can run") — but a transient failure is
-  // common when fast flips flood the connection, and then the user
-  // stared at a broken image on a black screen for 1-2s while
-  // RetryPageImg's slow chain ran (measured on the user's video:
-  // black gaps of 1.83s, 1.33s, 1.00s). Now the probe retries quickly
-  // on its own and the previous page stays until a good load; only
-  // after all probe retries fail do we advance, so the error block
-  // with its retry button can still show.
+  // Displayed-page gate (SHAKE FIX 2026-10-28, hardened 2026-10-28,
+  // reworked STREAM S2): advance displayedPage ONLY when the new
+  // page's image actually LOADS. The first version advanced on probe
+  // error too ("so the retries / error block can run") — but a
+  // transient failure is common when fast flips flood the connection,
+  // and then the user stared at a broken image on a black screen for
+  // 1-2s while RetryPageImg's slow chain ran (measured on the user's
+  // video: black gaps of 1.83s, 1.33s, 1.00s). Now the probe retries
+  // quickly on its own and the previous page stays until a good load.
+  // S2 changes: (1) the old per-attempt 5s watchdog (3 attempts =
+  // ~15s of pinned old page, taps ignored throughout) is replaced by
+  // ONE global 12s gate deadline per turn — probes retry every 300ms
+  // until the deadline, then advance so the error block with its retry
+  // button can show; (2) past ~5s a real loading indicator appears in
+  // fullscreen with a retry control (gateNonce re-runs the probe at
+  // once) instead of a silent stall.
   useEffect(() => {
     const p = currentPage;
     const g = ++displayedPageGenRef.current;
-    let attempts = 0;
+    if (displayedPageRef.current === p) {
+      setPageLoadPending(false);
+      setPageLoadSlow(false);
+      return;
+    }
+    const deadlineAt = Date.now() + 12000;
+    setPageLoadPending(true);
+    setPageLoadSlow(false);
+    const slowTimer = setTimeout(() => {
+      if (displayedPageGenRef.current === g) setPageLoadSlow(true);
+    }, 5000);
     let timer: ReturnType<typeof setTimeout> | null = null;
     const clearTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
     const probe = () => {
@@ -895,27 +963,42 @@ export default function QuranMushafPage({
         clearTimer();
         if (displayedPageGenRef.current !== g) return;
         const old = displayedPageRef.current;
-        if (old !== p) setTurnDir(p > old ? 1 : -1);
+        if (old !== p) {
+          const dir: 1 | -1 = p > old ? 1 : -1;
+          setTurnDir(dir);
+          turnDirRef.current = dir;
+        }
         displayedPageRef.current = p;
         setDisplayedPage(p);
+        setPageLoadPending(false);
+        setPageLoadSlow(false);
       };
       const onFail = () => {
         clearTimer();
         if (displayedPageGenRef.current !== g) return;
-        attempts += 1;
-        if (attempts < 3) timer = setTimeout(probe, 300);
-        else done();
+        // Global deadline, not a per-attempt watchdog: retries keep
+        // coming every 300ms, but the old page is never pinned past
+        // 12s — at the deadline we advance so the error block shows.
+        if (Date.now() >= deadlineAt) { done(); return; }
+        timer = setTimeout(probe, 300);
       };
       if (img.complete && img.naturalWidth > 0) { done(); return; }
       if (img.complete && img.naturalWidth === 0) { onFail(); return; }
       img.onload = done;
       img.onerror = onFail;
-      // Watchdog: a stalled load must not pin the old page forever.
-      timer = setTimeout(onFail, 5000);
+      // Watchdog for THIS attempt: only the time left to the deadline.
+      timer = setTimeout(onFail, Math.max(0, deadlineAt - Date.now()));
     };
     probe();
-    return () => { clearTimer(); };
-  }, [currentPage, edition]);
+    return () => { clearTimeout(slowTimer); clearTimer(); };
+  }, [currentPage, edition, gateNonce]);
+
+  // Slide start tracking for slide-consistent tap math (below): the
+  // displayed image remounts (and its 300ms slide restarts) exactly
+  // when displayedPage changes.
+  useEffect(() => {
+    slideStartRef.current = { at: Date.now(), dir: turnDirRef.current };
+  }, [displayedPage]);
 
   // Remember the user's chosen edition and last page, and honour a
   // cross-page jump from لوحتي (stored as { surah, ayah }).
@@ -925,6 +1008,26 @@ export default function QuranMushafPage({
   useEffect(() => {
     localStorage.setItem(PAGE_STORAGE_KEY, String(currentPage));
   }, [currentPage]);
+  // A share deep link in the hash (STREAM S2, see src/lib/shareLinks):
+  // #/mushaf?page=5 jumps straight to that page in normal view, and
+  // #/mushaf?surah=2&ayah=255 is handed to the لوحتي-jump effect below
+  // (declared after this one, so it consumes the stored target on the
+  // same mount) — same fullscreen + highlight behaviour as a لوحتي
+  // jump. Declared before that effect on purpose: mount effects run
+  // in declaration order. A bare #/mushaf is a no-op here.
+  useEffect(() => {
+    const parsed = parseHash(window.location.hash);
+    if (parsed.route !== 'mushaf') return;
+    if (parsed.page) { setCurrentPage(parsed.page); return; }
+    if (parsed.surah) {
+      try {
+        localStorage.setItem(TARGET_STORAGE_KEY, JSON.stringify({ surah: parsed.surah, ayah: parsed.ayah }));
+      } catch { /* storage unavailable: the jump below just won't run */ }
+    }
+    // Only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // A jump from لوحتي (stored as { surah, ayah }): go to the ayah's
   // ACTUAL page (not the surah's first page), open the Mushaf fullscreen
   // at once (no intro), and highlight the ayah's words exactly — no
@@ -959,6 +1062,10 @@ export default function QuranMushafPage({
     const clamped = Math.max(1, Math.min(TOTAL_PAGES, page));
     setCurrentPage(clamped);
     setSearchHighlight(null);
+    // STREAM S2: normal-view zoom never carries across a turn — a
+    // zoomed (cropped) page used to stay zoomed on the next page,
+    // hiding its edges until the user noticed and zoomed back out.
+    setZoom(1);
   };
 
   // Fullscreen swipe navigation (touch): swipe left = next page, swipe
@@ -1061,7 +1168,9 @@ export default function QuranMushafPage({
   // MERGED followStatus: listening | locked ONLY. 'found' (pending
   // confirmation) and 'lost' (re-lock after tracking) are both deleted:
   // there is no confirmation card and no tracking after a lock, so a
-  // wrong lock is escaped via إيقاف / X + a fresh start, not resync.
+  // wrong lock is escaped via the post-lock "مش دي؟ كمّل الاستماع"
+  // button (one-tap fresh start) or via إيقاف / X + a fresh start,
+  // not resync.
   const [followStatus, setFollowStatus] = useState<'listening' | 'locked'>('listening');
   const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
   const [followHeard, setFollowHeard] = useState('');
@@ -1103,6 +1212,11 @@ export default function QuranMushafPage({
   // Live-engine restart budget state (see LIVE_RESTART_MAX above).
   const liveRestartCountRef = useRef(0);
   const liveRestartWindowRef = useRef(0);
+  // S4: transient safety timer for the live engine — if onend never
+  // follows a transient error, this restarts directly after ~3s
+  // instead of hanging on "retrying" forever (same shape as the
+  // self-test timer; cleared by onend and by every engine stop).
+  const followTransientSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Jump generation: jumpToTracked awaits the network, so a slow jump
   // can resolve AFTER the user rejected, stopped, or resynced. Each of
   // those actions bumps this counter, and a jump whose generation is
@@ -1190,6 +1304,9 @@ export default function QuranMushafPage({
   const stopFollowEngines = useCallback(() => {
     followListeningRef.current = false;
     followStartingRef.current = false;
+    // S4: a pending safety restart must not fire after the engines
+    // are dead (it would resurrect listening on a stopped session).
+    if (followTransientSafetyRef.current) { clearTimeout(followTransientSafetyRef.current); followTransientSafetyRef.current = null; }
     const rec = recognitionRef.current;
     if (rec) {
       try { rec.onresult = null; rec.onerror = null; rec.onend = null; } catch {}
@@ -1639,6 +1756,11 @@ export default function QuranMushafPage({
     // running recognizer — the user must stop and tap again. The
     // Whisper path has no client-side locale: the transcribe-audio edge
     // function hardcodes language='ar'.
+    // S4 DOCUMENTED INCONSISTENCY (deliberately NOT flipped here):
+    // self-test pins ar-SA (SelfTestPage TEST_SPEECH_LOCALE) while
+    // follow keeps ar-EG here. The V3 per-device A/B counts decide
+    // one locale for both — flipping follow silently would change
+    // prayer behaviour on unmeasured evidence.
     const speechLocaleNow = currentSpeechLocale();
     // Honest mic-error wording (device-honesty): the old code showed
     // the same "allow the mic" line for every failure, including a
@@ -1668,6 +1790,7 @@ export default function QuranMushafPage({
       // Stops the live session with an honest prompt and returns the
       // user to the start branch (never a silent dead "listening").
       const stopLiveWithPrompt = (message: string) => {
+        if (followTransientSafetyRef.current) { clearTimeout(followTransientSafetyRef.current); followTransientSafetyRef.current = null; }
         try { rec.stop(); } catch {}
         recognitionRef.current = null;
         followListeningRef.current = false;
@@ -1676,6 +1799,22 @@ export default function QuranMushafPage({
         liveRestartWindowRef.current = 0;
         setFollowReady(true);
         setFollowError(message);
+      };
+      // S4: transient safety net (see followTransientSafetyRef).
+      // onend clears it (the normal restart path); this fires only
+      // when onend never comes. InvalidStateError means the engine
+      // is still running after all — not a dead end.
+      const armFollowTransientSafety = () => {
+        if (followTransientSafetyRef.current) clearTimeout(followTransientSafetyRef.current);
+        followTransientSafetyRef.current = setTimeout(() => {
+          followTransientSafetyRef.current = null;
+          if (!followListeningRef.current || followAutoLockedRef.current) return;
+          if (recognitionRef.current !== rec) return;
+          try { rec.start(); } catch (err: any) {
+            if (err && err.name === 'InvalidStateError') return;
+            stopLiveWithPrompt('توقف الاستماع المباشر — اضغط «ابدأ الاستماع» من جديد');
+          }
+        }, 3000);
       };
       rec.onresult = (e: any) => {
         // Post-lock/post-stop queued results neither deliver finals
@@ -1716,13 +1855,18 @@ export default function QuranMushafPage({
       };
       rec.onerror = (e: any) => {
         if (!followListeningRef.current || followAutoLockedRef.current) return;
-        // Only fatal errors stop the session with a message.
+        // S4 taxonomy port (self-test P3 shape, lock semantics
+        // untouched): transient errors are named, not swallowed.
         // 'no-speech' (imam silent) and 'aborted' are transient: the
         // onend restart below retries them silently, and showing an
-        // error for silence would be a false alarm. Previously every
-        // other error was silently swallowed while the lobby kept
-        // saying "listening" on a dead engine.
-        if (e.error === 'not-allowed') {
+        // error for silence would be a false alarm — but the 3s
+        // safety timer now backstops a missing onend. Previously
+        // every other error was silently swallowed while the lobby
+        // kept saying "listening" on a dead engine; unknown errors
+        // now stop honestly with a re-tap prompt instead.
+        if (e.error === 'no-speech' || e.error === 'aborted') {
+          armFollowTransientSafety();
+        } else if (e.error === 'not-allowed') {
           stopLiveWithPrompt(micErrorMessage({ name: 'NotAllowedError' }));
         } else if (e.error === 'audio-capture') {
           stopLiveWithPrompt('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط «ابدأ الاستماع» من جديد');
@@ -1734,7 +1878,11 @@ export default function QuranMushafPage({
           // Transient: the engine auto-restarts from onend, so this
           // message must NOT tell the user to re-tap or to go back
           // to the start branch — it clears on the next good result.
+          // The safety timer covers a missing onend here too.
           setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت — بيحاول تاني لوحده');
+          armFollowTransientSafety();
+        } else {
+          stopLiveWithPrompt('توقف الاستماع المباشر — اضغط «ابدأ الاستماع» من جديد');
         }
       };
       rec.onend = () => {
@@ -1744,6 +1892,9 @@ export default function QuranMushafPage({
         // speech, the mic is dead — stop honestly instead of looping.
         // A failed restart used to be swallowed by an empty catch
         // while the lobby still said "listening".
+        // S4: a normal onend cancels the transient safety timer —
+        // this IS the restart path the timer backstops.
+        if (followTransientSafetyRef.current) { clearTimeout(followTransientSafetyRef.current); followTransientSafetyRef.current = null; }
         if (!followListeningRef.current || followAutoLockedRef.current) return;
         const now = Date.now();
         if (now - liveRestartWindowRef.current > LIVE_RESTART_WINDOW_MS) {
@@ -1925,13 +2076,31 @@ export default function QuranMushafPage({
     handleFollowAutoLock(lock);
   }, [followManual, handleFollowAutoLock]);
 
+  // S4 wrong-lock escape ("wrong page? keep listening"): the merged
+  // spec deleted the pre-lock confirmation card, so a misfire's only
+  // exits were إيقاف / X + a fresh start. This post-lock button is
+  // NOT a confirmation step — the lock already happened, with the
+  // same trigger/lock/interim constants untouched — it just makes
+  // the fresh start one tap: release the latch + highlight, then
+  // re-enter listening from this tap (gesture intact for mic +
+  // wake lock). A uniqueness gate on finals locks was considered
+  // and rejected: repeated ayahs (identical text) could never lock
+  // under it, which would be a worse prayer failure than a
+  // one-tap escape from a rare misfire.
+  const resumeFollowAfterWrongLock = useCallback(() => {
+    setSearchHighlight(null);
+    enterFollowMode();
+    void startFollowListening();
+  }, [enterFollowMode, startFollowListening]);
+
   // MERGED deletions (exit + auto-stop roles): resyncFollow (the old
   // "re-lock after lost" control), confirmFollowLock and
   // rejectFollowLock (the old "لقيتها!" OK / "مش دي" card) are DELETED,
   // not kept. In the merged spec there is no confirmation to confirm
   // or reject, and no 'lost' state to resync out of: tracking stops on
-  // lock. A wrong lock is escaped via إيقاف / X + a fresh ابدأ الاستماع
-  // tap — that is the only way out of a session, by design.
+  // lock. A wrong lock is escaped via the post-lock "مش دي؟
+  // كمّل الاستماع" button (one-tap fresh start) or via إيقاف / X +
+  // a fresh ابدأ الاستماع tap — those are the ways out, by design.
   // (confirmFollowLock / rejectFollowLock deleted — see note above.)
 
   // Dedicated follow route (#/follow): opening it starts follow mode
@@ -1985,6 +2154,8 @@ export default function QuranMushafPage({
   // another tab cannot strand لوحتي / الرئيسية in native fullscreen.
   useEffect(() => () => {
     teardownFollowResources();
+    // S4: a playing link voice must die with the page, not orphan.
+    stopLinkAudio();
     try {
       const d = document as any;
       if (d.fullscreenElement || d.webkitFullscreenElement) {
@@ -1993,6 +2164,20 @@ export default function QuranMushafPage({
       }
     } catch {}
   }, [teardownFollowResources]);
+
+  // S6: Escape closes the topmost overlay only — never follow state.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (selectedVerse) { setSelectedVerse(null); return; }
+      if (showEditionPickerInFullscreen) { setShowEditionPickerInFullscreen(false); return; }
+      if (showEditionPicker) { setShowEditionPicker(false); return; }
+      if (showIndex) { setShowIndex(false); return; }
+      if (showRatelIntro) { setShowRatelIntro(false); return; }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedVerse, showEditionPickerInFullscreen, showEditionPicker, showIndex, showRatelIntro]);
 
   const openFullscreen = () => {
     setShowRatelIntro(true);
@@ -2195,15 +2380,38 @@ export default function QuranMushafPage({
     return { ...b, left, top, width: right - left, height: bottom - top };
   };
 
+  // STREAM S2 slide-consistent tap math: during the 300ms slide the
+  // image is translated (mushaf-slide-next/prev on the IMG), but the
+  // wrapper rect never moves — so the old code mapped taps through
+  // the FINAL geometry while the image was still mid-slide, opening
+  // the wrong ayah. The visual image left edge during the slide is
+  // imgL - dir*(1-progress)*imgW (next slides in from the left, prev
+  // from the right), so the tap's wrapper-% is shifted back by that
+  // offset before the normal container->image mapping. After 300ms
+  // the offset is exactly 0 and the math is unchanged. No paper-box
+  // value is touched: this only corrects for the animation.
+  const slideOffsetPercent = (): number => {
+    const s = slideStartRef.current;
+    if (!s) return 0;
+    const elapsed = Date.now() - s.at;
+    if (elapsed >= 300) return 0;
+    const imgW = fullscreenNorm ? fullscreenNorm.imgW : 100;
+    return -s.dir * (1 - elapsed / 300) * imgW;
+  };
+  // Client coords -> full-image % through the geometry actually shown
+  // (slide-adjusted, then the normal normalization mapping).
+  const toImagePercent = (clientX: number, clientY: number, rect: DOMRect): [number, number] => {
+    const fx = ((clientX - rect.left) / rect.width) * 100 - slideOffsetPercent();
+    const fy = ((clientY - rect.top) / rect.height) * 100;
+    return containerToImagePercent(fx, fy);
+  };
+
   const handleWordTap = async (clientX: number, clientY: number) => {
     const wrap = pageWrapRef.current;
     const boxes = pageWordBoxes;
     if (!wrap || !boxes) return;
     const rect = wrap.getBoundingClientRect();
-    const [px, py] = containerToImagePercent(
-      ((clientX - rect.left) / rect.width) * 100,
-      ((clientY - rect.top) / rect.height) * 100,
-    );
+    const [px, py] = toImagePercent(clientX, clientY, rect);
     // Smallest containing box wins, not the first: the source data has
     // a few word boxes that overlap their neighbour (e.g. page 371
     // words 26:109:5/6, page 500 words 45:17:14/15, where the later
@@ -2243,20 +2451,23 @@ export default function QuranMushafPage({
     if (row) handleVerseClick(row);
   };
 
-  const playAudio = (url: string) => { new Audio(url).play(); };
+  // S4: orphan link audio is gone — playLinkAudio (recitation block
+  // above) owns the single element and stops it on popup close,
+  // ayah change, and recitation start. This alias is kept only so
+  // the two link buttons below read the same.
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/30 to-white pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl flex items-center justify-center shadow-lg">
+        <div className="max-w-6xl xl:max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-accent-800">المصحف الشريف</h1>
-              <p className="text-xs text-accent-500">اقرأ واحفظ وراجع — اضغط على أي آية لمعرفة الرابط</p>
+              <p className="text-xs text-accent-600">اقرأ واحفظ وراجع — اضغط على أي آية لمعرفة الرابط</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2295,7 +2506,7 @@ export default function QuranMushafPage({
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="max-w-6xl xl:max-w-7xl mx-auto px-4 py-6">
         {/* A personal word before reading — a daily dua for the reader.
             Prefixed with the intention reminder: whoever opens the
             Mushaf is here to memorize or link memorization. Same quiet
@@ -2336,8 +2547,8 @@ export default function QuranMushafPage({
               <List className="w-4 h-4" /> الفهرس
             </button>
             <div className="flex items-center gap-2">
-              <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}
-                className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
+              <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="الصفحة السابقة"
+                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
                 <ChevronRight className="w-6 h-6" />
               </button>
               <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
@@ -2345,22 +2556,22 @@ export default function QuranMushafPage({
                   onChange={(e) => setPageInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(pageInput); if (!isNaN(n)) goToPage(n); setPageInput(''); } }}
                   className="w-16 text-center text-base font-semibold text-accent-700 bg-transparent focus:outline-none"
-                  placeholder={currentPage.toString()} />
-                <span className="text-sm text-accent-400">/ {TOTAL_PAGES}</span>
+                  placeholder={formatAr(currentPage)} />
+                <span className="text-sm text-accent-600">/ {formatAr(TOTAL_PAGES)}</span>
               </div>
-              <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= TOTAL_PAGES}
-                className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
+              <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= TOTAL_PAGES} aria-label="الصفحة التالية"
+                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
                 <ChevronLeft className="w-6 h-6" />
               </button>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="تصغير الصفحة" aria-label="تصغير الصفحة"
-                className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
-              <span className="text-sm text-accent-500 w-14 text-center font-semibold">{Math.round(zoom * 100)}%</span>
+                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
+              <span className="text-sm text-accent-600 w-14 text-center font-semibold">{Math.round(zoom * 100)}%</span>
               <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
-                className="p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
+                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
               <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
-                className="p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
+                className="icon-action p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
               <button onClick={toggleGoldFrame} title="إطار ذهبي حول الصفحة"
                 className={`px-2.5 py-2 text-sm font-bold rounded-lg transition-smooth ${goldFrame ? 'bg-amber-200 text-amber-800 ring-1 ring-amber-400' : 'text-accent-600 hover:bg-amber-100'}`}>
                 إطار ذهبي
@@ -2381,9 +2592,20 @@ export default function QuranMushafPage({
               العودة للمتابعة
             </button>
             <button onClick={stopFollow}
-              className="px-3 py-1.5 text-sm font-bold text-white bg-emerald-600 rounded-lg">
+              className="px-3 py-1.5 text-sm font-bold text-white bg-emerald-700 rounded-lg">
               إيقاف
             </button>
+          </div>
+        )}
+
+        {/* Non-Madinah warning: word taps, ayah highlights inside the
+            page image, and Madinah paper geometry are built on the
+            Madinah word-box dataset — on any other edition they
+            silently do nothing today. Warn here (and in fullscreen
+            below, and in the edition picker) instead of silence. */}
+        {edition.id !== 'madinah' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4 text-sm font-bold text-amber-800 leading-relaxed">
+            تنبيه: في {edition.name}، الضغط على كلمات الصفحة والتمييز الدقيق داخل الصورة غير متاح — المزايا دي مبنية على صفحات مصحف المدينة فقط. القراءة وآيات السورة والروابط تحت شغالة عادي.
           </div>
         )}
 
@@ -2392,12 +2614,17 @@ export default function QuranMushafPage({
               surface, so it must fill the screen instead of sitting
               beside the list (the list now follows below the page). */}
           <div className="flex flex-col items-center">
-            <div className="relative bg-gradient-to-br from-stone-50 to-white rounded-2xl shadow-xl border-2 border-amber-200 overflow-hidden p-3 sm:p-6 max-w-full">
+            {/* STREAM S2 zoom-with-pan: at zoom > 1 the image is sized
+                by layout width (not a cropped transform) inside a
+                scrollable card, so every edge stays reachable by
+                scrolling; at zoom <= 1 the old transform path is
+                untouched. goToPage also resets zoom (above). */}
+            <div className={`relative bg-gradient-to-br from-stone-50 to-white rounded-2xl shadow-xl border-2 border-amber-200 p-3 sm:p-6 max-w-full ${zoom > 1 ? 'overflow-auto max-h-[85dvh]' : 'overflow-hidden'}`}>
               {imageLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-amber-50/80 z-10">
                   <div className="flex flex-col items-center gap-3">
                     <div className="w-12 h-12 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin" />
-                    <p className="text-sm text-accent-500">جارٍ تحميل الصفحة...</p>
+                    <p className="text-sm text-accent-600">جارٍ تحميل الصفحة...</p>
                   </div>
                 </div>
               )}
@@ -2405,9 +2632,13 @@ export default function QuranMushafPage({
                 <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
                   <BookOpen className="w-14 h-14 text-amber-300 mb-3" />
                   <p className="text-base font-semibold text-accent-600 mb-1">تعذر تحميل الصفحة</p>
-                  <p className="text-sm text-accent-400 mb-3">قد يكون الخادم غير متاح حالياً</p>
+                  {edition.id === 'hafs' && currentPage === HAFS_UNAVAILABLE_PAGE ? (
+                    <p className="text-sm text-amber-700 mb-3 leading-relaxed">صفحة {HAFS_UNAVAILABLE_PAGE} من مصحف حفص غير متاحة حاليًا — الخادم يرفضها (خطأ ٤٠٣) ولا بديل لها حتى الآن. جرّب مصحف المدينة لقراءة الصفحة دي.</p>
+                  ) : (
+                    <p className="text-sm text-accent-600 mb-3">قد يكون الخادم غير متاح حالياً</p>
+                  )}
                   <button onClick={() => { setImageError(false); setImageLoading(true); }}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition-smooth">
+                    className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-semibold rounded-lg transition-smooth">
                     إعادة المحاولة
                   </button>
                 </div>
@@ -2417,7 +2648,9 @@ export default function QuranMushafPage({
                   onLoad={() => setImageLoading(false)}
                   onFinalError={() => { setImageError(true); setImageLoading(false); }}
                   className="max-w-full h-auto rounded-lg shadow-md transition-transform duration-300 origin-top [-webkit-touch-callout:none]"
-                  style={{ transform: `scale(${zoom})` }} loading="eager" />
+                  style={zoom > 1
+                    ? { width: `${zoom * 100}%`, maxWidth: 'none', height: 'auto' }
+                    : { transform: `scale(${zoom})` }} loading="eager" />
               )}
               {goldFrame && (
                 <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] rounded-2xl" />
@@ -2446,7 +2679,7 @@ export default function QuranMushafPage({
                   </div>
                   <div>
                     <h3 className="font-bold text-accent-800 text-base">آيات سورة {currentSurahName}</h3>
-                    <p className="text-sm text-accent-500">اضغط على أي آية لمعرفة الرابط</p>
+                    <p className="text-sm text-accent-600">اضغط على أي آية لمعرفة الرابط</p>
                   </div>
                 </div>
                 {/* Ayah filter: jump straight to one ayah of this surah. */}
@@ -2460,7 +2693,7 @@ export default function QuranMushafPage({
                     className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-base font-semibold text-accent-700 focus:outline-none focus:border-emerald-400" />
                   {ayahFilter.trim() && (
                     <button onClick={() => setAyahFilter('')}
-                      className="px-3 py-2 text-sm font-semibold text-accent-500 hover:bg-white rounded-lg">
+                      className="px-3 py-2 text-sm font-semibold text-accent-600 hover:bg-white rounded-lg">
                       إلغاء الفلتر
                     </button>
                   )}
@@ -2493,9 +2726,9 @@ export default function QuranMushafPage({
                           <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-lg">
                             {verse.ayah_no}
                           </span>
-                          <span className="text-sm text-accent-500">آية {verse.ayah_no}</span>
+                          <span className="text-sm text-accent-600">آية {verse.ayah_no}</span>
                           {hasLinks && (
-                            <span className="flex items-center gap-1 text-sm text-emerald-600 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">
+                            <span className="flex items-center gap-1 text-sm text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">
                               <Bookmark className="w-3.5 h-3.5" /> {verse.links_count} رابط
                             </span>
                           )}
@@ -2528,8 +2761,8 @@ export default function QuranMushafPage({
                                       if (!ra) return null;
                                       return (
                                         <div className="flex gap-2 mt-2">
-                                          <button onClick={(e) => { e.stopPropagation(); playAudio(ra.url); }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                                          <button onClick={(e) => { e.stopPropagation(); playLinkAudio(ra.url); }}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg">
                                             <Volume2 className="w-4 h-4" /> {ra.label}
                                           </button>
                                         </div>
@@ -2543,6 +2776,7 @@ export default function QuranMushafPage({
                                 <p className="text-base text-accent-400">لا توجد روابط لهذه الآية بعد</p>
                               </div>
                             )}
+                            {linkAudioError && <p className="text-sm text-red-600 font-semibold mt-2">{linkAudioError}</p>}
                           </div>
                         )}
                       </div>
@@ -2560,13 +2794,13 @@ export default function QuranMushafPage({
 
       {/* Index modal — Surah / Juz / Hizb */}
       {showIndex && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={() => setShowIndex(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col animate-slide-up"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-lg font-bold text-accent-800">فهرس المصحف</h3>
-              <button onClick={() => setShowIndex(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowIndex(false)} aria-label="إغلاق" className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
             </div>
             {/* Tabs */}
             <div className="flex border-b border-gray-100">
@@ -2589,7 +2823,7 @@ export default function QuranMushafPage({
                   {SURAHS.map((s) => (
                     <button key={s.no} onClick={() => goToSurah(s.no)}
                       className={`flex items-center gap-2 p-2.5 rounded-lg text-sm font-semibold transition-smooth ${currentSurah === s.no ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'hover:bg-gray-50 text-accent-600 border border-transparent'}`}>
-                      <span className="text-xs text-accent-400">{s.no}.</span>{s.name}
+                      <span className="text-xs text-accent-600">{s.no}.</span>{s.name}
                     </button>
                   ))}
                 </div>
@@ -2601,7 +2835,7 @@ export default function QuranMushafPage({
                       className={`flex items-center gap-3 p-3 rounded-lg text-sm font-semibold transition-smooth text-right ${currentJuz.number === j.number ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'hover:bg-amber-50 text-accent-600 border border-transparent'}`}>
                       <span className="flex items-center justify-center w-8 h-8 bg-amber-100 text-amber-700 rounded-lg text-xs font-bold">{j.number}</span>
                       <span className="flex-1">{j.name}</span>
-                      <span className="text-xs text-accent-400">صفحة {j.startPage}</span>
+                      <span className="text-xs text-accent-600">صفحة {j.startPage}</span>
                     </button>
                   ))}
                 </div>
@@ -2611,9 +2845,9 @@ export default function QuranMushafPage({
                   {HIZB_START_PAGES.map((h) => (
                     <button key={h.number} onClick={() => { goToPage(h.startPage); setShowIndex(false); }}
                       className={`flex items-center gap-2 p-2.5 rounded-lg text-sm font-semibold transition-smooth ${currentHizb.number === h.number ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'hover:bg-gray-50 text-accent-600 border border-transparent'}`}>
-                      <span className="text-xs text-accent-400">الحزب {h.number}</span>
-                      <span className="text-xs text-accent-400">جزء {h.juz}</span>
-                      <span className="text-xs text-accent-400 mr-auto">ص {h.startPage}</span>
+                      <span className="text-xs text-accent-600">الحزب {h.number}</span>
+                      <span className="text-xs text-accent-600">جزء {h.juz}</span>
+                      <span className="text-xs text-accent-600 mr-auto">ص {h.startPage}</span>
                     </button>
                   ))}
                 </div>
@@ -2625,20 +2859,23 @@ export default function QuranMushafPage({
 
       {/* Edition picker modal */}
       {showEditionPicker && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
           onClick={() => setShowEditionPicker(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-lg font-bold text-accent-800">اختر طبعة المصحف</h3>
-              <button onClick={() => setShowEditionPicker(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+              <button onClick={() => setShowEditionPicker(false)} aria-label="إغلاق" className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
             </div>
             <div className="p-4 space-y-2">
               {EDITIONS.map((ed, idx) => (
                 <button key={ed.id} onClick={() => { setSelectedEdition(idx); setShowEditionPicker(false); setImageLoading(true); setImageError(false); }}
                   className={`w-full text-right p-3 rounded-xl border-2 transition-smooth ${selectedEdition === idx ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-amber-200 hover:bg-amber-50/30'}`}>
                   <p className="font-bold text-accent-800 text-base">{ed.name}</p>
-                  <p className="text-sm text-accent-500 mt-0.5">{ed.description}</p>
+                  <p className="text-sm text-accent-600 mt-0.5">{ed.description}</p>
+                  {ed.id !== 'madinah' && (
+                    <p className="text-xs text-amber-700 mt-1">تنبيه: الضغط على الكلمات والتمييز داخل الصورة غير متاح في هذه الطبعة (مصحف المدينة فقط).</p>
+                  )}
                 </button>
               ))}
             </div>
@@ -2659,7 +2896,8 @@ export default function QuranMushafPage({
           }}>
 
           {showRatelIntro && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-900 to-emerald-950 transition-opacity duration-1000">
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-gradient-to-br from-emerald-900 via-teal-900 to-emerald-950 transition-opacity duration-1000 cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); setShowRatelIntro(false); }}>
               <div className="absolute inset-0 opacity-10">
                 <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-emerald-400 rounded-full blur-3xl animate-pulse-soft" />
                 <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-teal-400 rounded-full blur-3xl animate-pulse-soft" />
@@ -2672,6 +2910,7 @@ export default function QuranMushafPage({
                 <p className="text-xl sm:text-2xl text-white/90 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
                   كما كنت ترتل في الدنيا، فإن منزلتك عند آخر آية تقرؤها
                 </p>
+                <p className="text-sm text-white/70 mt-8 font-semibold">اضغط للتخطي ⏭</p>
 
               </div>
             </div>
@@ -2750,22 +2989,77 @@ export default function QuranMushafPage({
           {/* MERGED: the old "لقيتها!" confirmation card (OK / "مش دي")
               is DELETED and must not be re-added. A lock now opens the
               page fullscreen with the ayah highlighted by itself, with
-              no tap after ابدأ الاستماع. */}
+              no tap after ابدأ الاستماع. The post-lock "مش دي؟
+              كمّل الاستماع" pill is not a confirmation card — it only
+              escapes an already-made lock with a one-tap restart. */}
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
-              title="إغلاق"
-              className="absolute top-4 right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
+              title="إغلاق" aria-label="إغلاق"
+              className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
               <X className="w-7 h-7" />
             </button>
           )}
 
-          {/* Worship timer, top-center: always visible (even in clean
-              mode — it is a reminder, not a control), never blocking
-              taps. Hidden only during the intro splash. */}
-          {!showRatelIntro && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+          {/* MERGED top bar (STREAM S2): the worship timer and the
+              Juz/Hizb/Surah chips used to share one absolute
+              top-center anchor in TWO separate divs and pile up on
+              narrow phones. They are now ONE wrapping row, centred,
+              with side padding kept clear of the corner buttons, so
+              on a narrow phone they wrap to a second line instead of
+              overlapping. The page number joins the same row. Labels
+              follow displayedPage during lag (see labelPage). In
+              clean mode only the timer shows (no chips to pile up);
+              the page pill below stays visible there. The bar never
+              blocks taps (pointer-events-none). Hidden only during
+              the intro splash. Safe-area top (S6) so the notch never
+              covers it. */}
+          {!showRatelIntro && cleanMode && (
+            <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
               <WorshipTimer dark />
+            </div>
+          )}
+          {!showRatelIntro && !cleanMode && (
+            <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)]">
+              <WorshipTimer dark />
+              <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">صفحة {labelPage}</span>
+              {/* Juz/Hizb collapse below 420px: on a 320-360px phone the
+                  timer + page + surah already fill one line, and a
+                  second wrapped line would cover the page's top
+                  ornament — the full set still shows on wider screens
+                  and in normal view. */}
+              <span className="hidden min-[420px]:inline-block px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">{labelJuz.name}</span>
+              <span className="hidden min-[420px]:inline-block px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">الحزب {labelHizb.number}</span>
+              <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">سورة {labelSurahName}</span>
+            </div>
+          )}
+          {/* Slow page-load indicator (STREAM S2): appears only once a
+              turn has stalled past ~5s (pageLoadSlow). It sits above
+              the verse strip — never over the top bar, whose wrapped
+              height varies on narrow phones — and its retry button
+              re-runs the load gate at once (gateNonce). The wrapper
+              stops propagation so a tap here never exits fullscreen. */}
+          {!showRatelIntro && showFullscreen && pageLoadPending && pageLoadSlow && (
+            <div className="absolute bottom-32 left-1/2 -translate-x-1/2 z-30 pointer-events-none"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 px-3 py-2 bg-black/70 backdrop-blur text-white text-xs font-bold rounded-full ring-1 ring-white/30 shadow whitespace-nowrap">
+                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                جارٍ تحميل الصفحة…
+                <button onClick={(e) => { e.stopPropagation(); setGateNonce((n) => n + 1); }}
+                  className="pointer-events-auto px-2.5 py-1 bg-amber-500 hover:bg-amber-400 rounded-full text-white">
+                  إعادة المحاولة
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Non-Madinah warning, fullscreen flavour: same warning as
+              the normal view (word taps / highlights / paper geometry
+              are Madinah-only). Bottom-center, pointer-events-none so
+              it never eats a tap; hidden in clean reading + intro. */}
+          {edition.id !== 'madinah' && !showRatelIntro && !cleanMode && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/70 text-white text-xs font-bold rounded-full pointer-events-none whitespace-nowrap">
+              {edition.name}: الضغط على الكلمات والتمييز داخل الصورة متاح في مصحف المدينة فقط
             </div>
           )}
 
@@ -2773,27 +3067,27 @@ export default function QuranMushafPage({
           {!showRatelIntro && !showEditionPickerInFullscreen && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(false); setCleanMode(true); requestNativeFullscreen(); }}
               title="قراءة نظيفة — إخفاء كل الأدوات"
-              className="absolute top-4 right-20 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
+              className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-20 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
               <Maximize2 className="w-7 h-7" />
             </button>
           )}
 
           {cleanMode && showCleanHint && !selectedVerse && (
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/70 text-white text-sm font-semibold rounded-full pointer-events-none whitespace-nowrap">
+            <div className="absolute top-[calc(1.5rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/70 text-white text-sm font-semibold rounded-full pointer-events-none whitespace-nowrap">
               اضغط على هامش الصفحة لإظهار الأدوات
             </div>
           )}
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
-              className="absolute top-4 left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg">
+              className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg">
               <Layers className="w-5 h-5" /> {edition.name}
             </button>
           )}
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); toggleGoldFrame(); }}
-              className={`absolute top-[68px] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${goldFrame ? 'bg-amber-500/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
+              className={`absolute top-[calc(68px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${goldFrame ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
               إطار ذهبي
             </button>
           )}
@@ -2802,19 +3096,13 @@ export default function QuranMushafPage({
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); toggleHifzMode(); }}
               title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار روابطها أولًا'}
-              className={`absolute top-[124px] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-500/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
+              className={`absolute top-[calc(124px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
               وضع الحفظ {hifzMode ? '✓' : ''}
             </button>
           )}
 
-          {/* Juz / Hizb info in fullscreen */}
-          {!showRatelIntro && !cleanMode && (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-none">
-              <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">{currentJuz.name}</span>
-              <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">الحزب {currentHizb.number}</span>
-              <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-semibold rounded-lg ring-1 ring-white/30 shadow">سورة {currentSurahName}</span>
-            </div>
-          )}
+          {/* (Juz / Hizb / Surah chips now live in the merged top bar
+              above — this second top-center div was the pile-up.) */}
 
           {!showRatelIntro && !showEditionPickerInFullscreen && (
             <>
@@ -2871,10 +3159,7 @@ export default function QuranMushafPage({
                       // still open the ayah popup. Margins are judged in
                       // full-image %, through the normalization mapping.
                       const rect = e.currentTarget.getBoundingClientRect();
-                      const [px, py] = containerToImagePercent(
-                        ((e.clientX - rect.left) / rect.width) * 100,
-                        ((e.clientY - rect.top) / rect.height) * 100,
-                      );
+                      const [px, py] = toImagePercent(e.clientX, e.clientY, rect);
                       // Margins are judged against the parity-aware
                       // text block (odd [6,83], even [17,94], y [14,88]).
                       const tbL = currentPage % 2 === 1 ? 6 : 17;
@@ -2918,7 +3203,12 @@ export default function QuranMushafPage({
                         height: `${(fullscreenNorm.ph * fullscreenNorm.imgH) / 100}%`,
                       } : undefined} />
                   )}
-                  {tapFlash && (() => {
+                  {/* STREAM S2: highlights follow displayedPage — while
+                      the image lags, the word boxes belong to the
+                      REQUESTED page, so follow/search/tap highlights
+                      are suppressed until the displayed image lands
+                      rather than marking the wrong page's words. */}
+                  {tapFlash && displayedPage === currentPage && (() => {
                     const f = imageBoxToContainer(clampBoxToPaper(tapFlash));
                     return (
                       <div className="absolute rounded-md ring-2 ring-amber-300 bg-amber-300/20 pointer-events-none"
@@ -2930,7 +3220,7 @@ export default function QuranMushafPage({
                       strongest with a ring, words already recited are a
                       solid amber, words ahead are faint — so the eye
                       follows the imam at a glance, even on a phone. */}
-                  {followOn && followPos && pageWordBoxes && (() => {
+                  {followOn && followPos && pageWordBoxes && displayedPage === currentPage && (() => {
                     const boxes = pageWordBoxes
                       .filter((b) => b.surah === followPos.surah && b.ayah === followPos.ayah)
                       .map((b) => ({ ...b, wordNo: Number(b.key.split(':')[2]) || 0 }))
@@ -2951,7 +3241,7 @@ export default function QuranMushafPage({
                   {/* Search-jump highlight: the ayah tapped in لوحتي,
                       marked amber exactly on its words until the page
                       turns or fullscreen exits. */}
-                  {searchHighlight && (!followOn || !followPos) && pageWordBoxes && (() => {
+                  {searchHighlight && (!followOn || !followPos) && pageWordBoxes && displayedPage === currentPage && (() => {
                     const boxes = pageWordBoxes.filter((b) => b.surah === searchHighlight.surah && b.ayah === searchHighlight.ayah);
                     if (boxes.length === 0) return null;
                     return (<>
@@ -2972,7 +3262,7 @@ export default function QuranMushafPage({
                   <BookOpen className="w-14 h-14 text-white/30 mx-auto mb-3" />
                   <p className="text-white/50 text-base">تعذر تحميل الصفحة</p>
                   <button onClick={(e) => { e.stopPropagation(); setImageError(false); setImageLoading(true); }}
-                    className="mt-3 px-4 py-2 bg-amber-600 text-white text-sm rounded-lg">إعادة المحاولة</button>
+                    className="mt-3 px-4 py-2 bg-amber-700 text-white text-sm rounded-lg">إعادة المحاولة</button>
                 </div>
               )}
 
@@ -2987,19 +3277,26 @@ export default function QuranMushafPage({
                   pinned to the left on every page so the composition
                   never jumps between turns — while the main page
                   itself stays fixed. */}
+              {/* STREAM S2 turn zones: w-24 swallowed 96px of each edge
+                  (53% of a 360px phone, nearly the whole width in
+                  landscape) and even DISABLED zones at pp.1/604 still
+                  blocked word taps. Now viewport-proportional
+                  (w-12 -> w-16 -> w-24) and disabled zones are
+                  pointer-events-none, so edge words stay tappable and
+                  a boundary page's dead zone vanishes entirely. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
                 aria-label="الصفحة السابقة"
-                className="absolute top-0 bottom-0 right-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 group">
+                className="absolute top-0 bottom-0 right-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
                 <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
-                    <ChevronRight className="w-10 h-10" />
+                  <div className="p-2.5 sm:p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
+                    <ChevronRight className="w-8 h-8 sm:w-10 sm:h-10" />
                   </div>
                   <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded-full ring-1 ring-white/30 shadow">السابق</span>
                 </div>
               </button>
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
                 aria-label="الصفحة التالية"
-                className="absolute top-0 bottom-0 left-0 w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 group">
+                className="absolute top-0 bottom-0 left-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
                 {/* FACING STRIP REMOVED 2026-10-27 per user ("الغي الهوامش"):
                     no side sliver in fullscreen — the main page only, so
                     no second page's text ever overlaps its left edge. */}
@@ -3045,8 +3342,8 @@ export default function QuranMushafPage({
                   </div>
                 )}
                 <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
-                    <ChevronLeft className="w-10 h-10" />
+                  <div className="p-2.5 sm:p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
+                    <ChevronLeft className="w-8 h-8 sm:w-10 sm:h-10" />
                   </div>
                   <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded-full ring-1 ring-white/30 shadow">التالي</span>
                 </div>
@@ -3055,8 +3352,21 @@ export default function QuranMushafPage({
               {/* Verse selector — only the ayahs printed on this page */}
               <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(1rem_+_env(safe-area-inset-bottom))] pointer-events-auto px-4"
                 onClick={(e) => e.stopPropagation()}>
-                {followOn && (
+                {followStatus === 'locked' && followPos && !followOn && (
                   <div className="mb-2 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
+                    <span className="truncate">
+                      الإمام الآن: سورة {SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية {followPos.ayah}
+                    </span>
+                    <button onClick={resumeFollowAfterWrongLock}
+                      className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0">
+                      مش دي؟ كمّل الاستماع
+                    </button>
+                    <button onClick={stopFollow} title="إيقاف المتابعة"
+                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
+                  </div>
+                )}
+                {followOn && (
+                  <div className="mb-2 flex items-center gap-2 bg-amber-700 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
                     <Mic className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">
                       {followStatus === 'locked' && followPos
@@ -3072,7 +3382,9 @@ export default function QuranMushafPage({
                   <div className="flex gap-2">
                     {stripVerses.map((v) => (
                       <button key={v.id} onClick={() => handleVerseClick(v)}
-                        className={`relative flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
+                        disabled={displayedPage !== currentPage}
+                        title={displayedPage !== currentPage ? 'جارٍ تحميل الصفحة…' : undefined}
+                        className={`relative flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 disabled:opacity-40 ${
                           followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           searchHighlight && searchHighlight.surah === v.surah_no && searchHighlight.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
@@ -3099,11 +3411,11 @@ export default function QuranMushafPage({
                           {selectedVerse.ayah_no}
                         </span>
                         <div>
-                          <p className="text-sm text-accent-500">{selectedVerse.surah_name} — آية {selectedVerse.ayah_no}</p>
+                          <p className="text-sm text-accent-600">{selectedVerse.surah_name} — آية {selectedVerse.ayah_no}</p>
                         </div>
                       </div>
-                      <button onClick={() => setSelectedVerse(null)}
-                        className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
+                      <button onClick={() => setSelectedVerse(null)} aria-label="إغلاق"
+                        className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg">
                         <X className="w-5 h-5" />
                       </button>
                     </div>
@@ -3111,9 +3423,9 @@ export default function QuranMushafPage({
                       {hifzMode && !hifzRevealed ? (
                         <div className="mb-3 text-center bg-amber-50 border border-amber-200 rounded-xl p-4">
                           <p className="text-sm font-bold text-amber-800">الآية مخفية في وضع الحفظ — سمّعها من حفظك الأول</p>
-                          <p className="text-xs text-accent-500 mt-1">روابطها ظاهرة تحت، والنص يظهر لما تضغط الزر</p>
+                          <p className="text-xs text-accent-600 mt-1">روابطها ظاهرة تحت، والنص يظهر لما تضغط الزر</p>
                           <button onClick={() => setHifzRevealed(true)}
-                            className="mt-3 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl">
+                            className="mt-3 px-5 py-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-bold rounded-xl">
                             أظهر الآية
                           </button>
                         </div>
@@ -3137,7 +3449,7 @@ export default function QuranMushafPage({
                           className="flex-1 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-sm hover:bg-emerald-100 transition-smooth flex items-center justify-center gap-1.5">
                           <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيط' : 'اقترح تربيط'}
                         </button>
-                        <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} />
+                        <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} surahNo={selectedVerse.surah_no} />
                       </div>
                       {suggestOpen && (
                         <div className="mb-3 bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
@@ -3148,34 +3460,34 @@ export default function QuranMushafPage({
                               <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يظهر للإدارة للمراجعة قبل النشر.</p>
                               <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
                               <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
-                              <label className="block text-xs font-semibold text-accent-500 mb-1">نوع التربيط</label>
+                              <label className="block text-xs font-semibold text-accent-600 mb-1">نوع التربيط</label>
                               <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
                                 {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
                               </select>
                               {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
-                              <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm">
+                              <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-xl text-sm">
                                 {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح'}
                               </button>
                             </>
                           ) : (
                             <>
                               <p className="text-sm font-semibold text-accent-700 mb-2">سجّل دخولك الأول عشان نقدر نراجع اقتراحك.</p>
-                              <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-sm">تسجيل الدخول</button>
+                              <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-700 text-white font-bold rounded-xl text-sm">تسجيل الدخول</button>
                             </>
                           )}
                         </div>
                       )}
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           المتشابهات
                         </button>
                         <button onClick={() => setPopupTab('irab')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           الإعراب
                         </button>
                         <button onClick={() => setPopupTab('tafsir')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           التفسير
                         </button>
                       </div>
@@ -3187,7 +3499,7 @@ export default function QuranMushafPage({
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
                           <p className="text-base text-accent-500 mb-3">{mutashabihatError}</p>
                           <button onClick={() => selectedVerse && findSimilar(selectedVerse)}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg">
                             إعادة المحاولة
                           </button>
                         </div>
@@ -3196,7 +3508,7 @@ export default function QuranMushafPage({
                           {qulPhrases.map((e) => (
                             <div key={e.id} className="bg-gray-50 rounded-lg p-3 border border-emerald-100">
                               <p className="font-arabic text-lg font-bold text-accent-800 leading-loose"><mark className="bg-amber-200 rounded px-0.5">{e.text}</mark></p>
-                              <p className="text-sm text-accent-500 mb-2">تتكرر في {e.ayahs} آية في {e.surahs} سورة</p>
+                              <p className="text-sm text-accent-600 mb-2">تتكرر في {e.ayahs} آية في {e.surahs} سورة</p>
                               <div className="flex flex-wrap gap-1.5">
                                 {e.others.slice(0, 12).map((o) => (
                                   <button key={o.key} onClick={() => hopToQulAyah(o.surah_no, o.ayah_no)}
@@ -3204,11 +3516,11 @@ export default function QuranMushafPage({
                                     {o.surah_name} — {o.ayah_no}
                                   </button>
                                 ))}
-                                {e.others.length > 12 && <span className="text-sm text-accent-400 self-center">و{e.others.length - 12} آية أخرى</span>}
+                                {e.others.length > 12 && <span className="text-sm text-accent-600 self-center">و{e.others.length - 12} آية أخرى</span>}
                               </div>
                             </div>
                           ))}
-                          <p className="text-xs text-accent-400 leading-relaxed text-center">المصدر: بيانات «المتشابهات» من مكتبة القرآن العالمية (QUL) — مشروع Tarteel.</p>
+                          <p className="text-xs text-accent-600 leading-relaxed text-center">المصدر: بيانات «المتشابهات» من مكتبة القرآن العالمية (QUL) — مشروع Tarteel.</p>
                         </div>
                       ) : mutashabihat && mutashabihat.length > 0 ? (
                         <div className="space-y-2">
@@ -3246,8 +3558,8 @@ export default function QuranMushafPage({
                                 if (!ra) return null;
                                 return (
                                   <div className="flex gap-2 mt-2">
-                                    <button onClick={() => playAudio(ra.url)}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                                    <button onClick={() => playLinkAudio(ra.url)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg">
                                       <Volume2 className="w-4 h-4" /> {ra.label}
                                     </button>
                                   </div>
@@ -3262,6 +3574,7 @@ export default function QuranMushafPage({
                           <p className="text-base text-accent-400">لا توجد روابط لهذه الآية بعد</p>
                         </div>
                       ))}
+                      {popupTab === 'links' && linkAudioError && <p className="text-sm text-red-600 font-semibold mt-2">{linkAudioError}</p>}
                       {popupTab === 'irab' && (
                         <div className="space-y-3">
                           <iframe
@@ -3274,7 +3587,7 @@ export default function QuranMushafPage({
                             className="block text-center text-sm font-semibold text-emerald-700 hover:text-emerald-800">
                             فتح الإعراب في صفحة مستقلة (اختياري)
                           </a>
-                          <p className="text-xs text-accent-400 leading-relaxed text-center">المصدر: «المجتبى من مشكل إعراب القرآن الكريم» لأحمد بن محمد الخراط، عبر الموسوعة القرآنية (Quranpedia). إن لم يظهر إعراب موجز لهذه الآية، فالإعراب التفصيلي كلمة كلمة (بالإنجليزية) متاح هنا: <a href={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`} target="_blank" rel="noreferrer" className="text-emerald-700 underline">Quranic Arabic Corpus</a>.</p>
+                          <p className="text-xs text-accent-600 leading-relaxed text-center">المصدر: «المجتبى من مشكل إعراب القرآن الكريم» لأحمد بن محمد الخراط، عبر الموسوعة القرآنية (Quranpedia). إن لم يظهر إعراب موجز لهذه الآية، فالإعراب التفصيلي كلمة كلمة (بالإنجليزية) متاح هنا: <a href={`https://corpus.quran.com/wordbyword.jsp?chapter=${selectedVerse.surah_no}&verse=${selectedVerse.ayah_no}`} target="_blank" rel="noreferrer" className="text-emerald-700 underline">Quranic Arabic Corpus</a>.</p>
                         </div>
                       )}
                       {popupTab === 'tafsir' && (
@@ -3282,7 +3595,7 @@ export default function QuranMushafPage({
                           <div className="flex gap-2">
                             {TAFSIR_EDITIONS.map((ed) => (
                               <button key={ed.id} onClick={() => setTafsirEdition(ed.id)}
-                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${tafsirEdition === ed.id ? 'bg-amber-600 text-white' : 'bg-amber-50 text-accent-600 hover:bg-amber-100'}`}>
+                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${tafsirEdition === ed.id ? 'bg-amber-700 text-white' : 'bg-amber-50 text-accent-600 hover:bg-amber-100'}`}>
                                 {ed.name}
                               </button>
                             ))}
@@ -3295,14 +3608,14 @@ export default function QuranMushafPage({
                             <div className="text-center py-6 bg-gray-50 rounded-lg">
                               <p className="text-base text-accent-500 mb-3">{tafsirError}</p>
                               <button onClick={() => selectedVerse && loadTafsir(tafsirEdition, selectedVerse)}
-                                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg">
+                                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-semibold rounded-lg">
                                 إعادة المحاولة
                               </button>
                             </div>
                           ) : tafsirText ? (
                             <p className="text-base text-accent-700 leading-loose whitespace-pre-line">{tafsirText}</p>
                           ) : null}
-                          <p className="text-xs text-accent-400 text-center">المصدر: نصوص تفاسير منشورة عبر AlQuranCloud</p>
+                          <p className="text-xs text-accent-600 text-center">المصدر: نصوص تفاسير منشورة عبر AlQuranCloud</p>
                         </div>
                       )}
                     </div>
@@ -3310,7 +3623,7 @@ export default function QuranMushafPage({
                           below the tab content, so الروابط and the tabs stay on top. */}
                       <div className="flex items-center gap-2 mt-2 mb-3">
                         <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciting ? 'bg-amber-600 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciting ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
                           {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                           {reciting ? `إيقاف التلاوة — ${reciter.name}` : 'استمع للآية'}
                         </button>
@@ -3320,17 +3633,17 @@ export default function QuranMushafPage({
                           if (reciteRef.current) reciteRef.current.loop = next;
                         }}
                           title="تكرار الآية للحفظ"
-                          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciteLoop ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciteLoop ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           <Repeat className="w-4 h-4" /> تكرار
                         </button>
                       </div>
                       {showReciters && (
                         <div className="mb-4">
-                          <p className="text-xs text-accent-400 text-center mb-2">اختر القارئ</p>
+                          <p className="text-xs text-accent-600 text-center mb-2">اختر القارئ</p>
                           <div className="flex flex-wrap gap-1.5">
                             {RECITERS.map((r) => (
                               <button key={r.id} onClick={() => selectedVerse && startRecitation(selectedVerse, r)}
-                                className={`px-3 py-1.5 rounded-full text-sm font-bold transition-smooth ${r.id === reciterId ? 'bg-amber-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                                className={`px-3 py-1.5 rounded-full text-sm font-bold transition-smooth ${r.id === reciterId ? 'bg-amber-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                                 {r.name}
                               </button>
                             ))}
@@ -3348,15 +3661,16 @@ export default function QuranMushafPage({
                 </div>
               )}
 
-              {/* Page number — always visible (even in clean mode),
-                  never blocking taps. It used to render as invisible
-                  text (text-white/0) at screen center, which is why the
-                  number seemed to disappear in fullscreen. It now sits
-                  below the top-center timer/info row, over the page's
-                  top ornament, as a small dark pill like the others. */}
-              <div className="absolute top-[68px] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-                <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-bold rounded-lg ring-1 ring-white/30 shadow">صفحة {currentPage}</span>
-              </div>
+              {/* Page number in clean mode only (STREAM S2): outside
+                  clean mode the number is part of the merged top bar
+                  above, so a second pill here would duplicate it. It
+                  follows displayedPage during lag (labelPage) and
+                  never blocks taps. */}
+              {cleanMode && (
+                <div className="absolute top-[68px] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                  <span className="px-3 py-1.5 bg-black/60 backdrop-blur text-white text-xs font-bold rounded-lg ring-1 ring-white/30 shadow">صفحة {labelPage}</span>
+                </div>
+              )}
             </>
           )}
 
@@ -3376,7 +3690,7 @@ export default function QuranMushafPage({
                     <button key={ed.id} onClick={() => { setSelectedEdition(idx); setShowEditionPickerInFullscreen(false); setImageLoading(true); setImageError(false); }}
                       className={`w-full text-right p-3 rounded-xl border-2 transition-smooth ${selectedEdition === idx ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:border-amber-200 hover:bg-amber-50/30'}`}>
                       <p className="font-bold text-accent-800 text-base">{ed.name}</p>
-                      <p className="text-sm text-accent-500 mt-0.5">{ed.description}</p>
+                      <p className="text-sm text-accent-600 mt-0.5">{ed.description}</p>
                     </button>
                   ))}
                 </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import type { QuranVerse } from '../lib/types';
 import { X, Save, Edit3 } from 'lucide-react';
@@ -12,6 +13,8 @@ export default function EditVerseModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  useEscapeClose(true, onClose);
+
   const [surahNo, setSurahNo] = useState(verse.surah_no);
   const [surahName, setSurahName] = useState(verse.surah_name);
   const [ayahNo, setAyahNo] = useState(verse.ayah_no);
@@ -62,8 +65,8 @@ export default function EditVerseModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-slide-up my-auto">
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-accent-50 rounded-lg flex items-center justify-center">
@@ -71,7 +74,7 @@ export default function EditVerseModal({
             </div>
             <h3 className="font-bold text-accent-800">تعديل الآية</h3>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-smooth">
+          <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-smooth">
             <X className="w-5 h-5" />
           </button>
         </div>

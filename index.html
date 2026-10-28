@@ -9,7 +9,15 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: the on-screen keyboard resizes
+         the layout viewport (Android) instead of covering fixed inputs. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- Fonts: preconnect + preload-as-style (Amiri added as the Naskh
+         fallback; no binary font files are bundled — text-only push). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@300;400;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@300;400;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&display=swap" /></noscript>
     <title>روابط الذكر الحكيم — احفظ القرآن بالتربيطات</title>
     <meta name="description" content="احفظ القرآن الكريم بالتربيطات الذهنية، آية آية — كل آية مربوطة بما قبلها وما بعدها عشان تثبت في ذهنك." />
     <meta property="og:image" content="https://bolt.new/static/og_default.png">

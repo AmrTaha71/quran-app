@@ -20,13 +20,18 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
     return () => { clearTimeout(show); clearTimeout(done); };
   }, [duration, onFinish]);
 
+  // S6: tap anywhere to skip — the launch splash was unskippable (and
+  // stacked up to ~5s of brand screens with the auth flash). The timers
+  // above still fire, but the parent unmounts on onFinish, so the
+  // cleanup runs and nothing double-fires.
   return (
     <div
       dir="rtl"
       lang="ar"
-      aria-hidden="true"
+      aria-label="شاشة البداية — اضغط للتخطي"
       className="rq-splash"
-      style={{ opacity: fadeOut ? 0 : 1 }}
+      style={{ opacity: fadeOut ? 0 : 1, cursor: 'pointer' }}
+      onClick={onFinish}
     >
       <style>{`
         .rq-splash {
@@ -36,7 +41,7 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
           background:
             radial-gradient(ellipse 90% 65% at 50% 38%, rgba(255, 235, 180, 0.10), rgba(255, 235, 180, 0) 60%),
             linear-gradient(160deg, #0b7a5e 0%, #065f46 45%, #043d30 100%);
-          font-family: 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif;
+          font-family: 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
           transition: opacity 500ms ease;
         }
         .rq-splash-pattern { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.055; }
@@ -100,6 +105,14 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
           animation: rq-splash-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
           animation-delay: 0.75s;
         }
+        .rq-splash-skip {
+          position: absolute; left: 50%; bottom: max(28px, env(safe-area-inset-bottom));
+          transform: translateX(-50%); z-index: 2;
+          background: rgba(0, 0, 0, 0.35); color: rgba(248, 241, 222, 0.95);
+          border: 1px solid rgba(240, 200, 90, 0.5); border-radius: 999px;
+          padding: 10px 22px; font-size: 15px; font-weight: 700; cursor: pointer;
+          font-family: 'Cairo', system-ui, sans-serif;
+        }
         @keyframes rq-splash-rise {
           from { opacity: 0; transform: translateY(12px); }
           to { opacity: 1; transform: translateY(0); }
@@ -150,6 +163,7 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
         <div className="rq-splash-divider"><i /></div>
         <p className="rq-splash-tagline">{message || 'احفظها بالتربيط'}</p>
       </div>
+      <button type="button" className="rq-splash-skip" aria-label="تخطي شاشة البداية">تخطَّ ⏭</button>
     </div>
   );
 }

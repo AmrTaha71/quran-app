@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { Heart, Bookmark, AlertTriangle, BadgeCheck, X } from 'lucide-react';
@@ -84,7 +85,8 @@ export function ListToggleButtons({
           key={item.type}
           onClick={(e) => { e.stopPropagation(); onToggle(verse.id, item.type); }}
           title={item.type === 'favorites' ? 'المفضلة' : item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
-          className={`p-1.5 rounded-lg transition-smooth ${
+          aria-label={item.type === 'favorites' ? 'المفضلة' : item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
+          className={`icon-action p-1.5 rounded-lg transition-smooth ${
             lists[item.type].has(verse.id) ? item.activeColor : 'text-gray-400 hover:bg-gray-100'
           }`}
         >
@@ -102,6 +104,7 @@ export function LongPressMenu({
   onAddToList: (verseId: number, listType: ListType) => void;
   onClose: () => void;
 }) {
+  useEscapeClose(true, onClose);
   const items: { type: ListType; icon: React.ReactNode; color: string; label: string }[] = [
     { type: 'favorites', icon: <Heart className="w-4 h-4" />, color: 'text-red-500 bg-red-50', label: 'المفضلة' },
     { type: 'read_later', icon: <Bookmark className="w-4 h-4" />, color: 'text-blue-500 bg-blue-50', label: 'أرجع لها لاحقاً' },
@@ -110,15 +113,15 @@ export function LongPressMenu({
   ];
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs animate-slide-up" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-bold text-accent-800">إضافة إلى قائمة</p>
-          <button onClick={onClose} className="text-gray-400 hover:bg-gray-100 rounded-lg p-1">
+          <button onClick={onClose} aria-label="إغلاق" className="icon-action text-gray-400 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <p className="text-xs text-accent-400 mb-3 text-center">{verse.surah_name} — آية {verse.ayah_no}</p>
+        <p className="text-xs text-accent-600 mb-3 text-center">{verse.surah_name} — آية {verse.ayah_no}</p>
         <div className="space-y-2">
           {items.map((item) => (
             <button
@@ -158,6 +161,7 @@ export function LinkLongPressMenu({
   onAddToList: (verseId: number, listType: ListType, linkId?: number) => void;
   onClose: () => void;
 }) {
+  useEscapeClose(true, onClose);
   const items: { type: ListType; icon: React.ReactNode; color: string; label: string }[] = [
     { type: 'favorites', icon: <Heart className="w-5 h-5" />, color: 'text-red-500 bg-red-50 hover:bg-red-100', label: 'المفضلة' },
     { type: 'read_later', icon: <Bookmark className="w-5 h-5" />, color: 'text-blue-500 bg-blue-50 hover:bg-blue-100', label: 'أرجع لها لاحقاً' },
@@ -166,19 +170,19 @@ export function LinkLongPressMenu({
   ];
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm animate-slide-up" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Bookmark className="w-5 h-5 text-emerald-600" />
             <p className="text-sm font-bold text-accent-800">إضافة الرابط إلى قائمة</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:bg-gray-100 rounded-lg p-1">
+          <button onClick={onClose} aria-label="إغلاق" className="icon-action text-gray-400 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="bg-gray-50 rounded-xl p-3 mb-4">
-          <p className="text-xs text-accent-500 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
+          <p className="text-xs text-accent-600 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
           <p className="text-xs text-accent-700 truncate font-semibold">{link.link_title || link.link_content}</p>
         </div>
         <div className="space-y-2">

@@ -40,7 +40,7 @@ export default function CircularProgressIndicator({
         <span className="font-bold text-emerald-700" style={{ fontSize: size < 80 ? '14px' : '20px' }}>
           {value}%
         </span>
-        {label && <span className="text-[10px] text-accent-400 mt-0.5">{label}</span>}
+        {label && <span className="text-[10px] text-accent-600 mt-0.5">{label}</span>}
       </div>
     </div>
   );

@@ -1,42 +1,108 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useEscapeClose } from '../lib/useEscape';
 import {
   Share2, X, MessageCircle, Mail, Phone, Facebook, Twitter, Link2,
   Send, Linkedin, Copy, Check,
 } from 'lucide-react';
+import { APP_URL, buildShareUrl } from '../lib/shareLinks';
 
 export default function ShareButton({
-  verseText, surahName, ayahNo,
+  verseText, surahName, ayahNo, surahNo, pageNo,
 }: {
   verseText: string;
   surahName: string;
   ayahNo: number;
+  /** Surah number, when known — enables a real ayah deep link. */
+  surahNo?: number;
+  /** Madinah page number, when known — used only if no ayah is given. */
+  pageNo?: number;
 }) {
   const [open, setOpen] = useState(false);
+  useEscapeClose(open, () => setOpen(false));
   const [copied, setCopied] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<{ top: number; left: number; width: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const isGenericAppShare = ayahNo === 0;
+  // Real deep link: an ayah share points at that ayah, a page share at
+  // that page; only the generic (landing) share stays on the bare URL.
+  const shareUrl = isGenericAppShare
+    ? APP_URL
+    : buildShareUrl({ surah: surahNo, ayah: ayahNo, page: pageNo });
+  const shareText = isGenericAppShare
+    ? `روابط الذكر الحكيم\n\nاحفظها بالتربيط:\n${shareUrl}`
+    : `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${shareUrl}`;
+  const encodedText = encodeURIComponent(shareText);
+  const encodedUrl = encodeURIComponent(shareUrl);
+
+  // Position the panel from the trigger's viewport rect when it opens,
+  // and re-measure on resize: the panel is portalled to <body> (below),
+  // so no overflow-hidden ancestor can clip it, and its width is
+  // capped at the viewport (min(340px, 100vw - 2rem)).
+  const measurePanel = () => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const width = Math.min(340, vw - 32);
+    // Align the panel's right edge with the trigger's right edge
+    // (RTL layout), clamped inside the viewport with a 1rem margin.
+    const left = Math.min(Math.max(16, rect.right - width), vw - width - 16);
+    const top = Math.min(rect.bottom + 8, Math.max(8, window.innerHeight - 16));
+    setPanelStyle({ top, left, width });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    measurePanel();
+    window.addEventListener('resize', measurePanel);
+    return () => window.removeEventListener('resize', measurePanel);
+    // Only on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open ]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
 
-  const appUrl = 'https://rawabit-alziker-alhakim.vercel.app';
-  const isGenericAppShare = ayahNo === 0;
-  const shareText = isGenericAppShare
-    ? `روابط الذكر الحكيم\n\nاحفظها بالتربيط:\n${appUrl}`
-    : `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${appUrl}`;
-  const encodedText = encodeURIComponent(shareText);
-  const encodedUrl = encodeURIComponent(appUrl);
-
-  const handleCopy = () => {
-    // Generic share text already contains the URL; per-ayah keeps the
-    // previous copy behavior unchanged.
-    navigator.clipboard.writeText(isGenericAppShare ? shareText : `${shareText}\n${appUrl}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  // Copy only reports success after the write actually resolves. The
+  // async Clipboard API is tried first; on pages where it is
+  // unavailable (non-secure context, denied permission) a hidden
+  // textarea + execCommand fallback runs. If both fail, no "تم النسخ"
+  // is shown — instead the URL is displayed for a manual copy.
+  const handleCopy = async () => {
+    setCopyFailed(false);
+    const text = shareText;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setCopyFailed(true);
+    }
   };
 
   const socialPlatforms = [
@@ -97,8 +163,9 @@ export default function ShareButton({
   // placeholder store URLs that do not exist — removed.)
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative">
       <button
+        ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-base font-bold rounded-xl shadow-lg hover:shadow-xl transition-smooth active:scale-95"
       >
@@ -106,16 +173,21 @@ export default function ShareButton({
         مشاركة
       </button>
 
-      {open && (
+      {open && createPortal(
         <>
-          <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm md:hidden" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 w-[340px] sm:w-[380px] animate-slide-up right-0">
+          <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          {/* Portalled to <body> so overflow-hidden verse cards can never
+              clip it; width capped at min(340px, 100vw - 2rem) and the
+              panel itself scrolls on short landscape heights. */}
+          <div ref={panelRef}
+            className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-gray-200 p-5 animate-slide-up max-h-[calc(100dvh-2rem)] overflow-y-auto"
+            style={panelStyle ? { top: panelStyle.top, left: panelStyle.left, width: panelStyle.width } : { left: 16, right: 16 }}>
             <div className="flex items-center justify-between mb-4">
               <p className="text-base font-bold text-accent-800 flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-emerald-600" />
                 شاركنا في الأجر
               </p>
-              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setOpen(false)} aria-label="إغلاق" className="icon-action text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -131,7 +203,7 @@ export default function ShareButton({
                   key={s.label}
                   href={s.url}
                   onClick={(e) => {
-                    if (s.action) { e.preventDefault(); s.action(); }
+                    if (s.action) { e.preventDefault(); void s.action(); }
                   }}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -150,12 +222,19 @@ export default function ShareButton({
                 التطبيق غير منشور في المتاجر بعد — شارك رابط الويب، وستظهر روابط جوجل بلاي وآب ستور وويندوز هنا بعد النشر الفعلي.
               </p>
               <button
-                onClick={handleCopy}
+                onClick={() => void handleCopy()}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-smooth bg-teal-600 hover:bg-teal-700"
               >
                 <Link2 className="w-5 h-5" />
                 {copied ? 'تم نسخ رابط الويب' : 'نسخ رابط الويب'}
               </button>
+              {copyFailed && (
+                <div className="mt-3">
+                  <p className="text-xs font-bold text-red-600 text-center mb-2">تعذّر النسخ التلقائي — انسخ الرابط يدويًا:</p>
+                  <input readOnly value={shareUrl} onFocus={(e) => e.target.select()}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-xs text-accent-700 break-all" dir="ltr" />
+                </div>
+              )}
             </div>
 
             {/* Native share API */}
@@ -163,7 +242,7 @@ export default function ShareButton({
               <button
                 onClick={async () => {
                   try {
-                    await navigator.share({ title: 'روابط الذكر الحكيم', text: shareText, url: appUrl });
+                    await navigator.share({ title: 'روابط الذكر الحكيم', text: shareText, url: shareUrl });
                   } catch { /* user cancelled */ }
                 }}
                 className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-gray-50 hover:bg-gray-100 text-accent-700 text-sm font-semibold rounded-xl transition-smooth"
@@ -173,7 +252,8 @@ export default function ShareButton({
               </button>
             )}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );

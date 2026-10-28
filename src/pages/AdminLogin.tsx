@@ -38,7 +38,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
               <BookOpen className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-accent-800">لوحة الإدارة</h1>
-            <p className="text-sm text-accent-500 mt-1">روابط الذكر الحكيم</p>
+            <p className="text-sm text-accent-600 mt-1">روابط الذكر الحكيم</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
@@ -93,7 +93,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
 
           <button
             onClick={() => onNavigate('home')}
-            className="flex items-center gap-1.5 mt-6 text-sm text-accent-500 hover:text-accent-700 transition-smooth mx-auto"
+            className="flex items-center gap-1.5 mt-6 text-sm text-accent-600 hover:text-accent-700 transition-smooth mx-auto"
           >
             <ArrowRight className="w-4 h-4" />
             العودة للرئيسية

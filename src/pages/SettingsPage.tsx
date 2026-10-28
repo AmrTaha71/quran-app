@@ -5,7 +5,7 @@ import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
-import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, EDITION_DOWNLOADS } from '../lib/pageDownload';
+import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, EDITION_DOWNLOADS, HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
 
@@ -76,49 +76,98 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [dlRunning, setDlRunning] = useState(false);
   const [dlDone, setDlDone] = useState(0);
   const [dlFailed, setDlFailed] = useState<number[]>([]);
+  const [dlUnverified, setDlUnverified] = useState<number[]>([]);
   const [dlStopped, setDlStopped] = useState(false);
+  const [dlStopping, setDlStopping] = useState(false);
   const [dlError, setDlError] = useState('');
+  const [dlQuotaFull, setDlQuotaFull] = useState(false);
+  // Madinah size-confirm gate (like the optional editions already
+  // have): the first tap runs a storage preflight and shows the size
+  // + free space; only the confirm button starts the ~240 MB run.
+  const [dlConfirm, setDlConfirm] = useState(false);
+  const [dlSpace, setDlSpace] = useState<{ neededMB: number; freeMB: number | null; persisted: boolean | null } | null>(null);
   const dlStopRef = useRef(false);
+  const dlAbortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     if (dlSupported) void countCachedPages('madinah').then(setDlCached);
   }, [dlSupported]);
+  // First tap: preflight (quota estimate + persist request) and show
+  // the confirm gate. A 'low' result REFUSES the run instead of
+  // starting a 240 MB download that is guaranteed to die midway.
+  const askDownload = async () => {
+    if (dlRunning) return;
+    setDlError('');
+    setDlQuotaFull(false);
+    const space = await checkDownloadSpace('madinah', dlCached ?? 0);
+    const persisted = await requestPersistentStorage();
+    setDlSpace({ neededMB: space.neededMB, freeMB: space.freeMB, persisted: persisted ?? space.persisted });
+    if (space.status === 'low') {
+      setDlError(`مساحة جهازك لا تكفي — التحميل يحتاج حوالي ${space.neededMB.toLocaleString('ar-EG')} ميجابايت (بهامش أمان) والمتاح حوالي ${(space.freeMB ?? 0).toFixed(0)} ميجابايت. فضّي مساحة وحاول تاني.`);
+      setDlConfirm(false);
+      return;
+    }
+    setDlConfirm(true);
+  };
   const startDownload = async () => {
     if (dlRunning) return;
     dlStopRef.current = false;
+    dlAbortRef.current = new AbortController();
+    setDlConfirm(false);
     setDlStopped(false);
+    setDlStopping(false);
     setDlError('');
+    setDlQuotaFull(false);
     setDlRunning(true);
     setDlFailed([]);
+    setDlUnverified([]);
     try {
-      try { await (navigator.storage as any)?.persist?.(); } catch {}
-      const { downloaded, failed } = await downloadAllPages('madinah',
-        (p) => { setDlDone(p.done); setDlFailed(p.failed); },
+      const result = await downloadAllPages('madinah',
+        (p) => { setDlDone(p.done); setDlFailed(p.failed); setDlUnverified(p.unverified); },
         () => dlStopRef.current,
+        { signal: dlAbortRef.current.signal },
       );
-      setDlCached(downloaded);
-      setDlFailed(failed);
-      setDlStopped(dlStopRef.current);
+      setDlCached(result.downloaded);
+      setDlFailed(result.failed);
+      setDlUnverified(result.unverified);
+      setDlStopped(result.aborted && !result.quotaExceeded);
+      setDlQuotaFull(result.quotaExceeded);
+      if (result.quotaExceeded) {
+        setDlError('مساحة جهازك ممتلئة — وقف التحميل لأن التخزين خلص. اللي اتحمّل محفوظ، فضّي مساحة ودوس كمّل تحميل الناقص.');
+      }
     } catch {
       setDlError('تعذر التحميل — تأكد من الاتصال بالإنترنت وحاول تاني');
     } finally {
       setDlRunning(false);
+      setDlStopping(false);
+      dlAbortRef.current = null;
     }
   };
-  const stopDownload = () => { dlStopRef.current = true; };
+  // Stop is IMMEDIATE: the abort signal kills in-flight fetches at
+  // once (they have per-fetch timeouts too) and the button flips to
+  // "جارٍ الإيقاف…" right away instead of waiting for 4 fetches.
+  const stopDownload = () => {
+    dlStopRef.current = true;
+    dlAbortRef.current?.abort();
+    setDlStopping(true);
+  };
   const clearDownload = async () => {
     await clearCachedPages('madinah');
     setDlCached(0);
     setDlDone(0);
     setDlFailed([]);
+    setDlUnverified([]);
   };
   // Optional-edition downloads (tajweed / warsh / hafs): same
   // mechanics as Madinah, one state record per edition, and every
   // start goes through a size warning first (confirm flag) — nothing
   // here ever downloads without the user choosing that edition.
-  type OptDl = { cached: number | null; running: boolean; done: number; failed: number[]; stopped: boolean; error: string; confirm: boolean };
-  const emptyOpt = (): OptDl => ({ cached: null, running: false, done: 0, failed: [], stopped: false, error: '', confirm: false });
+  // The confirm tap also runs the storage preflight; 'low' refuses
+  // with the quota message instead of opening the confirm box.
+  type OptDl = { cached: number | null; running: boolean; done: number; failed: number[]; unverified: number[]; stopped: boolean; stopping: boolean; quota: boolean; error: string; confirm: boolean; space: { neededMB: number; freeMB: number | null } | null };
+  const emptyOpt = (): OptDl => ({ cached: null, running: false, done: 0, failed: [], unverified: [], stopped: false, stopping: false, quota: false, error: '', confirm: false, space: null });
   const [optDl, setOptDl] = useState<Record<string, OptDl>>({});
   const optStopRefs = useRef<Record<string, boolean>>({});
+  const optAbortRefs = useRef<Record<string, AbortController | null>>({});
   const patchOpt = (id: string, patch: Partial<OptDl>) =>
     setOptDl((prev) => ({ ...prev, [id]: { ...(prev[id] ?? emptyOpt()), ...patch } }));
   useEffect(() => {
@@ -127,28 +176,48 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       void countCachedPages(ed.id).then((n) => patchOpt(ed.id, { cached: n }));
     }
   }, [dlSupported]);
+  const askOptDownload = async (id: string) => {
+    const st = optDl[id];
+    if (st?.running) return;
+    const space = await checkDownloadSpace(id, st?.cached ?? 0);
+    if (space.status === 'low') {
+      patchOpt(id, { error: `مساحة جهازك لا تكفي — التحميل يحتاج حوالي ${space.neededMB.toLocaleString('ar-EG')} ميجابايت (بهامش أمان) والمتاح حوالي ${(space.freeMB ?? 0).toFixed(0)} ميجابايت. فضّي مساحة وحاول تاني.`, confirm: false });
+      return;
+    }
+    patchOpt(id, { error: '', space: { neededMB: space.neededMB, freeMB: space.freeMB }, confirm: true });
+  };
   const startOptDownload = async (id: string) => {
     const st = optDl[id];
     if (st?.running) return;
     optStopRefs.current[id] = false;
-    patchOpt(id, { confirm: false, stopped: false, error: '', running: true, failed: [] });
+    optAbortRefs.current[id] = new AbortController();
+    patchOpt(id, { confirm: false, stopped: false, stopping: false, quota: false, error: '', running: true, failed: [], unverified: [] });
     try {
-      try { await (navigator.storage as any)?.persist?.(); } catch {}
-      const { downloaded, failed } = await downloadAllPages(id,
-        (p) => { patchOpt(id, { done: p.done, failed: p.failed }); },
+      const result = await downloadAllPages(id,
+        (p) => { patchOpt(id, { done: p.done, failed: p.failed, unverified: p.unverified }); },
         () => !!optStopRefs.current[id],
+        { signal: optAbortRefs.current[id]!.signal },
       );
-      patchOpt(id, { cached: downloaded, failed, stopped: !!optStopRefs.current[id] });
+      patchOpt(id, {
+        cached: result.downloaded, failed: result.failed, unverified: result.unverified,
+        stopped: result.aborted && !result.quotaExceeded, quota: result.quotaExceeded,
+        error: result.quotaExceeded ? 'مساحة جهازك ممتلئة — وقف التحميل لأن التخزين خلص. اللي اتحمّل محفوظ، فضّي مساحة ودوس كمّل تحميل الناقص.' : '',
+      });
     } catch {
       patchOpt(id, { error: 'تعذر التحميل — تأكد من الاتصال بالإنترنت وحاول تاني' });
     } finally {
-      patchOpt(id, { running: false });
+      patchOpt(id, { running: false, stopping: false });
+      optAbortRefs.current[id] = null;
     }
   };
-  const stopOptDownload = (id: string) => { optStopRefs.current[id] = true; };
+  const stopOptDownload = (id: string) => {
+    optStopRefs.current[id] = true;
+    optAbortRefs.current[id]?.abort();
+    patchOpt(id, { stopping: true });
+  };
   const clearOptDownload = async (id: string) => {
     await clearCachedPages(id);
-    patchOpt(id, { cached: 0, done: 0, failed: [] });
+    patchOpt(id, { cached: 0, done: 0, failed: [], unverified: [] });
   };
   // Installed-app (PWA standalone) detection for the install card:
   // standalone means no Safari chrome, no link bar, no fullscreen
@@ -158,18 +227,75 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     } catch { return false; }
   });
+  // Install prompt + platform branching (2026-10-28): the old card
+  // gave Safari Share steps to EVERY non-standalone browser, which
+  // is unusable on Android. Now: capture beforeinstallprompt and
+  // offer a real install button where the browser provides one;
+  // otherwise branch the manual steps by platform (Android menu vs
+  // iOS Safari Share). iOS detection covers iPadOS 13+ (which reports
+  // MacIntel + touch) as well as iPhone/iPod.
+  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
+  const installPromptRef = useRef<typeof installPrompt>(null);
+  const [installOutcome, setInstallOutcome] = useState('');
+  const [installPlatform] = useState<'ios' | 'android' | 'other'>(() => {
+    try {
+      const ua = window.navigator.userAgent || '';
+      const isIOS = /iPad|iPhone|iPod/.test(ua) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+      if (isIOS) return 'ios';
+      if (/Android/.test(ua)) return 'android';
+      return 'other';
+    } catch { return 'other'; }
+  });
+  useEffect(() => {
+    const handler = (e: Event) => {
+      // Prevent the browser's automatic mini-infobar so our own
+      // install button is the one the user taps.
+      e.preventDefault();
+      const ev = e as unknown as { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+      installPromptRef.current = ev;
+      setInstallPrompt(ev);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+  const runInstallPrompt = async () => {
+    const ev = installPromptRef.current;
+    if (!ev) return;
+    try {
+      await ev.prompt();
+      const choice = await ev.userChoice;
+      setInstallOutcome(choice.outcome === 'accepted'
+        ? 'تم قبول التثبيت — افتح التطبيق من أيقونة الشاشة الرئيسية.'
+        : 'تم إلغاء التثبيت — تقدر تحاول تاني في أي وقت من هنا.');
+    } catch {
+      setInstallOutcome('تعذر فتح نافذة التثبيت — جرّب الخطوات اليدوية تحت.');
+    } finally {
+      installPromptRef.current = null;
+      setInstallPrompt(null);
+    }
+  };
   // ADMIN ENTRY (2026-10-27): shown ONLY to users in admin_users.
   // Normal users never see this section — and BottomNav stays at
   // its final 5 items, so الإدارة lives here, not as a tab.
   const [isAdmin, setIsAdmin] = useState(false);
+  // S5: same gate-retry rule as AdminPage — a transient failure must
+  // surface a retry, never silently hide the admin section (which
+  // looked exactly like "not an admin"). maybeSingle(): a non-admin
+  // yields row=null with NO error, so any error is a real failure.
+  const [adminGateError, setAdminGateError] = useState(false);
+  const [adminGateAttempt, setAdminGateAttempt] = useState(0);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       const uid = data.session?.user?.id;
       if (!uid) return;
-      supabase.from('admin_users').select('user_id').eq('user_id', uid).single()
-        .then(({ data: row }) => { if (row) setIsAdmin(true); });
+      setAdminGateError(false);
+      supabase.from('admin_users').select('user_id').eq('user_id', uid).maybeSingle()
+        .then(({ data: row, error }) => {
+          if (error) { setAdminGateError(true); return; }
+          if (row) setIsAdmin(true);
+        });
     });
-  }, []);
+  }, [adminGateAttempt]);
   // EASY PASSWORD CHANGE while logged in (2026-10-27): no email
   // link needed — the logged-in user sets a new password directly.
   const [newPassword, setNewPassword] = useState('');
@@ -231,7 +357,41 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setJustSavedWird(true);
     saved();
   };
-  const resetDefaults = () => {
+  // S5 — truthful reset (was: local-only, so the gender mount effect
+  // re-read the profile and self-undid the gender reset on next
+  // visit, and the wird form's values were untouched). The reset now:
+  // (1) asks for confirmation and states exactly what it resets;
+  // (2) writes gender=null to user_profiles FIRST, so no stale gender
+  // can be re-read back; (3) resets the wird PARTS to the app default
+  // (جديد: صفحتين) while preserving streak/lastDone/doneDays, which
+  // are progress history, not a setting; (4) updates the wird form
+  // state on this page at once. Deliberately NOT touched, and said so
+  // in the confirm + the note under the button: your place in the
+  // Mushaf (quran-mushaf-page) and your self-test settings
+  // (quran-test-settings) — wiping those would destroy progress, and
+  // the button never claimed to reset them by name.
+  const [resetMsg, setResetMsg] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const resetDefaults = async () => {
+    if (!window.confirm(
+      'استعادة الإعدادات الافتراضية؟\n\n' +
+      'سيُعاد: شكل الصفحة، القارئ الافتراضي، الجنس، لغة التطبيق، وأجزاء الورد اليومي.\n' +
+      'سجل إنجاز الورد (الأيام والاستمرارية) محفوظ ولن يتغير.\n' +
+      'لن يتغير: موضعك في المصحف ولا إعدادات التسميع.'
+    )) return;
+    setResetting(true);
+    setResetMsg('');
+    let serverFailed = false;
+    try {
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (uid) {
+        const { error } = await supabase.from('user_profiles').update({ gender: null }).eq('user_id', uid);
+        if (error) serverFailed = true;
+      }
+    } catch {
+      serverFailed = true;
+    }
     setEditionIdx(0);
     setGoldFrame(false);
     setReciterId(DEFAULT_RECITER_ID);
@@ -243,20 +403,32 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       localStorage.removeItem('quran-link-voice');
       localStorage.removeItem('quran-user-gender');
     } catch {}
+    const currentWird = loadWird();
+    const resetWird: WirdState = { ...currentWird, parts: { sabaq: 2, murajaa: 0, manzil: 0 }, target: 2, type: 'sabaq' };
+    saveWird(resetWird);
+    setWird(resetWird);
+    setDraftWird(resetWird);
+    setJustSavedWird(false);
     setLang('ar-EG');
-    saved();
+    setResetting(false);
+    if (serverFailed) {
+      setResetMsg('تمت استعادة الإعدادات المحلية والورد، لكن تعذّر حفظ الجنس على الحساب — الجنس القديم قد يعود عند فتح الإعدادات تاني. حاول تاني.');
+    } else {
+      setResetMsg('تمت استعادة الإعدادات الافتراضية ✓');
+      saved();
+    }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/30 to-white pb-24">
       <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center gap-3">
           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
             <Settings className="w-7 h-7 text-white" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h1 className="text-lg font-bold text-accent-800">الإعدادات</h1>
-            <p className="text-sm text-accent-500">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
+            <p className="text-sm text-accent-600">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
           </div>
           {savedTick && (
             <span className="mr-auto flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
@@ -276,7 +448,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
           </h2>
-          <p className="text-sm text-accent-500 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p>
+          <p className="text-sm text-accent-600 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p>
           {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
             <div key={k} className="flex items-center justify-between gap-3 mb-3">
               <p className="text-sm font-semibold text-accent-700">{WIRD_TYPE_LABEL[k]}</p>
@@ -316,7 +488,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Sparkles className="w-5 h-5 text-amber-500" /> اختر شكل الصفحة بنفسك
           </h2>
-          <p className="text-sm text-accent-500 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p>
+          <p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {EDITIONS.map((ed, i) => (
               <button key={ed.id} onClick={() => pickEdition(i)}
@@ -325,11 +497,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <BookOpen className="w-5 h-5 text-emerald-600" /> {ed.name}
                   {editionIdx === i && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
                 </p>
-                <p className="text-sm text-accent-500 mt-1">{EDITION_NOTES[ed.id] || ''}</p>
+                <p className="text-sm text-accent-600 mt-1">{EDITION_NOTES[ed.id] || ''}</p>
               </button>
             ))}
           </div>
-          <p className="text-xs text-accent-400 mt-3">ملحوظة: المصاحف غير المدينة بتتفتح من النت — لو عايز واحد منها على جهازك حمّله من قسم صفحات المصحف على جهازك تحت.</p>
+          <p className="text-xs text-accent-600 mt-3">ملحوظة: المصاحف غير المدينة بتتفتح من النت — لو عايز واحد منها على جهازك حمّله من قسم صفحات المصحف على جهازك تحت. وتنبيه: الضغط على كلمات الصفحة والتمييز الدقيق داخل الصورة شغال في مصحف المدينة بس — في غيره الصفحة بتتفتح للقراءة، لكن من غير ضغط كلمات ولا تمييز.</p>
           {/* Live preview: the chosen page itself, right here — it
               updates on every choice (edition card or gold toggle),
               so the user sees exactly what the Mushaf will open with. */}
@@ -337,7 +509,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {EDITIONS[editionIdx].name}</p>
             <div className="relative mx-auto w-full max-w-[300px] rounded-lg overflow-hidden shadow-lg bg-amber-50">
               {previewFailed ? (
-                <p className="text-sm text-accent-500 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
+                <p className="text-sm text-accent-600 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
               ) : (
                 <>
                   <img key={EDITIONS[editionIdx].id} src={EDITIONS[editionIdx].imageUrl(2)} alt="معاينة صفحة المصحف"
@@ -350,13 +522,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </>
               )}
             </div>
-            <p className="text-xs text-accent-400 text-center mt-2">صفحة الفاتحة — نفس الشكل اللي هيتفتح بيه المصحف</p>
+            <p className="text-xs text-accent-600 text-center mt-2">صفحة الفاتحة — نفس الشكل اللي هيتفتح بيه المصحف</p>
           </div>
           <button onClick={toggleGold}
             className={`mt-4 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${goldFrame ? 'border-amber-400 bg-amber-50' : 'border-gray-200 hover:border-amber-200'}`}>
             <span className="text-right">
               <span className="block font-bold text-accent-800">إطار ذهبي حول الصفحة</span>
-              <span className="block text-sm text-accent-500">إطار ذهبي أنيق فوق صورة الصفحة في المصحف</span>
+              <span className="block text-sm text-accent-600">إطار ذهبي أنيق فوق صورة الصفحة في المصحف</span>
             </span>
             <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${goldFrame ? 'bg-amber-500' : 'bg-gray-300'}`}>
               <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${goldFrame ? 'mr-auto' : ''}`} />
@@ -377,12 +549,40 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </p>
           ) : (
             <>
-              <p className="text-sm text-accent-500 mb-3">
+              <p className="text-sm text-accent-600 mb-3">
                 الخطوة الأولى قبل تحميل الصفحات: ثبّت التطبيق على الشاشة الرئيسية — كده بيشتغل زي تطبيقات الموبايل، من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
               </p>
-              <p className="text-sm font-bold text-accent-700 leading-relaxed" dir="ltr">
-                Steps: 1. In Safari, tap Share. 2. Tap Add to Home Screen. 3. Open the app from the home screen icon.
-              </p>
+              {/* iOS PWA-orphan warning: the installed app has SEPARATE
+                  storage from Safari (fresh login, counters at 0, and
+                  any pages downloaded in Safari are NOT in the
+                  installed app). Say so before the user installs, and
+                  recommend install-first-then-download ordering. */}
+              {installPlatform === 'ios' && (
+                <p className="text-sm font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3 leading-relaxed">
+                  تنبيه مهم قبل التثبيت على آيفون/آيباد: النسخة المثبتة لها مساحة تخزين منفصلة عن سفاري — بعد التثبيت هتحتاج تسجيل دخول من جديد، وأي صفحات حمّلتها من سفاري مش هتكون موجودة في النسخة المثبتة وهتحتاج تحميلها تاني. عشان كده: ثبّت الأول، وبعدين حمّل الصفحات من داخل التطبيق المثبت.
+                </p>
+              )}
+              {installPrompt ? (
+                <>
+                  <button onClick={runInstallPrompt}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl transition-smooth">
+                    ثبّت التطبيق الآن
+                  </button>
+                  {installOutcome && <p className="text-sm text-accent-500 mt-2">{installOutcome}</p>}
+                </>
+              ) : installPlatform === 'android' ? (
+                <p className="text-sm font-bold text-accent-700 leading-relaxed">
+                  من متصفح كروم على جهازك: افتح قائمة المتصفح (⋮) ثم اختر «إضافة إلى الشاشة الرئيسية» أو «تثبيت التطبيق»، وبعدين افتح التطبيق من الأيقونة الجديدة.
+                </p>
+              ) : installPlatform === 'ios' ? (
+                <p className="text-sm font-bold text-accent-700 leading-relaxed">
+                  من سفاري: اضغط زر المشاركة (Share) ثم «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)، وبعدين افتح التطبيق من أيقونة الشاشة الرئيسية.
+                </p>
+              ) : (
+                <p className="text-sm font-bold text-accent-700 leading-relaxed">
+                  من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»، وبعدين افتح التطبيق من الأيقونة الجديدة.
+                </p>
+              )}
             </>
           )}
         </section>
@@ -394,7 +594,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
           </h2>
-          <p className="text-sm text-accent-500 mb-4">
+          <p className="text-sm text-accent-600 mb-4">
             مصحف المدينة هو الافتراضي: حمّل صفحاته الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي. مفيش حاجة تانية بتتحمل لوحدها.
           </p>
           {!dlSupported ? (
@@ -411,46 +611,71 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(dlDone / 604) * 100}%` }} />
                   </div>
-                  <p className="text-sm text-accent-500 mt-1">جارٍ التحميل… {dlDone.toLocaleString('ar-EG')} من ٦٠٤</p>
+                  <p className="text-sm text-accent-600 mt-1">جارٍ التحميل… {dlDone.toLocaleString('ar-EG')} من ٦٠٤</p>
                 </div>
               )}
               {dlFailed.length > 0 && !dlRunning && (
                 <p className="text-sm text-amber-700 mb-3">تعذر تحميل {dlFailed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
               )}
+              {dlUnverified.length > 0 && !dlRunning && (
+                <p className="text-sm text-amber-700 mb-3">عدد {dlUnverified.length.toLocaleString('ar-EG')} صفحة اتحفظت من غير تأكيد (الشبكة منعت التأكد من سلامتها) — هي بتتفتح من غير نت، لكنها مش محسوبة في العداد، والتحميل الجاي هيأكدها ويحسبها.</p>
+              )}
               {dlStopped && !dlRunning && (
-                <p className="text-sm text-accent-500 mb-3">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
+                <p className="text-sm text-accent-600 mb-3">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
               )}
               {dlError && !dlRunning && (
-                <p className="text-sm text-red-600 mb-3">{dlError}</p>
+                <p className={`text-sm mb-3 ${dlQuotaFull ? 'text-red-600 font-bold' : 'text-red-600'}`}>{dlError}</p>
               )}
-              <div className="flex gap-3">
-                {!dlRunning ? (
-                  <button onClick={startDownload} disabled={dlCached !== null && dlCached >= 604}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
-                    {dlCached !== null && dlCached > 0 && dlCached < 604 ? 'كمّل تحميل الناقص' : 'حمّل كل الصفحات'}
-                  </button>
-                ) : (
-                  <button onClick={stopDownload}
-                    className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-bold rounded-xl">
-                    إيقاف التحميل
-                  </button>
-                )}
-                {dlCached !== null && dlCached > 0 && !dlRunning && (
-                  <button onClick={clearDownload}
-                    className="px-5 py-2.5 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
-                    مسح المحمل
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-accent-400 mt-3 leading-relaxed">
-                ملحوظة: المتصفح ممكن يمسح الصفحات لو مساحة الجهاز ضاقت — العداد هنا هيبين الناقص، ودوسة واحدة ترجّعه.
+              {dlConfirm && !dlRunning ? (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 mb-3">
+                  <p className="text-sm font-bold text-amber-800">
+                    مصحف المدينة حجمه حوالي ٢٤٠ ميجابايت — يفضل واي فاي.
+                    {dlSpace && dlSpace.freeMB !== null && ` المتاح على جهازك حوالي ${dlSpace.freeMB.toFixed(0)} ميجابايت، والتحميل محتاج حوالي ${dlSpace.neededMB.toLocaleString('ar-EG')} ميجابايت.`}
+                    {' '}متأكد عايز تحمله على جهازك؟
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={startDownload}
+                      className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
+                      أيوه، حمّل
+                    </button>
+                    <button onClick={() => setDlConfirm(false)}
+                      className="px-5 py-2 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  {!dlRunning ? (
+                    <button onClick={askDownload} disabled={dlCached !== null && dlCached >= 604}
+                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
+                      {dlCached !== null && dlCached > 0 && dlCached < 604 ? 'كمّل تحميل الناقص' : 'حمّل كل الصفحات'}
+                    </button>
+                  ) : (
+                    <button onClick={stopDownload} disabled={dlStopping}
+                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-bold rounded-xl">
+                      {dlStopping ? 'جارٍ الإيقاف…' : 'إيقاف التحميل'}
+                    </button>
+                  )}
+                  {dlCached !== null && dlCached > 0 && !dlRunning && (
+                    <button onClick={clearDownload}
+                      className="px-5 py-2.5 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                      مسح المحمل
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="text-xs text-accent-600 mt-3 leading-relaxed">
+                {dlSpace?.persisted === true
+                  ? 'التخزين محمي من المسح التلقائي على جهازك ✓ — والعداد هنا هيبين الناقص لو حصل أي مسح، ودوسة واحدة ترجّعه.'
+                  : 'ملحوظة: المتصفح ممكن يمسح الصفحات لو مساحة الجهاز ضاقت — العداد هنا هيبين الناقص، ودوسة واحدة ترجّعه.'}
               </p>
               {/* Optional editions: nothing here downloads unless the
                   user picks that edition, and every start shows the
                   edition's size first (confirm box). */}
               <div className="border-t border-gray-100 mt-5 pt-4">
                 <p className="font-bold text-accent-800 mb-1">مصاحف إضافية — اختياري</p>
-                <p className="text-sm text-accent-500 mb-3">مفيش مصحف بيتحمل لوحده — كل واحد بيتحمل بس لو اخترته من هنا، وبحجمه قبل ما تدوس تحميل.</p>
+                <p className="text-sm text-accent-600 mb-3">مفيش مصحف بيتحمل لوحده — كل واحد بيتحمل بس لو اخترته من هنا، وبحجمه قبل ما تدوس تحميل.</p>
                 <div className="grid gap-3">
                   {EDITION_DOWNLOADS.filter((e) => e.id !== 'madinah').map((ed) => {
                     const st = optDl[ed.id] ?? emptyOpt();
@@ -458,31 +683,41 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                     return (
                       <div key={ed.id} className="rounded-xl border border-gray-200 p-4">
                         <p className="font-bold text-accent-800">{ed.name}</p>
-                        <p className="text-sm text-accent-500">
+                        <p className="text-sm text-accent-600">
                           حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت • {ed.pages.toLocaleString('ar-EG')} صفحة
                           {st.cached === null ? '' : full ? ' • كل الصفحات محملة ✓' : ` • محمل منها ${st.cached.toLocaleString('ar-EG')} من ${ed.pages.toLocaleString('ar-EG')}`}
                         </p>
+                        {ed.id === 'hafs' && (
+                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-2 leading-relaxed">
+                            ملحوظة: صفحة {HAFS_UNAVAILABLE_PAGE} من مصحف حفص غير متاحة للتحميل (الخادم يرفضها، ولا بديل لها حاليًا) — الـ {ed.pages.toLocaleString('ar-EG')} صفحة هي كل الصفحات المتاحة، و«محمل بالكامل» تعني اكتمال المتاح فقط، مش الصفحة الناقصة.
+                          </p>
+                        )}
                         {st.running && (
                           <div className="mt-3">
                             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                               <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(st.done / ed.pages) * 100}%` }} />
                             </div>
-                            <p className="text-sm text-accent-500 mt-1">جارٍ التحميل… {st.done.toLocaleString('ar-EG')} من {ed.pages.toLocaleString('ar-EG')}</p>
+                            <p className="text-sm text-accent-600 mt-1">جارٍ التحميل… {st.done.toLocaleString('ar-EG')} من {ed.pages.toLocaleString('ar-EG')}</p>
                           </div>
                         )}
                         {st.failed.length > 0 && !st.running && (
                           <p className="text-sm text-amber-700 mt-2">تعذر تحميل {st.failed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
                         )}
+                        {st.unverified.length > 0 && !st.running && (
+                          <p className="text-sm text-amber-700 mt-2">عدد {st.unverified.length.toLocaleString('ar-EG')} صفحة اتحفظت من غير تأكيد (الشبكة منعت التأكد من سلامتها) — هي بتتفتح من غير نت، لكنها مش محسوبة في العداد، والتحميل الجاي هيأكدها ويحسبها.</p>
+                        )}
                         {st.stopped && !st.running && (
-                          <p className="text-sm text-accent-500 mt-2">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
+                          <p className="text-sm text-accent-600 mt-2">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
                         )}
                         {st.error && !st.running && (
-                          <p className="text-sm text-red-600 mt-2">{st.error}</p>
+                          <p className={`text-sm mt-2 ${st.quota ? 'text-red-600 font-bold' : 'text-red-600'}`}>{st.error}</p>
                         )}
                         {st.confirm && !st.running ? (
                           <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
                             <p className="text-sm font-bold text-amber-800">
-                              {ed.name} حجمه حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت — يفضل واي فاي. متأكد عايز تحمله على جهازك؟
+                              {ed.name} حجمه حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت — يفضل واي فاي.
+                              {st.space && st.space.freeMB !== null && ` المتاح على جهازك حوالي ${st.space.freeMB.toFixed(0)} ميجابايت.`}
+                              {' '}متأكد عايز تحمله على جهازك؟
                             </p>
                             <div className="flex gap-2 mt-2">
                               <button onClick={() => startOptDownload(ed.id)}
@@ -498,14 +733,14 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                         ) : (
                           <div className="flex gap-2 mt-3">
                             {!st.running ? (
-                              <button onClick={() => patchOpt(ed.id, { confirm: true })} disabled={full}
+                              <button onClick={() => askOptDownload(ed.id)} disabled={full}
                                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
                                 {full ? 'محمل بالكامل ✓' : st.cached !== null && st.cached > 0 ? 'كمّل تحميل الناقص' : 'حمّل المصحف'}
                               </button>
                             ) : (
-                              <button onClick={() => stopOptDownload(ed.id)}
-                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-bold rounded-xl">
-                                إيقاف التحميل
+                              <button onClick={() => stopOptDownload(ed.id)} disabled={st.stopping}
+                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-bold rounded-xl">
+                                {st.stopping ? 'جارٍ الإيقاف…' : 'إيقاف التحميل'}
                               </button>
                             )}
                             {st.cached !== null && st.cached > 0 && !st.running && (
@@ -530,29 +765,29 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Volume2 className="w-5 h-5 text-emerald-600" /> التلاوة والصوت
           </h2>
-          <p className="text-sm text-accent-500 mb-4">القارئ الافتراضي لتلاوة الآيات.</p>
+          <p className="text-sm text-accent-600 mb-4">القارئ الافتراضي لتلاوة الآيات.</p>
           <p className="text-sm font-semibold text-accent-700 mb-2">القارئ الافتراضي</p>
           <div className="flex flex-wrap gap-2 mb-5">
             {RECITERS.map((r) => (
               <button key={r.id} onClick={() => pickReciter(r.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold border transition-smooth ${reciterId === r.id ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-bold border transition-smooth ${reciterId === r.id ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
                 {r.name}
               </button>
             ))}
           </div>
           <p className="text-sm font-semibold text-accent-700 mb-2">الجنس — يحدد صوت روابط الآيات</p>
-          <p className="text-xs text-accent-400 mb-3">للرجال: الصوت الرجالي المولّد دائماً. للنساء: الصوت النسائي.</p>
+          <p className="text-xs text-accent-600 mb-3">للرجال: الصوت الرجالي المولّد دائماً. للنساء: الصوت النسائي.</p>
           <div className="flex gap-2">
             <button onClick={() => pickGender('female')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'female' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'female' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
               امرأة
             </button>
             <button onClick={() => pickGender('male')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'male' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'male' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
               رجل
             </button>
           </div>
-          {!linkGender && <p className="text-xs text-accent-400 mt-2">لم تختر بعد — التطبيق يستخدم الصوت النسائي حتى تختار.</p>}
+          {!linkGender && <p className="text-xs text-accent-600 mt-2">لم تختر بعد — التطبيق يستخدم الصوت النسائي حتى تختار.</p>}
         </section>
 
         {/* Language */}
@@ -563,7 +798,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div className="flex flex-wrap gap-2">
             {LANGUAGES.map((l) => (
               <button key={l.code} onClick={() => { setLang(l.code); saved(); }}
-                className={`px-4 py-2 rounded-lg text-sm font-bold border transition-smooth ${lang === l.code ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-bold border transition-smooth ${lang === l.code ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
                 {l.flag} {l.nativeName}
               </button>
             ))}
@@ -575,7 +810,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Lock className="w-5 h-5 text-emerald-600" /> كلمة السر
           </h2>
-          <p className="text-sm text-accent-500 mb-4">غيّر كلمة السر من هنا على طول، من غير ما تستنى رابط إيميل.</p>
+          <p className="text-sm text-accent-600 mb-4">غيّر كلمة السر من هنا على طول، من غير ما تستنى رابط إيميل.</p>
           <div className="relative">
             <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
               placeholder="كلمة سر جديدة (٦ أحرف على الأقل)"
@@ -585,30 +820,47 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
-          {passwordMsg && <p className="text-xs text-accent-500 mt-2">{passwordMsg}</p>}
+          {passwordMsg && <p className="text-xs text-accent-600 mt-2">{passwordMsg}</p>}
           <button onClick={changePassword}
-            className="mt-3 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+            className="mt-3 w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition-smooth">
             حفظ كلمة السر الجديدة
           </button>
         </section>
+
+        {adminGateError && (
+          <section className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+            <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+              <Shield className="w-5 h-5 text-amber-600" /> لوحة الإدارة
+            </h2>
+            <p className="text-sm text-accent-500 mb-4">تعذّر التأكد من صلاحية الإدارة — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
+            <button onClick={() => setAdminGateAttempt((a) => a + 1)}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+              إعادة المحاولة
+            </button>
+          </section>
+        )}
 
         {isAdmin && (
           <section className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5">
             <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
             </h2>
-            <p className="text-sm text-accent-500 mb-4">القسم ده بيظهر للأدمن بس — المستخدم العادي مش بيشوفه.</p>
+            <p className="text-sm text-accent-600 mb-4">القسم ده بيظهر للأدمن بس — المستخدم العادي مش بيشوفه.</p>
             <button onClick={() => onNavigate('admin')}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition-smooth">
               افتح لوحة الإدارة
             </button>
           </section>
         )}
 
-        <button onClick={resetDefaults}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-bold rounded-xl border border-gray-200 transition-smooth">
-          <RotateCcw className="w-5 h-5" /> استعادة الإعدادات الافتراضية
+        <button onClick={resetDefaults} disabled={resetting}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-bold rounded-xl border border-gray-200 transition-smooth disabled:opacity-50">
+          <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
         </button>
+        <p className="text-xs text-accent-400 leading-relaxed -mt-2">
+          يعيد: شكل الصفحة، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
+        </p>
+        {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
       </div>
 
       <BottomNav current="settings" onNavigate={onNavigate} />

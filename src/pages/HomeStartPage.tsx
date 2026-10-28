@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
@@ -54,6 +55,7 @@ export default function HomeStartPage({ session, onNavigate }: {
     try { localStorage.setItem('quran-first-run-seen', '1'); } catch { /* ignore */ }
     setShowIntro(false);
   };
+  useEscapeClose(showIntro, dismissIntro);
   const [lastPage] = useState(readLastPage);
   const [wird] = useState(loadWird);
   const today = new Date().toLocaleDateString('en-CA');
@@ -98,11 +100,11 @@ export default function HomeStartPage({ session, onNavigate }: {
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <img src="/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
           <div>
             <h1 className="text-lg font-bold text-accent-800" style={{ fontFamily: "'Noto Naskh Arabic', serif" }}>روابط الذكر الحكيم</h1>
-            <p className="text-sm text-accent-500">للحفظ بالتربيطات</p>
+            <p className="text-sm text-accent-600">للحفظ بالتربيطات</p>
           </div>
         </div>
       </header>
@@ -116,7 +118,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
-          <p className="text-sm text-accent-500 mt-1">
+          <p className="text-sm text-accent-600 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
           </p>
           <p className="text-sm text-emerald-700 font-semibold mt-2">
@@ -149,7 +151,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           <p className="font-bold text-accent-800">
             ورد اليوم: {WIRD_TYPE_LABEL[wird.type]} — {pagesText}
           </p>
-          <p className="text-sm text-accent-500 mt-1">
+          <p className="text-sm text-accent-600 mt-1">
             {doneToday ? 'تم ✓ تقبل الله منك.' : 'لم ينجز بعد — من لوحتي علّمه منجزا.'}
           </p>
         </button>
@@ -160,7 +162,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <p className="font-bold text-accent-800 flex items-center gap-2">
               <Link className="w-5 h-5 text-amber-600" /> تربيط اليوم
             </p>
-            <p className="text-sm text-accent-500 mt-1">
+            <p className="text-sm text-accent-600 mt-1">
               سورة {linkOfDay.surahName} — آية {linkOfDay.ayah.toLocaleString('ar-EG')}
               {linkOfDay.title ? ` — ${linkOfDay.title}` : ''}
             </p>
@@ -217,7 +219,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50" onClick={dismissIntro}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
             <p className="text-lg font-bold text-accent-800 mb-1">احفظ القرآن بالتربيطات</p>
-            <p className="text-sm text-accent-500 mb-4">٣ خطوات، وكل آية تثبت في ذهنك:</p>
+            <p className="text-sm text-accent-600 mb-4">٣ خطوات، وكل آية تثبت في ذهنك:</p>
             <ol className="text-right space-y-3 text-base text-accent-700">
               <li><span className="font-bold text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
               <li><span className="font-bold text-amber-700">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>

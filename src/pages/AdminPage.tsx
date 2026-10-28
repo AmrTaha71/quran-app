@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { loadVerseIndex, searchVerseIds } from '../lib/searchIndex';
 import { signOut } from '../lib/auth';
 import type { Session } from '@supabase/supabase-js';
 import type { QuranVerse, VerseFilter, AyahLink } from '../lib/types';
 import { TOTAL_VERSES, LINK_TYPES } from '../lib/types';
+import { formatAr } from '../lib/numerals';
 import { SURAHS } from '../lib/surahs';
 import {
   BookOpen, LogOut, Search, Bookmark, Settings, Trash2,
@@ -52,12 +54,32 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [pendingLinks, setPendingLinks] = useState<AyahLink[]>([]);
   const [pendingVerses, setPendingVerses] = useState<Record<number, QuranVerse>>({});
   const [showPending, setShowPending] = useState(false);
+  useEscapeClose(showPending, () => setShowPending(false));
   // Pending queue pagination: the queue renders cards with inputs and
   // voice buttons, so showing hundreds at once would freeze the page.
   // Rana sees 50 at a time and loads more on demand.
   const [pendingVisible, setPendingVisible] = useState(50);
   const [rephrasingId, setRephrasingId] = useState<number | null>(null);
-  const [rephraseCmd, setRephraseCmd] = useState('');
+  // S5: per-card rephrase input (was one shared string, so typing in
+  // card A sent from card B). Keyed by pending-link id.
+  const [rephraseCmds, setRephraseCmds] = useState<Record<number, string>>({});
+  // S5: busy map for approve/reject/delete/edit/voice/proposal actions
+  // (was: no disable-while-saving, so double taps double-fired).
+  const [savingIds, setSavingIds] = useState<Record<number, boolean>>({});
+  const setSaving = (id: number, v: boolean) =>
+    setSavingIds((prev) => ({ ...prev, [id]: v }));
+  // S5: action failure surfaced in place (was: a failed update looked
+  // identical to success until the next refetch).
+  const [adminError, setAdminError] = useState('');
+  // S5: queue-load failure must NOT look like "no pending links".
+  const [pendingError, setPendingError] = useState('');
+  const [pendingLoaded, setPendingLoaded] = useState(false);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  // S5 (V10): admin membership set for the queue badge. is_ai_draft
+  // defaults to false, so admin LinkModal rows and user suggestions
+  // are indistinguishable on that column alone; the badge below uses
+  // this set (+ absence of an original recording) instead.
+  const [adminIds, setAdminIds] = useState<Set<string> | null>(null);
   // AI proposals awaiting the admin's decision (per pending link).
   // A proposal is NOT written to the database until the admin approves
   // it, so re-requesting never destroys the current text.
@@ -196,34 +218,60 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     // all 6236. Rendering still slices to pendingVisible (50) at a
     // time, so the page itself does not try to render thousands of
     // cards at once.
+    // S5: a failed load now sets pendingError and KEEPS the previous
+    // list (was: silently ignored, so a failure looked exactly like
+    // an empty queue and the review button never appeared).
+    setPendingLoading(true);
+    setPendingError('');
     const all: any[] = [];
     let from = 0;
     for (;;) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('ayah_links')
         .select(`*, quran_verses!inner(id, surah_no, surah_name, ayah_no, ayah_text)`)
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .range(from, from + 999);
-      if (!data || data.length === 0) break;
+      if (error || !data) {
+        setPendingError('تعذّر تحميل قائمة المراجعة — تحقق من الاتصال وحاول تاني. القائمة المعروضة (لو فيه) قديمة.');
+        setPendingLoading(false);
+        return;
+      }
+      if (data.length === 0) break;
       all.push(...data);
       if (data.length < 1000) break;
       from += 1000;
     }
-    if (all.length > 0) {
-      setPendingLinks(all as unknown as AyahLink[]);
-      const verseMap: Record<number, QuranVerse> = {};
-      all.forEach((d) => {
-        const v = d.quran_verses;
-        if (v) verseMap[d.verse_id] = v;
-      });
-      setPendingVerses(verseMap);
-    }
+    // Always set, even when empty: after the last pending link is
+    // decided, the queue must read empty instead of going stale.
+    setPendingLinks(all as unknown as AyahLink[]);
+    const verseMap: Record<number, QuranVerse> = {};
+    all.forEach((d) => {
+      const v = d.quran_verses;
+      if (v) verseMap[d.verse_id] = v;
+    });
+    setPendingVerses(verseMap);
+    setPendingLoaded(true);
+    setPendingLoading(false);
   }, []);
 
   useEffect(() => { fetchVerses(); }, [fetchVerses]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { fetchPendingLinks(); }, [fetchPendingLinks]);
+
+  // S5 (V10): admin membership for the queue badge. If this fetch
+  // fails, adminIds stays null and the badge is hidden rather than
+  // shown on uncertain data — never guess "user suggestion" for a row
+  // whose creator is unknown. NOTE: any non-error response is treated
+  // as complete, and with select-own-only RLS the set is in practice
+  // just the viewer — so another admin's text-only row could slip past
+  // signal 1 and be misbadged; the durable fix is a DB source column.
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    supabase.from('admin_users').select('user_id').then(({ data, error }) => {
+      if (!error && data) setAdminIds(new Set(data.map((r: { user_id: string }) => r.user_id)));
+    });
+  }, [session?.user?.id]);
 
   const fetchUserStats = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_user_stats');
@@ -259,39 +307,91 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     setVerseLinks(data || []);
   };
 
+  // S5: remove a decided row from local state at once. The queue
+  // is NOT re-downloaded per action (was: every approve/reject
+  // re-fetched all 6,236 rows). Only the cheap head-count stats are
+  // refreshed after an approval, since publication moves the counts;
+  // the full queue reloads on demand via "تحديث القائمة".
+  const removePendingLocal = (linkId: number) => {
+    const removed = pendingLinks.find((l) => l.id === linkId);
+    setPendingLinks((prev) => prev.filter((l) => l.id !== linkId));
+    if (removed && !pendingLinks.some((l) => l.id !== linkId && l.verse_id === removed.verse_id)) {
+      setPendingVerses((prev) => {
+        const next = { ...prev };
+        delete next[removed.verse_id];
+        return next;
+      });
+    }
+    setProposals((prev) => {
+      if (!(linkId in prev)) return prev;
+      const next = { ...prev };
+      delete next[linkId];
+      return next;
+    });
+  };
+
   const deleteLink = async (linkId: number) => {
-    await supabase.from('ayah_links').delete().eq('id', linkId);
-    if (showLinksFor) fetchVerseLinks(showLinksFor);
-    fetchVerses();
+    if (!window.confirm('حذف هذا الرابط نهائيًا؟ لا يمكن التراجع.')) return;
+    if (savingIds[linkId]) return;
+    setSaving(linkId, true);
+    setAdminError('');
+    const { error } = await supabase.from('ayah_links').delete().eq('id', linkId);
+    if (error) {
+      setAdminError('تعذّر حذف الرابط — لم يتغير شيء، حاول تاني.');
+    } else {
+      if (showLinksFor) fetchVerseLinks(showLinksFor);
+      fetchVerses();
+    }
+    setSaving(linkId, false);
   };
 
   const approveLink = async (linkId: number) => {
-    await supabase.from('ayah_links').update({ status: 'approved' }).eq('id', linkId);
-    fetchPendingLinks(); fetchStats(); fetchVerses();
+    if (savingIds[linkId]) return;
+    setSaving(linkId, true);
+    setAdminError('');
+    const { error } = await supabase.from('ayah_links').update({ status: 'approved' }).eq('id', linkId);
+    if (error) {
+      setAdminError('تعذّر نشر الرابط — لم يتغير شيء، حاول تاني.');
+    } else {
+      removePendingLocal(linkId);
+      fetchStats();
+    }
+    setSaving(linkId, false);
   };
 
   const rejectLink = async (linkId: number) => {
-    await supabase.from('ayah_links').update({ status: 'rejected' }).eq('id', linkId);
-    fetchPendingLinks();
+    if (!window.confirm('رفض هذا الرابط؟ سيختفي من قائمة المراجعة ولن يظهر للمستخدمين.')) return;
+    if (savingIds[linkId]) return;
+    setSaving(linkId, true);
+    setAdminError('');
+    const { error } = await supabase.from('ayah_links').update({ status: 'rejected' }).eq('id', linkId);
+    if (error) {
+      setAdminError('تعذّر رفض الرابط — لم يتغير شيء، حاول تاني.');
+    } else {
+      removePendingLocal(linkId);
+    }
+    setSaving(linkId, false);
   };
 
   const rephrasePending = async (link: AyahLink) => {
+    const cmd = rephraseCmds[link.id] || '';
     setRephrasingId(link.id);
+    setAdminError('');
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-rephrase`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ text: link.link_content, command: rephraseCmd || undefined, mode: 'rephrase' }),
+        body: JSON.stringify({ text: link.link_content, command: cmd || undefined, mode: 'rephrase' }),
       });
       if (!res.ok) throw new Error('فشل');
       const data = await res.json();
       const newText = data.rephrased || link.link_content;
       // Proposal only: the admin approves it, discards it, or asks
       // for another version. The stored text is untouched until approval.
-      setProposals((prev) => ({ ...prev, [link.id]: { text: newText, command: rephraseCmd || '' } }));
-      setRephraseCmd('');
+      setProposals((prev) => ({ ...prev, [link.id]: { text: newText, command: cmd } }));
+      setRephraseCmds((prev) => ({ ...prev, [link.id]: '' }));
     } catch {
-      alert('تعذر إعادة الصياغة');
+      setAdminError('تعذّر إعادة الصياغة — حاول تاني.');
     }
     setRephrasingId(null);
   };
@@ -299,10 +399,17 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // Approve a proposed AI version: only now is it written to the DB.
   const applyProposal = async (linkId: number) => {
     const proposal = proposals[linkId];
-    if (!proposal) return;
-    await supabase.from('ayah_links').update({ link_content: proposal.text, rephrase_command: proposal.command || null }).eq('id', linkId);
-    setProposals((prev) => { const next = { ...prev }; delete next[linkId]; return next; });
-    fetchPendingLinks();
+    if (!proposal || savingIds[linkId]) return;
+    setSaving(linkId, true);
+    setAdminError('');
+    const { error } = await supabase.from('ayah_links').update({ link_content: proposal.text, rephrase_command: proposal.command || null }).eq('id', linkId);
+    if (error) {
+      setAdminError('تعذّر حفظ الصياغة المقترحة — النص الأصلي محفوظ، حاول تاني.');
+    } else {
+      setPendingLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, link_content: proposal.text, rephrase_command: proposal.command || null } : l)));
+      setProposals((prev) => { const next = { ...prev }; delete next[linkId]; return next; });
+    }
+    setSaving(linkId, false);
   };
 
   const discardProposal = (linkId: number) => {
@@ -312,9 +419,17 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const startEditText = (link: AyahLink) => { setEditingLinkId(link.id); setEditText(link.link_content); };
 
   const saveEditText = async (linkId: number) => {
-    await supabase.from('ayah_links').update({ link_content: editText.trim() }).eq('id', linkId);
-    setEditingLinkId(null);
-    fetchPendingLinks();
+    if (savingIds[linkId]) return;
+    setSaving(linkId, true);
+    setAdminError('');
+    const { error } = await supabase.from('ayah_links').update({ link_content: editText.trim() }).eq('id', linkId);
+    if (error) {
+      setAdminError('تعذّر حفظ النص المعدّل — حاول تاني.');
+    } else {
+      setPendingLinks((prev) => prev.map((l) => (l.id === linkId ? { ...l, link_content: editText.trim() } : l)));
+      setEditingLinkId(null);
+    }
+    setSaving(linkId, false);
   };
 
   const generateVoiceForLink = async (link: AyahLink, voice: 'male' | 'female') => {
@@ -344,16 +459,24 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       // there only when no female voice exists yet.
       const legacyUrl = voice === 'female' ? data.audioUrl : (link.synthetic_audio_url_female ?? data.audioUrl);
       const legacyType = voice === 'female' ? 'female' : (link.synthetic_audio_url_female ? 'female' : 'male');
-      await supabase.from('ayah_links').update({
+      const { error: saveError } = await supabase.from('ayah_links').update({
         synthetic_audio_url: legacyUrl,
         voice_type: legacyType,
         ...(voice === 'female'
           ? { synthetic_audio_url_female: data.audioUrl }
           : { synthetic_audio_url_male: data.audioUrl }),
       }).eq('id', link.id);
-      fetchPendingLinks();
+      if (saveError) throw saveError;
+      setPendingLinks((prev) => prev.map((l) => (l.id === link.id ? {
+        ...l,
+        synthetic_audio_url: legacyUrl,
+        voice_type: legacyType,
+        ...(voice === 'female'
+          ? { synthetic_audio_url_female: data.audioUrl }
+          : { synthetic_audio_url_male: data.audioUrl }),
+      } : l)));
     } catch {
-      alert('تعذر توليد الصوت المخلّق');
+      setAdminError('تعذّر توليد الصوت المخلّق — حاول تاني.');
     }
     setGeneratingVoiceId(null);
   };
@@ -377,19 +500,29 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // never sees an admin entry and, even if they type #/admin,
   // gets this plain message instead of the admin UI.
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  // S5: a transient gate-check failure must offer retry, never a bare
+  // "admin only" dead end to a real admin. maybeSingle() is the key:
+  // a non-admin yields data=null with NO error, so any error here is
+  // a genuine failure (network/permission), not "not an admin".
+  const [gateError, setGateError] = useState(false);
+  const [gateAttempt, setGateAttempt] = useState(0);
   useEffect(() => {
     if (!session?.user?.id) { setIsAdmin(false); return; }
-    supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).single()
-      .then(({ data }) => setIsAdmin(!!data));
-  }, [session?.user?.id]);
+    setGateError(false);
+    supabase.from('admin_users').select('user_id').eq('user_id', session.user.id).maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { setGateError(true); return; }
+        setIsAdmin(!!data);
+      });
+  }, [session?.user?.id, gateAttempt]);
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
           <h1 className="text-xl font-bold text-accent-800 mb-2">لوحة الإدارة</h1>
-          <p className="text-sm text-accent-500 mb-5">سجل دخول بحسابك العادي أولاً — لو حسابك أدمن، الإدارة هتفتح لك من الإعدادات.</p>
+          <p className="text-sm text-accent-600 mb-5">سجل دخول بحسابك العادي أولاً — لو حسابك أدمن، الإدارة هتفتح لك من الإعدادات.</p>
           <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">تسجيل الدخول</button>
-          <button onClick={() => onNavigate('home')} className="w-full text-sm text-accent-500 hover:text-accent-700 py-3">العودة للرئيسية</button>
+          <button onClick={() => onNavigate('home')} className="w-full text-sm text-accent-600 hover:text-accent-700 py-3">العودة للرئيسية</button>
         </div>
       </div>
     );
@@ -397,12 +530,24 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   if (isAdmin === null) {
     return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" /></div>;
   }
+  if (gateError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
+          <h1 className="text-xl font-bold text-accent-800 mb-2">تعذّر التأكد من صلاحية الإدارة</h1>
+          <p className="text-sm text-accent-500 mb-5">الاتصال بالخادم فشل أثناء التحقق — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
+          <button onClick={() => setGateAttempt((a) => a + 1)} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">إعادة المحاولة</button>
+          <button onClick={() => onNavigate('app')} className="w-full text-sm text-accent-500 hover:text-accent-700 py-3">العودة للوحتي</button>
+        </div>
+      </div>
+    );
+  }
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
           <h1 className="text-xl font-bold text-accent-800 mb-2">الصفحة دي للأدمن بس</h1>
-          <p className="text-sm text-accent-500 mb-5">حسابك شغال كمستخدم عادي تماماً، وده مقصود — الإدارة مش بتظهر للمستخدم العادي.</p>
+          <p className="text-sm text-accent-600 mb-5">حسابك شغال كمستخدم عادي تماماً، وده مقصود — الإدارة مش بتظهر للمستخدم العادي.</p>
           <button onClick={() => onNavigate('app')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">العودة للوحتي</button>
         </div>
       </div>
@@ -434,18 +579,18 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-gray-50 to-gray-50">
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-emerald-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl flex items-center justify-center shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <BookOpen className="w-5 h-5 text-white" />
             </div>
             <div>
               <h1 className="text-base font-bold text-accent-800">روابط الذكر الحكيم</h1>
-              <p className="text-xs text-accent-500">لوحة الإدارة — {session.user.email}</p>
+              <p className="text-xs text-accent-600 truncate">لوحة الإدارة — {session.user.email}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {pendingLinks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            {(pendingLinks.length > 0 || pendingError) && (
               <button onClick={() => { setPendingVisible(50); setShowPending(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-smooth font-semibold border border-amber-200">
                 <Clock className="w-4 h-4" /> مراجعة ({pendingLinks.length})
@@ -464,6 +609,18 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       </header>
 
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {pendingError && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 mb-4 flex flex-wrap items-center gap-3">
+            <p className="text-sm font-semibold text-red-700 flex-1">{pendingError}</p>
+            <button onClick={() => fetchPendingLinks()} className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg">إعادة تحميل القائمة</button>
+          </div>
+        )}
+        {adminError && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 mb-4 flex items-center gap-3">
+            <p className="text-sm font-semibold text-red-700 flex-1">{adminError}</p>
+            <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
+          </div>
+        )}
         {/* Dashboard — beautified */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
           <div className="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 rounded-2xl p-6 flex items-center gap-6 shadow-lg relative overflow-hidden">
@@ -515,7 +672,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-bold text-accent-800">رصيد OpenAI (تقديري)</p>
-              <p className="text-xs text-accent-500 mt-0.5">من سجل استخدام التطبيق فقط — الرقم الدقيق في صفحة Usage على OpenAI</p>
+              <p className="text-xs text-accent-600 mt-0.5">من سجل استخدام التطبيق فقط — الرقم الدقيق في صفحة Usage على OpenAI</p>
             </div>
             {usage && (
               <button onClick={loadUsage} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-smooth">
@@ -527,14 +684,14 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="mt-4">
               <div className="flex flex-wrap gap-6">
                 <div>
-                  <p className="text-xs text-accent-500 font-semibold">المتبقي التقديري</p>
+                  <p className="text-xs text-accent-600 font-semibold">المتبقي التقديري</p>
                   <p className="text-2xl font-bold text-emerald-700">${Math.max(0, startingBalance - usage.total).toFixed(2)}</p>
-                  <p className="text-xs text-accent-400">من ${startingBalance.toFixed(2)}</p>
+                  <p className="text-xs text-accent-600">من ${startingBalance.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-accent-500 font-semibold">المصروف التقديري</p>
+                  <p className="text-xs text-accent-600 font-semibold">المصروف التقديري</p>
                   <p className="text-2xl font-bold text-accent-800">${usage.total.toFixed(4)}</p>
-                  <p className="text-xs text-accent-400">عبر {usage.calls.toLocaleString('ar-EG')} مكالمة</p>
+                  <p className="text-xs text-accent-600">عبر {usage.calls.toLocaleString('ar-EG')} مكالمة</p>
                 </div>
               </div>
               {Math.max(0, startingBalance - usage.total) < 1 && (
@@ -554,19 +711,19 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <input value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} inputMode="decimal"
                     placeholder="5.00"
                     className="w-32 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500" />
-                  <button onClick={saveStartingBalance} className="px-3 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-xl">حفظ</button>
-                  <button onClick={() => setEditingBalance(false)} className="px-3 py-2 text-sm text-accent-500">إلغاء</button>
+                  <button onClick={saveStartingBalance} className="px-3 py-2 bg-emerald-700 text-white text-sm font-semibold rounded-xl">حفظ</button>
+                  <button onClick={() => setEditingBalance(false)} className="px-3 py-2 text-sm text-accent-600">إلغاء</button>
                 </div>
               ) : (
                 <button onClick={() => { setBalanceDraft(String(startingBalance)); setUsageError(''); setEditingBalance(true); }}
-                  className="mt-4 text-xs text-accent-500 underline underline-offset-2 hover:text-accent-700">
+                  className="mt-4 text-xs text-accent-600 underline underline-offset-2 hover:text-accent-700">
                   تعديل الرصيد الابتدائي (لو شحنت رصيد جديد)
                 </button>
               )}
               {usageError && <p className="text-xs text-red-500 mt-2">{usageError}</p>}
             </div>
           ) : (
-            <p className="text-sm text-accent-500 mt-3">لا توجد بيانات استخدام بعد — تبدأ مع أول استخدام للذكاء بعد التحديث.</p>
+            <p className="text-sm text-accent-600 mt-3">لا توجد بيانات استخدام بعد — تبدأ مع أول استخدام للذكاء بعد التحديث.</p>
           )}
         </div>
 
@@ -576,11 +733,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                placeholder="بحث بالنص (٣ كلمات)، رقم، أو سورة:آية (مثل 2:255)..."
+                placeholder="بحث بالنص، رقم، أو سورة:آية (مثل 2:255)..."
                 className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-smooth" />
             </div>
             {searchHint && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+              <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> {searchHint}
               </div>
             )}
@@ -601,7 +758,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 </button>
               ))}
             </div>
-            <button onClick={exportExcel} className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-smooth shadow-sm">
+            <button onClick={exportExcel} className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-smooth shadow-sm">
               <Download className="w-4 h-4" /> تصدير
             </button>
           </div>
@@ -612,19 +769,19 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded border-r-4 border-emerald-400 bg-emerald-50"></div>
-              <span className="text-xs text-accent-500">آية لها رابط</span>
+              <span className="text-xs text-accent-600">آية لها رابط</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded border-r-4 border-red-400 bg-red-50"></div>
-              <span className="text-xs text-accent-500">آية بدون روابط</span>
+              <span className="text-xs text-accent-600">آية بدون روابط</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Bookmark className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-xs text-accent-500">سجلي المقطع يا رنا — تسجيل رابط</span>
+              <span className="text-xs text-accent-600">سجلي المقطع يا رنا — تسجيل رابط</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Settings className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-xs text-accent-500">عرض الروابط</span>
+              <span className="text-xs text-accent-600">عرض الروابط</span>
             </div>
           </div>
         </div>
@@ -660,10 +817,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                           <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg">{verse.surah_no}:{verse.ayah_no}</span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
-                          <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-600 bg-emerald-50' : 'text-gray-500 bg-gray-50'}`}>
+                          <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-gray-500 bg-gray-50'}`}>
                             <Bookmark className="w-3 h-3" /> {verse.links_count || 0} رابط
                           </span>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
                             {verse.has_links ? 'لها رابط' : 'بدون رابط'}
                           </span>
                         </div>
@@ -682,12 +839,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                                   {link.audio_url && (
                                     <div className="flex items-center gap-1 mt-1">
                                       <Volume2 className="w-3 h-3 text-emerald-600" />
-                                      <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:underline text-[10px]">مقطع رنا</a>
+                                      <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline text-[10px]">مقطع رنا</a>
                                     </div>
                                   )}
-                                  {link.status === 'pending' && <span className="text-[10px] text-amber-600 font-semibold">بانتظار المراجعة</span>}
+                                  {link.status === 'pending' && <span className="text-[10px] text-amber-700 font-semibold">بانتظار المراجعة</span>}
                                 </div>
-                                <button onClick={() => deleteLink(link.id)} className="text-red-500 hover:bg-red-100 rounded p-1 flex-shrink-0"><Trash2 className="w-3 h-3" /></button>
+                                <button onClick={() => deleteLink(link.id)} disabled={!!savingIds[link.id]} aria-label="حذف الرابط" className="icon-action text-red-500 hover:bg-red-100 rounded p-1 flex-shrink-0 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             ))}
                           </div>
@@ -725,11 +882,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between p-4 border-t border-gray-100 bg-gray-50">
-              <p className="text-xs text-accent-500">صفحة {page + 1} من {totalPages} — {totalCount.toLocaleString('ar-EG')} آية</p>
+              <p className="text-xs text-accent-600">صفحة {formatAr(page + 1)} من {formatAr(totalPages)} — {formatAr(totalCount)} آية</p>
               <div className="flex items-center gap-1">
-                <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="p-2 text-accent-600 hover:bg-white rounded-lg disabled:opacity-30 transition-smooth"><ChevronRight className="w-4 h-4" /></button>
-                <span className="text-xs text-accent-600 px-2">{page + 1}</span>
-                <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="p-2 text-accent-600 hover:bg-white rounded-lg disabled:opacity-30 transition-smooth"><ChevronLeft className="w-4 h-4" /></button>
+                <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} aria-label="الصفحة السابقة" className="icon-action p-2 text-accent-600 hover:bg-white rounded-lg disabled:opacity-30 transition-smooth"><ChevronRight className="w-4 h-4" /></button>
+                <span className="text-xs text-accent-600 px-2">{formatAr(page + 1)}</span>
+                <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} aria-label="الصفحة التالية" className="icon-action p-2 text-accent-600 hover:bg-white rounded-lg disabled:opacity-30 transition-smooth"><ChevronLeft className="w-4 h-4" /></button>
               </div>
             </div>
           )}
@@ -745,14 +902,39 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 <Clock className="w-5 h-5 text-amber-600" />
                 <h3 className="font-bold text-accent-800">روابط بانتظار المراجعة ({pendingLinks.length})</h3>
               </div>
-              <button onClick={() => setShowPending(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => fetchPendingLinks()} disabled={pendingLoading}
+                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg disabled:opacity-50">
+                  <RefreshCw className={`w-3.5 h-3.5 ${pendingLoading ? 'animate-spin' : ''}`} /> تحديث القائمة
+                </button>
+                <button onClick={() => setShowPending(false)} aria-label="إغلاق" className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+              </div>
             </div>
             <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              {pendingError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold text-red-700 flex-1">{pendingError}</p>
+                  <button onClick={() => fetchPendingLinks()} className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg">إعادة المحاولة</button>
+                </div>
+              )}
+              {adminError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                  <p className="text-xs font-semibold text-red-700 flex-1">{adminError}</p>
+                  <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
+                </div>
+              )}
               {pendingLinks.length === 0 ? (
+                pendingLoading || !pendingLoaded ? (
+                  <div className="text-center py-12 text-accent-400">
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-emerald-500" />
+                    <p>جارٍ تحميل قائمة المراجعة…</p>
+                  </div>
+                ) : (
                 <div className="text-center py-12 text-accent-400">
                   <Check className="w-10 h-10 mx-auto mb-2 text-emerald-400" />
                   <p>لا توجد روابط بانتظار المراجعة</p>
                 </div>
+                )
               ) : (
                 <>
                   {pendingLinks.slice(0, pendingVisible).map((link) => {
@@ -760,16 +942,24 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   return (
                     <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
                       {verse && (
-                        <div className="mb-2 text-xs text-accent-400">
+                        <div className="mb-2 text-xs text-accent-600">
                           {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{verse.ayah_text?.slice(0, 80)}...</span>
                         </div>
                       )}
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{formatTypes(link.link_types)}</span>
                         {link.is_ai_draft && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">مسودة ذكاء اصطناعي</span>}
-                        {!link.is_ai_draft && link.created_by && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">اقتراح مستخدم</span>}
+                        {/* S5 (V10): "اقتراح مستخدم" ONLY when the creator is
+                            positively known to be a non-admin AND the row
+                            carries no original recording (the user suggest
+                            form is text-only; admin recordings always carry
+                            audio_url). is_ai_draft alone proves nothing —
+                            it defaults to false for admin rows too. When
+                            adminIds is still null (load failed), no badge
+                            is shown rather than a possibly wrong one. */}
+                        {!link.is_ai_draft && link.created_by && adminIds !== null && !adminIds.has(link.created_by) && !link.audio_url && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">اقتراح مستخدم</span>}
                         {link.audio_url && (
-                          <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
+                          <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-700 hover:underline">
                             <Volume2 className="w-3 h-3" /> مقطع رنا الأصلي
                           </a>
                         )}
@@ -780,10 +970,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={3}
                             className="w-full px-3 py-2 bg-white border border-emerald-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none" />
                           <div className="flex gap-2 mt-1">
-                            <button onClick={() => saveEditText(link.id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg">
-                              <Check className="w-3 h-3" /> حفظ النص
+                            <button onClick={() => saveEditText(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
+                              <Check className="w-3 h-3" /> {savingIds[link.id] ? 'جارٍ الحفظ…' : 'حفظ النص'}
                             </button>
-                            <button onClick={() => setEditingLinkId(null)} className="px-3 py-1.5 text-accent-500 text-xs hover:bg-gray-100 rounded-lg">إلغاء</button>
+                            <button onClick={() => setEditingLinkId(null)} className="px-3 py-1.5 text-accent-600 text-xs hover:bg-gray-100 rounded-lg">إلغاء</button>
                           </div>
                         </div>
                       ) : (
@@ -796,8 +986,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
 
                       {link.original_transcript && (
                         <details className="mt-2 mb-2">
-                          <summary className="text-xs text-accent-400 cursor-pointer hover:text-accent-600">النص الأصلي المنطوق</summary>
-                          <p className="text-xs text-accent-400 mt-1 p-2 bg-white rounded">{link.original_transcript}</p>
+                          <summary className="text-xs text-accent-600 cursor-pointer hover:text-accent-600">النص الأصلي المنطوق</summary>
+                          <p className="text-xs text-accent-600 mt-1 p-2 bg-white rounded">{link.original_transcript}</p>
                         </details>
                       )}
 
@@ -808,7 +998,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 mt-2">
                           <p className="text-xs font-semibold text-emerald-700 mb-2">الصوت الأصلي</p>
                           <button onClick={() => new Audio(link.audio_url!).play()}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg">
                             <Volume2 className="w-3.5 h-3.5" /> تشغيل الصوت الأصلي
                           </button>
                         </div>
@@ -856,7 +1046,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       </div>
 
                       <div className="flex gap-2 mt-3">
-                        <input type="text" value={rephraseCmd} onChange={(e) => setRephraseCmd(e.target.value)}
+                        <input type="text" value={rephraseCmds[link.id] || ''} onChange={(e) => setRephraseCmds((prev) => ({ ...prev, [link.id]: e.target.value }))}
                           placeholder="طلب تعديل (اختياري): مثلاً — اجعله أقصر"
                           className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-emerald-500" />
                         <button onClick={() => rephrasePending(link)} disabled={rephrasingId === link.id}
@@ -870,20 +1060,20 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <p className="text-xs font-semibold text-violet-700 mb-1">صياغة مقترحة بالذكاء الاصطناعي{proposals[link.id].command ? ` (طلب: ${proposals[link.id].command})` : ''}</p>
                           <p className="text-sm text-accent-700 leading-relaxed mb-2">{proposals[link.id].text}</p>
                           <div className="flex gap-2">
-                            <button onClick={() => applyProposal(link.id)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">اعتمديه يا رنا</button>
-                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-500 text-xs hover:bg-gray-100 rounded-lg">تجاهليه يا رنا</button>
+                            <button onClick={() => applyProposal(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg disabled:opacity-50">{savingIds[link.id] ? 'جارٍ الحفظ…' : 'اعتمديه يا رنا'}</button>
+                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-600 text-xs hover:bg-gray-100 rounded-lg">تجاهليه يا رنا</button>
                           </div>
-                          <p className="text-[11px] text-accent-400 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي يا رنا — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
+                          <p className="text-[11px] text-accent-600 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي يا رنا — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
                         </div>
                       )}
                                             <div className="flex gap-2 mt-3">
-                        <button onClick={() => approveLink(link.id)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-smooth">
-                          <Check className="w-4 h-4" /> اقبلي وانشري يا رنا
+                        <button onClick={() => approveLink(link.id)} disabled={!!savingIds[link.id]}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg transition-smooth disabled:opacity-50">
+                          <Check className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ النشر…' : 'اقبلي وانشري يا رنا'}
                         </button>
-                        <button onClick={() => rejectLink(link.id)}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth">
-                          <X className="w-4 h-4" /> ارفضيه يا رنا
+                        <button onClick={() => rejectLink(link.id)} disabled={!!savingIds[link.id]}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth disabled:opacity-50">
+                          <X className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ الرفض…' : 'ارفضيه يا رنا'}
                         </button>
                       </div>
                     </div>
@@ -919,7 +1109,7 @@ function StatCard({ label, value, color, icon }: { label: string; value: number;
     <div className={`p-5 rounded-2xl border ${colorMap[color]} flex items-center gap-4 shadow-sm hover:shadow-md transition-smooth`}>
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorMap[color]}`}>{icon}</div>
       <div>
-        <p className="text-xs text-accent-500 font-semibold">{label}</p>
+        <p className="text-xs text-accent-600 font-semibold">{label}</p>
         <p className="text-2xl font-bold text-accent-800">{value.toLocaleString('ar-EG')}</p>
       </div>
     </div>

@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase';
 import { loadVerseIndex, loadLinkIndex, searchVerseIds } from '../lib/searchIndex';
 import { signOut } from '../lib/auth';
 import type { QuranVerse, AyahLink } from '../lib/types';
-import { LINK_TYPES } from '../lib/types';
+import { LINK_TYPES, TOTAL_VERSES } from '../lib/types';
 import { SURAHS } from '../lib/surahs';
 import { useLang, speechLocale } from '../lib/LanguageContext';
+import { readPendingProfile, retryPendingProfile } from '../lib/profileRepair';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { LANGUAGES } from '../lib/translations';
+import { formatAr } from '../lib/numerals';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   Heart, Bookmark, AlertTriangle, BadgeCheck, X, BookMarked, AlertCircle,
@@ -51,6 +53,30 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameError, setNameError] = useState('');
+  // S1 auth stream: non-blocking profile-repair state. When signup's
+  // profile insert failed, a pending payload is stored (see
+  // lib/profileRepair); the App shell already retried it on sign-in,
+  // and this banner covers the case where that retry ALSO failed:
+  // the user is told, can retry with one tap, and nothing here blocks
+  // the rest of لوحتي. Dismissing only hides it for this visit — the
+  // payload stays for the next sign-in retry.
+  const [profileRepairNeeded, setProfileRepairNeeded] = useState(false);
+  const [profileRepairBusy, setProfileRepairBusy] = useState(false);
+  const [profileRepairError, setProfileRepairError] = useState('');
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const pending = readPendingProfile();
+    if (!pending || pending.user_id !== userId) return;
+    let cancelled = false;
+    void retryPendingProfile(supabase, userId).then((res) => {
+      if (!cancelled && !res.ok) setProfileRepairNeeded(true);
+    }).catch(() => {
+      if (!cancelled) setProfileRepairNeeded(true);
+    });
+    return () => { cancelled = true; };
+  }, [session]);
   const linkGender = getStoredLinkGender(profileGender);
   const [longPressVerse, setLongPressVerse] = useState<QuranVerse | null>(null);
   const [longPressLink, setLongPressLink] = useState<{ verse: QuranVerse; link: AyahLink } | null>(null);
@@ -327,17 +353,17 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <BookOpen className="w-7 h-7 text-white" />
             </div>
             <div>
               <h1 className="text-lg font-bold text-accent-800">{t('appName')}</h1>
-              <p className="text-sm text-accent-500">{(preferredName || profileName) ? `لوحة ${preferredName || profileName} — روابط الآيات` : 'لوحتي — روابط الآيات'}</p>
+              <p className="text-sm text-accent-600">{(preferredName || profileName) ? `لوحة ${preferredName || profileName} — روابط الآيات` : 'لوحتي — روابط الآيات'}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowLangMenu(!showLangMenu)}
                 className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
@@ -377,6 +403,38 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
+        {profileRepairNeeded && (
+          <div className="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+            <p className="text-sm text-amber-800 leading-relaxed">
+              بيانات ملفك (اسم المستخدم والنوع) لم تُحفظ بعد — اضغط لإعادة المحاولة، ولو استمرت المشكلة ستظل لوحتك شغالة عادي.
+            </p>
+            {profileRepairError && <p className="text-xs text-red-600 mt-2">{profileRepairError}</p>}
+            <div className="flex gap-2 mt-3">
+              <button
+                disabled={profileRepairBusy}
+                onClick={async () => {
+                  const userId = session?.user?.id;
+                  if (!userId) return;
+                  setProfileRepairBusy(true);
+                  setProfileRepairError('');
+                  const res = await retryPendingProfile(supabase, userId).catch((e) => ({ ok: false as const, error: e instanceof Error ? e.message : 'unknown error' }));
+                  setProfileRepairBusy(false);
+                  if (res.ok) {
+                    setProfileRepairNeeded(false);
+                  } else {
+                    setProfileRepairError(res.error || 'تعذرت إعادة المحاولة — حاول مرة أخرى.');
+                  }
+                }}
+                className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl disabled:opacity-50">
+                {profileRepairBusy ? '...' : 'إعادة المحاولة'}
+              </button>
+              <button onClick={() => setProfileRepairNeeded(false)}
+                className="px-3 py-2 text-sm text-amber-700 hover:text-amber-900">
+                إخفاء
+              </button>
+            </div>
+          </div>
+        )}
         {/* Personal greeting — just the salam (the board name is
             already clear in the header above, so it is not repeated
             here), a one-line reminder, and a personal dua */}
@@ -423,9 +481,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <h2 className="font-bold text-accent-800">مركز الحفظ</h2>
             </div>
             <p className="text-2xl font-bold text-accent-800">
-              حفظت {listCounts.memorized.toLocaleString('ar-EG')} آية من 6,236 — {Math.round((listCounts.memorized / 6236) * 100).toLocaleString('ar-EG')}٪
+              حفظت {formatAr(listCounts.memorized)} آية من {formatAr(TOTAL_VERSES)} — {formatAr(Math.round((listCounts.memorized / TOTAL_VERSES) * 100))}٪
             </p>
-            <p className="text-sm text-accent-500 leading-relaxed mt-1">
+            <p className="text-sm text-accent-600 leading-relaxed mt-1">
               {listCounts.memorized > 0
                 ? 'آياتك المحفوظة تحت، ومع كل آية روابطها.'
                 : 'لسه ما علّمتش آيات كمحفوظة — اضغط مطولًا على أي آية واختر «تم الحفظ»، وهنا هتتابع نسبتك.'}
@@ -446,8 +504,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <Mic className="w-5 h-5 text-amber-600" />
               <h2 className="font-bold text-accent-800">سمّع لنفسك</h2>
             </div>
-            <p className="text-sm text-accent-500 leading-relaxed flex-1">
-              بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٥ ثواني وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة. ولو المتصفح مش بيدعم الميكروفون، التقييم بيبقى يدوي.
+            <p className="text-sm text-accent-600 leading-relaxed flex-1">
+              بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٣ ثواني (الافتراضي — وبتتظبط من إعدادات التسميع) وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة. ولو المتصفح مش بيدعم الميكروفون، التقييم بيبقى يدوي.
             </p>
             <button onClick={() => onNavigate('test')}
               className="mt-4 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
@@ -480,7 +538,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <Filter className="w-5 h-5 text-emerald-600" />
               <span className="text-base font-bold text-accent-800">أدوات الفلترة</span>
               {activeFiltersCount > 0 && (
-                <span className="flex items-center justify-center w-6 h-6 bg-emerald-600 text-white text-xs font-bold rounded-full">
+                <span className="flex items-center justify-center w-6 h-6 bg-emerald-700 text-white text-xs font-bold rounded-full">
                   {activeFiltersCount}
                 </span>
               )}
@@ -514,12 +572,12 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   </button>
                 </div>
                 {searchHint && (
-                  <div className="flex items-center gap-1.5 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 mt-2">
+                  <div className="flex items-center gap-1.5 text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 mt-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     {searchHint}
                   </div>
                 )}
-                <p className="text-[11px] text-accent-400 mt-1.5">يقبل البحث الرسم العثماني والإملائي — اكتب كما تنطق، وسيجد الآيات حتى لو اختلف رسم الكلمة.</p>
+                <p className="text-[11px] text-accent-600 mt-1.5">يقبل البحث الرسم العثماني والإملائي — اكتب كما تنطق، وسيجد الآيات حتى لو اختلف رسم الكلمة.</p>
               </div>
 
               {/* Surah selection */}
@@ -572,7 +630,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
         {/* Results count */}
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm text-accent-500">
+          <p className="text-sm text-accent-600">
             {loading ? 'جارٍ التحميل...' : `${totalCount} آية`}
           </p>
         </div>
@@ -595,7 +653,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           // current page's verses, in order; no counts are shown because
           // a page holds only part of a surah's ayahs.
           <div className="space-y-3">
-            <p className="text-sm text-accent-500 leading-relaxed">اختر سورة لعرض آياتها، أو ابحث عن آية معينة من أدوات الفلترة.</p>
+            <p className="text-sm text-accent-600 leading-relaxed">اختر سورة لعرض آياتها، أو ابحث عن آية معينة من أدوات الفلترة.</p>
             {(() => {
               const groups: { no: number; name: string }[] = [];
               for (const v of verses) {
@@ -686,7 +744,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                           <BookMarked className="w-5 h-5" />
                           فتح في المصحف
                         </button>
-                        <ShareButton verseText={verse.ayah_text} surahName={verse.surah_name} ayahNo={verse.ayah_no} />
+                        <ShareButton verseText={verse.ayah_text} surahName={verse.surah_name} ayahNo={verse.ayah_no} surahNo={verse.surah_no} />
                       </div>
                     </div>
 
@@ -716,7 +774,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                 if (!audio) return null;
                                 return (
                                   <button onClick={() => new Audio(audio.url).play()}
-                                    className="flex items-center gap-1 text-xs text-emerald-600 hover:underline mt-1">
+                                    className="flex items-center gap-1 text-xs text-emerald-700 hover:underline mt-1">
                                     <Volume2 className="w-4 h-4" /> استماع ({audio.label})
                                   </button>
                                 );
@@ -737,7 +795,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between mt-4 bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
-            <p className="text-sm text-accent-500">
+            <p className="text-sm text-accent-600">
               {page + 1} / {totalPages}
             </p>
             <div className="flex items-center gap-1">

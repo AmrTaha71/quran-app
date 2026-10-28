@@ -1,11 +1,50 @@
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html {
-  direction: rtl;
+/* NOTE (S6): no `html { direction: rtl }` here on purpose. That rule beat
+   the `dir` attribute, so the en/fr LTR switch set dir="ltr" and nothing
+   moved. Direction now comes only from the attribute: index.html ships
+   dir="rtl" and LanguageProvider updates it on every language change, so
+   RTL stays the default and LTR actually applies for en/fr. */
+/* Fonts load from index.html (preload + stylesheet, incl. Amiri) instead
+   of a CSS @import, so the first paint does not wait on a chained fetch. */
+
+/* iOS notch / Dynamic Island: sticky page headers sit below the sensor
+   housing instead of under it. env() is 0 on devices without a notch. */
+header.sticky {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* iOS auto-zoom: Safari zooms on focus whenever a field renders under
+   16px. Tailwind's text-sm/text-xs utilities beat a bare element rule, so
+   the small-field selectors below pin those fields back to 1rem (16px).
+   Fields already at text-base or larger are untouched. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+input.text-sm,
+input.text-xs,
+textarea.text-sm,
+textarea.text-xs,
+select.text-sm,
+select.text-xs {
+  font-size: 1rem;
+}
+
+/* Visible keyboard focus everywhere. The 43 `focus:outline-none` fields
+   strip the default outline on :focus, so the escaped rule below restores
+   a real ring on :focus-visible (same specificity as the utility, later in
+   this file, so it wins); the plain rule covers everything else. */
+:focus-visible {
+  outline: 2px solid #047857;
+  outline-offset: 2px;
+}
+.focus\:outline-none:focus-visible {
+  outline: 2px solid #047857;
+  outline-offset: 2px;
 }
 
 body {
@@ -20,7 +59,10 @@ body {
 }
 
 .font-arabic {
-  font-family: 'Noto Naskh Arabic', serif;
+  /* Amiri is the fallback when Noto Naskh Arabic is unavailable (offline
+     or blocked font fetch): same Naskh style, no binary self-hosting —
+     the push tool accepts text only, so no font files are bundled. */
+  font-family: 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
   /* Ayah text: scales with the viewport instead of a fixed small size. */
   font-size: clamp(1.5rem, 4vw + 0.9rem, 2.25rem);
   line-height: 2.1;

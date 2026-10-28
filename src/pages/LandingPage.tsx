@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { TOTAL_VERSES } from '../lib/types';
 import { useLang } from '../lib/LanguageContext';
+import { formatNum } from '../lib/numerals';
 import { LANGUAGES } from '../lib/translations';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import ShareButton from '../components/ShareButton';
@@ -31,7 +32,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-stone-50">
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-emerald-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
               <Link className="w-6 h-6 text-white" />
@@ -102,12 +103,12 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
             <CircularProgressIndicator value={percentage} size={160} label={t('progress')} />
             <div className="text-center">
               <p className="text-3xl font-bold text-emerald-600">
-                {stats.withLinks.toLocaleString()} {t('indexedVerses')}
+                {formatNum(stats.withLinks, lang)} {t('indexedVerses')}
               </p>
               <p className="text-base text-accent-500">
-                {(lang === 'ar' || lang === 'ar-EG') ? 'من أصل' : 'out of'} {stats.total.toLocaleString()} {t('verse')}
+                {(lang === 'ar' || lang === 'ar-EG') ? 'من أصل' : 'out of'} {formatNum(stats.total, lang)} {t('verse')}
               </p>
-              <p className="text-sm text-amber-600 mt-1">{(stats.total - stats.withLinks).toLocaleString()} {t('remaining')}</p>
+              <p className="text-sm text-amber-700 mt-1">{formatNum(stats.total - stats.withLinks, lang)} {t('remaining')}</p>
             </div>
           </div>
 
@@ -143,7 +144,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
       <footer className="py-10 px-4 border-t border-emerald-100 bg-white">
         <div className="max-w-6xl mx-auto text-center text-base text-accent-500">
           <p>{t('appName')} © 2026</p>
-          <p className="mt-2 text-sm text-emerald-600 font-semibold">معك في كل آية، حتى نُتمّ حفظ كتاب الله</p>
+          <p className="mt-2 text-sm text-emerald-700 font-semibold">معك في كل آية، حتى نُتمّ حفظ كتاب الله</p>
         </div>
       </footer>
     </div>

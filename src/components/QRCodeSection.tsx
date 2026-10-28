@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useEscapeClose } from '../lib/useEscape';
 import { QrCode, X, Apple, Smartphone, Monitor, Download } from 'lucide-react';
 
 export default function QRCodeSection() {
   const [open, setOpen] = useState(false);
+  useEscapeClose(open, () => setOpen(false));
 
   const stores = [
     { icon: <Monitor className="w-7 h-7" />, label: 'متجر ويندوز', desc: 'Windows Store', url: 'https://apps.microsoft.com', color: 'bg-blue-600' },
@@ -21,8 +23,8 @@ export default function QRCodeSection() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setOpen(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center">
@@ -30,10 +32,10 @@ export default function QRCodeSection() {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-accent-800">حمّل التطبيق</h3>
-                  <p className="text-xs text-accent-500">امسح الرمز بكاميرا هاتفك</p>
+                  <p className="text-xs text-accent-600">امسح الرمز بكاميرا هاتفك</p>
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setOpen(false)} aria-label="إغلاق" className="icon-action p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -46,7 +48,7 @@ export default function QRCodeSection() {
                   </div>
                   <div className="text-center">
                     <p className="text-sm font-bold text-accent-800">{s.label}</p>
-                    <p className="text-[11px] text-accent-400">{s.desc}</p>
+                    <p className="text-[11px] text-accent-600">{s.desc}</p>
                   </div>
 
                   {/* QR Code */}
@@ -69,7 +71,7 @@ export default function QRCodeSection() {
                   </div>
 
                   <a href={s.url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700">
+                    className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-700">
                     <Download className="w-3.5 h-3.5" />
                     تحميل مباشر
                   </a>
@@ -77,7 +79,7 @@ export default function QRCodeSection() {
               ))}
             </div>
 
-            <p className="text-center text-xs text-accent-400 mt-5">
+            <p className="text-center text-xs text-accent-600 mt-5">
               امسح الرمز المناسب لجهازك لتثبيت التطبيق مباشرة
             </p>
           </div>

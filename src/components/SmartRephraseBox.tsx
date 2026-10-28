@@ -224,7 +224,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
           <Sparkles className="w-4 h-4 text-violet-600" />
           <h4 className="text-sm font-bold text-accent-800">إعادة الصياغة الذكية</h4>
         </div>
-        <button onClick={resetAll} className="text-xs text-accent-400 hover:text-accent-600">إغلاق</button>
+        <button onClick={resetAll} className="text-xs text-accent-600 hover:text-accent-600">إغلاق</button>
       </div>
 
       {saveStatus === 'saved' && (
@@ -244,7 +244,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
             <div className="bg-white rounded-lg p-3 border border-gray-100">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-accent-500">النص الأصلي</span>
+                <span className="text-xs font-semibold text-accent-600">النص الأصلي</span>
                 <button onClick={() => playTTS(originalText)} className="text-accent-400 hover:text-emerald-600">
                   <Volume2 className="w-4 h-4" />
                 </button>
@@ -272,7 +272,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleAccept}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-smooth"
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg transition-smooth"
             >
               <Check className="w-4 h-4" />
               قبول وحفظ
@@ -294,7 +294,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
             </button>
             <button
               onClick={() => processRephrase(originalText, commandText)}
-              className="flex items-center gap-1.5 px-3 py-2 text-accent-500 hover:bg-gray-100 text-sm rounded-lg transition-smooth"
+              className="flex items-center gap-1.5 px-3 py-2 text-accent-600 hover:bg-gray-100 text-sm rounded-lg transition-smooth"
             >
               <RefreshCw className="w-4 h-4" />
               إعادة

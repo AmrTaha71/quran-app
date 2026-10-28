@@ -87,7 +87,7 @@ export default function VoiceSelector({ text }: { text: string }) {
           <p className="text-xs font-bold text-accent-700 mb-2">اختيار الصوت</p>
           <div className="space-y-1">
             <div className="mb-2">
-              <p className="text-[10px] text-accent-400 mb-1">أصوات رجالية</p>
+              <p className="text-[10px] text-accent-600 mb-1">أصوات رجالية</p>
               {VOICE_OPTIONS.filter((v) => v.gender === 'male').map((v) => (
                 <button
                   key={v.id}
@@ -101,7 +101,7 @@ export default function VoiceSelector({ text }: { text: string }) {
               ))}
             </div>
             <div className="mb-2">
-              <p className="text-[10px] text-accent-400 mb-1">أصوات نسائية</p>
+              <p className="text-[10px] text-accent-600 mb-1">أصوات نسائية</p>
               {VOICE_OPTIONS.filter((v) => v.gender === 'female').map((v) => (
                 <button
                   key={v.id}
@@ -117,7 +117,7 @@ export default function VoiceSelector({ text }: { text: string }) {
           </div>
           <button
             onClick={savePreference}
-            className="w-full mt-2 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-smooth"
+            className="w-full mt-2 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-smooth"
           >
             {savedPref ? 'تم الحفظ!' : 'حفظ التفضيل'}
           </button>

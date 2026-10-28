@@ -1,20 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/LanguageContext';
 import { LANGUAGES, COUNTRY_CODES } from '../lib/translations';
+import { loginEmailCandidates, signupEmailCandidates, trimUsername } from '../lib/username';
+import { retryPendingProfile, savePendingProfile, type PendingProfile } from '../lib/profileRepair';
 import {
   BookOpen, Lock, Mail, User, Phone, Calendar, Eye, EyeOff,
   Globe, ArrowRight, Shield, Heart, RotateCcw,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
-type AuthMode = 'login' | 'signup' | 'recover';
-type LoginMethod = 'username' | 'phone';
+type AuthMode = 'login' | 'signup' | 'recover' | 'reset';
 
-export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
+export default function AuthPage({
+  onNavigate,
+  notice,
+  onDismissNotice,
+  recoveryMode,
+  onRecoveryExit,
+}: {
+  onNavigate: (r: Route) => void;
+  /** One-off banner from the App shell, e.g. the session-expired message. */
+  notice?: string | null;
+  onDismissNotice?: () => void;
+  /** True while the user arrived via a password-recovery link. */
+  recoveryMode?: boolean;
+  /** Called when the user leaves the reset form (done or abandoned). */
+  onRecoveryExit?: () => void;
+}) {
   const { t, lang, setLang } = useLang();
-  const [mode, setMode] = useState<AuthMode>('login');
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>('username');
+  const [mode, setMode] = useState<AuthMode>(recoveryMode ? 'reset' : 'login');
   const [showPassword, setShowPassword] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
 
@@ -29,6 +44,33 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Non-blocking profile warning: the account exists but its profile row
+  // failed to save (see handleSignup). It never blocks login — the row
+  // is retried after sign-in, and لوحتي shows the retry state if needed.
+  const [profileWarning, setProfileWarning] = useState('');
+  // Reset-form state (mode 'reset', reached only via a recovery link).
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetDone, setResetDone] = useState(false);
+  const [resetLinkExpired, setResetLinkExpired] = useState(false);
+
+  // If the App shell flags a recovery after this page already mounted
+  // (supabase's PASSWORD_RECOVERY event), switch to the reset form.
+  useEffect(() => {
+    if (recoveryMode) setMode('reset');
+  }, [recoveryMode]);
+
+  // On entering the reset form, confirm the recovery session actually
+  // exists: an expired or already-used link has no session, and the
+  // form would otherwise fail with a cryptic error on submit.
+  useEffect(() => {
+    if (mode !== 'reset') return;
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!cancelled) setResetLinkExpired(!data.session);
+    });
+    return () => { cancelled = true; };
+  }, [mode]);
 
   const calculateAge = (birth: string) => {
     if (!birth) return 0;
@@ -45,15 +87,29 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
     setError('');
     setLoading(true);
 
-    if (loginMethod === 'username') {
-      const loginEmail = username.includes('@') ? username : `${username}@quran-app.user`;
+    // S1 auth stream: the dead phone+DOB tab is gone (it derived an
+    // address signup never creates, so it could never succeed — see the
+    // removal note below the login form). Username login normalizes
+    // (trim + lowercase derivation) and retries the raw-case derivation
+    // for accounts created before normalization existed.
+    const candidates = loginEmailCandidates(username);
+    let signedIn = false;
+    for (const loginEmail of candidates) {
       const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
-      if (error) setError(t('invalidCredentials'));
-    } else {
-      const phoneEmail = `${phone.replace(/[^0-9]/g, '')}@quran-app.user`;
-      const dobPassword = birthDate.replace(/-/g, '');
-      const { error } = await supabase.auth.signInWithPassword({ email: phoneEmail, password: dobPassword });
-      if (error) setError(t('invalidCredentials'));
+      if (!error) {
+        signedIn = true;
+        break;
+      }
+    }
+    if (!signedIn) {
+      setError(t('invalidCredentials'));
+      // A stored pending profile (signup insert failed earlier) is
+      // retried now that a session exists; if it still fails, لوحتي
+      // shows the retry state — the login itself is not blocked.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        void retryPendingProfile(supabase, data.session.user.id).catch(() => {});
+      }
     }
     setLoading(false);
   };
@@ -61,6 +117,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setProfileWarning('');
 
     if (password.length < 6) {
       setError(t('passwordTooShort'));
@@ -70,7 +127,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
       setError(t('selectGender'));
       return;
     }
-    if (!username.trim()) {
+    if (!trimUsername(username)) {
       setError(t('enterUsername'));
       return;
     }
@@ -80,13 +137,24 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
     // mailbox, so Supabase rejected it and signup could never succeed
     // for a plain username. Login already accepts a real email typed
     // in the username field, so the two now match.
-    const signupEmail = email.trim() || (username.includes('@') ? username : `${username}@quran-app.user`);
+    // S1: the derived address is lowercased (see lib/username), and the
+    // already-registered fallback tries every candidate, so a legacy
+    // mixed-case account still signs in.
+    const candidates = signupEmailCandidates(email, username);
+    const signupEmail = candidates[0];
 
     const { data, error } = await supabase.auth.signUp({ email: signupEmail, password });
     if (error) {
       if (error.message.includes('already') || error.message.includes('registered')) {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email: signupEmail, password });
-        if (signInError) {
+        let signedIn = false;
+        for (const candidate of candidates) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email: candidate, password });
+          if (!signInError) {
+            signedIn = true;
+            break;
+          }
+        }
+        if (!signedIn) {
           setError(t('invalidCredentials'));
           setLoading(false);
         }
@@ -108,23 +176,71 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
       // used ONLY for password recovery when given. No verification
       // email is required — Supabase mailer_autoconfirm is on, so a
       // username-only account signs in immediately.
-      await supabase.from('user_profiles').insert({
+      // S1: the insert error is NO LONGER swallowed. On failure the
+      // payload is kept for a retry after sign-in (below, plus the App
+      // shell and لوحتي), and the user is told — in a non-blocking
+      // warning, not a login-blocking error — instead of silently
+      // ending up with no profile row (no username, no gender).
+      const profilePayload: PendingProfile = {
         user_id: data.user.id,
-        username,
+        username: trimUsername(username),
         gender,
         birth_date: birthDate || null,
         country_code: countryCode,
         phone: phone || null,
         preferred_language: lang,
         preferred_name: preferredName.trim() || null,
-      }).then(() => {});
+      };
+      const { error: insertError } = await supabase.from('user_profiles').insert(profilePayload);
 
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: signupEmail, password });
       if (signInError) {
+        if (insertError) {
+          savePendingProfile(profilePayload);
+          setProfileWarning('تم إنشاء الحساب، لكن حفظ بيانات الملف (اسم المستخدم والنوع) لم يكتمل — سنعيد المحاولة تلقائيًا بعد الدخول، ولو استمرت المشكلة ستظهر لك رسالة في لوحتك.');
+        }
         setSuccess(t('signUpSuccess'));
         setLoading(false);
+      } else if (insertError) {
+        // Signed in now, so RLS sees an authenticated user: one
+        // immediate retry. If it still fails, keep the payload for the
+        // App-shell/لوحتي retries and warn non-blockingly (the App
+        // shell routes to لوحتي on sign-in, where the retry state shows).
+        const { error: retryError } = await supabase.from('user_profiles').insert(profilePayload);
+        if (retryError) {
+          savePendingProfile(profilePayload);
+        }
       }
     }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    if (newPassword.length < 6) {
+      setError(t('passwordTooShort'));
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('كلمتا السر غير متطابقتين.');
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setLoading(false);
+    if (error) {
+      // Most commonly: the link expired or was already used, so there
+      // is no recovery session to update the password for.
+      if (error.message.includes('session') || error.message.includes('Auth session')) {
+        setResetLinkExpired(true);
+      } else {
+        setError(error.message);
+      }
+      return;
+    }
+    setResetDone(true);
+    setSuccess('تم تغيير كلمة السر بنجاح.');
   };
 
   const handleRecover = async (e: React.FormEvent) => {
@@ -144,8 +260,17 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
       return;
     }
 
+    // S1: redirect WITHOUT a hash fragment. The old `/#/auth` redirect
+    // produced a double hash (`#/auth#access_token=...&type=recovery`)
+    // that supabase's URL parser cannot read, so the link landed
+    // nowhere. `?recovery=1` survives supabase clearing the token hash,
+    // and the App shell also handles the bare-origin fallback and the
+    // PASSWORD_RECOVERY event, so the reset form opens either way.
+    // NOTE for the coordinator: if Supabase's redirect allow-list does
+    // not include this URL, add `<origin>/?recovery=1` there; the
+    // fallback (Site URL) still reaches the reset form via the event.
     const { error } = await supabase.auth.resetPasswordForEmail(recoverEmail, {
-      redirectTo: `${window.location.origin}/#/auth`,
+      redirectTo: `${window.location.origin}/?recovery=1`,
     });
     if (error) {
       setError(error.message);
@@ -197,11 +322,22 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
               <BookOpen className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-xl font-bold text-accent-800">{t('appName')}</h1>
-            <p className="text-xs text-accent-500 mt-1">{t('appTagline')}</p>
+            <p className="text-xs text-accent-600 mt-1">{t('appTagline')}</p>
           </div>
 
-          {/* Mode tabs */}
-          {mode !== 'recover' && (
+          {/* One-off App-shell notice (e.g. session expired routing). */}
+          {notice && (
+            <div className="flex items-start gap-2 p-3 mb-5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
+              <span className="flex-1">{notice}</span>
+              {onDismissNotice && (
+                <button type="button" onClick={onDismissNotice} aria-label="إغلاق"
+                  className="text-amber-500 hover:text-amber-700 font-bold shrink-0">✕</button>
+              )}
+            </div>
+          )}
+
+          {/* Mode tabs (hidden on the request and reset forms) */}
+          {mode !== 'recover' && mode !== 'reset' && (
             <div className="flex bg-gray-50 rounded-xl p-1 mb-5 border border-gray-100">
               <button
                 onClick={() => setMode('login')}
@@ -222,10 +358,67 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
             </div>
           )}
 
-          {mode === 'recover' ? (
+          {mode === 'reset' ? (
+            <form onSubmit={handleResetPassword} className="space-y-3">
+              <p className="text-sm text-accent-600 text-center mb-4">اختر كلمة سر جديدة لحسابك</p>
+              {resetLinkExpired ? (
+                <>
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center leading-relaxed">
+                    انتهت صلاحية رابط استرجاع كلمة السر أو تم استخدامه من قبل. اطلب رابطًا جديدًا من صفحة استرجاع كلمة السر.
+                  </div>
+                  <button type="button" onClick={() => { onRecoveryExit?.(); setMode('recover'); }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth">
+                    طلب رابط جديد
+                  </button>
+                </>
+              ) : resetDone ? (
+                <>
+                  {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-600 text-center">{success}</div>}
+                  <button type="button" onClick={() => { onRecoveryExit?.(); onNavigate('app'); }}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth">
+                    الذهاب إلى لوحتي
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-accent-700 mb-1.5">كلمة السر الجديدة</label>
+                    <div className="relative">
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
+                      <input type={showPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required
+                      placeholder="••••••"
+                      className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-accent-700 mb-1.5">تأكيد كلمة السر الجديدة</label>
+                    <div className="relative">
+                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
+                      <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
+                      placeholder="••••••"
+                      className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                    </div>
+                  </div>
+                  {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
+                  <button type="submit" disabled={loading}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
+                    {loading ? '...' : 'حفظ كلمة السر الجديدة'}
+                  </button>
+                  <button type="button" onClick={() => { onRecoveryExit?.(); setMode('login'); }}
+                    className="w-full text-sm text-accent-500 hover:text-accent-700 py-2">
+                    إلغاء والعودة لتسجيل الدخول
+                  </button>
+                </>
+              )}
+            </form>
+          ) : mode === 'recover' ? (
             <form onSubmit={handleRecover} className="space-y-3">
               <p className="text-sm text-accent-600 text-center mb-4">{t('recoverPassword')}</p>
-              <p className="text-xs text-accent-500 text-center">اكتب الإيميل الحقيقي اللي سجلت بيه، وهنبعت لك رابط تختار بيه كلمة سر جديدة. من غير إيميل حقيقي، الرابط مالوش مكان يروح له.</p>
+              <p className="text-xs text-accent-600 text-center">اكتب الإيميل الحقيقي اللي سجلت بيه، وهنبعت لك رابط تختار بيه كلمة سر جديدة. من غير إيميل حقيقي، الرابط مالوش مكان يروح له.</p>
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')}</label>
                 <div className="relative">
@@ -236,82 +429,54 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                 </div>
               </div>
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-600 text-center">{success}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
               <button type="submit" disabled={loading}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50">
                 <RotateCcw className="w-4 h-4" />
                 {loading ? '...' : t('recoverPassword')}
               </button>
               <button onClick={() => setMode('login')}
-                className="w-full text-sm text-accent-500 hover:text-accent-700 py-2">
+                className="w-full text-sm text-accent-600 hover:text-accent-700 py-2">
                 {t('backToHome')}
               </button>
             </form>
           ) : mode === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-3">
-              {/* Login method switch */}
-              <div className="flex bg-gray-50 rounded-lg p-1 mb-3 border border-gray-100">
-                <button type="button" onClick={() => setLoginMethod('username')}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-smooth ${loginMethod === 'username' ? 'bg-white text-accent-700 shadow-sm' : 'text-accent-400'}`}>
-                  {t('usernamePassword')}
-                </button>
-                <button type="button" onClick={() => setLoginMethod('phone')}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-smooth ${loginMethod === 'phone' ? 'bg-white text-accent-700 shadow-sm' : 'text-accent-400'}`}>
-                  {t('phoneDOB')}
-                </button>
+              {/* REMOVED (S1, device-review item 1): the phone+DOB login
+                  tab. It derived `<digits>@quran-app.user` with the
+                  birth-date digits as password, but signup NEVER creates
+                  that credential (signup stores a user-chosen password
+                  against the username-derived or real email) — so the
+                  tab could never succeed for any account created by this
+                  app, and no phone-derived identity is invented here to
+                  prop it up. Phone/country/birth-date fields still
+                  exist on the SIGNUP form, where they feed the profile
+                  row. If a real user ever depended on this tab, that
+                  would be visible as failed logins against phone-derived
+                  addresses — none can exist from app signups. */}
+              <div>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('username')} / {t('email')}</label>
+                <div className="relative">
+                  <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
+                  <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
+                  placeholder={t('enterUsername')}
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                </div>
               </div>
-
-              {loginMethod === 'username' ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('username')} / {t('email')}</label>
-                    <div className="relative">
-                      <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                      <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
-                      placeholder={t('enterUsername')}
-                      className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('password')}</label>
-                    <div className="relative">
-                      <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                      <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
-                      placeholder="••••••"
-                      className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
-                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex gap-2">
-                    <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)}
-                      className="px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500">
-                      {COUNTRY_CODES.map((c) => (
-                        <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
-                      ))}
-                    </select>
-                    <div className="flex-1 relative">
-                      <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                      <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required
-                      placeholder={t('enterPhone')}
-                      className="w-full pr-10 pl-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('birthDate')}</label>
-                    <div className="relative">
-                      <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                      <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} required
-                      className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                    </div>
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('password')}</label>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
+                  <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
+                  placeholder="••••••"
+                  className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
 
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
 
@@ -321,7 +486,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
               </button>
 
               <button type="button" onClick={() => setMode('recover')}
-                className="w-full text-xs text-accent-500 hover:text-accent-700 py-1">
+                className="w-full text-xs text-accent-600 hover:text-accent-700 py-1">
                 {t('forgotPassword')}
               </button>
             </form>
@@ -333,30 +498,31 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
                   placeholder={t('enterUsername')}
+                  autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">تحب أناديك بإيه؟ <span className="font-normal text-accent-400">(الكنية — اختياري)</span></label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">تحب أناديك بإيه؟ <span className="font-normal text-accent-600">(الكنية — اختياري)</span></label>
                 <div className="relative">
                   <Heart className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="text" value={preferredName} onChange={(e) => setPreferredName(e.target.value)}
                   placeholder="مثال: أبو آية، أبو عمر، أم مريم، أم يوسف"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-                <p className="text-xs text-accent-400 mt-1">الكنية اللي هناديك بيها في التطبيق — مثال: أبو آية، أبو عمر، أم مريم، أم يوسف. وتقدر تغيرها بعد كده من لوحتك.</p>
+                <p className="text-xs text-accent-600 mt-1">الكنية اللي هناديك بيها في التطبيق — مثال: أبو آية، أبو عمر، أم مريم، أم يوسف. وتقدر تغيرها بعد كده من لوحتك.</p>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-400">(اختياري)</span></label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-600">(اختياري)</span></label>
                 <div className="relative">
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   placeholder="email@example.com (اختياري)"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-                <p className="text-xs text-accent-400 mt-1">مش مطلوب للتسجيل، ومفيش تحقق بالإيميل. بس لو حطيت إيميل حقيقي، تقدر ترجع كلمة السر بيه بعد كده.</p>
+                <p className="text-xs text-accent-600 mt-1">مش مطلوب للتسجيل، ومفيش تحقق بالإيميل. بس لو حطيت إيميل حقيقي، تقدر ترجع كلمة السر بيه بعد كده.</p>
               </div>
 
               <div>
@@ -403,7 +569,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 {birthDate && (
-                  <p className="text-xs text-accent-400 mt-1">{t('age')}: {calculateAge(birthDate)} {(lang === 'ar' || lang === 'ar-EG') ? 'سنة' : ''}</p>
+                  <p className="text-xs text-accent-600 mt-1">{t('age')}: {calculateAge(birthDate)} {(lang === 'ar' || lang === 'ar-EG') ? 'سنة' : ''}</p>
                 )}
               </div>
 
@@ -424,7 +590,8 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
               </div>
 
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-600 text-center">{success}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              {profileWarning && <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-center leading-relaxed">{profileWarning}</div>}
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
@@ -434,7 +601,7 @@ export default function AuthPage({ onNavigate }: { onNavigate: (r: Route) => voi
           )}
 
           <button onClick={() => onNavigate('home')}
-            className="flex items-center gap-1.5 mt-5 text-sm text-accent-500 hover:text-accent-700 transition-smooth mx-auto">
+            className="flex items-center gap-1.5 mt-5 text-sm text-accent-600 hover:text-accent-700 transition-smooth mx-auto">
             <ArrowRight className="w-4 h-4" />
             {t('backToHome')}
           </button>

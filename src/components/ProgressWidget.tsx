@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { TOTAL_VERSES } from '../lib/types';
 import CircularProgressIndicator from './CircularProgressIndicator';
 import { TrendingUp, Bookmark, BookOpen, BarChart3 } from 'lucide-react';
 
 export default function ProgressWidget() {
   const [stats, setStats] = useState({
-    totalVerses: 6236,
+    totalVerses: TOTAL_VERSES,
     indexedVerses: 0,
     withLinks: 0,
     withoutLinks: 0,
@@ -24,7 +25,7 @@ export default function ProgressWidget() {
         .from('ayah_links')
         .select('*', { count: 'exact', head: true });
 
-      const total = 6236;
+      const total = TOTAL_VERSES;
       setStats({
         totalVerses: total,
         indexedVerses: indexedCount || 0,

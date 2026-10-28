@@ -4,6 +4,7 @@ import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { normalizeArabic, normalizeWords, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText } from '../lib/arabicNormalize';
 import { getStoredLinkGender } from '../lib/linkAudio';
+import { formatAr } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
@@ -433,15 +434,46 @@ function playCorrectChime() {
 // Correction text goes through correctionSpeechText: muqatta'at
 // tokens are spoken as letter names, other words keep their form
 // with only Quranic annotation marks stripped (see arabicNormalize).
+// Browser-TTS voice pick (S4 voice safety): the old code set lang
+// only, so which voice spoke a timer-triggered correction was device
+// luck — on some devices no Arabic voice was picked at all and the
+// correction played silent or in the wrong language. Prefer an
+// ar-SA voice, then ar-EG, then any Arabic voice; null means "let
+// the engine pick by lang" (voices load asynchronously, so an empty
+// list early in the session is not an error).
+function pickArabicTtsVoice(): SpeechSynthesisVoice | null {
+  try {
+    if (!('speechSynthesis' in window)) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return null;
+    const ar = voices.filter((v) => (v.lang || '').toLowerCase().startsWith('ar'));
+    if (ar.length === 0) return null;
+    return ar.find((v) => v.lang.toLowerCase().startsWith('ar-sa'))
+      || ar.find((v) => v.lang.toLowerCase().startsWith('ar-eg'))
+      || ar[0];
+  } catch {
+    return null;
+  }
+}
 function speakCorrection(words: string[], rate = 1.0) {
   if (words.length === 0) return;
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
-    u.lang = 'ar-SA';
-    u.rate = rate;
-    window.speechSynthesis.speak(u);
+    // One retry with the engine default voice: if the picked Arabic
+    // voice errors (timer-triggered playback on some phones), the
+    // correction must still be heard rather than silently lost.
+    const speakOnce = (voice: SpeechSynthesisVoice | null) => {
+      try {
+        const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
+        u.lang = 'ar-SA';
+        u.rate = rate;
+        if (voice) u.voice = voice;
+        u.onerror = () => { if (voice) speakOnce(null); };
+        window.speechSynthesis.speak(u);
+      } catch {}
+    };
+    speakOnce(pickArabicTtsVoice());
   } catch {}
 }
 function cancelCorrectionSpeech() {
@@ -510,6 +542,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
   const [micError, setMicError] = useState('');
+  // S4 voice safety: a stopped-but-preserved session. micStalled is
+  // set only by recoverable stops (no-result watchdog, restart-budget
+  // trip, failed restart) — never by permission denials — and means
+  // "the transcript survived, tap كمّل to resume it". contStalled is
+  // the continuous-mode twin (its transcript already survived stops;
+  // the flag only adds the honest banner + resume wording).
+  const [micStalled, setMicStalled] = useState(false);
+  const [contStalled, setContStalled] = useState(false);
   const [manualMode, setManualMode] = useState(false);
   const [savedProgress, setSavedProgress] = useState<TestProgress | null>(loadProgress);
   // Verification level + recitation mode (setup choices, persisted).
@@ -668,6 +708,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const lastInterimRef = useRef('');
   const quietTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // S4 voice safety timers (see helpers below): the no-result
+  // watchdog (last result timestamp + its timer) and the transient
+  // safety timer (fires when onend never follows a transient error).
+  const lastResultAtRef = useRef(0);
+  const watchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const transientSafetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const liveRef = useRef({
     ayah: null as TestAyah | null,
     finals: '',
@@ -693,6 +739,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const clearTimers = () => {
     if (quietTimerRef.current) { clearTimeout(quietTimerRef.current); quietTimerRef.current = null; }
     if (windowTimerRef.current) { clearInterval(windowTimerRef.current); windowTimerRef.current = null; }
+    if (watchdogTimerRef.current) { clearTimeout(watchdogTimerRef.current); watchdogTimerRef.current = null; }
+    if (transientSafetyTimerRef.current) { clearTimeout(transientSafetyTimerRef.current); transientSafetyTimerRef.current = null; }
     // Never let a spoken correction bleed into the next ayah or
     // keep playing after the user stops.
     cancelCorrectionSpeech();
@@ -723,6 +771,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     lastInterimRef.current = '';
     liveRef.current.micState = 'idle';
     setMicState('idle');
+    setMicStalled(false);
     setTranscript('');
     setInterim('');
     setCountdown(liveRef.current.corrDelay);
@@ -934,6 +983,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!ayah) return;
     stopRec();
     clearTimers();
+    setMicStalled(false);
     const next = [...liveRef.current.grades];
     next[index] = ok;
     liveRef.current.grades = next;
@@ -1038,9 +1088,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       windowTimerRef.current = setInterval(() => {
         left -= 1;
         if (left <= 0) {
-          if (windowTimerRef.current) clearInterval(windowTimerRef.current);
-          windowTimerRef.current = null;
-          gradeMic(false);
+          // S4: expiry evaluates any in-flight correction first
+          // (see expireCorrectionWindow) instead of grading false
+          // over speech from the window's tail.
+          expireCorrectionWindow();
         } else {
           setCountdown(left);
         }
@@ -1060,6 +1111,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // recitation. The locale claim is UNVERIFIED against vendor
   // internals — see FINDINGS.md — so this stays one constant a
   // coordinator can flip after the on-device A/B check.
+  // S4 DOCUMENTED INCONSISTENCY (deliberately NOT flipped here):
+  // follow-the-imam still uses ar-EG via currentSpeechLocale()
+  // (QuranMushafPage startFollowListening), while self-test pins
+  // ar-SA here. The two features disagree until the V3 per-device
+  // A/B counts decide one locale for both — flipping follow
+  // silently would change prayer behaviour on unmeasured evidence.
   const TEST_SPEECH_LOCALE = 'ar-SA';
   // Restart budget (same shape as the follow-mode LIVE_RESTART_*
   // budget in QuranMushafPage.tsx): >5 silent restarts in 10s with
@@ -1145,12 +1202,151 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     quietTimerRef.current = setTimeout(() => { evaluateNow(); }, QUIET_GAP_MS);
   };
 
-  const startMic = () => {
+  // ---- S4 voice-safety helpers -------------------------------------
+  // (a) No-result watchdog: 18s (inside the 15-20s brief) with no
+  // result at all — not even an interim — after start / the last
+  // result means the engine stalled while the UI still says
+  // "listening…". The trip NEVER wipes finals: it stops the engine
+  // and raises the stalled state, whose كمّل button resumes the
+  // same transcript (see resumeMic). A result re-arms the timer, so
+  // a slow-but-alive recitation is never interrupted.
+  const NO_RESULT_WATCHDOG_MS = 18000;
+  // (b) Transient safety timer: ~3s. The patched code restarts from
+  // onend after a transient error; if the engine omits onend, the
+  // session used to hang on "retrying" forever. The timer restarts
+  // directly, and only gives up (stalled state) on a non-trivial
+  // start failure — InvalidStateError means "already running", i.e.
+  // the engine is alive after all.
+  const TRANSIENT_SAFETY_MS = 3000;
+  const clearWatchdog = () => {
+    if (watchdogTimerRef.current) { clearTimeout(watchdogTimerRef.current); watchdogTimerRef.current = null; }
+  };
+  const clearTransientSafety = () => {
+    if (transientSafetyTimerRef.current) { clearTimeout(transientSafetyTimerRef.current); transientSafetyTimerRef.current = null; }
+  };
+  // Honest stop that preserves the transcript. Ayah mode: the finals
+  // stay in liveRef (the stalled UI grades or resumes them); the
+  // fresh-start button is still offered, so nothing is trapped.
+  const tripAyahStalled = (message: string) => {
+    stopRec();
+    clearTimers();
+    liveRef.current.micState = 'idle';
+    setMicState('idle');
+    setMicStalled(true);
+    setMicError(message);
+  };
+  const tripContStalled = (message: string) => {
+    stopContinuousMic();
+    setContStalled(true);
+    setMicError(message);
+  };
+  const onWatchdogFire = () => {
+    watchdogTimerRef.current = null;
+    // Still listening and truly silent for the whole window? Trip.
+    // Anything else (stopped, graded, prompting, or a result that
+    // landed since arming) is not a stall — re-arming is harmless
+    // because every live result re-arms anyway.
+    if (liveRef.current.contListening) {
+      if (contPromptingRef.current) return;
+      if (Date.now() - lastResultAtRef.current >= NO_RESULT_WATCHDOG_MS) {
+        tripContStalled('الاستماع وقف من غير نتيجة — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل');
+      }
+      return;
+    }
+    const ms = liveRef.current.micState;
+    if (ms !== 'listening' && ms !== 'correcting') return;
+    if (Date.now() - lastResultAtRef.current < NO_RESULT_WATCHDOG_MS) return;
+    tripAyahStalled('الاستماع وقف من غير نتيجة — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع');
+  };
+  const armWatchdog = () => {
+    clearWatchdog();
+    watchdogTimerRef.current = setTimeout(onWatchdogFire, NO_RESULT_WATCHDOG_MS);
+  };
+  const noteWatchdogResult = () => {
+    lastResultAtRef.current = Date.now();
+    clearTransientSafety();
+    armWatchdog();
+  };
+  // Arm the transient safety net for one recognizer. onend clears it
+  // (the normal restart path); a result clears it too (engine alive).
+  // Fires only if the session is still live and still that recognizer.
+  const armTransientSafety = (rec: any, onDead: () => void) => {
+    clearTransientSafety();
+    transientSafetyTimerRef.current = setTimeout(() => {
+      transientSafetyTimerRef.current = null;
+      if (recRef.current !== rec || userStopRef.current) return;
+      if (liveRef.current.contListening) {
+        if (contPromptingRef.current) return;
+        try { rec.start(); } catch (err: any) {
+          if (err && err.name === 'InvalidStateError') return;
+          onDead();
+        }
+        return;
+      }
+      const ms = liveRef.current.micState;
+      if (ms !== 'listening' && ms !== 'correcting') return;
+      try { rec.start(); } catch (err: any) {
+        if (err && err.name === 'InvalidStateError') return;
+        onDead();
+      }
+    }, TRANSIENT_SAFETY_MS);
+  };
+  // Window-expiry discipline: the old interval graded false at expiry
+  // WITHOUT evaluating speech from the window's tail — a correction
+  // spoken just before expiry (quiet timer still pending, or interim
+  // never finalized) was silently lost. Expiry now folds the pending
+  // interim in, evaluates, and only then grades false if the
+  // correction still does not complete the targets.
+  const expireCorrectionWindow = () => {
+    if (windowTimerRef.current) { clearInterval(windowTimerRef.current); windowTimerRef.current = null; }
+    if (liveRef.current.micState !== 'correcting') return;
+    const pendingInterim = takePendingInterim();
+    if (pendingInterim) {
+      liveRef.current.finals = `${liveRef.current.finals} ${pendingInterim}`.trim();
+      setTranscript(liveRef.current.finals);
+    }
+    evaluateNow();
+    if (liveRef.current.micState === 'correcting') gradeMic(false);
+  };
+  // "Show me the mistake" with the same fold: the user's last words
+  // belong in the transcript even when he ends the window himself.
+  const showMistakeNow = () => {
+    const pendingInterim = takePendingInterim();
+    if (pendingInterim) {
+      liveRef.current.finals = `${liveRef.current.finals} ${pendingInterim}`.trim();
+      setTranscript(liveRef.current.finals);
+    }
+    gradeMic(false);
+  };
+  // Grade exactly what was heard in a stalled session (no correction
+  // window — the mic is already stopped; gradeMic still speaks the
+  // correction aloud for a wrong grade).
+  const evaluateStalled = () => {
+    const ayah = liveRef.current.ayah;
+    if (!ayah) return;
+    const expected = expectedWordList(ayah.ayah_text);
+    const spoken = spokenTokens(liveRef.current.finals);
+    if (spoken.length === 0) return;
+    const strict = liveRef.current.level !== 'beginner';
+    const result = strict
+      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
+      : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
+    if (result.allMatched && result.extras.length === 0) gradeMic(true);
+    else gradeMic(false);
+  };
+
+  const startMic = (preserveArg?: boolean) => {
+    // S4: resume (كمّل) passes exactly true; a tap handler's event
+    // object must never count as "preserve" — hence === true.
+    const preserveFinals = preserveArg === true;
     const ayah = liveRef.current.ayah;
     if (!ayah) return;
     // Warm the audio context inside this tap so the later grading
-    // sounds (timer-triggered) are allowed to play.
+    // sounds (timer-triggered) are allowed to play. Also warm the
+    // TTS voice list so a later timer-triggered correction can pick
+    // a real Arabic voice instead of device luck.
     getAudioCtx();
+    try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch {}
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       setMicError('المتصفح ده مش بيدعم التسميع بالميكروفون — قيّم يدوي بدل كده');
@@ -1158,10 +1354,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     if (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting') return;
     setMicError('');
-    liveRef.current.finals = '';
+    setMicStalled(false);
+    // S4: a fresh start wipes the ayah transcript (old behaviour);
+    // a كمّل resume keeps it — that is the whole point of the
+    // stalled state (budget trips used to wipe on re-tap).
+    if (!preserveFinals) {
+      liveRef.current.finals = '';
+      setTranscript('');
+    } else {
+      setTranscript(liveRef.current.finals);
+    }
     liveRef.current.correctingTargets = [];
     liveRef.current.windowStartLen = 0;
-    setTranscript('');
     setInterim('');
     setWrongIndices([]);
     userStopRef.current = false;
@@ -1182,6 +1386,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // in the new ayah's transcript.
       if (recRef.current !== rec) return;
       noteRecResult();
+      // S4: any result — final or interim — proves the engine alive
+      // and re-arms the no-result watchdog.
+      noteWatchdogResult();
       // A transient network note clears on the next good result.
       setMicError('');
       let interimText = '';
@@ -1233,12 +1440,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // Stopping on them (the old behaviour) dead-ended the test
       // and forced a re-tap that wiped the ayah's finals.
       // The spec guarantees an end event whenever a session ends,
-      // so the onend restart below is the retry path.
+      // so the onend restart below is the retry path — and the S4
+      // 3s safety timer below is the backstop when onend never
+      // comes (the old code hung on "retrying" forever then).
       if (recRef.current !== rec) return;
       const code = e && e.error;
-      if (code === 'no-speech' || code === 'aborted') return;
+      const stallMessage = 'الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع';
+      if (code === 'no-speech' || code === 'aborted') {
+        armTransientSafety(rec, () => tripAyahStalled(stallMessage));
+        return;
+      }
       if (code === 'network') {
         setMicError('الاستماع المباشر محتاج إنترنت — بيحاول تاني لوحده');
+        armTransientSafety(rec, () => tripAyahStalled(stallMessage));
         return;
       }
       if (code === 'language-not-supported' && !(rec as any).__triedLocaleFallback) {
@@ -1266,6 +1480,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // while the user is still mid-ayah, unless they stopped or
       // were graded. The identity check blocks a stale session
       // from restarting after a newer one began (or after stop).
+      // S4: a normal onend cancels the transient safety timer —
+      // this IS the restart path the timer backstops.
+      clearTransientSafety();
       if (recRef.current !== rec || userStopRef.current) return;
       if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
       // [P1] Rescue the orphaned interim: it will never finalize
@@ -1281,11 +1498,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
       }
       // [P4] Budgeted restart: a dead mic used to loop forever.
+      // S4: tripping the budget now preserves the transcript and
+      // offers كمّل — the old code went idle and the next tap
+      // wiped the ayah's finals.
       if (!recRestartAllowed()) {
-        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
-        stopRec();
-        liveRef.current.micState = 'idle';
-        setMicState('idle');
+        tripAyahStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع');
         return;
       }
       try {
@@ -1293,9 +1510,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       } catch (err: any) {
         // Already running (double onend): not an error, stay live.
         if (err && err.name === 'InvalidStateError') return;
-        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
-        liveRef.current.micState = 'idle';
-        setMicState('idle');
+        tripAyahStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع');
       }
     };
     recRef.current = rec;
@@ -1309,7 +1524,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     liveRef.current.micState = 'listening';
     setMicState('listening');
+    // S4: the watchdog clock starts at session start, not at the
+    // first result — a session that never yields anything must
+    // still trip honestly instead of showing "listening…" forever.
+    lastResultAtRef.current = Date.now();
+    armWatchdog();
   };
+
+  // S4: resume a stalled ayah session without wiping its transcript.
+  const resumeMic = () => startMic(true);
 
   // ---- Continuous mode -------------------------------------------
   // One listening session over the whole range: no per-ayah stops.
@@ -1473,6 +1696,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if ('speechSynthesis' in window) {
           const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
           u.lang = 'ar-SA';
+          // S4: same Arabic voice pick as ayah corrections — the
+          // prompt must not be device luck either.
+          const v = pickArabicTtsVoice();
+          if (v) u.voice = v;
           u.rate = CORR_RATE_VALUE[liveRef.current.corrRate];
           u.onend = resumeAfterPrompt;
           u.onerror = resumeAfterPrompt;
@@ -1649,6 +1876,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // [P4] Stale-recognizer guard (see ayah path).
       if (recRef.current !== rec) return;
       noteRecResult();
+      // S4: any result re-arms the no-result watchdog.
+      noteWatchdogResult();
       setMicError('');
       let interimText = '';
       let sawFinal = false;
@@ -1696,11 +1925,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // [P3] Same taxonomy as the ayah path: transient errors do
       // not stop the session; the onend restart is the retry, and
       // the accumulated continuous transcript survives it.
+      // S4: the 3s safety timer backstops a missing onend here too,
+      // and its dead-end preserves (never wipes) the transcript.
       if (recRef.current !== rec) return;
       const code = e && e.error;
-      if (code === 'no-speech' || code === 'aborted') return;
+      if (code === 'no-speech' || code === 'aborted') {
+        armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
+        return;
+      }
       if (code === 'network') {
         setMicError('الاستماع المباشر محتاج إنترنت — بيحاول تاني لوحده');
+        armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
         return;
       }
       if (code === 'language-not-supported' && !(rec as any).__triedLocaleFallback) {
@@ -1724,6 +1959,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // [P1/P4] Same restart discipline as the ayah path: rescue
       // the orphaned interim, re-grade if it completes the range,
       // then restart under budget — never for a stale session.
+      // S4: a normal onend cancels the transient safety timer.
+      clearTransientSafety();
       if (recRef.current !== rec || userStopRef.current) return;
       if (!liveRef.current.contListening) return;
       const orphan = takePendingInterim();
@@ -1744,16 +1981,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (recRef.current !== rec || userStopRef.current || !liveRef.current.contListening) return;
       }
       if (!recRestartAllowed()) {
-        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
-        stopContinuousMic();
+        tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل');
         return;
       }
       try {
         rec.start();
       } catch (err: any) {
         if (err && err.name === 'InvalidStateError') return;
-        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
-        stopContinuousMic();
+        tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل');
       }
     };
     recRef.current = rec;
@@ -1767,6 +2002,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     liveRef.current.contListening = true;
     setContListening(true);
+    // S4: watchdog clock starts at session start (also after every
+    // prompt resume, which re-enters here), and a resume clears the
+    // stalled banner — the transcript itself was never wiped.
+    setContStalled(false);
+    lastResultAtRef.current = Date.now();
+    armWatchdog();
   };
 
   // Advance after a mic grade (the user reads the green ayah / red
@@ -1824,16 +2065,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
             <Mic className="w-7 h-7 text-white" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-accent-800">سمّع لنفسك</h1>
-            <p className="text-sm text-accent-500">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
+            <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
-          <button onClick={() => onNavigate('app')}
-            className="mr-auto flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg">
+          <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"
+            className="mr-auto icon-action flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg">
             <Home className="w-5 h-5" /> لوحتي
           </button>
         </div>
@@ -1881,7 +2122,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     متقدم
                   </button>
                 </div>
-                <p className="text-sm text-accent-500 mt-2 leading-relaxed">
+                <p className="text-sm text-accent-600 mt-2 leading-relaxed">
                   {verifyLevel === 'beginner'
                     ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه.'
                     : verifyLevel === 'intermediate'
@@ -1908,7 +2149,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </button>
                   ))}
                 </div>
-                <p className="text-sm text-accent-500 mt-2 leading-relaxed">
+                <p className="text-sm text-accent-600 mt-2 leading-relaxed">
                   فترة التريث هي المهلة اللي بتاخدها تصلح لنفسك قبل ما البرنامج ينطق التصحيح (في آية آية)، أو مدة سكوتك قبل ما ينبهك (في المتصل). أما المقاطعة الفورية للغلطة المؤكدة وانت ماشي فبتفضل فورية — دي الرد التلقائي.
                 </p>
               </div>
@@ -1924,7 +2165,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     متصل
                   </button>
                 </div>
-                <p className="text-sm text-accent-500 mt-2 leading-relaxed">
+                <p className="text-sm text-accent-600 mt-2 leading-relaxed">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
@@ -1933,14 +2174,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <p className="text-sm text-amber-700 mt-1">الوضع المتصل يحتاج ميكروفون — جهازك مش بيدعمه، فالاختيار ده مقفول.</p>
                 )}
               </div>
-              <p className="text-xs text-accent-400 leading-relaxed">
+              <p className="text-xs text-accent-600 leading-relaxed">
                 ملحوظة بأمانة: التدقيق كله على مستوى الكلمات — البرنامج بيسمع الكلمات مش الأصوات، فما بيقيس أحكام التجويد (اللحن الخفي).
               </p>
             </div>
 
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
               <h2 className="font-bold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
-              <p className="text-sm text-accent-500 leading-relaxed">
+              <p className="text-sm text-accent-600 leading-relaxed">
                 ابدأ من أول سورة أو جزء أو حزب أو ربع، واخلص عند نهاية نفس الوحدة، أو عند نهاية حزب أو جزء أو سورة.
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -1975,7 +2216,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                 </label>
               </div>
-              <p className="text-sm text-accent-500">
+              <p className="text-sm text-accent-600">
                 يبدأ من: سورة {SURAHS.find((s) => s.no === unitPreview.start.surah)?.name || ''} آية {unitPreview.start.ayah.toLocaleString('ar-EG')} ({unitLabel(startKind, startNum)})
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -2053,7 +2294,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                 </label>
               </div>
-              <p className="text-sm text-accent-500">
+              <p className="text-sm text-accent-600">
                 سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية — النطاق المختار: {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}
               </p>
               {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
@@ -2061,7 +2302,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                 {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
               </button>
-              <p className="text-xs text-accent-400 leading-relaxed">
+              <p className="text-xs text-accent-600 leading-relaxed">
                 {micSupported
                   ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ' + corrDelay.toLocaleString('ar-EG') + ' ثواني تصلحها، وبعدها يظهر لك الجزء الغلط بالأحمر وينطقه لك البرنامج بصوت رجالي أو نسائي حسب حسابك. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
                   : 'المتصفح ده مش بيدعم التسميع بالميكروفون — نص الآية لا يظهر إلا بعد أن تسمّعها وتضغط "أظهر الآية"، ثم تقيّم نفسك: صح أو خطأ.'}
@@ -2074,8 +2315,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <ul className="space-y-2">
                   {history.slice(0, 5).map((h, i) => (
                     <li key={i} className="flex items-center justify-between text-sm gap-2">
-                      <span className="text-accent-700">{h.endSurahName && h.endSurah !== h.surah ? <>من سورة {h.surahName} آية {h.from} إلى سورة {h.endSurahName} آية {h.endAyah}</> : <>سورة {h.surahName} — آيات {h.from} إلى {h.to}</>}</span>
-                      <span className="font-bold text-emerald-700 whitespace-nowrap">{h.correct}/{h.total} ({h.total > 0 ? Math.round((h.correct / h.total) * 100) : 0}٪)</span>
+                      <span className="text-accent-700">{h.endSurahName && h.endSurah !== h.surah ? <>من سورة {h.surahName} آية {formatAr(h.from)} إلى سورة {h.endSurahName} آية {formatAr(h.endAyah)}</> : <>سورة {h.surahName} — آيات {formatAr(h.from)} إلى {formatAr(h.to)}</>}</span>
+                      <span className="font-bold text-emerald-700 whitespace-nowrap">{formatAr(h.correct)}/{formatAr(h.total)} ({h.total > 0 ? formatAr(Math.round((h.correct / h.total) * 100)) : formatAr(0)}٪)</span>
                       <span className="text-accent-400 whitespace-nowrap">{h.date}</span>
                     </li>
                   ))}
@@ -2091,8 +2332,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <span className="text-accent-700">
                 {rangeStart && rangeEnd ? (
                   rangeStart.surah === rangeEnd.surah
-                    ? <>سورة {SURAHS.find((s) => s.no === rangeStart.surah)?.name || ''} — من آية {rangeStart.ayah} إلى آية {rangeEnd.ayah}</>
-                    : <>من سورة {SURAHS.find((s) => s.no === rangeStart.surah)?.name || ''} آية {rangeStart.ayah} إلى سورة {SURAHS.find((s) => s.no === rangeEnd.surah)?.name || ''} آية {rangeEnd.ayah}</>
+                    ? <>سورة {SURAHS.find((s) => s.no === rangeStart.surah)?.name || ''} — من آية {formatAr(rangeStart.ayah)} إلى آية {formatAr(rangeEnd.ayah)}</>
+                    : <>من سورة {SURAHS.find((s) => s.no === rangeStart.surah)?.name || ''} آية {formatAr(rangeStart.ayah)} إلى سورة {SURAHS.find((s) => s.no === rangeEnd.surah)?.name || ''} آية {formatAr(rangeEnd.ayah)}</>
                 ) : 'تسميع متصل'}
               </span>
               <span className="text-emerald-700">كلمة {contProgress.matched.toLocaleString('ar-EG')} من {contProgress.total.toLocaleString('ar-EG')}</span>
@@ -2104,13 +2345,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6 text-center">
               {!contListening ? (
                 <>
+                  {contStalled && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                      <p className="text-base font-bold text-amber-800">
+                        الاستماع وقف — لكن اللي سمعته محفوظ، كمّل من غير ما يضيع
+                      </p>
+                    </div>
+                  )}
                   <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Mic className="w-10 h-10 text-emerald-700" />
                   </div>
                   <p className="text-lg font-bold text-accent-700 leading-relaxed">
                     سمّع النطاق كله على بعضه من حفظك الآن
                   </p>
-                  <p className="text-sm text-accent-400 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
+                  <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
                   <button onClick={startContinuousMic}
                     className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto">
                     <Mic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
@@ -2137,7 +2385,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </button>
                   )}
                   {(transcript || interim) && (
-                    <p className="text-sm text-accent-500 leading-relaxed mb-4" dir="rtl">
+                    <p className="text-sm text-accent-600 leading-relaxed mb-4" dir="rtl">
                       سمعت: {transcript}{interim ? ` ${interim}` : ''}
                     </p>
                   )}
@@ -2158,7 +2406,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
             <button onClick={() => { stopContinuousMic(); setPhase('setup'); }}
-              className="block mx-auto text-sm font-bold text-accent-500 hover:text-accent-700 underline">
+              className="block mx-auto text-sm font-bold text-accent-600 hover:text-accent-700 underline">
               إلغاء التسميع والعودة للإعدادات
             </button>
           </div>
@@ -2190,14 +2438,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <p className="text-lg font-bold text-accent-700 leading-relaxed">
                         سمّع الآية {ayahs[index].ayah_no} من حفظك الآن
                       </p>
-                      <p className="text-sm text-accent-400 mt-1">النص مخفي عمدًا — عندما تنتهي اضغط الزر</p>
+                      <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — عندما تنتهي اضغط الزر</p>
                       <button onClick={() => setRevealed(true)}
                         className="mt-5 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white text-lg font-bold rounded-xl shadow">
                         أظهر الآية
                       </button>
                       {micSupported && (
                         <button onClick={() => { manualPreferredRef.current = false; setManualMode(false); }}
-                          className="mt-3 block mx-auto text-sm font-bold text-accent-500 hover:text-accent-700 underline">
+                          className="mt-3 block mx-auto text-sm font-bold text-accent-600 hover:text-accent-700 underline">
                           أو سمّع بالميكروفون بدل كده
                         </button>
                       )}
@@ -2205,7 +2453,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   ) : (
                     <>
                       <p className="text-2xl leading-[2.2] font-bold text-accent-800" dir="rtl">{ayahs[index].ayah_text}</p>
-                      <p className="text-sm text-accent-500 mt-4">طابق ما سمّعته بالنص — ثم قيّم نفسك بصدق:</p>
+                      <p className="text-sm text-accent-600 mt-4">طابق ما سمّعته بالنص — ثم قيّم نفسك بصدق:</p>
                       <div className="flex gap-3 mt-4">
                         <button onClick={() => grade(true)}
                           className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2">
@@ -2231,7 +2479,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               ) : micState === 'done-wrong' ? (
                 <>
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
-                  <p className="text-sm text-accent-500 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
+                  <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
                   <p className="text-2xl leading-[2.2] font-bold" dir="rtl">
                     {expectedWordList(ayahs[index].ayah_text).map((w, i) => (
                       <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
@@ -2255,19 +2503,47 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <>
                   {micState === 'idle' && (
                     <>
+                      {micStalled && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                          <p className="text-base font-bold text-amber-800">
+                            الاستماع وقف — لكن اللي سمعته محفوظ ومش هيضيع
+                          </p>
+                          {transcript && (
+                            <p className="text-sm text-accent-500 leading-relaxed mt-1" dir="rtl">
+                              سمعت: {transcript}
+                            </p>
+                          )}
+                          <div className="flex gap-2 justify-center mt-3">
+                            <button onClick={resumeMic}
+                              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
+                              كمّل
+                            </button>
+                            {spokenTokens(liveRef.current.finals).length > 0 && (
+                              <button onClick={evaluateStalled}
+                                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
+                                قيّم اللي اتسمع
+                              </button>
+                            )}
+                            <button onClick={() => startMic()}
+                              className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
+                              ابدأ من جديد
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
                         <Mic className="w-10 h-10 text-emerald-700" />
                       </div>
                       <p className="text-lg font-bold text-accent-700 leading-relaxed">
                         سمّع الآية {ayahs[index].ayah_no} من حفظك الآن
                       </p>
-                      <p className="text-sm text-accent-400 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ بصوتك</p>
-                      <button onClick={startMic}
+                      <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ بصوتك</p>
+                      <button onClick={() => startMic()}
                         className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto">
                         <Mic className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
                       <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}
-                        className="mt-3 text-sm font-bold text-accent-500 hover:text-accent-700 underline">
+                        className="mt-3 text-sm font-bold text-accent-600 hover:text-accent-700 underline">
                         أو قيّم نفسك يدوي بدل الميكروفون
                       </button>
                     </>
@@ -2285,14 +2561,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <p className="text-base font-bold text-amber-800">
                             في حاجة محتاجة تتصلح — كمّل أو صلّح، عندك {countdown.toLocaleString('ar-EG')} ثواني
                           </p>
-                          <button onClick={() => gradeMic(false)}
+                          <button onClick={() => showMistakeNow()}
                             className="mt-1 text-sm font-bold text-amber-700 underline">
                             خلاص، وريني الغلط
                           </button>
                         </div>
                       )}
                       {(transcript || interim) && (
-                        <p className="text-sm text-accent-500 leading-relaxed mb-4" dir="rtl">
+                        <p className="text-sm text-accent-600 leading-relaxed mb-4" dir="rtl">
                           سمعت: {transcript}{interim ? ` ${interim}` : ''}
                         </p>
                       )}
@@ -2332,7 +2608,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 {index + 1 < ayahs.length ? (<>تخطي الآية <ChevronLeft className="w-5 h-5" /></>) : 'إنهاء التسميع'}
               </button>
             </div>
-            <p className="text-center text-sm text-accent-400">النتيجة حتى الآن: {correct} صح من {index + (currentDone ? 1 : 0)} آية</p>
+            <p className="text-center text-sm text-accent-600">النتيجة حتى الآن: {correct} صح من {index + (currentDone ? 1 : 0)} آية</p>
           </div>
         )}
 
@@ -2363,7 +2639,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </button>
                       </div>
                       {wrongByAyah[i]?.length ? <p className="text-red-600 text-xs mt-1">الكلمات الغلط: {wrongByAyah[i].join(' ')}</p> : null}
-                      {extraByAyah[i]?.length ? <p className="text-amber-600 text-xs mt-1">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
+                      {extraByAyah[i]?.length ? <p className="text-amber-700 text-xs mt-1">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
                     </li>
                   ) : null))}
                 </ul>
