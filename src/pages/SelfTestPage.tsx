@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
+import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import { formatAr } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
@@ -167,39 +168,10 @@ function spokenTokens(text: string): string[] {
   return out;
 }
 
-// P1: an opaque numeral token (see digitTokenToOpaque) — digits
-// with no Arabic letters. Spoken tokens are either cleanToken output
-// (Arabic letters only) or opaque tokens, so this test is exact on
-// spoken-token arrays. It must NOT be applied to expected norms
-// (which never contain digits) or raw text.
-function isOpaqueToken(t: string): boolean {
-  return /\d/.test(t) && !/[\u0621-\u064A]/.test(t);
-}
-
-// Normalized Levenshtein similarity for the overshoot exclusion
-// (P0-1): 1 - distance / max length. Inputs are short normalized
-// words, so the quadratic DP is trivial per call.
-function normLevSim(a: string, b: string): number {
-  if (a === b) return 1;
-  const m = a.length, n = b.length;
-  if (m === 0 || n === 0) return 0;
-  let prev: number[] = Array.from({ length: n + 1 }, (_, j) => j);
-  for (let i = 1; i <= m; i++) {
-    const cur: number[] = [i];
-    for (let j = 1; j <= n; j++) {
-      cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
-    }
-    prev = cur;
-  }
-  return 1 - prev[n] / Math.max(m, n);
-}
-
-// Liturgical phrases skipped (leading only) by the overshoot count
-// (F2). Normalized forms — spoken tokens are already normalized,
-// verified against the real normalizer (بسم الله الرحمن الرحيم,
-// أعوذ بالله من الشيطان الرجيم).
-const OVERSHOOT_BASMALAH = ['بسم', 'الله', 'الرحمن', 'الرحيم'];
-const OVERSHOOT_ISTIADHA = ['اعوذ', 'بالله', 'من', 'الشيطان', 'الرجيم'];
+// R1 (Claude-2): isOpaqueToken, normLevSim, OVERSHOOT_BASMALAH and
+// OVERSHOOT_ISTIADHA moved to src/lib/overshoot.ts (single source of
+// truth, shared by the component and the runners). They are imported
+// at the top of this file; see overshoot.ts for their definitions.
 
 // ---- D1 diagnostics (transcript-truth) -------------------------------
 // (a) App shell, recorded next to the build stamp and the raw
@@ -822,6 +794,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     diagTtsListener = (kind, label) => diagPush(kind, { label });
     return () => { diagTtsListener = null; };
   }, []);
+  // R5 (Claude-2) LOCALITY GUARANTEE: this export NEVER leaves the
+  // device on its own. Its only outputs are the user's explicit
+  // clipboard copy (diagCopyJson below: clipboard API with a
+  // textarea fallback) — there is no fetch, no supabase call, no
+  // beacon and no auto-send anywhere on the diag paths (verified by
+  // grep over diagPush/diagExport/diagCopyJson and the panel). The
+  // recitation transcript inside the JSON is the user's own speech;
+  // it moves only when the user pastes it somewhere themselves.
   // Export shape (format 'quran-test-diag/v1', documented in the
   // followup-diag evidence file): meta + settings + range + the
   // recorded outcome (grades, wrongByAyah) + the full event list +
@@ -2101,6 +2081,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     contAlignCacheRef.current = entry;
     return entry;
   };
+  // Q7b (Claude-2, ASSESSED — documented, not changed): this function
+  // MUTATES contCreditedRef while being called as a read function
+  // (it adds every raw-matched index to the credited set). That is
+  // provably safe, not a corruption path, for three reasons: (1) the
+  // add is idempotent (a Set — re-adding an index is a no-op), so
+  // repeated read calls cannot inflate anything; (2) it only ever
+  // adds RAW-MATCHED indices, never unmatched ones, so the credited
+  // set can never keep a word matched that the aligner did not match;
+  // (3) every consumer uses raw || credited, so adding raw matches
+  // to the set changes no consumer's result — the overshoot input
+  // (below) and the progress count read the same effective matched
+  // either way. The fragility Claude names is real but latent: a
+  // future reader must NOT treat contCreditedRef as "fix-only" — it
+  // is the UNION of raw-matched-ever and fix-credited (checkContFix's
+  // settle adds the fix credits; startTestGlobal resets it). If the
+  // aligner ever becomes non-monotonic under transcript append
+  // (finals only grow today, so raw matched is append-stable), this
+  // merge must be re-examined. No separation of read/mutation is
+  // made: the merge is load-bearing for the overshoot wrapper, which
+  // relies on this side effect to keep credited current.
   const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
     const raw = contRawAlignment();
     const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i));
@@ -2332,103 +2332,31 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // word. It only prompts (the same speakContPrompt as every other
   // correction); the word stays missed until the user actually says
   // it after the prompt (checkContFix credit, unchanged).
+  // R1 (Claude-2): the overshoot decision lives in src/lib/overshoot.ts
+  // (pure function overshootOwed) — this wrapper only feeds it the
+  // live alignment state. Call order is preserved exactly:
+  // contRawAlignment() first, then contEffectiveMatched() (kept for
+  // its side effect of recording raw matches into contCreditedRef),
+  // then the pure decision. The wrapper adds no counting of its own;
+  // the runners import the same overshootOwed, so a future counting
+  // bug cannot hide in a mirror again.
   const contOvershootOwed = (): { words: string[]; indices: number[]; norms: string[] } | null => {
     const expected = liveRef.current.contExpected;
     if (expected.length === 0) return null;
-    // P0-1(c): the overshoot check never runs while a prompt is
-    // playing — checkContMissInterrupt already early-returns then,
-    // and this self-guard means no future caller can fire one
-    // mid-prompt either. No tokens can be appended while prompting
-    // anyway (the mic is stopped and recRef nulled by speakContPrompt,
-    // and both append paths — live finals and onend orphan rescue —
-    // are guarded by recRef identity + contListening), so there is
-    // no "received during TTS" token set left to filter: the
-    // exclusion is the guard itself, not a filter. Finals-only
-    // holds by construction: the check runs only from the
-    // final-result handler and the onend orphan-rescue path, never
-    // on a timer and never on interim tokens.
-    if (contPromptingRef.current) return null;
     const raw = contRawAlignment();
-    const { matched, lastMatchedIdx, consumed } = contEffectiveMatched();
-    if (lastMatchedIdx < 0) return null;
-    const nextIdx = lastMatchedIdx + 1;
-    if (nextIdx >= expected.length) return null;
-    const next = expected[nextIdx];
-    // Words left in the next word's ayah, from the next word onward.
-    let remaining = 0;
-    for (let i = nextIdx; i < expected.length && expected[i].ayahIdx === next.ayahIdx; i++) remaining++;
-    // F1: anchor at the END of the last raw match's consumed span.
-    // The old code anchored at positions[i] (the span START), so a
-    // match's own fragments — letter names of an opening, pieces of
-    // a split word — counted as new words and fired false
-    // interrupts. A credited-only word has no raw position; the last
-    // raw match is the safe anchor, and credited words are excluded
-    // below as repeats via the effective matched set. Defensive
-    // fallback: a missing/short consumed array (stale cache) anchors
-    // at the start rather than producing a NaN anchor.
-    let anchor = -1;
-    for (let i = lastMatchedIdx; i >= 0; i--) {
-      if (raw.matched[i] && raw.positions[i] >= 0) {
-        const span = consumed && consumed[i] ? consumed[i] : 1;
-        anchor = raw.positions[i] + span - 1;
-        break;
-      }
-    }
-    if (anchor < 0) return null;
-    // F2: skip a LEADING run of liturgical phrases after the anchor
-    // — a basmalah and/or isti'adha, each in order, each possibly a
-    // prefix (the user may pause mid-phrase). Only exact in-order
-    // contiguous phrases are skipped; the scan stops permanently at
-    // the first non-phrase token, so out-of-order phrase words still
-    // count. Counting only — grading is untouched.
-    let scan = anchor + 1;
-    for (;;) {
-      let took = 0;
-      for (const phrase of [OVERSHOOT_BASMALAH, OVERSHOOT_ISTIADHA]) {
-        let k = 0;
-        while (k < phrase.length && raw.spoken[scan + k] === phrase[k]) k++;
-        if (k > 0) { took = k; break; }
-      }
-      if (took === 0) break;
-      scan += took;
-    }
-    const matchedNorms = new Set<string>();
-    matched.forEach((m, i) => { if (m) matchedNorms.add(expected[i].norm); });
-    // P0-1(b): the owed ayah's own words, for the near-miss
-    // exclusion below (a token similar to something owed is a
-    // variant of it, not forward movement).
-    const owedAyahNorms: string[] = [];
-    expected.forEach((w) => { if (w.ayahIdx === next.ayahIdx) owedAyahNorms.push(w.norm); });
-    const distinctNew = new Set<string>();
-    for (let t = scan; t < raw.spoken.length; t++) {
-      const tok = raw.spoken[t];
-      if (matchedNorms.has(tok)) continue;
-      // P1: opaque numeral artifacts carry no lexical evidence of
-      // movement (they are engine renderings, not spoken words).
-      if (isOpaqueToken(tok)) continue;
-      // P0-1(b): near-miss variants of owed words are not movement.
-      // Verified against the planted device replay: للمؤمنين vs
-      // للمتقين scores 0.625 (< 0.7), so the replay still fires.
-      let nearMiss = false;
-      for (const w of owedAyahNorms) {
-        if (normLevSim(tok, w) >= 0.7) { nearMiss = true; break; }
-      }
-      if (nearMiss) continue;
-      distinctNew.add(tok);
-    }
-    // P0-1 threshold + F3 conflict resolution: fire only when the
-    // pigeonhole holds (strictly more distinct new words than the
-    // ayah has left) AND the count clears the noise floor (>= 4) —
-    // EXCEPT when remaining == 1, where the pigeonhole is tightest
-    // (any 2 distinct new words already exceed 1 slot) and reviewer
-    // 1's F3 REQUIRES the 2-junk fire (join-anchor +2 junk). The
-    // threshold keeps protecting every roomier case; the exemption
-    // keeps the required end-of-ayah fire. A single slip (distinct
-    // 1) never fires under either branch.
-    if (distinctNew.size > remaining && (distinctNew.size >= 4 || remaining === 1)) {
-      return { words: [next.orig], indices: [nextIdx], norms: [next.norm] };
-    }
-    return null;
+    // Kept for its credit-recording side effect (see above); its
+    // return value is intentionally unused — the pure function
+    // derives effective matched from raw + credited itself.
+    contEffectiveMatched();
+    return overshootOwed({
+      expected,
+      spoken: raw.spoken,
+      rawMatched: raw.matched,
+      rawPositions: raw.positions,
+      rawConsumed: raw.consumed,
+      credited: contCreditedRef.current,
+      prompting: contPromptingRef.current,
+    });
   };
   const cancelContPrompt = () => {
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }

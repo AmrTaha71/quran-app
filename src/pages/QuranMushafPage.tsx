@@ -1267,10 +1267,21 @@ export default function QuranMushafPage({
   const [followMicWaiting, setFollowMicWaiting] = useState(false);
   const [followMicWaitStartedAt, setFollowMicWaitStartedAt] = useState<number | null>(null);
   const followMicWaitingRef = useRef(false);
+  // B4 (Bolt note 2): the silent pre-audiostart retry is made VISIBLE
+  // in the lobby waiting line (e.g. "محاولة 2/2 بعد إنهاء صامت قبل
+  // الإذن") alongside the elapsed ticker, so a device test can
+  // report whether Safari silently ends sessions. This waiting-line
+  // evidence is the event surface — no full follow event log is
+  // built. The note is set ONLY by the R3 retry branch (below) and
+  // cleared by every wait-state change (see the setter): any
+  // grant / result / stop / cancel ends the wait, so the note can
+  // never strand past the wait it describes.
+  const [followWaitRetryNote, setFollowWaitRetryNote] = useState<string | null>(null);
   const setFollowMicWaitingState = useCallback((waiting: boolean, startedAt: number | null = null) => {
     followMicWaitingRef.current = waiting;
     setFollowMicWaiting(waiting);
     setFollowMicWaitStartedAt(waiting ? startedAt : null);
+    setFollowWaitRetryNote(null);
   }, []);
   // P0-2 (Claude): true once the live engine has begun capturing audio
   // in this session (onaudiostart, fallback onstart — both fire only
@@ -1281,6 +1292,14 @@ export default function QuranMushafPage({
   // time, on every terminal stop, and by stopFollowEngines, so a
   // previous session's grant can never authorize restarts in a new one.
   const followAudioStartedRef = useRef(false);
+  // R3 (Claude-2): silent pre-audiostart onend retries, per tap.
+  // Safari sometimes ends the engine on its own before capture; the
+  // old code honest-stopped on the first such end, which could kill
+  // a session before the first word. At most 2 retries per tap; the
+  // budget resets ONLY on onaudiostart/onstart (markFollowAudioStarted),
+  // on first result, and on a fresh tap — never on a retry itself,
+  // so a loop that never gets audiostart exhausts and stops honestly.
+  const followPreAudioRetryRef = useRef(0);
   // P0-2 (Claude): elapsed-seconds ticker for the permission wait.
   // The static "started at HH:MM:SS" stamp could not tell a 2s wait
   // from a 2-minute one; the ticker makes a stuck prompt visible, and
@@ -1445,6 +1464,32 @@ export default function QuranMushafPage({
     followStreamRef.current?.getTracks().forEach((t) => t.stop());
     followStreamRef.current = null;
   }, [setFollowMicWaitingState]);
+
+  // B1 (Bolt CONDITION, required before any device test): a WORKING
+  // Cancel button while waiting for mic permission, live AND Whisper
+  // paths. Today the start buttons are disabled during the wait and
+  // the ready branch has no stop button at all, so if Safari never
+  // shows the prompt the user is stuck with no exit except reload.
+  // The button stays ENABLED during waiting (no disabled prop) and
+  // calls this handler. stopFollowEngines alone is NOT enough: a
+  // pending getUserMedia grant (Whisper) or index load (live) would
+  // still resolve under the same startGen and resurrect listening
+  // behind the user's back — so the generation is bumped FIRST
+  // (every in-flight grant / load / chunk checks startGen and aborts
+  // on mismatch), then stopFollowEngines clears the wait (ref + state
+  // through the single setter) and stops the engines. followOn and
+  // followReady are deliberately NOT touched — unlike stopFollow,
+  // cancel must NOT exit follow mode: the lobby stays in its ready
+  // branch with the start buttons enabled, so a fresh tap works
+  // immediately. User-initiated cancel does not violate the no-timer
+  // rule (no timer is involved — this is a tap). The wake lock and
+  // followActiveRef are left alone for the same reason: the user is
+  // still in the lobby, not leaving follow mode; the next tap
+  // re-arms everything.
+  const cancelFollowMicWait = useCallback(() => {
+    followStartGenRef.current += 1;
+    stopFollowEngines();
+  }, [stopFollowEngines]);
 
   // Shared FULL teardown for a follow session (mic, stream, recorder,
   // wake lock, visibility listener). No setState here, so it is safe
@@ -1964,6 +2009,8 @@ export default function QuranMushafPage({
     // P0-2: a fresh session starts with no audio grant — a previous
     // session's audiostart must never authorize restarts here.
     followAudioStartedRef.current = false;
+    // R3: a fresh tap gets a fresh pre-audiostart retry budget.
+    followPreAudioRetryRef.current = 0;
     // Locale captured at tap time from the same source the language
     // provider uses (localStorage 'app-lang'): ar-EG -> ar-EG, anything
     // else -> ar-SA. A language change mid-session does NOT retune a
@@ -2018,6 +2065,11 @@ export default function QuranMushafPage({
       // either way, because it keys on the same flag.
       const markFollowAudioStarted = () => {
         followAudioStartedRef.current = true;
+        // R3: a grant resets the pre-audiostart retry budget (the
+        // session is alive; a later silent end takes the budgeted
+        // restart path, not this branch, but the reset keeps the
+        // budget accounting exact if the flag is ever re-armed).
+        followPreAudioRetryRef.current = 0;
         if (followMicWaitingRef.current) setFollowMicWaitingState(false);
       };
       rec.onaudiostart = markFollowAudioStarted;
@@ -2082,6 +2134,10 @@ export default function QuranMushafPage({
         // on the normal listening display (and the budgeted onend
         // restart) apply.
         if (followMicWaitingRef.current) setFollowMicWaitingState(false);
+        // R3: a result resets the pre-audiostart retry budget (the
+        // session is demonstrably alive; the branch below is
+        // unreachable after this anyway, since the wait is cleared).
+        followPreAudioRetryRef.current = 0;
         // Any result resets the dead-mic restart budget (speech heard
         // = mic alive).
         liveRestartCountRef.current = 0;
@@ -2184,6 +2240,39 @@ export default function QuranMushafPage({
         // Wording stays deliberately cause-neutral ("before any
         // result") rather than claiming a permission cause.
         if (followMicWaitingRef.current && !followAudioStartedRef.current) {
+          // R3 (Claude-2): a SILENT pre-audiostart onend — Safari
+          // sometimes ends the engine on its own before capture
+          // (imam silent, engine blip). The old code honest-stopped
+          // on the first such end, which could kill a session before
+          // the first word. Allow at most 2 retries per tap; the
+          // budget resets only on onaudiostart/onstart, first result,
+          // or a fresh tap (see followPreAudioRetryRef) — never on a
+          // retry itself — so a loop that never gets audiostart
+          // exhausts and stops honestly instead of looping forever.
+          // Tension documented, not hidden: E3's original rationale
+          // for an immediate honest stop was that a restart while
+          // permission is undecided could re-prompt behind the
+          // user's back. The cap is the compromise: a restart on the
+          // same engine attaches to a pending decision rather than
+          // stacking prompts, and 2 retries bound any loop. Denials
+          // never reach this branch: onerror stops honestly first
+          // (listening false), so onend early-returns above.
+          if (followPreAudioRetryRef.current < 2) {
+            followPreAudioRetryRef.current += 1;
+            // B4: the retry is VISIBLE in the lobby waiting line
+            // (count + reason), so a device test can report whether
+            // Safari silently ends sessions. The wait itself stays
+            // set — only the note changes — and the setter clears
+            // the note on the next wait-state change (grant, result,
+            // stop, cancel), so it cannot strand.
+            setFollowWaitRetryNote(`محاولة ${followPreAudioRetryRef.current}/2 بعد إنهاء صامت قبل الإذن`);
+            try {
+              rec.start();
+            } catch {
+              stopLiveWithPrompt('توقف الاستماع المباشر فجأة — اضغط «ابدأ الاستماع» من جديد');
+            }
+            return;
+          }
           stopLiveWithPrompt('انتهى الاستماع قبل وصول أي نتيجة — اضغط «ابدأ الاستماع» من جديد');
           return;
         }
@@ -2237,18 +2326,34 @@ export default function QuranMushafPage({
             followOrderedRef.current = buildOrderedVerses(verses);
           }
         } catch {
-          try { rec.stop(); } catch {}
-          recognitionRef.current = null;
-          followListeningRef.current = false;
-          followStartingRef.current = false;
+          // R3-addendum (reviewer 2, hardening): this catch runs after an
+          // await, so a stop + re-tap during a first-load index fetch
+          // followed by the OLD load failing would otherwise clear the
+          // NEW session's shared refs (recognitionRef, listening) and
+          // leave it silently dead until the next re-tap. Guard every
+          // session mutation with startGen (same pattern as the wait
+          // clear below). Deliberate extension of the brief's 3-statement
+          // scope (rec.stop/recognitionRef/listening): reviewer 1's
+          // version also guards the ready/error sets, which are the same
+          // clobber class — a stale catch must not flip a live session
+          // to "ready" or paint a stale error on it. The guard cannot
+          // change owning-session behavior (it passes exactly then).
+          // The finally's index-loading reset is shared UI state and runs
+          // regardless — cosmetic only, noted, not restructured.
+          if (startGen === followStartGenRef.current) {
+            try { rec.stop(); } catch {}
+            recognitionRef.current = null;
+            followListeningRef.current = false;
+            followStartingRef.current = false;
+            setFollowReady(true);
+            setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+          }
           // E3: an index failure after a granted-but-silent start is
           // terminal too — it must not strand the waiting display.
           // P0-2: generation-guarded — this catch runs after an await,
           // so a stop + re-tap during the load would otherwise clear
           // the NEW session's wait (the newer session owns it now).
           if (startGen === followStartGenRef.current) setFollowMicWaitingState(false);
-          setFollowReady(true);
-          setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
         } finally {
           setFollowIndexLoading(false);
         }
@@ -2343,15 +2448,26 @@ export default function QuranMushafPage({
         followOrderedRef.current = buildOrderedVerses(verses);
       }
     } catch {
-      followListeningRef.current = false;
-      stream.getTracks().forEach((t) => t.stop());
-      followStreamRef.current = null;
+      // R3-addendum (reviewer 2, hardening): same stale-catch shape
+      // as the live branch — a stop + re-tap during the index fetch
+      // followed by the OLD load failing must not clear the NEW
+      // session's listening/stream/ready/error state. Guard every
+      // session mutation with startGen; a stale failure is silent
+      // (the new session owns the display now). Same deliberate
+      // extension as the live catch (ready/error/index-loading are
+      // the same clobber class; the guard cannot change
+      // owning-session behavior).
+      if (startGen === followStartGenRef.current) {
+        followListeningRef.current = false;
+        stream.getTracks().forEach((t) => t.stop());
+        followStreamRef.current = null;
+        setFollowReady(true);
+        setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+        setFollowIndexLoading(false);
+      }
       // E3 (UI state only): terminal index failure — end the wait.
       // P0-2: generation-guarded (post-await catch; see live branch).
       if (startGen === followStartGenRef.current) setFollowMicWaitingState(false);
-      setFollowReady(true);
-      setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
-      setFollowIndexLoading(false);
       return;
     }
     setFollowIndexLoading(false);
@@ -3275,13 +3391,24 @@ export default function QuranMushafPage({
                       <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
-                    {/* E3: Whisper-path permission wait renders in the ready
-                        branch (followReady is still true until the grant
-                        lands). No إيقاف button lives here, so no stop
-                        instruction — the wait ends on grant/denial, and
-                        the start buttons above are disabled meanwhile so
-                        a tap cannot silently stack a second attempt. */}
-                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">بانتظار إذن الميكروفون من المتصفح… (مرّ {followMicWaitElapsed} ثانية)</p>}
+                    {/* B1: the cancel button lives here, in the ready
+                        branch, because BOTH permission waits render
+                        here (followReady stays true until the grant
+                        lands, live and Whisper alike) — the listening
+                        branch's إيقاف only appears after a grant. The
+                        button stays ENABLED during waiting (no
+                        disabled prop): tapping it stops the engines,
+                        clears the wait (ref + state) and returns the
+                        lobby to idle, so a fresh tap works. The start
+                        buttons above stay disabled meanwhile so a tap
+                        cannot silently stack a second attempt. */}
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">بانتظار إذن الميكروفون من المتصفح… (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}</p>}
+                    {followMicWaiting && (
+                      <button onClick={cancelFollowMicWait}
+                        className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                        إلغاء الانتظار — رجوع للبداية من غير إعادة تحميل
+                      </button>
+                    )}
                     <p className="text-xs text-emerald-200 mt-4">لو الميكروفون مش شغال — بديل يدوي (اختياري):</p>
                     <div className="flex gap-2 mt-2">
                       <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
@@ -3298,7 +3425,7 @@ export default function QuranMushafPage({
                         NOT claim "listening" — that mislabel is what made
                         a queued Safari prompt look like a frozen app. */}
                     <p className="text-sm font-bold mt-4">{followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام...'}</p>
-                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">المتصفح لسه مطلعش نافذة الإذن — (مرّ {followMicWaitElapsed} ثانية){followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">المتصفح لسه مطلعش نافذة الإذن — (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}{followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
