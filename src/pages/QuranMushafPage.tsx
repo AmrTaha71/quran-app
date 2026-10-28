@@ -2503,17 +2503,21 @@ export default function QuranMushafPage({
                                     </span>
                                     {link.link_title && <p className="text-sm font-bold text-accent-700 mb-1">{link.link_title}</p>}
                                     <p className="text-base text-accent-600 leading-relaxed">{link.link_content}</p>
+                                    {/* Primary female voice = the original
+                                        recording; a generated voice is only
+                                        the additional fallback (same rule as
+                                        لوحتي's resolveLinkAudio). */}
                                     <div className="flex gap-2 mt-2">
-                                      {link.synthetic_audio_url && (
-                                        <button onClick={(e) => { e.stopPropagation(); playAudio(link.synthetic_audio_url!); }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
-                                          <Volume2 className="w-4 h-4" /> استماع ({link.voice_type === 'female' ? 'نسائي' : 'رجالي'})
+                                      {(link.audio_url || link.synthetic_audio_url) && (
+                                        <button onClick={(e) => { e.stopPropagation(); playAudio(link.audio_url ?? link.synthetic_audio_url!); }}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                                          <Volume2 className="w-4 h-4" /> {link.audio_url ? 'صوت نسائي' : link.voice_type === 'male' ? 'صوت رجالي' : 'صوت نسائي'}
                                         </button>
                                       )}
-                                      {link.audio_url && (
-                                        <button onClick={(e) => { e.stopPropagation(); playAudio(link.audio_url!); }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
-                                          <Volume2 className="w-4 h-4" /> المقطع الأصلي
+                                      {link.audio_url && link.synthetic_audio_url && (
+                                        <button onClick={(e) => { e.stopPropagation(); playAudio(link.synthetic_audio_url!); }}
+                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
+                                          <Volume2 className="w-4 h-4" /> صوت مولّد ({link.voice_type === 'male' ? 'رجالي' : 'نسائي'})
                                         </button>
                                       )}
                                     </div>
@@ -3222,17 +3226,20 @@ export default function QuranMushafPage({
                               </span>
                               {link.link_title && <p className="text-base font-bold text-accent-700 mb-1">{link.link_title}</p>}
                               <p className="text-base text-accent-600 leading-relaxed">{link.link_content}</p>
+                              {/* Primary female voice = the original
+                                  recording; a generated voice is only the
+                                  additional fallback (same rule as لوحتي). */}
                               <div className="flex gap-2 mt-2">
-                                {link.synthetic_audio_url && (
-                                  <button onClick={() => playAudio(link.synthetic_audio_url!)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
-                                    <Volume2 className="w-4 h-4" /> صوت مولّد
+                                {(link.audio_url || link.synthetic_audio_url) && (
+                                  <button onClick={() => playAudio(link.audio_url ?? link.synthetic_audio_url!)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                                    <Volume2 className="w-4 h-4" /> {link.audio_url ? 'صوت نسائي' : link.voice_type === 'male' ? 'صوت رجالي' : 'صوت نسائي'}
                                   </button>
                                 )}
-                                {link.audio_url && (
-                                  <button onClick={() => playAudio(link.audio_url!)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
-                                    <Volume2 className="w-4 h-4" /> المقطع الأصلي
+                                {link.audio_url && link.synthetic_audio_url && (
+                                  <button onClick={() => playAudio(link.synthetic_audio_url!)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
+                                    <Volume2 className="w-4 h-4" /> صوت مولّد ({link.voice_type === 'male' ? 'رجالي' : 'نسائي'})
                                   </button>
                                 )}
                               </div>
