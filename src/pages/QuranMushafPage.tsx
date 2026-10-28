@@ -203,7 +203,7 @@ function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalErro
       onLoad={onLoad}
       onError={() => {
         if (attempt === 0) setAttempt(1);
-        else if (attempt === 1) timerRef.current = setTimeout(() => setAttempt(2), 1200);
+        else if (attempt === 1) timerRef.current = setTimeout(() => setAttempt(2), 400);
         else if (attempt === 2 && fallback) setAttempt(3);
         else onFinalError();
       }}
@@ -833,32 +833,64 @@ export default function QuranMushafPage({
     loadPageAyahs(currentPage);
   }, [currentPage, fetchPageVerses, loadPageAyahs]);
 
-  // Preload the neighbouring pages so turning feels instant (±3, not
-  // ±1: at two turns a second the old ±1 window could not keep up and
-  // fast flips showed a white gap between pages).
+  // Preload the neighbouring pages so turning feels instant — but
+  // ONLY after the user settles (400ms without a turn). The old code
+  // fired ±3 preloads on EVERY turn, so fast flips flooded the
+  // connection with dozens of parallel requests and some page loads
+  // failed transiently (the black broken-image gaps). With the gate
+  // above, a lag no longer shows a gap (the old page stays), so
+  // waiting for a settle is safe. ±1 first, then ±2, ±3, so the
+  // nearest pages always win the race.
   useEffect(() => {
-    for (const p of [currentPage - 3, currentPage - 2, currentPage - 1, currentPage + 1, currentPage + 2, currentPage + 3]) {
-      if (p >= 1 && p <= TOTAL_PAGES) {
-        const img = new Image();
-        img.src = edition.imageUrl(p);
+    const timer = setTimeout(() => {
+      for (const p of [currentPage - 1, currentPage + 1, currentPage - 2, currentPage + 2, currentPage - 3, currentPage + 3]) {
+        if (p >= 1 && p <= TOTAL_PAGES) {
+          const img = new Image();
+          img.src = edition.imageUrl(p);
+        }
       }
-    }
+    }, 400);
+    return () => clearTimeout(timer);
   }, [currentPage, edition]);
 
-  // Displayed-page gate (SHAKE FIX 2026-10-28): advance displayedPage
-  // only when the new page's image is actually loaded (cached images
-  // resolve synchronously). The generation guard drops stale loads when
-  // the user flips past a page before its image arrives, so the display
-  // can never regress to an older page. On load error the new page is
-  // still shown, so RetryPageImg's retries / error block can run.
+  // Displayed-page gate (SHAKE FIX 2026-10-28, hardened 2026-10-28):
+  // advance displayedPage ONLY when the new page's image actually
+  // LOADS. The first version advanced on probe error too ("so the
+  // retries / error block can run") — but a transient failure is
+  // common when fast flips flood the connection, and then the user
+  // stared at a broken image on a black screen for 1-2s while
+  // RetryPageImg's slow chain ran (measured on the user's video:
+  // black gaps of 1.83s, 1.33s, 1.00s). Now the probe retries quickly
+  // on its own and the previous page stays until a good load; only
+  // after all probe retries fail do we advance, so the error block
+  // with its retry button can still show.
   useEffect(() => {
     const p = currentPage;
     const g = ++displayedPageGenRef.current;
-    const img = new Image();
-    img.src = edition.imageUrl(p);
-    const done = () => { if (displayedPageGenRef.current === g) setDisplayedPage(p); };
-    if (img.complete && img.naturalWidth > 0) done();
-    else { img.onload = done; img.onerror = done; }
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const clearTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    const probe = () => {
+      if (displayedPageGenRef.current !== g) return;
+      const img = new Image();
+      img.src = edition.imageUrl(p);
+      const done = () => { clearTimer(); if (displayedPageGenRef.current === g) setDisplayedPage(p); };
+      const onFail = () => {
+        clearTimer();
+        if (displayedPageGenRef.current !== g) return;
+        attempts += 1;
+        if (attempts < 3) timer = setTimeout(probe, 300);
+        else done();
+      };
+      if (img.complete && img.naturalWidth > 0) { done(); return; }
+      if (img.complete && img.naturalWidth === 0) { onFail(); return; }
+      img.onload = done;
+      img.onerror = onFail;
+      // Watchdog: a stalled load must not pin the old page forever.
+      timer = setTimeout(onFail, 5000);
+    };
+    probe();
+    return () => { clearTimer(); };
   }, [currentPage, edition]);
 
   // Remember the user's chosen edition and last page, and honour a
@@ -2570,7 +2602,7 @@ export default function QuranMushafPage({
 
       {/* Fullscreen viewer with intro */}
       {showFullscreen && (
-        <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-black'} flex ${useMadinahCover ? 'items-start' : 'items-center'} justify-center select-none overflow-hidden overscroll-contain`}
+        <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-[#f8f1de]'} flex ${useMadinahCover ? 'items-start' : 'items-center'} justify-center select-none overflow-hidden overscroll-contain`}
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
             if (cleanMode) { setCleanMode(false); return; }
@@ -2783,8 +2815,8 @@ export default function QuranMushafPage({
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
                       ? { width: '100vw', height: '100dvh', background: '#f8f1de' }
-                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)` })
-                    : { aspectRatio: String(imgAspect) }}
+                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: '#f8f1de' })
+                    : { aspectRatio: String(imgAspect), background: '#f8f1de' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     // Word tap (click, not touchend — see touchend note).
