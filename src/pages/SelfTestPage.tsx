@@ -41,7 +41,32 @@ const TARGET_KEY = 'quran-mushaf-target';
 // the user has paused, so the utterance is (probably) complete.
 const QUIET_GAP_MS = 1500;
 // Self-correction window after a mismatch, in seconds (the user's spec).
-const CORRECT_WINDOW_S = 5;
+// It depends on the verification level: beginners and intermediates get
+// 5s, advanced users only 3s (a faster, stricter check).
+type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
+function correctWindowFor(level: VerifyLevel): number {
+  return level === 'advanced' ? 3 : 5;
+}
+// Recitation mode: 'ayah' grades one ayah at a time (the original
+// flow); 'continuous' lets the user recite the whole range without
+// stopping at each ayah, and reports missed words per ayah at the end.
+type ReciteMode = 'ayah' | 'continuous';
+
+// Self-test settings (verification level + recitation mode) persist
+// across visits, so the user picks them once.
+const SETTINGS_KEY = 'quran-test-settings';
+function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode } {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      const level: VerifyLevel = p.level === 'intermediate' || p.level === 'advanced' ? p.level : 'beginner';
+      const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
+      return { level, mode };
+    }
+  } catch {}
+  return { level: 'beginner', mode: 'ayah' };
+}
 
 function loadHistory(): TestRecord[] {
   try {
@@ -158,6 +183,50 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
   return { matched, allMatched: matched.every(Boolean) };
 }
 
+// Strict alignment (intermediate/advanced levels): the same greedy
+// in-order match as alignWords, but spoken words that are skipped over
+// (extra words: a repeated word, an added word, isti'adha after the
+// start) are collected as extras instead of being silently ignored.
+// Joined-word merges consume their spoken tokens, so they are never
+// extras. A strict pass needs allMatched AND zero extras.
+function alignWordsStrict(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; extras: string[] } {
+  const matched = new Array(expected.length).fill(false);
+  const extras: string[] = [];
+  let j = 0;
+  let i = 0;
+  const consumeThrough = (k: number, count: number) => {
+    for (let t = j; t < k; t++) extras.push(spoken[t]);
+    j = k + count;
+  };
+  while (i < expected.length) {
+    let found = -1;
+    for (let k = j; k < spoken.length; k++) {
+      if (spoken[k] === expected[i]) { found = k; break; }
+    }
+    if (found >= 0) { consumeThrough(found, 1); matched[i] = true; i++; continue; }
+    let joined = -1;
+    for (let k = j; k + 1 < spoken.length; k++) {
+      if (spoken[k] + spoken[k + 1] === expected[i]) { joined = k; break; }
+    }
+    if (joined >= 0) { consumeThrough(joined, 2); matched[i] = true; i++; continue; }
+    if (i + 1 < expected.length) {
+      const pair = expected[i] + expected[i + 1];
+      const assimilated = expected[i].endsWith('ن') && expected[i + 1].startsWith('م')
+        ? expected[i].slice(0, -1) + expected[i + 1]
+        : '';
+      let foundPair = -1;
+      for (let k = j; k < spoken.length; k++) {
+        if (spoken[k] === pair || (assimilated && spoken[k] === assimilated)) { foundPair = k; break; }
+      }
+      if (foundPair >= 0) { consumeThrough(foundPair, 1); matched[i] = true; matched[i + 1] = true; i += 2; continue; }
+    }
+    i++;
+  }
+  // Trailing spoken words after the last match are extras too.
+  for (let t = j; t < spoken.length; t++) extras.push(spoken[t]);
+  return { matched, allMatched: matched.every(Boolean), extras };
+}
+
 // ---- Sounds (WebAudio, no files) -------------------------------------
 // The AudioContext is created/resumed inside the mic-start tap (a user
 // gesture), so later timer-triggered playback is allowed by autoplay
@@ -181,9 +250,16 @@ function playWrongBuzzer() {
   try {
     const t = ctx.currentTime;
     const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.22, t);
-    gain.gain.setValueAtTime(0.22, t + 0.45);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+    // Louder and clearer than before (the user asked for a more
+    // obvious wrong sound): gain 0.22 -> 0.40, and TWO pulses
+    // (0-0.35s, 0.5-0.9s) so it cannot be mistaken for a tap or a
+    // notification. Still no high frequencies, so it stays unharsh.
+    gain.gain.setValueAtTime(0.40, t);
+    gain.gain.setValueAtTime(0.40, t + 0.35);
+    gain.gain.setValueAtTime(0.001, t + 0.45);
+    gain.gain.setValueAtTime(0.40, t + 0.50);
+    gain.gain.setValueAtTime(0.40, t + 0.80);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.90);
     gain.connect(ctx.destination);
     // Two detuned low square waves: the beating between them is the
     // classic wrong-answer buzz.
@@ -191,10 +267,10 @@ function playWrongBuzzer() {
       const o = ctx.createOscillator();
       o.type = 'square';
       o.frequency.setValueAtTime(f, t);
-      o.frequency.linearRampToValueAtTime(f * 0.8, t + 0.45);
+      o.frequency.linearRampToValueAtTime(f * 0.8, t + 0.85);
       o.connect(gain);
       o.start(t);
-      o.stop(t + 0.55);
+      o.stop(t + 0.90);
     });
   } catch {}
 }
@@ -272,13 +348,35 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [micState, setMicState] = useState<MicState>('idle');
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
-  const [countdown, setCountdown] = useState(CORRECT_WINDOW_S);
+  const [countdown, setCountdown] = useState(() => correctWindowFor(loadTestSettings().level));
   const [wrongIndices, setWrongIndices] = useState<number[]>([]);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
   const [micError, setMicError] = useState('');
   const [manualMode, setManualMode] = useState(false);
   const [savedProgress, setSavedProgress] = useState<TestProgress | null>(loadProgress);
+  // Verification level + recitation mode (setup choices, persisted).
+  const [verifyLevel, setVerifyLevel] = useState<VerifyLevel>(() => loadTestSettings().level);
+  const [reciteMode, setReciteMode] = useState<ReciteMode>(() => loadTestSettings().mode);
+  // The mode of the test actually running (resume always runs ayah
+  // mode, whatever the setup preference says).
+  const [testMode, setTestMode] = useState<ReciteMode>('ayah');
+  // Extra spoken words (strict levels only): current ayah's extras,
+  // per-ayah extras for the review list, and continuous-mode extras.
+  const [wrongExtras, setWrongExtras] = useState<string[]>([]);
+  const [extraByAyah, setExtraByAyah] = useState<Record<number, string[]>>({});
+  const [contExtras, setContExtras] = useState<string[]>([]);
+  // Continuous-mode display state (matched words / current ayah).
+  const [contListening, setContListening] = useState(false);
+  const [contProgress, setContProgress] = useState({ matched: 0, total: 0, ayahIdx: 0 });
+
+  const applySettings = (level: VerifyLevel, mode: ReciteMode) => {
+    setVerifyLevel(level);
+    setReciteMode(mode);
+    liveRef.current.level = level;
+    liveRef.current.mode = mode;
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ level, mode })); } catch {}
+  };
 
   // Manual preference survives ayah changes (the old code reset it
   // every ayah, so a manual user had to re-tap it each time).
@@ -297,6 +395,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     skipped: [] as boolean[],
     correctingTargets: [] as string[],
     windowStartLen: 0,
+    level: loadTestSettings().level,
+    mode: loadTestSettings().mode,
+    // Continuous mode: one recognition session over the whole range.
+    contListening: false,
+    contFinals: '',
+    contExpected: [] as { norm: string; orig: string; ayahIdx: number }[],
+    contStrict: false,
   });
 
   const surahCount = SURAH_AYAH_COUNTS[surah - 1] || 1;
@@ -323,8 +428,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setMicState('idle');
     setTranscript('');
     setInterim('');
-    setCountdown(CORRECT_WINDOW_S);
+    setCountdown(correctWindowFor(liveRef.current.level));
     setWrongIndices([]);
+    setWrongExtras([]);
     setMicError('');
     setManualMode(manualPreferredRef.current);
   };
@@ -350,7 +456,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   // Global-range test (unit mode + resume): verse ids are sequential
   // 1..6236 in surah order, so id range = global ayah range.
-  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null) => {
+  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode) => {
+    // Capture the mode up front: the setup chips stay tappable while
+    // ayahs load, and a mid-load switch must not hijack this test.
+    // Resume forces ayah mode; fresh starts use the setup choice.
+    const modeAtStart = forceMode ?? reciteMode;
     const lo = Math.max(1, Math.min(startGlobal, endGlobal, 6236));
     const hi = Math.min(Math.max(startGlobal, endGlobal), 6236);
     const startPt = globalToPoint(lo);
@@ -376,6 +486,35 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setRangeStart(startPt);
       setRangeEnd(endPt);
       setAyahs(data as TestAyah[]);
+      // Continuous mode: one listening session over the whole range.
+      // No per-ayah progress is saved (a continuous test resumes as
+      // a fresh recitation, not mid-stream).
+      if (modeAtStart === 'continuous') {
+        const expected: { norm: string; orig: string; ayahIdx: number }[] = [];
+        (data as TestAyah[]).forEach((a, ai) => {
+          expectedWordList(a.ayah_text).forEach((w) => expected.push({ norm: w.norm, orig: w.orig, ayahIdx: ai }));
+        });
+        liveRef.current.contExpected = expected;
+        liveRef.current.contFinals = '';
+        liveRef.current.contListening = false;
+        liveRef.current.contStrict = liveRef.current.level !== 'beginner';
+        setTestMode('continuous');
+        setIndex(0);
+        setRevealed(false);
+        setWrongByAyah({});
+        setExtraByAyah({});
+        setContExtras([]);
+        setContProgress({ matched: 0, total: expected.length, ayahIdx: 0 });
+        setContListening(false);
+        setTranscript('');
+        setInterim('');
+        setMicError('');
+        try { localStorage.removeItem(PROGRESS_KEY); } catch {}
+        setSavedProgress(null);
+        setPhase('testing');
+        return;
+      }
+      setTestMode('ayah');
       const n = data.length;
       const fresh = new Array(n).fill(false);
       const grades0 = restore && Array.isArray(restore.grades) && restore.grades.length === n ? restore.grades.map(Boolean) : fresh;
@@ -386,6 +525,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setSkipped(skipped0);
       liveRef.current.skipped = skipped0;
       setWrongByAyah({});
+      setExtraByAyah({});
+      setContExtras([]);
       setWrongIndices([]);
       setIndex(index0);
       setRevealed(false);
@@ -403,21 +544,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   // Manual mode wrapper: single-surah ayah range -> global range.
-  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null) => {
+  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode) => {
     const count = SURAH_AYAH_COUNTS[surahNo - 1] || 1;
     const lo = Math.max(1, Math.min(fromNo, toNo, count));
     const hi = Math.min(Math.max(fromNo, toNo), count);
     const base = SURAH_START_GLOBAL[surahNo - 1] || 1;
-    return startTestGlobal(base + lo - 1, base + hi - 1, restore);
+    return startTestGlobal(base + lo - 1, base + hi - 1, restore, forceMode);
   };
 
   const resumeTest = () => {
     const p = savedProgress;
     if (!p) return;
+    // Resume is always ayah-by-ayah (continuous tests save no
+    // mid-stream progress), without touching the saved preference.
     if (typeof p.startGlobal === 'number' && typeof p.endGlobal === 'number') {
-      void startTestGlobal(p.startGlobal, p.endGlobal, { index: p.index, grades: p.grades, skipped: p.skipped });
+      void startTestGlobal(p.startGlobal, p.endGlobal, { index: p.index, grades: p.grades, skipped: p.skipped }, 'ayah');
     } else {
-      void startTest(p.surah, p.from, p.to, { index: p.index, grades: p.grades, skipped: p.skipped });
+      void startTest(p.surah, p.from, p.to, { index: p.index, grades: p.grades, skipped: p.skipped }, 'ayah');
     }
   };
 
@@ -501,9 +644,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       playWrongBuzzer();
       const expected = expectedWordList(ayah.ayah_text);
       const spoken = spokenTokens(liveRef.current.finals);
-      const { matched } = alignWords(expected.map((w) => w.norm), spoken);
-      setWrongIndices(expected.map((_, i) => i).filter((i) => !matched[i]));
-      setWrongByAyah((prev) => ({ ...prev, [index]: expected.filter((_, i) => !matched[i]).map((w) => w.orig) }));
+      // Strict levels also flag extra spoken words; beginners are
+      // only judged on missing/wrong words (اللحن الجلي).
+      const strict = liveRef.current.level !== 'beginner';
+      const result = strict
+        ? alignWordsStrict(expected.map((w) => w.norm), spoken)
+        : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
+      setWrongIndices(expected.map((_, i) => i).filter((i) => !result.matched[i]));
+      setWrongByAyah((prev) => ({ ...prev, [index]: expected.filter((_, i) => !result.matched[i]).map((w) => w.orig) }));
+      setWrongExtras(result.extras);
+      if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
       liveRef.current.micState = 'done-wrong';
       setMicState('done-wrong');
     }
@@ -516,34 +666,46 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const expected = expectedWordList(ayah.ayah_text);
     const spoken = spokenTokens(liveRef.current.finals);
     if (spoken.length === 0) return;
-    // During the correction window, only the words that were wrong
-    // count — and only from speech AFTER the window opened. The old
-    // code re-checked the whole accumulated transcript, so reciting
-    // in pieces across the window passed without a full reading.
+    // During the correction window, beginners only re-say the words
+    // that were wrong — and only from speech AFTER the window
+    // opened. The old code re-checked the whole accumulated
+    // transcript, so reciting in pieces across the window passed
+    // without a full reading. Strict levels instead demand a clean
+    // re-recitation of the whole ayah (no missing, no extra words).
     if (liveRef.current.micState === 'correcting') {
-      const targets = liveRef.current.correctingTargets;
-      if (targets.length > 0) {
-        const { allMatched } = alignWords(targets, spoken.slice(liveRef.current.windowStartLen));
-        if (allMatched) gradeMic(true);
+      const windowSpoken = spoken.slice(liveRef.current.windowStartLen);
+      if (liveRef.current.level !== 'beginner') {
+        const { allMatched, extras } = alignWordsStrict(expected.map((w) => w.norm), windowSpoken);
+        if (allMatched && extras.length === 0) gradeMic(true);
+      } else {
+        const targets = liveRef.current.correctingTargets;
+        if (targets.length > 0) {
+          const { allMatched } = alignWords(targets, windowSpoken);
+          if (allMatched) gradeMic(true);
+        }
       }
       return;
     }
-    const { allMatched, matched } = alignWords(expected.map((w) => w.norm), spoken);
-    if (allMatched) {
+    const strict = liveRef.current.level !== 'beginner';
+    const result = strict
+      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
+      : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
+    if (result.allMatched && result.extras.length === 0) {
       gradeMic(true);
       return;
     }
-    // Mismatch: open the 5s correction window (still listening).
+    // Mismatch: open the correction window (still listening).
     // Record what was wrong and where the transcript stood, so the
     // window judges only the correction, not the old speech.
     if (liveRef.current.micState === 'listening') {
-      liveRef.current.correctingTargets = expected.filter((_, i) => !matched[i]).map((w) => w.norm);
+      liveRef.current.correctingTargets = expected.filter((_, i) => !result.matched[i]).map((w) => w.norm);
       liveRef.current.windowStartLen = spoken.length;
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
-      setCountdown(CORRECT_WINDOW_S);
+      const windowS = correctWindowFor(liveRef.current.level);
+      setCountdown(windowS);
       if (windowTimerRef.current) clearInterval(windowTimerRef.current);
-      let left = CORRECT_WINDOW_S;
+      let left = windowS;
       windowTimerRef.current = setInterval(() => {
         left -= 1;
         if (left <= 0) {
@@ -660,6 +822,143 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setMicState('listening');
   };
 
+  // ---- Continuous mode -------------------------------------------
+  // One listening session over the whole range: no per-ayah stops.
+  // Progress = greedy in-order coverage of the range's expected
+  // words; the report at the end lists missed words per ayah (and,
+  // on strict levels, the extra spoken words as one global note —
+  // extras cannot be reliably attributed to a single ayah mid-flow).
+  const updateContProgress = (spoken: string[]) => {
+    const expected = liveRef.current.contExpected;
+    const { matched } = alignWords(expected.map((w) => w.norm), spoken);
+    let matchedCount = 0;
+    let lastMatchedIdx = -1;
+    matched.forEach((m, i) => { if (m) { matchedCount++; lastMatchedIdx = i; } });
+    const ayahIdx = lastMatchedIdx >= 0 ? expected[lastMatchedIdx].ayahIdx : 0;
+    setContProgress({ matched: matchedCount, total: expected.length, ayahIdx });
+    return { matched, allMatched: matched.every(Boolean) };
+  };
+
+  const stopContinuousMic = () => {
+    stopRec();
+    liveRef.current.contListening = false;
+    setContListening(false);
+  };
+
+  // Grade the whole range from the accumulated continuous transcript.
+  // Returns true when every ayah was fully covered.
+  const gradeContinuousNow = (): boolean => {
+    const expected = liveRef.current.contExpected;
+    const spoken = spokenTokens(liveRef.current.contFinals);
+    const strict = liveRef.current.contStrict;
+    const result = strict
+      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
+      : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
+    const ayahCount = expected.length ? expected[expected.length - 1].ayahIdx + 1 : 0;
+    const gradesArr = new Array(ayahCount).fill(true);
+    const missedByAyah: Record<number, string[]> = {};
+    expected.forEach((w, i) => {
+      if (!result.matched[i]) {
+        gradesArr[w.ayahIdx] = false;
+        (missedByAyah[w.ayahIdx] ||= []).push(w.orig);
+      }
+    });
+    liveRef.current.grades = gradesArr;
+    setGrades(gradesArr);
+    const noSkips = new Array(ayahCount).fill(false);
+    liveRef.current.skipped = noSkips;
+    setSkipped(noSkips);
+    setWrongByAyah(missedByAyah);
+    setExtraByAyah({});
+    setContExtras(result.extras);
+    finishTest(gradesArr);
+    return gradesArr.every(Boolean);
+  };
+
+  const finishContinuousPressed = () => {
+    if (spokenTokens(liveRef.current.contFinals).length === 0) {
+      setMicError('لسه ما سمعت حاجة — سمّع النطاق الأول وبعدين اضغط "أنهيت التسميع"');
+      return;
+    }
+    stopContinuousMic();
+    const allOk = gradeContinuousNow();
+    if (allOk) playCorrectChime(); else playWrongBuzzer();
+  };
+
+  const startContinuousMic = () => {
+    getAudioCtx();
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setMicError('المتصفح ده مش بيدعم التسميع بالميكروفون — جرّب وضع "آية آية" اليدوي بدل كده');
+      return;
+    }
+    if (liveRef.current.contListening) return;
+    setMicError('');
+    // Do NOT wipe contFinals here: the test start already cleared it,
+    // and a stop/resume must continue the same transcript.
+    setTranscript(liveRef.current.contFinals);
+    setInterim('');
+    userStopRef.current = false;
+    const rec = new SR();
+    rec.lang = currentSpeechLocale();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        // Same isFinal fix as the ayah path: it lives on the result.
+        const res = e.results[i];
+        const r = res[0];
+        if (res.isFinal || r.isFinal) {
+          liveRef.current.contFinals = `${liveRef.current.contFinals} ${r.transcript}`.trim();
+          setTranscript(liveRef.current.contFinals);
+          const { allMatched } = updateContProgress(spokenTokens(liveRef.current.contFinals));
+          if (allMatched) {
+            // Range fully recited: finish on its own, with a chime.
+            stopContinuousMic();
+            playCorrectChime();
+            gradeContinuousNow();
+          }
+        } else {
+          interimText += `${r.transcript} `;
+        }
+      }
+      if (interimText.trim()) setInterim(interimText.trim());
+    };
+    rec.onerror = (e: any) => {
+      if (e.error === 'not-allowed') {
+        setMicError('الميكروفون مقفول — اسمح بيه من إعدادات المتصفح');
+      } else if (e.error === 'network') {
+        setMicError('الاستماع المباشر محتاج إنترنت');
+      } else {
+        setMicError('تعذر الاستماع — جرّب تاني');
+      }
+      stopContinuousMic();
+    };
+    rec.onend = () => {
+      // Browsers pause recognition after silence; resume while the
+      // user is still mid-range, unless they stopped or finished.
+      if (!userStopRef.current && liveRef.current.contListening) {
+        try {
+          rec.start();
+        } catch {
+          setMicError('الاستماع وقف — اضغط الميكروفون تاني');
+          stopContinuousMic();
+        }
+      }
+    };
+    recRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      setMicError('تعذر بدء الاستماع — جرّب تاني');
+      recRef.current = null;
+      return;
+    }
+    liveRef.current.contListening = true;
+    setContListening(true);
+  };
+
   // Advance after a mic grade (the user reads the green ayah / red
   // wrong part first, then moves on deliberately — no auto-advance).
   const nextAfterMic = () => {
@@ -754,6 +1053,58 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </div>
             )}
+            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 space-y-4">
+              <h2 className="font-bold text-accent-800">إعدادات التسميع</h2>
+              <div>
+                <p className="text-sm font-bold text-accent-700 mb-2">مستوى التدقيق</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => applySettings('beginner', reciteMode)}
+                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'beginner' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    مبتدئ
+                  </button>
+                  <button onClick={() => applySettings('intermediate', reciteMode)}
+                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'intermediate' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    متوسط
+                  </button>
+                  <button onClick={() => applySettings('advanced', reciteMode)}
+                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'advanced' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    متقدم
+                  </button>
+                </div>
+                <p className="text-sm text-accent-500 mt-2 leading-relaxed">
+                  {verifyLevel === 'beginner'
+                    ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه. مهلة التصحيح ٥ ثواني.'
+                    : verifyLevel === 'intermediate'
+                    ? 'يوقف عند أي خطأ في الكلمات: ناقصة أو مختلفة أو زائدة. مهلة التصحيح ٥ ثواني.'
+                    : 'زي المتوسط، لكن مهلة التصحيح ٣ ثواني فقط — تدقيق أسرع وأشد.'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-accent-700 mb-2">طريقة التسميع</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => applySettings(verifyLevel, 'ayah')}
+                    className={`py-2.5 rounded-xl font-bold ${reciteMode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    آية آية
+                  </button>
+                  <button onClick={() => applySettings(verifyLevel, 'continuous')} disabled={!micSupported}
+                    className={`py-2.5 rounded-xl font-bold disabled:opacity-40 ${reciteMode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    متصل
+                  </button>
+                </div>
+                <p className="text-sm text-accent-500 mt-2 leading-relaxed">
+                  {reciteMode === 'ayah'
+                    ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
+                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
+                </p>
+                {!micSupported && (
+                  <p className="text-sm text-amber-700 mt-1">الوضع المتصل يحتاج ميكروفون — جهازك مش بيدعمه، فالاختيار ده مقفول.</p>
+                )}
+              </div>
+              <p className="text-xs text-accent-400 leading-relaxed">
+                ملحوظة بأمانة: التدقيق كله على مستوى الكلمات — البرنامج بيسمع الكلمات مش الأصوات، فما بيقيس أحكام التجويد (اللحن الخفي).
+              </p>
+            </div>
+
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
               <h2 className="font-bold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
               <p className="text-sm text-accent-500 leading-relaxed">
@@ -879,7 +1230,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
               <p className="text-xs text-accent-400 leading-relaxed">
                 {micSupported
-                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ٥ ثواني تصلحها، وبعدها يظهر لك الجزء الغلط بس بالأحمر. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
+                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ' + (correctWindowFor(verifyLevel) === 3 ? '٣ ثواني' : '٥ ثواني') + ' تصلحها، وبعدها يظهر لك الجزء الغلط بس بالأحمر. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
                   : 'المتصفح ده مش بيدعم التسميع بالميكروفون — نص الآية لا يظهر إلا بعد أن تسمّعها وتضغط "أظهر الآية"، ثم تقيّم نفسك: صح أو خطأ.'}
               </p>
             </div>
@@ -901,7 +1252,77 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           </div>
         )}
 
-        {phase === 'testing' && ayahs[index] && (
+        {phase === 'testing' && testMode === 'continuous' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between text-sm font-bold">
+              <span className="text-accent-700">
+                {rangeStart && rangeEnd ? (
+                  rangeStart.surah === rangeEnd.surah
+                    ? <>سورة {SURAHS.find((s) => s.no === rangeStart.surah)?.name || ''} — من آية {rangeStart.ayah} إلى آية {rangeEnd.ayah}</>
+                    : <>من سورة {SURAHS.find((s) => s.no === rangeStart.surah)?.name || ''} آية {rangeStart.ayah} إلى سورة {SURAHS.find((s) => s.no === rangeEnd.surah)?.name || ''} آية {rangeEnd.ayah}</>
+                ) : 'تسميع متصل'}
+              </span>
+              <span className="text-emerald-700">كلمة {contProgress.matched.toLocaleString('ar-EG')} من {contProgress.total.toLocaleString('ar-EG')}</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${contProgress.total > 0 ? (contProgress.matched / contProgress.total) * 100 : 0}%` }} />
+            </div>
+
+            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6 text-center">
+              {!contListening ? (
+                <>
+                  <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Mic className="w-10 h-10 text-emerald-700" />
+                  </div>
+                  <p className="text-lg font-bold text-accent-700 leading-relaxed">
+                    سمّع النطاق كله على بعضه من حفظك الآن
+                  </p>
+                  <p className="text-sm text-accent-400 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
+                  <button onClick={startContinuousMic}
+                    className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto">
+                    <Mic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+                    <p className="text-lg font-bold text-accent-700">بسمعك… كمّل من غير توقف</p>
+                  </div>
+                  {ayahs[contProgress.ayahIdx] && (
+                    <p className="text-sm font-bold text-emerald-700 mb-4">
+                      الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
+                    </p>
+                  )}
+                  {(transcript || interim) && (
+                    <p className="text-sm text-accent-500 leading-relaxed mb-4" dir="rtl">
+                      سمعت: {transcript}{interim ? ` ${interim}` : ''}
+                    </p>
+                  )}
+                  <div className="flex gap-3 justify-center">
+                    <button onClick={finishContinuousPressed}
+                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
+                      أنهيت التسميع
+                    </button>
+                    <button onClick={stopContinuousMic}
+                      className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-bold rounded-xl flex items-center gap-2">
+                      <Square className="w-4 h-4" /> قف
+                    </button>
+                  </div>
+                </>
+              )}
+              {micError && (
+                <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
+              )}
+            </div>
+            <button onClick={() => { stopContinuousMic(); setPhase('setup'); }}
+              className="block mx-auto text-sm font-bold text-accent-500 hover:text-accent-700 underline">
+              إلغاء التسميع والعودة للإعدادات
+            </button>
+          </div>
+        )}
+
+        {phase === 'testing' && testMode === 'ayah' && ayahs[index] && (
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm font-bold">
               <span className="text-accent-700">سورة {SURAHS.find((s) => s.no === ayahs[index].surah_no)?.name || ''} — آية {ayahs[index].ayah_no}</span>
@@ -974,6 +1395,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
                     ))}
                   </p>
+                  {wrongExtras.length > 0 && (
+                    <p className="text-sm text-amber-700 mt-3">كلمات زائدة سمعتها: {wrongExtras.join(' ')}</p>
+                  )}
                   <button onClick={nextAfterMic}
                     className="mt-5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow">
                     {index + 1 < ayahs.length ? 'الآية اللي بعدها' : 'إنهاء التسميع'}
@@ -1091,10 +1515,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </button>
                       </div>
                       {wrongByAyah[i]?.length ? <p className="text-red-600 text-xs mt-1">الكلمات الغلط: {wrongByAyah[i].join(' ')}</p> : null}
+                      {extraByAyah[i]?.length ? <p className="text-amber-600 text-xs mt-1">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
                     </li>
                   ) : null))}
                 </ul>
               </div>
+            )}
+
+            {contExtras.length > 0 && testMode === 'continuous' && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed">
+                كلمات زائدة سمعتها أثناء التسميع المتصل: {contExtras.join(' ')}
+              </p>
             )}
 
             <div className="flex gap-3">
