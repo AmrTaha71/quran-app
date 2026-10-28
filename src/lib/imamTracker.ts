@@ -77,6 +77,45 @@ export function findLock(heard: string[], ordered: OrderedVerse[], minRun = FOLL
   return best?.pos ?? null;
 }
 
+// INTERIM LOCK (2026-10-28, user request: the Mushaf must open on the
+// imam's ayah AUTOMATICALLY, mid-ayah — neither waiting for the imam to
+// finish the ayah nor for the user to press stop). Live-engine finals
+// only land when the imam pauses (usually the ayah end), so finals-only
+// matching could not open before the ayah ended. An interim lock fires
+// only on a LONG (6+) consecutive run whose exact word sequence occurs
+// in exactly ONE ayah of the whole Mushaf: a 6-word unique phrase is
+// not an ASR guess artifact, and a shared phrase (e.g. the basmala,
+// repeated at every surah) can never interim-lock. Finals keep their
+// 4-word rule as the fallback; interim words are never added to the
+// finals buffer, so nothing is double-counted.
+export const FOLLOW_INTERIM_MIN_WORDS = 6;
+export function findInterimLock(heard: string[], ordered: OrderedVerse[]): TrackedPosition | null {
+  const window = heard.slice(-20);
+  if (window.length < FOLLOW_INTERIM_MIN_WORDS) return null;
+  const lock = findLock(window, ordered, FOLLOW_INTERIM_MIN_WORDS);
+  if (!lock) return null;
+  const ayah = ordered.find((v) => v.surah === lock.surah && v.ayah === lock.ayah);
+  if (!ayah) return null;
+  const suffix = ayah.words.slice(lock.word - FOLLOW_INTERIM_MIN_WORDS + 1, lock.word + 1);
+  if (suffix.length < FOLLOW_INTERIM_MIN_WORDS) return null;
+  let count = 0;
+  for (const v of ordered) {
+    let found = false;
+    for (let w = 0; w + FOLLOW_INTERIM_MIN_WORDS <= v.words.length; w++) {
+      let ok = true;
+      for (let k = 0; k < FOLLOW_INTERIM_MIN_WORDS; k++) {
+        if (v.words[w + k] !== suffix[k]) { ok = false; break; }
+      }
+      if (ok) { found = true; break; }
+    }
+    if (found) {
+      count++;
+      if (count > 1) return null;
+    }
+  }
+  return count === 1 ? lock : null;
+}
+
 export function advanceTracking(
   pos: TrackedPosition,
   heard: string[],

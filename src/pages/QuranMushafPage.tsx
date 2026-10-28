@@ -11,9 +11,10 @@ import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } fr
 import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
-import { buildOrderedVerses, findLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
+import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
 import BottomNav from '../components/BottomNav';
+import ShareButton from '../components/ShareButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
@@ -226,6 +227,13 @@ export default function QuranMushafPage({
 }) {
   const { t, lang, setLang } = useLang();
   const [currentPage, setCurrentPage] = useState(readStoredPage);
+  // SHAKE FIX 2026-10-28: the fullscreen image follows displayedPage
+  // (the page whose image has actually loaded), not currentPage, so a
+  // fast turn never shows a white gap while the next image downloads —
+  // the previous page stays put until the new one is ready. Pills and
+  // the verse strip still follow currentPage instantly (tap feedback).
+  const [displayedPage, setDisplayedPage] = useState(readStoredPage);
+  const displayedPageGenRef = useRef(0);
   const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
   const [ayahFilter, setAyahFilter] = useState('');
   // Search-jump highlight: the ayah tapped in لوحتي, marked amber on
@@ -341,6 +349,38 @@ export default function QuranMushafPage({
   const surahPageListCache = useRef<Record<number, { number: number; page_number: number }[]>>({});
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
+  // SUGGEST-A-LINK (2026-10-28, requested 2026-10-27): users propose a
+  // link from the ayah popup; it lands in ayah_links as status='pending'
+  // with created_by = the user (is_ai_draft=false), so the admin queue
+  // shows it for review — never auto-published. Label is gender-aware
+  // (اقترح تربيط / اقترحي تربيط) from user_profiles.gender.
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestText, setSuggestText] = useState('');
+  const [suggestTitle, setSuggestTitle] = useState('');
+  const [suggestType, setSuggestType] = useState(LINK_TYPES[0]?.value ?? 'wajih');
+  const [suggestSending, setSuggestSending] = useState(false);
+  const [suggestSent, setSuggestSent] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
+  const [suggestGender, setSuggestGender] = useState<'male' | 'female' | null>(null);
+  useEffect(() => {
+    if (!session) return;
+    supabase.from('user_profiles').select('gender').eq('user_id', session.user.id).maybeSingle()
+      .then(({ data }) => { if (data?.gender === 'female' || data?.gender === 'male') setSuggestGender(data.gender); });
+  }, [session]);
+  useEffect(() => { setSuggestOpen(false); setSuggestSent(false); setSuggestError(''); }, [selectedVerse?.id]);
+  const submitSuggestion = async () => {
+    if (!selectedVerse || !session) return;
+    const text = suggestText.trim();
+    if (!text) { setSuggestError('اكتب التربيط الأول'); return; }
+    setSuggestSending(true); setSuggestError('');
+    const { error } = await supabase.from('ayah_links').insert({
+      verse_id: selectedVerse.id, link_content: text, link_title: suggestTitle.trim() || null,
+      link_types: [suggestType], status: 'pending', created_by: session.user.id, is_ai_draft: false,
+    });
+    setSuggestSending(false);
+    if (error) { setSuggestError('تعذّر إرسال الاقتراح — حاول تاني'); return; }
+    setSuggestSent(true); setSuggestText(''); setSuggestTitle('');
+  };
   // Ayah recitation (open audio CDNs, see lib/reciters.ts),
   // with a repeat switch for memorization. Stops when the popup ayah changes.
   const reciteRef = useRef<HTMLAudioElement | null>(null);
@@ -793,14 +833,32 @@ export default function QuranMushafPage({
     loadPageAyahs(currentPage);
   }, [currentPage, fetchPageVerses, loadPageAyahs]);
 
-  // Preload the neighbouring pages so turning feels instant.
+  // Preload the neighbouring pages so turning feels instant (±3, not
+  // ±1: at two turns a second the old ±1 window could not keep up and
+  // fast flips showed a white gap between pages).
   useEffect(() => {
-    for (const p of [currentPage - 1, currentPage + 1]) {
+    for (const p of [currentPage - 3, currentPage - 2, currentPage - 1, currentPage + 1, currentPage + 2, currentPage + 3]) {
       if (p >= 1 && p <= TOTAL_PAGES) {
         const img = new Image();
         img.src = edition.imageUrl(p);
       }
     }
+  }, [currentPage, edition]);
+
+  // Displayed-page gate (SHAKE FIX 2026-10-28): advance displayedPage
+  // only when the new page's image is actually loaded (cached images
+  // resolve synchronously). The generation guard drops stale loads when
+  // the user flips past a page before its image arrives, so the display
+  // can never regress to an older page. On load error the new page is
+  // still shown, so RetryPageImg's retries / error block can run.
+  useEffect(() => {
+    const p = currentPage;
+    const g = ++displayedPageGenRef.current;
+    const img = new Image();
+    img.src = edition.imageUrl(p);
+    const done = () => { if (displayedPageGenRef.current === g) setDisplayedPage(p); };
+    if (img.complete && img.naturalWidth > 0) done();
+    else { img.onload = done; img.onerror = done; }
   }, [currentPage, edition]);
 
   // Remember the user's chosen edition and last page, and honour a
@@ -1311,6 +1369,30 @@ export default function QuranMushafPage({
   const followFinalRef = useRef(onFollowFinal);
   useEffect(() => { followFinalRef.current = onFollowFinal; });
 
+  // INTERIM LOCK (2026-10-28): the live engine's interim text arrives
+  // DURING the ayah, so it can lock mid-ayah without waiting for the
+  // ayah end or a stop tap. Same latch/listening/active guards as
+  // finals; interim words never touch the finals buffer (no
+  // double-counting). Identical interim text redelivered by the engine
+  // is skipped so one utterance is attempted once per new word.
+  const lastInterimRef = useRef('');
+  const onFollowInterim = useCallback((text: string) => {
+    if (!followListeningRef.current || followAutoLockedRef.current || !followActiveRef.current) return;
+    if (followPosRef.current) return;
+    const trimmed = text.trim();
+    if (!trimmed || trimmed === lastInterimRef.current) return;
+    lastInterimRef.current = trimmed;
+    const ordered = followOrderedRef.current;
+    if (!ordered) return;
+    const words = heardWords(trimmed);
+    if (words.length < FOLLOW_INTERIM_MIN_WORDS) return;
+    const lock = findInterimLock(words, ordered);
+    if (!lock) return;
+    handleFollowAutoLock(lock);
+  }, [handleFollowAutoLock]);
+  const followInterimRef = useRef(onFollowInterim);
+  useEffect(() => { followInterimRef.current = onFollowInterim; });
+
   const recordChunk = (ms: number): Promise<Blob> => new Promise((resolve, reject) => {
     const stream = followStreamRef.current;
     if (!stream) { reject(new Error('no stream')); return; }
@@ -1559,7 +1641,12 @@ export default function QuranMushafPage({
           if (res.isFinal || r.isFinal) followFinalRef.current(r.transcript);
           else interim += r.transcript + ' ';
         }
-        if (interim.trim()) setFollowHeard(interim.trim());
+        if (interim.trim()) {
+          setFollowHeard(interim.trim());
+          // Interim-lock attempt (2026-10-28): mid-ayah auto-open —
+          // the matcher decides (6+ unique words); display unchanged.
+          followInterimRef.current(interim);
+        }
       };
       rec.onerror = (e: any) => {
         if (!followListeningRef.current || followAutoLockedRef.current) return;
@@ -1978,6 +2065,13 @@ export default function QuranMushafPage({
   const madinahNorm = useMadinahCover
     ? coverNormForPaperBox(madinahPaperBox, viewportAspect, madinahFrameBand(currentPage))
     : normForPaperBox(madinahPaperBox);
+  // Fullscreen render norm (SHAKE FIX 2026-10-28): when the displayed
+  // image lags the requested page, the image AND its geometry must
+  // follow the displayed page together — otherwise the old image would
+  // sit at the new page's (parity-flipped) position during the lag.
+  const fullscreenNorm = useMadinahCover && displayedPage !== currentPage
+    ? coverNormForPaperBox(MADINAH_PAPER_BOXES[displayedPage - 1], viewportAspect, madinahFrameBand(displayedPage))
+    : madinahNorm;
   // Main paper's top edge in viewport-height % (cover mode only), used
   // to vertically align the facing sliver with the main page.
   const coverMainPaperTop = useMadinahCover && madinahNorm
@@ -2688,7 +2782,7 @@ export default function QuranMushafPage({
                   className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
-                      ? { width: '100vw', height: '100dvh', background: '#ffffff' }
+                      ? { width: '100vw', height: '100dvh', background: '#f8f1de' }
                       : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)` })
                     : { aspectRatio: String(imgAspect) }}
                   onClick={(e) => {
@@ -2711,34 +2805,41 @@ export default function QuranMushafPage({
                       if (px < tbL || px > tbL + 77 || py < 14 || py > 88) { setCleanMode(false); return; }
                     }
                     if (Date.now() - lastSwipeAt.current < 500) return;
+                    // During an image lag (displayed page behind the
+                    // requested page) a tap would map through the new
+                    // page's norm onto the old image — ignore it rather
+                    // than open the wrong ayah; the tap works the moment
+                    // the new image lands.
+                    if (displayedPage !== currentPage) return;
                     void handleWordTap(e.clientX, e.clientY);
                   }}
                   onTouchStart={handlePageTouchStart}
                   onTouchEnd={handlePageTouchEnd}>
-                  {/* key: remount on page change (like the normal view) so the
-                      previous page's image is never shown for a frame at the
-                      new page's position while the new image loads — that
-                      one-frame jump read as a slight shake on every turn. */}
+                  {/* Displayed-page image (SHAKE FIX 2026-10-28): the key
+                      follows displayedPage, so the previous page stays
+                      mounted — at its own norm — until the new image
+                      has loaded. The old key-remount-on-currentPage
+                      showed a white gap on every fast turn. */}
                   {/* Automatic retries before giving up: a transient
                       failure while flipping fast no longer flips the
                       page straight into the error block (see
                       RetryPageImg above). Key remounts per page, so
                       attempts reset on every turn. */}
-                  <RetryPageImg key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)} alt={`صفحة ${currentPage}`}
-                    className={`${madinahNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
-                    style={madinahNorm ? { left: `${madinahNorm.imgL}%`, top: `${madinahNorm.imgT}%`, width: `${madinahNorm.imgW}%`, height: `${madinahNorm.imgH}%` } : undefined}
+                  <RetryPageImg key={`${edition.id}-${displayedPage}`} src={edition.imageUrl(displayedPage)} alt={`صفحة ${displayedPage}`}
+                    className={`${fullscreenNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
+                    style={fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%` } : undefined}
                     onLoad={(e) => {
                       const im = e.currentTarget;
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
                     }}
                     onFinalError={() => setImageError(true)} />
                   {goldFrame && (
-                    <div className={`absolute z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] ${madinahNorm && useMadinahCover ? '' : 'inset-0'}`}
-                      style={madinahNorm && useMadinahCover ? {
-                        left: `${madinahNorm.imgL + (madinahNorm.pl * madinahNorm.imgW) / 100}%`,
-                        top: `${madinahNorm.imgT + (madinahNorm.pt * madinahNorm.imgH) / 100}%`,
-                        width: `${(madinahNorm.pw * madinahNorm.imgW) / 100}%`,
-                        height: `${(madinahNorm.ph * madinahNorm.imgH) / 100}%`,
+                    <div className={`absolute z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] ${fullscreenNorm && useMadinahCover ? '' : 'inset-0'}`}
+                      style={fullscreenNorm && useMadinahCover ? {
+                        left: `${fullscreenNorm.imgL + (fullscreenNorm.pl * fullscreenNorm.imgW) / 100}%`,
+                        top: `${fullscreenNorm.imgT + (fullscreenNorm.pt * fullscreenNorm.imgH) / 100}%`,
+                        width: `${(fullscreenNorm.pw * fullscreenNorm.imgW) / 100}%`,
+                        height: `${(fullscreenNorm.ph * fullscreenNorm.imgH) / 100}%`,
                       } : undefined} />
                   )}
                   {tapFlash && (() => {
@@ -2952,6 +3053,42 @@ export default function QuranMushafPage({
                         <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
                         <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
                       </button>
+                      {/* Suggest + share, with the ayah-tap options
+                          (2026-10-28): propose a link for admin review,
+                          and share the ayah (panel header: شاركنا في الأجر). */}
+                      <div className="flex gap-2 mb-3">
+                        <button onClick={() => setSuggestOpen(!suggestOpen)}
+                          className="flex-1 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-sm hover:bg-emerald-100 transition-smooth flex items-center justify-center gap-1.5">
+                          <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيط' : 'اقترح تربيط'}
+                        </button>
+                        <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} />
+                      </div>
+                      {suggestOpen && (
+                        <div className="mb-3 bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
+                          {suggestSent ? (
+                            <p className="text-sm font-bold text-emerald-700">تم إرسال اقتراحك — هيتراجع من الإدارة قبل النشر. جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
+                          ) : session ? (
+                            <>
+                              <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يظهر للإدارة للمراجعة قبل النشر.</p>
+                              <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+                              <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+                              <label className="block text-xs font-semibold text-accent-500 mb-1">نوع التربيط</label>
+                              <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
+                                {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
+                              </select>
+                              {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
+                              <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-sm">
+                                {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح'}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm font-semibold text-accent-700 mb-2">سجّل دخولك الأول عشان نقدر نراجع اقتراحك.</p>
+                              <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-sm">تسجيل الدخول</button>
+                            </>
+                          )}
+                        </div>
+                      )}
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
@@ -2980,7 +3117,6 @@ export default function QuranMushafPage({
                         </div>
                       ) : qulPhrases && qulPhrases.length > 0 ? (
                         <div className="space-y-2">
-                          <p className="text-xs text-accent-400 leading-relaxed text-center">عبارات مشتركة مراجعة لهذه الآية — اضغط أي آية لعرض متشابهاتها.</p>
                           {qulPhrases.map((e) => (
                             <div key={e.id} className="bg-gray-50 rounded-lg p-3 border border-emerald-100">
                               <p className="font-arabic text-lg font-bold text-accent-800 leading-loose"><mark className="bg-amber-200 rounded px-0.5">{e.text}</mark></p>
@@ -3000,7 +3136,6 @@ export default function QuranMushafPage({
                         </div>
                       ) : mutashabihat && mutashabihat.length > 0 ? (
                         <div className="space-y-2">
-                          <p className="text-xs text-accent-400 leading-relaxed text-center">آيات تشترك مع هذه الآية في عبارة من ٣ كلمات فأكثر — محسوبة من نص المصحف نفسه، والعبارة المشتركة مظللة بالأصفر. اضغط أي آية لعرض متشابهاتها.</p>
                           {mutashabihat.map((s) => (
                             <button key={`${s.verse.surah_no}:${s.verse.ayah_no}`} onClick={() => handleSimilarClick(s.verse)}
                               className="block w-full text-right bg-gray-50 hover:bg-emerald-50 rounded-lg p-3 border border-emerald-100">
@@ -3052,7 +3187,6 @@ export default function QuranMushafPage({
                       ))}
                       {popupTab === 'irab' && (
                         <div className="space-y-3">
-                          <p className="text-base text-accent-600 leading-relaxed">إعراب موجز بالعربي، يظهر هنا داخل النافذة قدام الصفحة من غير ما تسيب المصحف.</p>
                           <iframe
                             key={`${selectedVerse.surah_no}:${selectedVerse.ayah_no}`}
                             src={`https://quranpedia.net/embed?surah=${selectedVerse.surah_no}&ayah=${selectedVerse.ayah_no}&type=e3rab&lock=1&ayah_text=0`}

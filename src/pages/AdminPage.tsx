@@ -700,6 +700,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{formatTypes(link.link_types)}</span>
                         {link.is_ai_draft && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">مسودة ذكاء اصطناعي</span>}
+                        {!link.is_ai_draft && link.created_by && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-700">اقتراح مستخدم</span>}
                         {link.audio_url && (
                           <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-xs text-emerald-600 hover:underline">
                             <Volume2 className="w-3 h-3" /> مقطع رنا الأصلي

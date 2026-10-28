@@ -612,6 +612,32 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <BookOpen className="w-14 h-14 text-gray-300 mx-auto mb-3" />
             <p className="text-base text-accent-400">{listFilter ? 'لا توجد آيات في هذه القائمة' : t('noLinksYet')}</p>
           </div>
+        ) : !debouncedSearch && !surahFilter ? (
+          // Surah headers only (2026-10-28): no ayahs are laid out under
+          // the surah names until the user asks for a specific surah
+          // (tap a header — it sets the same surah filter the filter
+          // chips use) or a specific ayah (search). Grouped from the
+          // current page's verses, in order; no counts are shown because
+          // a page holds only part of a surah's ayahs.
+          <div className="space-y-3">
+            <p className="text-sm text-accent-500 leading-relaxed">اختر سورة لعرض آياتها، أو ابحث عن آية معينة من أدوات الفلترة.</p>
+            {(() => {
+              const groups: { no: number; name: string }[] = [];
+              for (const v of verses) {
+                if (!groups.some((g) => g.no === v.surah_no)) groups.push({ no: v.surah_no, name: v.surah_name });
+              }
+              return groups.map((g) => (
+                <button key={g.no} onClick={() => { setSurahFilter(String(g.no)); setPage(0); }}
+                  className="w-full flex items-center justify-between bg-white rounded-2xl border border-emerald-100 shadow-sm p-4 hover:shadow-md transition-smooth">
+                  <span className="flex items-center gap-2">
+                    <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-lg">{g.no.toLocaleString('ar-EG')}</span>
+                    <span className="text-base font-bold text-accent-800">سورة {g.name}</span>
+                  </span>
+                  <span className="flex items-center gap-1 text-sm font-semibold text-emerald-700">عرض الآيات <ChevronLeft className="w-5 h-5" /></span>
+                </button>
+              ));
+            })()}
+          </div>
         ) : (
           <div className="space-y-4">
             {verses.map((verse) => {

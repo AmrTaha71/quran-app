@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CalendarDays, Flame, BookOpen, Check, Settings } from 'lucide-react';
-import { loadWird, saveWird, WIRD_TYPE_LABEL, type WirdState } from '../lib/wird';
+import { loadWird, saveWird, WIRD_TYPE_LABEL, formatPages, type WirdState, type WirdType } from '../lib/wird';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
@@ -42,15 +42,11 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
   }
 
   // Full required wird, written out in front of the user on لوحتي:
-  // type + page count with correct Arabic plural, always visible
-  // whether today is done or not (done state keeps the requirement
-  // text and adds the completion note, it never replaces it).
-  const pagesText =
-    wird.target === 1
-      ? 'صفحة واحدة'
-      : wird.target === 2
-        ? 'صفحتين'
-        : `${wird.target.toLocaleString('ar-EG')} صفحات`;
+  // all three parts with their page counts (only parts above 0),
+  // always visible whether today is done or not (done state keeps
+  // the requirement text and adds the completion note, it never
+  // replaces it).
+  const partEntries = (Object.keys(WIRD_TYPE_LABEL) as WirdType[]).filter((k) => (wird.parts?.[k] ?? 0) > 0);
 
   return (
     <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
@@ -64,9 +60,16 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
         )}
       </div>
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
-        <p className="font-bold text-accent-800">
-          المطلوب اليوم: {WIRD_TYPE_LABEL[wird.type]} — {pagesText}
-        </p>
+        <p className="font-bold text-accent-800">المطلوب اليوم:</p>
+        {partEntries.length === 0 ? (
+          <p className="text-sm text-accent-600 mt-1">لم يتم تحديد ورد بعد — حدده من الإعدادات.</p>
+        ) : (
+          <ul className="mt-1 space-y-0.5">
+            {partEntries.map((k) => (
+              <li key={k} className="text-sm font-semibold text-accent-700">{WIRD_TYPE_LABEL[k]} — {formatPages(wird.parts[k])}</li>
+            ))}
+          </ul>
+        )}
         <p className="text-sm text-accent-600 mt-1">
           {doneToday ? 'تم ✓ تقبل الله منك.' : 'اقرأها ثم علّمها منجزة.'}
         </p>

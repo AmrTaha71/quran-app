@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
-import { loadWird, saveWird, WIRD_TYPE_LABEL, type WirdState, type WirdType } from '../lib/wird';
+import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
 
@@ -153,43 +153,47 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* Daily wird — FIRST section by request: the user picks
-            type + pages, presses حفظ, and the saved wird shows in a
-            line right under the button. The لوحتي card reads the
-            saved value, so it only changes on save. */}
+        {/* Daily wird — FIRST section by request: the user sets all
+            THREE parts in this one window (pages per part, 0 = skip
+            that part today), presses حفظ once, and the saved wird
+            shows in a line right under the button. The لوحتي card
+            reads the saved value, so it only changes on save. */}
         <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
           </h2>
-          <p className="text-sm text-accent-500 mb-4">اختار نوع الورد وعدد صفحات اليوم، وبعدين اضغط حفظ — وهيظهر لك وردك المسجل في سطر تحت الزرار.</p>
-          <p className="text-sm font-semibold text-accent-700 mb-2">نوع الورد</p>
-          <div className="flex gap-2 mb-5 flex-wrap">
-            {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
-              <button key={k} onClick={() => updateDraftWird({ type: k })}
-                className={`px-3 py-1.5 text-sm font-bold rounded-full transition-smooth ${draftWird.type === k ? 'bg-amber-500 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
-                {WIRD_TYPE_LABEL[k]}
-              </button>
-            ))}
-          </div>
-          <p className="text-sm font-semibold text-accent-700 mb-2">صفحات اليوم</p>
-          <div className="flex items-center gap-3 mb-5">
-            <button onClick={() => updateDraftWird({ target: Math.max(1, draftWird.target - 1) })}
-              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
-            <span className="text-lg font-bold text-accent-800 w-8 text-center">{draftWird.target.toLocaleString('ar-EG')}</span>
-            <button onClick={() => updateDraftWird({ target: Math.min(10, draftWird.target + 1) })}
-              className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
-          </div>
-          <button onClick={saveWirdChoice}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl transition-smooth">
+          <p className="text-sm text-accent-500 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p>
+          {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
+            <div key={k} className="flex items-center justify-between gap-3 mb-3">
+              <p className="text-sm font-semibold text-accent-700">{WIRD_TYPE_LABEL[k]}</p>
+              <div className="flex items-center gap-3">
+                <button onClick={() => updateDraftWird({ parts: { ...draftWird.parts, [k]: Math.max(0, draftWird.parts[k] - 1) } })}
+                  className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
+                <span className="text-lg font-bold text-accent-800 w-8 text-center">{draftWird.parts[k].toLocaleString('ar-EG')}</span>
+                <button onClick={() => updateDraftWird({ parts: { ...draftWird.parts, [k]: Math.min(10, draftWird.parts[k] + 1) } })}
+                  className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
+              </div>
+            </div>
+          ))}
+          <p className="text-sm font-semibold text-accent-700 mb-5">
+            المجموع: {formatPages(wirdTotal(draftWird.parts))} يوميًا
+          </p>
+          <button onClick={saveWirdChoice} disabled={wirdTotal(draftWird.parts) === 0}
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-base font-bold rounded-xl transition-smooth">
             حفظ
           </button>
+          {wirdTotal(draftWird.parts) === 0 && (
+            <p className="mt-2 text-sm font-semibold text-amber-700">اختر صفحة واحدة على الأقل في جزء واحد قبل الحفظ.</p>
+          )}
           {justSavedWird && (
             <p className="mt-3 flex items-center gap-1.5 text-sm font-bold text-emerald-700">
               <Check className="w-4 h-4" /> تم الحفظ
             </p>
           )}
           <p className="mt-2 text-sm font-semibold text-accent-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
-            وردك اليومي المسجل: {WIRD_TYPE_LABEL[wird.type]} — {wird.target.toLocaleString('ar-EG')} {wird.target === 1 ? 'صفحة' : wird.target === 2 ? 'صفحتين' : 'صفحات'} يوميًا
+            وردك اليومي المسجل: {wirdTotal(wird.parts) === 0
+              ? 'لم يتم تحديد ورد بعد'
+              : (Object.keys(WIRD_TYPE_LABEL) as WirdType[]).filter((k) => wird.parts[k] > 0).map((k) => `${WIRD_TYPE_LABEL[k]} — ${formatPages(wird.parts[k])}`).join('، ')} يوميًا
           </p>
         </section>
 
