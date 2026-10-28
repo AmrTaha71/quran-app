@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
-import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages } from '../lib/pageDownload';
+import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, EDITION_DOWNLOADS } from '../lib/pageDownload';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
 
@@ -62,7 +62,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [dlError, setDlError] = useState('');
   const dlStopRef = useRef(false);
   useEffect(() => {
-    if (dlSupported) void countCachedPages().then(setDlCached);
+    if (dlSupported) void countCachedPages('madinah').then(setDlCached);
   }, [dlSupported]);
   const startDownload = async () => {
     if (dlRunning) return;
@@ -73,7 +73,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setDlFailed([]);
     try {
       try { await (navigator.storage as any)?.persist?.(); } catch {}
-      const { downloaded, failed } = await downloadAllPages(
+      const { downloaded, failed } = await downloadAllPages('madinah',
         (p) => { setDlDone(p.done); setDlFailed(p.failed); },
         () => dlStopRef.current,
       );
@@ -88,11 +88,58 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const stopDownload = () => { dlStopRef.current = true; };
   const clearDownload = async () => {
-    await clearCachedPages();
+    await clearCachedPages('madinah');
     setDlCached(0);
     setDlDone(0);
     setDlFailed([]);
   };
+  // Optional-edition downloads (tajweed / warsh / hafs): same
+  // mechanics as Madinah, one state record per edition, and every
+  // start goes through a size warning first (confirm flag) — nothing
+  // here ever downloads without the user choosing that edition.
+  type OptDl = { cached: number | null; running: boolean; done: number; failed: number[]; stopped: boolean; error: string; confirm: boolean };
+  const emptyOpt = (): OptDl => ({ cached: null, running: false, done: 0, failed: [], stopped: false, error: '', confirm: false });
+  const [optDl, setOptDl] = useState<Record<string, OptDl>>({});
+  const optStopRefs = useRef<Record<string, boolean>>({});
+  const patchOpt = (id: string, patch: Partial<OptDl>) =>
+    setOptDl((prev) => ({ ...prev, [id]: { ...(prev[id] ?? emptyOpt()), ...patch } }));
+  useEffect(() => {
+    if (!dlSupported) return;
+    for (const ed of EDITION_DOWNLOADS.filter((e) => e.id !== 'madinah')) {
+      void countCachedPages(ed.id).then((n) => patchOpt(ed.id, { cached: n }));
+    }
+  }, [dlSupported]);
+  const startOptDownload = async (id: string) => {
+    const st = optDl[id];
+    if (st?.running) return;
+    optStopRefs.current[id] = false;
+    patchOpt(id, { confirm: false, stopped: false, error: '', running: true, failed: [] });
+    try {
+      try { await (navigator.storage as any)?.persist?.(); } catch {}
+      const { downloaded, failed } = await downloadAllPages(id,
+        (p) => { patchOpt(id, { done: p.done, failed: p.failed }); },
+        () => !!optStopRefs.current[id],
+      );
+      patchOpt(id, { cached: downloaded, failed, stopped: !!optStopRefs.current[id] });
+    } catch {
+      patchOpt(id, { error: 'تعذر التحميل — تأكد من الاتصال بالإنترنت وحاول تاني' });
+    } finally {
+      patchOpt(id, { running: false });
+    }
+  };
+  const stopOptDownload = (id: string) => { optStopRefs.current[id] = true; };
+  const clearOptDownload = async (id: string) => {
+    await clearCachedPages(id);
+    patchOpt(id, { cached: 0, done: 0, failed: [] });
+  };
+  // Installed-app (PWA standalone) detection for the install card:
+  // standalone means no Safari chrome, no link bar, no fullscreen
+  // banner — the app already opens like a native app.
+  const [isStandalone] = useState(() => {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    } catch { return false; }
+  });
   // ADMIN ENTRY (2026-10-27): shown ONLY to users in admin_users.
   // Normal users never see this section — and BottomNav stays at
   // its final 5 items, so الإدارة lives here, not as a tab.
@@ -258,6 +305,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             ))}
           </div>
+          <p className="text-xs text-accent-400 mt-3">ملحوظة: المصاحف غير المدينة بتتفتح من النت — لو عايز واحد منها على جهازك حمّله من قسم صفحات المصحف على جهازك تحت.</p>
           {/* Live preview: the chosen page itself, right here — it
               updates on every choice (edition card or gold toggle),
               so the user sees exactly what the Mushaf will open with. */}
@@ -292,6 +340,29 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </button>
         </section>
 
+        {/* Part 1 — install the app itself (PWA): no Safari, no link
+            bar, no fullscreen banner. Part 2 (the pages download
+            below) is separate, so the app itself stays light. */}
+        <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+            <Smartphone className="w-5 h-5 text-emerald-600" /> ثبّت التطبيق على جهازك
+          </h2>
+          {isStandalone ? (
+            <p className="text-sm text-emerald-700 font-bold">
+              التطبيق مثبّت على جهازك ✓ — بيفتح من أيقونة الشاشة الرئيسية من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-accent-500 mb-3">
+                الخطوة الأولى قبل تحميل الصفحات: ثبّت التطبيق على الشاشة الرئيسية — كده بيشتغل زي تطبيقات الموبايل، من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
+              </p>
+              <p className="text-sm font-bold text-accent-700 leading-relaxed" dir="ltr">
+                Steps: 1. In Safari, tap Share. 2. Tap Add to Home Screen. 3. Open the app from the home screen icon.
+              </p>
+            </>
+          )}
+        </section>
+
         {/* Mushaf pages on the device — one-tap full download (Hafidz
             pattern): after this, every flip is a local read, instant
             on any connection, even offline. Madinah edition only. */}
@@ -300,7 +371,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
           </h2>
           <p className="text-sm text-accent-500 mb-4">
-            حمّل صفحات مصحف المدينة الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي.
+            مصحف المدينة هو الافتراضي: حمّل صفحاته الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي. مفيش حاجة تانية بتتحمل لوحدها.
           </p>
           {!dlSupported ? (
             <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
@@ -350,6 +421,82 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <p className="text-xs text-accent-400 mt-3 leading-relaxed">
                 ملحوظة: المتصفح ممكن يمسح الصفحات لو مساحة الجهاز ضاقت — العداد هنا هيبين الناقص، ودوسة واحدة ترجّعه.
               </p>
+              {/* Optional editions: nothing here downloads unless the
+                  user picks that edition, and every start shows the
+                  edition's size first (confirm box). */}
+              <div className="border-t border-gray-100 mt-5 pt-4">
+                <p className="font-bold text-accent-800 mb-1">مصاحف إضافية — اختياري</p>
+                <p className="text-sm text-accent-500 mb-3">مفيش مصحف بيتحمل لوحده — كل واحد بيتحمل بس لو اخترته من هنا، وبحجمه قبل ما تدوس تحميل.</p>
+                <div className="grid gap-3">
+                  {EDITION_DOWNLOADS.filter((e) => e.id !== 'madinah').map((ed) => {
+                    const st = optDl[ed.id] ?? emptyOpt();
+                    const full = st.cached !== null && st.cached >= ed.pages;
+                    return (
+                      <div key={ed.id} className="rounded-xl border border-gray-200 p-4">
+                        <p className="font-bold text-accent-800">{ed.name}</p>
+                        <p className="text-sm text-accent-500">
+                          حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت • {ed.pages.toLocaleString('ar-EG')} صفحة
+                          {st.cached === null ? '' : full ? ' • كل الصفحات محملة ✓' : ` • محمل منها ${st.cached.toLocaleString('ar-EG')} من ${ed.pages.toLocaleString('ar-EG')}`}
+                        </p>
+                        {st.running && (
+                          <div className="mt-3">
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(st.done / ed.pages) * 100}%` }} />
+                            </div>
+                            <p className="text-sm text-accent-500 mt-1">جارٍ التحميل… {st.done.toLocaleString('ar-EG')} من {ed.pages.toLocaleString('ar-EG')}</p>
+                          </div>
+                        )}
+                        {st.failed.length > 0 && !st.running && (
+                          <p className="text-sm text-amber-700 mt-2">تعذر تحميل {st.failed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
+                        )}
+                        {st.stopped && !st.running && (
+                          <p className="text-sm text-accent-500 mt-2">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
+                        )}
+                        {st.error && !st.running && (
+                          <p className="text-sm text-red-600 mt-2">{st.error}</p>
+                        )}
+                        {st.confirm && !st.running ? (
+                          <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
+                            <p className="text-sm font-bold text-amber-800">
+                              {ed.name} حجمه حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت — يفضل واي فاي. متأكد عايز تحمله على جهازك؟
+                            </p>
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={() => startOptDownload(ed.id)}
+                                className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
+                                أيوه، حمّل
+                              </button>
+                              <button onClick={() => patchOpt(ed.id, { confirm: false })}
+                                className="px-5 py-2 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                                إلغاء
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2 mt-3">
+                            {!st.running ? (
+                              <button onClick={() => patchOpt(ed.id, { confirm: true })} disabled={full}
+                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
+                                {full ? 'محمل بالكامل ✓' : st.cached !== null && st.cached > 0 ? 'كمّل تحميل الناقص' : 'حمّل المصحف'}
+                              </button>
+                            ) : (
+                              <button onClick={() => stopOptDownload(ed.id)}
+                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-bold rounded-xl">
+                                إيقاف التحميل
+                              </button>
+                            )}
+                            {st.cached !== null && st.cached > 0 && !st.running && (
+                              <button onClick={() => clearOptDownload(ed.id)}
+                                className="px-5 py-2.5 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                                مسح المحمل
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </>
           )}
         </section>

@@ -25,6 +25,12 @@ const IMG_CACHE = 'quran-pages-v2';
 // here are served cache-first automatically. This name MUST stay in
 // the activate keep-list, or an update would wipe the user's download.
 const FULL_IMG_CACHE = 'quran-pages-full';
+// Optional-edition full-download caches (Settings, per edition):
+// same rules as FULL_IMG_CACHE — written only by the download UI,
+// never trimmed, and keep-listed below so an update never wipes them.
+const FULL_IMG_CACHE_TAJWEED = 'quran-pages-full-tajweed';
+const FULL_IMG_CACHE_WARSH = 'quran-pages-full-warsh';
+const FULL_IMG_CACHE_HAFS = 'quran-pages-full-hafs';
 const MAX_IMG_ENTRIES = 150;
 
 async function trimCache(cacheName, maxEntries) {
@@ -52,7 +58,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) => Promise.all(
-        keys.filter((k) => k !== SHELL_CACHE && k !== IMG_CACHE && k !== FULL_IMG_CACHE).map((k) => caches.delete(k))
+        keys.filter((k) => k !== SHELL_CACHE && k !== IMG_CACHE && k !== FULL_IMG_CACHE && k !== FULL_IMG_CACHE_TAJWEED && k !== FULL_IMG_CACHE_WARSH && k !== FULL_IMG_CACHE_HAFS).map((k) => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
