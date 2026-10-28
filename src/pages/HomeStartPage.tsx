@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
+import AppLogo from '../components/AppLogo';
 import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
@@ -110,6 +111,11 @@ export default function HomeStartPage({ session, onNavigate }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
+        {/* Big app logo (SVG version of the luxurious AI logo) */}
+        <div className="flex justify-center mb-5">
+          <AppLogo className="w-72 sm:w-80 h-auto drop-shadow-md" />
+        </div>
+
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
           <p className="text-sm text-accent-500 mt-1">
