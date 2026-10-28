@@ -114,8 +114,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Same-origin static assets: stale-while-revalidate.
-  if (url.origin === self.location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css'))) {
+  // Same-origin static assets: stale-while-revalidate. This covers
+  // JS/CSS and the icon PNGs (the artwork itself, generated at
+  // build time) so the splash and start-page logo also work offline.
+  if (url.origin === self.location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png'))) {
     event.respondWith(
       caches.match(req).then((cached) => {
         const network = fetch(req).then((res) => {

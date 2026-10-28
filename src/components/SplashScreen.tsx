@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react';
-import EmblemMedallion from './EmblemMedallion';
 
-// Branded launch screen for "روابط الذكر الحكيم" — replaces the old
-// plain splash (white tile + BookOpen glyph + progress bar + %).
-// A full-screen emerald moment that feels like opening a luxury
-// book: deep emerald gradient, a faint arabesque star lattice, a
-// gold book frame with glowing corner diamonds, the medallion logo
-// in the center, the app name in gold Naskh lettering, and the
-// tagline beneath. No spinner, no progress bar, no "loading" text —
-// the brand itself is the waiting room.
+// Branded launch screen for "روابط الذكر الحكيم" — the artwork
+// ITSELF, not a redraw: the centerpiece is /icon-512.png, the very
+// image that is also the app icon (generated at build time from the
+// base64 artwork in scripts/logo-art). The artwork already carries
+// the app name in gold calligraphy, so the splash adds only the
+// tagline below it — no second name, no progress bar, no %.
 //
 // Interface kept compatible with the old splash so App.tsx needs no
 // changes: `duration` (default 2000ms) is how long the splash stays
@@ -76,11 +73,11 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
           pointer-events: none;
         }
         .rq-splash-logo {
-          width: min(220px, 62vw);
+          width: min(300px, 76vw);
           animation: rq-splash-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
           animation-delay: 0.05s;
         }
-        .rq-splash-logo > * { width: 100%; height: auto; display: block; }
+        .rq-splash-logo > * { width: 100%; height: auto; display: block; border-radius: 24px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); }
         .rq-splash-divider {
           display: flex; align-items: center; gap: 12px; width: min(240px, 60vw);
           margin: 26px 0 18px;
@@ -97,15 +94,8 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
         .rq-splash-divider i {
           width: 8px; height: 8px; background: #f0c85a; transform: rotate(45deg); flex: none;
         }
-        .rq-splash-name {
-          margin: 0; color: #f0c85a;
-          font-size: clamp(34px, 9vw, 48px); font-weight: 700; line-height: 1.35;
-          text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
-          animation: rq-splash-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-          animation-delay: 0.5s;
-        }
         .rq-splash-tagline {
-          margin: 10px 0 0; color: rgba(248, 241, 222, 0.92);
+          margin: 0; color: rgba(248, 241, 222, 0.92);
           font-size: clamp(17px, 4.5vw, 22px); line-height: 1.6;
           animation: rq-splash-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
           animation-delay: 0.75s;
@@ -155,10 +145,9 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
       <div className="rq-splash-inner">
         <div className="rq-splash-glow" />
         <div className="rq-splash-logo">
-          <EmblemMedallion variant="icon" />
+          <img src="/icon-512.png" alt="روابط الذكر الحكيم" />
         </div>
         <div className="rq-splash-divider"><i /></div>
-        <h1 className="rq-splash-name">روابط الذكر الحكيم</h1>
         <p className="rq-splash-tagline">{message || 'احفظها بالتربيط'}</p>
       </div>
     </div>

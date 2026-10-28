@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import EmblemMedallion from '../components/EmblemMedallion';
 import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
@@ -100,7 +99,7 @@ export default function HomeStartPage({ session, onNavigate }: {
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <EmblemMedallion className="w-12 h-12 shrink-0" />
+          <img src="/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
           <div>
             <h1 className="text-lg font-bold text-accent-800" style={{ fontFamily: "'Noto Naskh Arabic', serif" }}>روابط الذكر الحكيم</h1>
             <p className="text-sm text-accent-500">للحفظ بالتربيطات</p>
@@ -109,10 +108,10 @@ export default function HomeStartPage({ session, onNavigate }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
-        {/* App mark: the medallion, sized so the greeting and the
-            resume action stay visible without scrolling on phones. */}
+        {/* App mark: the artwork itself, sized so the greeting and
+            the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">
-          <EmblemMedallion className="w-56 h-auto drop-shadow-md" />
+          <img src="/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md" />
         </div>
 
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
