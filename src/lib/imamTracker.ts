@@ -20,7 +20,7 @@
 // but is NOT called by the merged flow.
 export const FOLLOW_TRIGGER_WORDS = 5;
 export const FOLLOW_LOCK_MIN_WORDS = 4;
-import { normalizeWords } from './arabicNormalize';
+import { normalizeWords, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER } from './arabicNormalize';
 import type { VerseIndexEntry } from './searchIndex';
 
 export interface TrackedPosition {
@@ -41,12 +41,55 @@ export function buildOrderedVerses(verses: VerseIndexEntry[]): OrderedVerse[] {
   return sorted.map((v) => ({
     surah: v.surah_no,
     ayah: v.ayah_no,
-    words: v.norm.split(/\s+/).filter(Boolean),
+    // Canonicalize muqatta'at spellings (طاها -> طه، حام -> حم،
+    // الاما -> الم): the verse side must meet the heard side in the
+    // same canonical form. 1:1 token mapping, so word indices (and
+    // therefore lock positions) are unchanged.
+    words: v.norm.split(/\s+/).filter(Boolean).map((w) => muqattaatLetters(w) ?? w),
   }));
 }
 
+// Heard words, with the same muqatta'at gap closed as in self-test:
+// an imam reciting an opening says letter names, so a run of spoken
+// letter names collapses to the opening token (ألف لام ميم -> الم),
+// and a single spoken variant token canonicalizes the same way
+// (طاها -> طه، ياس -> يس). Runs collapse ONLY when they spell a
+// genuine opening token — a non-opening run is left alone, token by
+// token, so nothing else can merge. Length-1 runs collapse only for
+// صاد/قاف/نون: those names never occur as standalone Quranic
+// words, while single يا (the vocative particle, يا أيها) and ها
+// (ها أنتم) are real words and must never collapse. The 4-word
+// lock run itself disambiguates ألم (105:1 ألم تر...) from the 2:1
+// opening (الم ذلك...): their second words differ, so no false
+// lock is possible there. Known pre-existing limit, unchanged:
+// ayahs shorter than 4 words (e.g. 42:1 حم, 42:2 عسق alone) can
+// never finals-lock, since findLock needs 4 consecutive words in
+// ONE ayah; the interim lock needs 6.
 export function heardWords(text: string): string[] {
-  return normalizeWords(text);
+  const words = normalizeWords(text);
+  const out: string[] = [];
+  for (let i = 0; i < words.length;) {
+    let run = '';
+    let k = i;
+    for (; k < words.length; k++) {
+      const l = MUQATTAAT_NAME_TO_LETTER[words[k]];
+      if (!l) break;
+      run += l;
+    }
+    const runLen = k - i;
+    if (runLen >= 2) {
+      const canon = muqattaatLetters(run);
+      if (canon) { out.push(canon); i = k; continue; }
+      // Not an opening: fall through and handle words[i] singly.
+    } else if (runLen === 1 && (words[i] === 'صاد' || words[i] === 'قاف' || words[i] === 'نون')) {
+      out.push(MUQATTAAT_NAME_TO_LETTER[words[i]]);
+      i++;
+      continue;
+    }
+    out.push(muqattaatLetters(words[i]) ?? words[i]);
+    i++;
+  }
+  return out;
 }
 
 export function findLock(heard: string[], ordered: OrderedVerse[], minRun = FOLLOW_LOCK_MIN_WORDS): TrackedPosition | null {

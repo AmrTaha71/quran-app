@@ -2,8 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
-import { normalizeArabic, normalizeWords } from '../lib/arabicNormalize';
-import { currentSpeechLocale } from '../lib/LanguageContext';
+import { normalizeArabic, normalizeWords, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText } from '../lib/arabicNormalize';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import BottomNav from '../components/BottomNav';
 import {
@@ -157,6 +156,68 @@ function spokenTokens(text: string): string[] {
   return normalizeWords(text).map(cleanToken).filter(Boolean);
 }
 
+// Single-token forms for an expected word pair spoken as one token
+// (assimilation across the word boundary). Only real, attested
+// patterns, and only where the first word's final letter is actually
+// sakinah in recitation:
+//   * nun sakinah + يرملون (idgham: the ن drops — من يقول -> ميقول،
+//     أن لا -> ألا، إن ما -> إما) or + ب (iqlab: the ن becomes م —
+//     من بعد -> ممبعد — or drops, as ASR writes no shadda: مبعد).
+//     Restricted to من/أن/إن/عن/لن (with a leading و/ف, or أ+و/ف),
+//     so voweled-ن words never assimilate: كان + يقول as كايقول
+//     stays a miss, and the old rule's كان + ما -> كاما false match
+//     is fixed. (لمن/ممن as first word is a deliberate gap.)
+//   * lam sakinah in قل/بل/هل + ر/ل (idgham: قل رب -> قرب،
+//     بل رفعه -> برفعه). وقال/جعل never assimilate: their lam is
+//     voweled. Exact concatenation is checked by the caller.
+// A geminate written single (لكم ما -> لكما) is deliberately NOT
+// accepted: لكما/منهما are real words, so that spelling is a
+// plausible wrong word, not just an assimilation.
+const NUN_WORDS = ['من', 'ان', 'عن', 'لن'];
+function pairBase(w: string): string {
+  let b = w;
+  for (;;) {
+    if (NUN_WORDS.includes(b)) return b;
+    if (b.startsWith('و') || b.startsWith('ف')) { b = b.slice(1); continue; }
+    if (b.startsWith('اف') || b.startsWith('او')) { b = b.slice(2); continue; }
+    return b;
+  }
+}
+function assimilatedPairForms(a: string, b: string): string[] {
+  const forms: string[] = [];
+  if (a.endsWith('ن') && NUN_WORDS.includes(pairBase(a))) {
+    if (/^[يرملون]/.test(b)) forms.push(a.slice(0, -1) + b);
+    else if (b.startsWith('ب')) forms.push(a.slice(0, -1) + 'م' + b, a.slice(0, -1) + b);
+  }
+  const lamBase = a.replace(/^[وف]/, '');
+  if ((lamBase === 'قل' || lamBase === 'بل' || lamBase === 'هل') && a.endsWith('ل') && /^[رل]/.test(b)) {
+    forms.push(a.slice(0, -1) + b);
+  }
+  return forms;
+}
+
+// A mushaf word spoken split across tokens: the parts concatenate
+// to it. A boundary ا+ا may collapse to one ا: ها + أنتم is spoken
+// for هأنتم, where the mushaf merges ها's ا with أنتم's أ.
+function splitMatches(parts: string[], expected: string): boolean {
+  const collapsible = parts.slice(0, -1).map((p, b) => p.endsWith('ا') && parts[b + 1].startsWith('ا'));
+  const total = 1 << Math.max(0, parts.length - 1);
+  for (let mask = 0; mask < total; mask++) {
+    let ok = true;
+    let s = '';
+    for (let p = 0; p < parts.length; p++) {
+      let part = parts[p];
+      if (p > 0 && (mask & (1 << (p - 1)))) {
+        if (!collapsible[p - 1]) { ok = false; break; }
+        part = part.slice(1);
+      }
+      s += part;
+    }
+    if (ok && s === expected) return true;
+  }
+  return false;
+}
+
 // Greedy in-order alignment: every expected word must appear in the
 // spoken words, in order. Extra spoken words (basmalah, isti'adha,
 // a repeated word) are ignored — they never consume an expected word.
@@ -164,8 +225,40 @@ function spokenTokens(text: string): string[] {
 // Joined words: mushaf tokens are sometimes written joined
 // (يَـٰٓأَيُّهَا -> one token) while speech splits them (يا + أيها),
 // and vice versa (مِن + مَّا spoken as one مما, with the ن assimilated
-// into the م). A bounded 2-token lookahead on both sides handles
-// these without ever matching out of order.
+// into the م; see assimilatedPairForms for the full set). A bounded
+// 2- and 3-token lookahead on both sides handles these without ever
+// matching out of order.
+// Muqatta'at letter-name matching (2026-10-28): an expected
+// opening token also matches when spoken as its letter names
+// (ألف لام ميم for الم) or as a canonical-equal single token
+// (طاها for طه، ياس for يس، الاما for الم — the seeded rasm
+// variants). Gated on the expected token canonicalizing into the
+// closed 14-token set, and for الم additionally on the next
+// expected word being a genuine opening second word (see
+// arabicNormalize: ألم "did-not" normalizes to الم too, and must
+// never match letter names). Runs are searched in order like the
+// other attempts; in strict mode skipped tokens before the run
+// become extras via consumeThrough, exactly as for joins.
+function muqattaatMatchAt(expected: string[], i: number, spoken: string[], j: number): { start: number; count: number } | null {
+  const letters = muqattaatLetters(expected[i]);
+  if (!letters) return null;
+  if (letters === 'الم') {
+    const next = i + 1 < expected.length ? expected[i + 1] : '';
+    if (!MUQATTAAT_ALIF_LAM_MEEM_SECONDS.includes(next)) return null;
+  }
+  for (let k = j; k < spoken.length; k++) {
+    if (k + letters.length <= spoken.length) {
+      let ok = true;
+      for (let t = 0; t < letters.length; t++) {
+        if (MUQATTAAT_NAME_TO_LETTER[spoken[k + t]] !== letters[t]) { ok = false; break; }
+      }
+      if (ok) return { start: k, count: letters.length };
+    }
+    if (muqattaatLetters(spoken[k]) === letters) return { start: k, count: 1 };
+  }
+  return null;
+}
+
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean } {
   const matched = new Array(expected.length).fill(false);
   let j = 0;
@@ -177,18 +270,30 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
     }
     if (found >= 0) { matched[i] = true; j = found + 1; i++; continue; }
     let joined = -1;
+    let joinedCount = 2;
+    // Prefix prefilter (coordinator amendment, semantics-preserving):
+    // splitMatches can only succeed when the first part is a prefix
+    // of the expected word (only later parts may lose a leading ا),
+    // so non-prefix candidates skip the allocation-heavy call. Without
+    // this, the no-match worst case at 6000 words was ~6.1s vs ~0.44s
+    // baseline; with it, it returns to near baseline.
     for (let k = j; k + 1 < spoken.length; k++) {
-      if (spoken[k] + spoken[k + 1] === expected[i]) { joined = k; break; }
+      if (expected[i].startsWith(spoken[k]) && splitMatches([spoken[k], spoken[k + 1]], expected[i])) { joined = k; break; }
     }
-    if (joined >= 0) { matched[i] = true; j = joined + 2; i++; continue; }
+    if (joined < 0) {
+      for (let k = j; k + 2 < spoken.length; k++) {
+        if (expected[i].startsWith(spoken[k]) && splitMatches([spoken[k], spoken[k + 1], spoken[k + 2]], expected[i])) { joined = k; joinedCount = 3; break; }
+      }
+    }
+    if (joined >= 0) { matched[i] = true; j = joined + joinedCount; i++; continue; }
+    const muq = muqattaatMatchAt(expected, i, spoken, j);
+    if (muq) { matched[i] = true; j = muq.start + muq.count; i++; continue; }
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
-      const assimilated = expected[i].endsWith('ن') && expected[i + 1].startsWith('م')
-        ? expected[i].slice(0, -1) + expected[i + 1]
-        : '';
+      const forms = assimilatedPairForms(expected[i], expected[i + 1]);
       let foundPair = -1;
       for (let k = j; k < spoken.length; k++) {
-        if (spoken[k] === pair || (assimilated && spoken[k] === assimilated)) { foundPair = k; break; }
+        if (spoken[k] === pair || forms.includes(spoken[k])) { foundPair = k; break; }
       }
       if (foundPair >= 0) { matched[i] = true; matched[i + 1] = true; j = foundPair + 1; i += 2; continue; }
     }
@@ -219,18 +324,30 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
     }
     if (found >= 0) { consumeThrough(found, 1); matched[i] = true; i++; continue; }
     let joined = -1;
+    let joinedCount = 2;
+    // Prefix prefilter (coordinator amendment, semantics-preserving):
+    // splitMatches can only succeed when the first part is a prefix
+    // of the expected word (only later parts may lose a leading ا),
+    // so non-prefix candidates skip the allocation-heavy call. Without
+    // this, the no-match worst case at 6000 words was ~6.1s vs ~0.44s
+    // baseline; with it, it returns to near baseline.
     for (let k = j; k + 1 < spoken.length; k++) {
-      if (spoken[k] + spoken[k + 1] === expected[i]) { joined = k; break; }
+      if (expected[i].startsWith(spoken[k]) && splitMatches([spoken[k], spoken[k + 1]], expected[i])) { joined = k; break; }
     }
-    if (joined >= 0) { consumeThrough(joined, 2); matched[i] = true; i++; continue; }
+    if (joined < 0) {
+      for (let k = j; k + 2 < spoken.length; k++) {
+        if (expected[i].startsWith(spoken[k]) && splitMatches([spoken[k], spoken[k + 1], spoken[k + 2]], expected[i])) { joined = k; joinedCount = 3; break; }
+      }
+    }
+    if (joined >= 0) { consumeThrough(joined, joinedCount); matched[i] = true; i++; continue; }
+    const muq = muqattaatMatchAt(expected, i, spoken, j);
+    if (muq) { consumeThrough(muq.start, muq.count); matched[i] = true; i++; continue; }
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
-      const assimilated = expected[i].endsWith('ن') && expected[i + 1].startsWith('م')
-        ? expected[i].slice(0, -1) + expected[i + 1]
-        : '';
+      const forms = assimilatedPairForms(expected[i], expected[i + 1]);
       let foundPair = -1;
       for (let k = j; k < spoken.length; k++) {
-        if (spoken[k] === pair || (assimilated && spoken[k] === assimilated)) { foundPair = k; break; }
+        if (spoken[k] === pair || forms.includes(spoken[k])) { foundPair = k; break; }
       }
       if (foundPair >= 0) { consumeThrough(foundPair, 1); matched[i] = true; matched[i + 1] = true; i += 2; continue; }
     }
@@ -313,12 +430,15 @@ function playCorrectChime() {
 // Arabic TTS as an instant fallback so the correction never waits
 // on the network. The mic is always stopped before any correction
 // plays, so the device never "hears" its own correction.
+// Correction text goes through correctionSpeechText: muqatta'at
+// tokens are spoken as letter names, other words keep their form
+// with only Quranic annotation marks stripped (see arabicNormalize).
 function speakCorrection(words: string[], rate = 1.0) {
   if (words.length === 0) return;
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(words.join(' '));
+    const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
     u.lang = 'ar-SA';
     u.rate = rate;
     window.speechSynthesis.speak(u);
@@ -449,6 +569,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // strict extras), and the words from the last prompt that he is
   // expected to say back after the resume.
   const contCreditedRef = useRef<Set<number>>(new Set());
+  // Continuous-alignment cache (speed-latency): the raw greedy
+  // alignment for the current transcript. contFinals only grows by
+  // appending whole finals, so the alignment for an unchanged
+  // transcript is identical — yet the baseline recomputed it 3x per
+  // final (update + interrupt + stall) and 1x per interim, each time
+  // re-tokenizing the whole transcript and re-aligning all ~6000
+  // expected words. The cache stores only the RAW result; the
+  // effective matched set is still recomputed per call from raw +
+  // the monotonic credit set, so credit / awaiting-fix / stall /
+  // interrupt behaviour is untouched. Keyed by expected-array
+  // identity + finals string + strict flag: any change misses and
+  // recomputes exactly once. The cached arrays are never mutated
+  // (callers map/filter them into fresh arrays).
+  const contAlignCacheRef = useRef<{
+    expected: { norm: string; orig: string; ayahIdx: number }[];
+    finals: string;
+    strict: boolean;
+    spoken: string[];
+    matched: boolean[];
+    extras: string[];
+  } | null>(null);
+  // Cached expected norms: contExpected is built once per test, so
+  // mapping it to norms on every alignment call was pure allocation.
+  const contExpectedNormsRef = useRef<{
+    expected: { norm: string; orig: string; ayahIdx: number }[];
+    norms: string[];
+  } | null>(null);
   const contFixedNormsRef = useRef<Set<string>>(new Set());
   const contAwaitingRef = useRef<{ indices: number[]; norms: string[]; baseLen: number } | null>(null);
   const [contPrompting, setContPrompting] = useState(false);
@@ -472,7 +619,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ text: words.join(' '), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
+        body: JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.audioUrl) return null;
@@ -514,6 +661,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Refs: the single source of truth inside recognition callbacks.
   const recRef = useRef<any>(null);
   const userStopRef = useRef(false);
+  // [P0] Recognition-robustness plumbing: restart budget + pending
+  // interim. Only one recognizer runs at a time, so one shared pair
+  // serves both ayah and continuous mode.
+  const recRestartRef = useRef({ count: 0, windowStart: 0 });
+  const lastInterimRef = useRef('');
   const quietTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const liveRef = useRef({
@@ -568,6 +720,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     stopRec();
     clearTimers();
     liveRef.current.finals = '';
+    lastInterimRef.current = '';
     liveRef.current.micState = 'idle';
     setMicState('idle');
     setTranscript('');
@@ -653,6 +806,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         // Teacher state is per-test: a new range starts with a clean
         // slate (no carried-over credits, prompts, or expectations).
         contCreditedRef.current = new Set();
+        contAlignCacheRef.current = null;
+        contExpectedNormsRef.current = null;
         contFixedNormsRef.current = new Set();
         contAwaitingRef.current = null;
         contPromptedKeyRef.current = '';
@@ -896,7 +1051,88 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // The "خلصت، قيّمها" button: unlike the timer paths (which must
   // stay silent), a tap with zero spoken words gets a hint instead
   // of silently doing nothing.
+  // ---- Recognition robustness helpers (tasmii-100 stream 3) ----
+  // The recitation target is Classical/Quranic Arabic, not the UI
+  // language: the test locale is fixed here, independent of the
+  // interface language (see P7). 'ar-SA' is the vendor's formal
+  // Arabic model; 'ar-EG' biases toward Egyptian colloquial
+  // phonology/lexicon, which is the wrong target for tajwid
+  // recitation. The locale claim is UNVERIFIED against vendor
+  // internals — see FINDINGS.md — so this stays one constant a
+  // coordinator can flip after the on-device A/B check.
+  const TEST_SPEECH_LOCALE = 'ar-SA';
+  // Restart budget (same shape as the follow-mode LIVE_RESTART_*
+  // budget in QuranMushafPage.tsx): >5 silent restarts in 10s with
+  // no result means the mic is dead — stop honestly instead of
+  // looping forever. Any result resets the budget (speech = alive).
+  const REC_RESTART_MAX = 5;
+  const REC_RESTART_WINDOW_MS = 10000;
+  const resetRecRestartBudget = () => { recRestartRef.current = { count: 0, windowStart: 0 }; };
+  const noteRecResult = () => { recRestartRef.current = { count: 0, windowStart: 0 }; };
+  const recRestartAllowed = (): boolean => {
+    const now = Date.now();
+    if (now - recRestartRef.current.windowStart > REC_RESTART_WINDOW_MS) {
+      recRestartRef.current = { count: 0, windowStart: now };
+    }
+    recRestartRef.current.count += 1;
+    return recRestartRef.current.count <= REC_RESTART_MAX;
+  };
+  const otherArabicLocale = (locale: string): string => (locale === 'ar-SA' ? 'ar-EG' : 'ar-SA');
+  // [P5] Alternative-rescue, deliberately narrow so it cannot mask
+  // a real mistake: for a FINAL result only, if the top hypothesis
+  // does not match any contiguous run of expected words, but a
+  // lower-ranked alternative — same token count, so no word is ever
+  // inserted or deleted — matches a contiguous expected run
+  // exactly (after the same normalization grading uses), use that
+  // alternative's transcript instead. A word is credited only when
+  // some engine hypothesis literally equals the expected word(s).
+  // Confidence is NOT used: it is uncalibrated across vendors and
+  // filtering on it would drop correct words (see FINDINGS.md).
+  const pickFinalTranscript = (res: any, expectedNorms: string[]): string => {
+    const first = res && res[0] ? res[0].transcript || '' : '';
+    if (!res || typeof res.length !== 'number' || res.length < 2 || expectedNorms.length === 0) return first;
+    const firstTokens = spokenTokens(first);
+    if (firstTokens.length === 0) return first;
+    const matchesRun = (tokens: string[]): boolean => {
+      for (let st = 0; st + tokens.length <= expectedNorms.length; st++) {
+        let ok = true;
+        for (let t = 0; t < tokens.length; t++) {
+          if (expectedNorms[st + t] !== tokens[t]) { ok = false; break; }
+        }
+        if (ok) return true;
+      }
+      return false;
+    };
+    if (matchesRun(firstTokens)) return first;
+    for (let a = 1; a < res.length; a++) {
+      const alt = res[a] ? res[a].transcript || '' : '';
+      const altTokens = spokenTokens(alt);
+      if (altTokens.length !== firstTokens.length) continue;
+      if (matchesRun(altTokens)) return alt;
+    }
+    return first;
+  };
+  // The interim text still pending when a session ends. It is
+  // merged into finals ONLY on onend (the words will never
+  // finalize) or on an explicit "done" tap (the user asserts the
+  // utterance is complete) — never while the session is alive, so
+  // a revised interim can never double-count.
+  const takePendingInterim = (): string => {
+    const t = lastInterimRef.current;
+    lastInterimRef.current = '';
+    setInterim('');
+    return t;
+  };
+
   const evaluatePressed = () => {
+    // [P8] Explicit "done" tap: fold the still-pending interim in
+    // first, or words spoken without a trailing pause are lost
+    // (finals only arrive after a silence gap).
+    const pendingInterim = takePendingInterim();
+    if (pendingInterim) {
+      liveRef.current.finals = `${liveRef.current.finals} ${pendingInterim}`.trim();
+      setTranscript(liveRef.current.finals);
+    }
     if (spokenTokens(liveRef.current.finals).length === 0 && (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting')) {
       setMicError('لسه ما سمعت حاجة — اقرأ الآية الأول وبعدين اضغط "خلصت، قيّمها"');
       return;
@@ -929,12 +1165,28 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setInterim('');
     setWrongIndices([]);
     userStopRef.current = false;
+    lastInterimRef.current = '';
     const rec = new SR();
-    rec.lang = currentSpeechLocale();
+    // [P7] Fixed test locale (see helpers): Quranic recitation,
+    // not the UI language, decides the model.
+    rec.lang = TEST_SPEECH_LOCALE;
     rec.continuous = true;
     rec.interimResults = true;
+    // [P5] Ask for N-best hypotheses; vendors that do not honour
+    // this simply return one alternative and pickFinalTranscript
+    // degrades to the top hypothesis. Guarded: never throw here.
+    try { rec.maxAlternatives = 3; } catch {}
     rec.onresult = (e: any) => {
+      // [P4] Stale-recognizer guard: a late final from a previous
+      // session (e.g. after stop() + ayah change) must never land
+      // in the new ayah's transcript.
+      if (recRef.current !== rec) return;
+      noteRecResult();
+      // A transient network note clears on the next good result.
+      setMicError('');
       let interimText = '';
+      let sawFinal = false;
+      const expectedNorms = expectedWordList(liveRef.current.ayah?.ayah_text || '').map((w) => w.norm);
       for (let i = e.resultIndex; i < e.results.length; i++) {
         // isFinal lives on the RESULT, not its first alternative —
         // reading it off the alternative made every final look
@@ -942,8 +1194,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         // follow-the-imam). Check both for quirk engines.
         const res = e.results[i];
         const r = res[0];
+        if (!r) continue;
         if (res.isFinal || r.isFinal) {
-          liveRef.current.finals = `${liveRef.current.finals} ${r.transcript}`.trim();
+          sawFinal = true;
+          // [P5] Narrow alternative-rescue (see helpers).
+          const chosen = pickFinalTranscript(res, expectedNorms);
+          liveRef.current.finals = `${liveRef.current.finals} ${chosen}`.trim();
           setTranscript(liveRef.current.finals);
           // Spoken enough words to cover the ayah? Judge at once.
           const expectedLen = expectedWordList(liveRef.current.ayah?.ayah_text || '').length;
@@ -956,13 +1212,47 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           interimText += `${r.transcript} `;
         }
       }
-      if (interimText.trim()) setInterim(interimText.trim());
+      // [P2] Interim bookkeeping: a fresh interim replaces the old
+      // one; a final-only event clears it (that interim just
+      // finalized — leaving it displayed would double-show it
+      // next to the finals). An event with neither leaves the
+      // still-pending interim untouched (the engine only reports
+      // changed results from resultIndex onward).
+      if (interimText.trim()) {
+        lastInterimRef.current = interimText.trim();
+        setInterim(interimText.trim());
+      } else if (sawFinal) {
+        lastInterimRef.current = '';
+        setInterim('');
+      }
     };
     rec.onerror = (e: any) => {
-      if (e.error === 'not-allowed') {
+      // [P3] Error taxonomy — transient errors must NOT stop the
+      // session. 'no-speech' (silence) and 'aborted' end a session
+      // that onend restarts; 'network' likewise retries itself.
+      // Stopping on them (the old behaviour) dead-ended the test
+      // and forced a re-tap that wiped the ayah's finals.
+      // The spec guarantees an end event whenever a session ends,
+      // so the onend restart below is the retry path.
+      if (recRef.current !== rec) return;
+      const code = e && e.error;
+      if (code === 'no-speech' || code === 'aborted') return;
+      if (code === 'network') {
+        setMicError('الاستماع المباشر محتاج إنترنت — بيحاول تاني لوحده');
+        return;
+      }
+      if (code === 'language-not-supported' && !(rec as any).__triedLocaleFallback) {
+        (rec as any).__triedLocaleFallback = true;
+        try { rec.lang = otherArabicLocale(rec.lang); rec.start(); return; } catch {}
+      }
+      if (code === 'not-allowed') {
         setMicError('الميكروفون مقفول — اسمح بيه من إعدادات المتصفح، أو قيّم يدوي بدل كده');
-      } else if (e.error === 'network') {
-        setMicError('الاستماع المباشر محتاج إنترنت — أو قيّم يدوي بدل كده');
+      } else if (code === 'audio-capture') {
+        setMicError('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط الميكروفون تاني');
+      } else if (code === 'service-not-allowed') {
+        setMicError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب متصفح تاني أو قيّم يدوي بدل كده');
+      } else if (code === 'language-not-supported') {
+        setMicError('الاستماع المباشر مش بيدعم العربية على الجهاز ده — قيّم يدوي بدل كده');
       } else {
         setMicError('تعذر الاستماع — جرّب تاني أو قيّم يدوي بدل كده');
       }
@@ -972,19 +1262,44 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setMicState('idle');
     };
     rec.onend = () => {
-      // Browsers pause recognition after silence; resume while the
-      // user is still mid-ayah, unless they stopped or were graded.
-      if (!userStopRef.current && (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting')) {
-        try {
-          rec.start();
-        } catch {
-          setMicError('الاستماع وقف — اضغط الميكروفون تاني');
-          liveRef.current.micState = 'idle';
-          setMicState('idle');
-        }
+      // [P1/P4] Browsers pause recognition after silence; resume
+      // while the user is still mid-ayah, unless they stopped or
+      // were graded. The identity check blocks a stale session
+      // from restarting after a newer one began (or after stop).
+      if (recRef.current !== rec || userStopRef.current) return;
+      if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
+      // [P1] Rescue the orphaned interim: it will never finalize
+      // now, and dropping it loses the last spoken words.
+      const orphan = takePendingInterim();
+      if (orphan) {
+        liveRef.current.finals = `${liveRef.current.finals} ${orphan}`.trim();
+        setTranscript(liveRef.current.finals);
+        const expectedLen = expectedWordList(liveRef.current.ayah?.ayah_text || '').length;
+        if (spokenTokens(liveRef.current.finals).length >= expectedLen) evaluateNow();
+        // Grading stopped the session; do not restart into it.
+        if (recRef.current !== rec || userStopRef.current) return;
+        if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
+      }
+      // [P4] Budgeted restart: a dead mic used to loop forever.
+      if (!recRestartAllowed()) {
+        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
+        stopRec();
+        liveRef.current.micState = 'idle';
+        setMicState('idle');
+        return;
+      }
+      try {
+        rec.start();
+      } catch (err: any) {
+        // Already running (double onend): not an error, stay live.
+        if (err && err.name === 'InvalidStateError') return;
+        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
+        liveRef.current.micState = 'idle';
+        setMicState('idle');
       }
     };
     recRef.current = rec;
+    resetRecRestartBudget();
     try {
       rec.start();
     } catch {
@@ -1007,15 +1322,55 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // or fixed by repeating a prompt). Re-running the aligner from
   // scratch after an out-of-order repetition could otherwise
   // un-credit a word he already said right.
-  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number } => {
+  // The single raw alignment shared by updateContProgress,
+  // contOwedWords (interrupt + stall) and gradeContinuousNow within
+  // one transcript state. Callers that run back-to-back on unchanged
+  // finals (the normal case: update, then interrupt check, then
+  // stall re-arm, all inside one onresult) now hit the cache instead
+  // of re-tokenizing + re-aligning. Incremental tokenization: finals
+  // only ever grows by appending " " + a final transcript, and
+  // tokenization is local to each whitespace-delimited word
+  // (normalizeArabic's replacements never span a space — the only
+  // cross-word rule is a lookahead that treats a following space and
+  // end-of-string identically), so the old tokens are a prefix of the
+  // new tokens. Any shape that is not a clean append falls back to
+  // a full tokenize, and any cache-key change falls back to a full
+  // alignment — so the raw result is always exactly the baseline's.
+  const contRawAlignment = (): { matched: boolean[]; extras: string[] } => {
     const expected = liveRef.current.contExpected;
-    const spoken = spokenTokens(liveRef.current.contFinals);
+    const finals = liveRef.current.contFinals;
     const strict = liveRef.current.contStrict;
+    const cached = contAlignCacheRef.current;
+    if (cached && cached.expected === expected && cached.finals === finals && cached.strict === strict) {
+      return cached;
+    }
+    let spoken: string[];
+    if (
+      cached && cached.expected === expected &&
+      finals.length > cached.finals.length &&
+      finals.startsWith(cached.finals) &&
+      (cached.finals === '' || finals[cached.finals.length] === ' ')
+    ) {
+      spoken = cached.spoken.concat(spokenTokens(finals.slice(cached.finals.length)));
+    } else {
+      spoken = spokenTokens(finals);
+    }
+    let normsEntry = contExpectedNormsRef.current;
+    if (!normsEntry || normsEntry.expected !== expected) {
+      normsEntry = { expected, norms: expected.map((w) => w.norm) };
+      contExpectedNormsRef.current = normsEntry;
+    }
     const result = strict
-      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
-      : { ...alignWords(expected.map((w) => w.norm), spoken) };
-    const matched = result.matched.map((m, i) => m || contCreditedRef.current.has(i));
-    result.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
+      ? alignWordsStrict(normsEntry.norms, spoken)
+      : { ...alignWords(normsEntry.norms, spoken), extras: [] as string[] };
+    const entry = { expected, finals, strict, spoken, matched: result.matched, extras: result.extras };
+    contAlignCacheRef.current = entry;
+    return entry;
+  };
+  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number } => {
+    const raw = contRawAlignment();
+    const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i));
+    raw.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
     let lastMatchedIdx = -1;
     matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
     return { matched, lastMatchedIdx };
@@ -1116,7 +1471,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const playTtsFallback = () => {
       try {
         if ('speechSynthesis' in window) {
-          const u = new SpeechSynthesisUtterance(words.join(' '));
+          const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
           u.lang = 'ar-SA';
           u.rate = CORR_RATE_VALUE[liveRef.current.corrRate];
           u.onend = resumeAfterPrompt;
@@ -1227,11 +1582,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Returns true when every ayah was fully covered.
   const gradeContinuousNow = (): boolean => {
     const expected = liveRef.current.contExpected;
-    const spoken = spokenTokens(liveRef.current.contFinals);
-    const strict = liveRef.current.contStrict;
-    const result = strict
-      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
-      : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
+    const raw = contRawAlignment();
     const { matched } = contEffectiveMatched();
     const ayahCount = expected.length ? expected[expected.length - 1].ayahIdx + 1 : 0;
     const gradesArr = new Array(ayahCount).fill(true);
@@ -1251,12 +1602,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setExtraByAyah({});
     // A repeated fix word is not an "extra": he said it because the
     // app asked him to, so it must not appear in the extras note.
-    setContExtras(result.extras.filter((e) => !contFixedNormsRef.current.has(e)));
+    setContExtras(raw.extras.filter((e) => !contFixedNormsRef.current.has(e)));
     finishTest(gradesArr);
     return gradesArr.every(Boolean);
   };
 
   const finishContinuousPressed = () => {
+    // [P8] Same orphaned-interim rescue as the ayah "done" tap.
+    const pendingInterim = takePendingInterim();
+    if (pendingInterim) {
+      liveRef.current.contFinals = `${liveRef.current.contFinals} ${pendingInterim}`.trim();
+      setTranscript(liveRef.current.contFinals);
+    }
     if (spokenTokens(liveRef.current.contFinals).length === 0) {
       setMicError('لسه ما سمعت حاجة — سمّع النطاق الأول وبعدين اضغط "أنهيت التسميع"');
       return;
@@ -1280,18 +1637,32 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setTranscript(liveRef.current.contFinals);
     setInterim('');
     userStopRef.current = false;
+    lastInterimRef.current = '';
     const rec = new SR();
-    rec.lang = currentSpeechLocale();
+    // [P7] Fixed test locale (see helpers).
+    rec.lang = TEST_SPEECH_LOCALE;
     rec.continuous = true;
     rec.interimResults = true;
+    // [P5] N-best hypotheses (degrades to top hypothesis if ignored).
+    try { rec.maxAlternatives = 3; } catch {}
     rec.onresult = (e: any) => {
+      // [P4] Stale-recognizer guard (see ayah path).
+      if (recRef.current !== rec) return;
+      noteRecResult();
+      setMicError('');
       let interimText = '';
+      let sawFinal = false;
+      const expectedNorms = liveRef.current.contExpected.map((w) => w.norm);
       for (let i = e.resultIndex; i < e.results.length; i++) {
         // Same isFinal fix as the ayah path: it lives on the result.
         const res = e.results[i];
         const r = res[0];
+        if (!r) continue;
         if (res.isFinal || r.isFinal) {
-          liveRef.current.contFinals = `${liveRef.current.contFinals} ${r.transcript}`.trim();
+          sawFinal = true;
+          // [P5] Narrow alternative-rescue (see helpers).
+          const chosen = pickFinalTranscript(res, expectedNorms);
+          liveRef.current.contFinals = `${liveRef.current.contFinals} ${chosen}`.trim();
           setTranscript(liveRef.current.contFinals);
           checkContFix();
           const { allMatched } = updateContProgress();
@@ -1309,34 +1680,84 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           interimText += `${r.transcript} `;
         }
       }
-      if (interimText.trim()) setInterim(interimText.trim());
+      // [P2] Interim bookkeeping (see ayah path).
+      if (interimText.trim()) {
+        lastInterimRef.current = interimText.trim();
+        setInterim(interimText.trim());
+      } else if (sawFinal) {
+        lastInterimRef.current = '';
+        setInterim('');
+      }
       // Every result — final or interim — rearms the 3s stall
       // prompt, so only true silence triggers a correction.
       scheduleContStallPrompt();
     };
     rec.onerror = (e: any) => {
-      if (e.error === 'not-allowed') {
+      // [P3] Same taxonomy as the ayah path: transient errors do
+      // not stop the session; the onend restart is the retry, and
+      // the accumulated continuous transcript survives it.
+      if (recRef.current !== rec) return;
+      const code = e && e.error;
+      if (code === 'no-speech' || code === 'aborted') return;
+      if (code === 'network') {
+        setMicError('الاستماع المباشر محتاج إنترنت — بيحاول تاني لوحده');
+        return;
+      }
+      if (code === 'language-not-supported' && !(rec as any).__triedLocaleFallback) {
+        (rec as any).__triedLocaleFallback = true;
+        try { rec.lang = otherArabicLocale(rec.lang); rec.start(); return; } catch {}
+      }
+      if (code === 'not-allowed') {
         setMicError('الميكروفون مقفول — اسمح بيه من إعدادات المتصفح');
-      } else if (e.error === 'network') {
-        setMicError('الاستماع المباشر محتاج إنترنت');
+      } else if (code === 'audio-capture') {
+        setMicError('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط الميكروفون تاني');
+      } else if (code === 'service-not-allowed') {
+        setMicError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب متصفح تاني');
+      } else if (code === 'language-not-supported') {
+        setMicError('الاستماع المباشر مش بيدعم العربية على الجهاز ده');
       } else {
         setMicError('تعذر الاستماع — جرّب تاني');
       }
       stopContinuousMic();
     };
     rec.onend = () => {
-      // Browsers pause recognition after silence; resume while the
-      // user is still mid-range, unless they stopped or finished.
-      if (!userStopRef.current && liveRef.current.contListening) {
-        try {
-          rec.start();
-        } catch {
-          setMicError('الاستماع وقف — اضغط الميكروفون تاني');
+      // [P1/P4] Same restart discipline as the ayah path: rescue
+      // the orphaned interim, re-grade if it completes the range,
+      // then restart under budget — never for a stale session.
+      if (recRef.current !== rec || userStopRef.current) return;
+      if (!liveRef.current.contListening) return;
+      const orphan = takePendingInterim();
+      if (orphan) {
+        liveRef.current.contFinals = `${liveRef.current.contFinals} ${orphan}`.trim();
+        setTranscript(liveRef.current.contFinals);
+        checkContFix();
+        const { allMatched } = updateContProgress();
+        if (allMatched) {
           stopContinuousMic();
+          playCorrectChime();
+          gradeContinuousNow();
+          return;
         }
+        // Parity with the live-result path: rescued words can
+        // confirm a passed-over miss, which interrupts at once.
+        checkContMissInterrupt();
+        if (recRef.current !== rec || userStopRef.current || !liveRef.current.contListening) return;
+      }
+      if (!recRestartAllowed()) {
+        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
+        stopContinuousMic();
+        return;
+      }
+      try {
+        rec.start();
+      } catch (err: any) {
+        if (err && err.name === 'InvalidStateError') return;
+        setMicError('الاستماع وقف — اضغط الميكروفون تاني');
+        stopContinuousMic();
       }
     };
     recRef.current = rec;
+    resetRecRestartBudget();
     try {
       rec.start();
     } catch {
