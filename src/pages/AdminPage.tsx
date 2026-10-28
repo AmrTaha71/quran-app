@@ -9,7 +9,7 @@ import { SURAHS } from '../lib/surahs';
 import {
   BookOpen, LogOut, Search, Bookmark, Settings, Trash2,
   ChevronRight, ChevronLeft, Download, Filter, X,
-  Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Heart, Loader2, Mic,
+  Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic,
 } from 'lucide-react';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
@@ -36,6 +36,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [stats, setStats] = useState({ withLinks: 0, withoutLinks: 0 });
   // OpenAI balance monitor (estimated from app-side usage logging).
   const [usage, setUsage] = useState<{ total: number; calls: number; byFn: Record<string, { calls: number; cost: number }> } | null>(null);
+  // User-account counts (2026-10-28, Amr's request): served by the
+  // admin-only get_user_stats RPC, so the browser never touches
+  // auth.users directly.
+  const [userStats, setUserStats] = useState<{ total: number; confirmed: number; signed_in: number; new_30d: number } | null>(null);
+  const [userStatsError, setUserStatsError] = useState('');
   const [startingBalance, setStartingBalance] = useState(5);
   const [balanceDraft, setBalanceDraft] = useState('5');
   const [editingBalance, setEditingBalance] = useState(false);
@@ -219,6 +224,17 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   useEffect(() => { fetchVerses(); }, [fetchVerses]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => { fetchPendingLinks(); }, [fetchPendingLinks]);
+
+  const fetchUserStats = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_user_stats');
+    if (error || !data || data.length === 0) {
+      setUserStatsError('تعذّر تحميل عدد المستخدمين');
+      return;
+    }
+    setUserStats(data[0] as { total: number; confirmed: number; signed_in: number; new_30d: number });
+    setUserStatsError('');
+  }, []);
+  useEffect(() => { fetchUserStats(); }, [fetchUserStats]);
   useEffect(() => { fetchStats(); }, [fetchStats, verses]);
 
   useEffect(() => {
@@ -441,6 +457,35 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           </div>
           <StatCard label="آيات لها رابط" value={stats.withLinks} color="emerald" icon={<Bookmark className="w-5 h-5" />} />
           <StatCard label="آيات بدون روابط" value={stats.withoutLinks} color="red" icon={<X className="w-5 h-5" />} />
+        </div>
+
+        {/* User accounts — so the admins can rejoice in the good they
+            provide (2026-10-28). Counted by the admin-only
+            get_user_stats RPC; the button refreshes the count. */}
+        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-6 mb-4 shadow-lg relative overflow-hidden">
+          <div className="absolute -top-6 -left-6 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
+          <div className="flex flex-wrap items-center gap-6 relative">
+            <div className="flex items-center justify-center w-16 h-16 bg-white/15 rounded-2xl shrink-0">
+              <Users className="w-8 h-8 text-white" />
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <p className="text-sm text-amber-100 font-semibold mb-1">عدد حسابات المستخدمين</p>
+              {userStats ? (
+                <>
+                  <p className="text-4xl font-bold text-white">{userStats.total.toLocaleString('ar-EG')} حساب</p>
+                  <p className="text-xs text-amber-100 mt-1">منهم دخلوا فعلًا: {userStats.signed_in.toLocaleString('ar-EG')} • حسابات جديدة آخر ٣٠ يوم: {userStats.new_30d.toLocaleString('ar-EG')}</p>
+                </>
+              ) : userStatsError ? (
+                <p className="text-sm font-bold text-white">{userStatsError}</p>
+              ) : (
+                <p className="text-sm text-amber-100">جارٍ التحميل…</p>
+              )}
+            </div>
+            <button onClick={fetchUserStats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-white/15 hover:bg-white/25 rounded-lg transition-smooth">
+              <RefreshCw className="w-3.5 h-3.5" /> تحديث
+            </button>
+            <p className="text-sm font-bold text-white bg-white/15 rounded-xl px-3 py-2">تقبّل الله منكم، ونتشارك الأجر كلنا</p>
+          </div>
         </div>
 
         {/* OpenAI balance monitor — estimated from app-side usage logging */}
