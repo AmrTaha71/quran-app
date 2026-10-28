@@ -430,6 +430,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const contPromptAudioRef = useRef<HTMLAudioElement | null>(null);
   const contPrefetchRef = useRef<{ key: string; url: string | null } | null>(null);
   const contPromptedKeyRef = useRef('');
+  // Teacher state (2026-10-28): expected indices already credited
+  // (matched once, or fixed by repeating a prompted word — credit is
+  // monotonic, so a later re-alignment never un-credits a word he
+  // already said right), the norms of fixed words (excluded from
+  // strict extras), and the words from the last prompt that he is
+  // expected to say back after the resume.
+  const contCreditedRef = useRef<Set<number>>(new Set());
+  const contFixedNormsRef = useRef<Set<string>>(new Set());
+  const contAwaitingRef = useRef<{ indices: number[]; norms: string[]; baseLen: number } | null>(null);
   const [contPrompting, setContPrompting] = useState(false);
   const [contLastPrompt, setContLastPrompt] = useState<string[]>([]);
   const stopCorrAudio = () => {
@@ -437,6 +446,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     corrAudioRef.current = null;
   };
   const fetchCorrectionAudio = async (words: string[], token: number): Promise<string | null> => {
+    if (words.length === 0) return null;
+    const url = await requestCorrectionAudio(words);
+    if (token !== corrFetchTokenRef.current) return null;
+    return url;
+  };
+  // Raw gendered-voice generation (no token): used by the prefetch
+  // path above and by mid-flow interrupts, where the correction
+  // cannot be prefetched (the miss is only known when it happens).
+  const requestCorrectionAudio = async (words: string[]): Promise<string | null> => {
     if (words.length === 0) return null;
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
@@ -446,7 +464,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.audioUrl) return null;
-      if (token !== corrFetchTokenRef.current) return null;
       return data.audioUrl;
     } catch { return null; }
   };
@@ -614,6 +631,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         setContExtras([]);
         setContProgress({ matched: 0, total: expected.length, ayahIdx: 0 });
         setContListening(false);
+        // Teacher state is per-test: a new range starts with a clean
+        // slate (no carried-over credits, prompts, or expectations).
+        contCreditedRef.current = new Set();
+        contFixedNormsRef.current = new Set();
+        contAwaitingRef.current = null;
+        contPromptedKeyRef.current = '';
+        contPrefetchRef.current = null;
+        setContLastPrompt([]);
         setTranscript('');
         setInterim('');
         setMicError('');
@@ -958,12 +983,29 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // words; the report at the end lists missed words per ayah (and,
   // on strict levels, the extra spoken words as one global note —
   // extras cannot be reliably attributed to a single ayah mid-flow).
-  const updateContProgress = (spoken: string[]) => {
+  // Continuous alignment with monotonic credit: the fresh greedy
+  // alignment is OR-ed with every index ever credited (matched once,
+  // or fixed by repeating a prompt). Re-running the aligner from
+  // scratch after an out-of-order repetition could otherwise
+  // un-credit a word he already said right.
+  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number } => {
     const expected = liveRef.current.contExpected;
-    const { matched } = alignWords(expected.map((w) => w.norm), spoken);
-    let matchedCount = 0;
+    const spoken = spokenTokens(liveRef.current.contFinals);
+    const strict = liveRef.current.contStrict;
+    const result = strict
+      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
+      : { ...alignWords(expected.map((w) => w.norm), spoken) };
+    const matched = result.matched.map((m, i) => m || contCreditedRef.current.has(i));
+    result.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
     let lastMatchedIdx = -1;
-    matched.forEach((m, i) => { if (m) { matchedCount++; lastMatchedIdx = i; } });
+    matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
+    return { matched, lastMatchedIdx };
+  };
+  const updateContProgress = () => {
+    const expected = liveRef.current.contExpected;
+    const { matched, lastMatchedIdx } = contEffectiveMatched();
+    let matchedCount = 0;
+    matched.forEach((m) => { if (m) matchedCount++; });
     const ayahIdx = lastMatchedIdx >= 0 ? expected[lastMatchedIdx].ayahIdx : 0;
     setContProgress({ matched: matchedCount, total: expected.length, ayahIdx });
     return { matched, allMatched: matched.every(Boolean) };
@@ -984,26 +1026,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // recognizer heard its own correction it would falsely match it
   // as the user's recitation. Resume is guarded so a user stop or
   // finish during the prompt never restarts listening.
-  const contOwedWords = (): string[] => {
+  const contOwedWords = (): { words: string[]; indices: number[]; norms: string[]; isMiss: boolean } => {
     const expected = liveRef.current.contExpected;
-    if (expected.length === 0) return [];
-    const spoken = spokenTokens(liveRef.current.contFinals);
-    const strict = liveRef.current.contStrict;
-    const result = strict
-      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
-      : { ...alignWords(expected.map((w) => w.norm), spoken) };
-    let lastMatchedIdx = -1;
-    result.matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
+    const empty = { words: [] as string[], indices: [] as number[], norms: [] as string[], isMiss: false };
+    if (expected.length === 0) return empty;
+    const { matched, lastMatchedIdx } = contEffectiveMatched();
     let firstMissIdx = -1;
     for (let i = 0; i < lastMatchedIdx; i++) {
-      if (!result.matched[i]) { firstMissIdx = i; break; }
+      if (!matched[i]) { firstMissIdx = i; break; }
     }
     if (firstMissIdx >= 0) {
       const ayahIdx = expected[firstMissIdx].ayahIdx;
-      return expected.filter((w, i) => i < lastMatchedIdx && !result.matched[i] && w.ayahIdx === ayahIdx).map((w) => w.orig);
+      const indices: number[] = [];
+      expected.forEach((w, i) => {
+        if (i < lastMatchedIdx && !matched[i] && w.ayahIdx === ayahIdx) indices.push(i);
+      });
+      return {
+        words: indices.map((i) => expected[i].orig),
+        indices,
+        norms: indices.map((i) => expected[i].norm),
+        isMiss: true,
+      };
     }
-    if (lastMatchedIdx + 1 < expected.length) return [expected[lastMatchedIdx + 1].orig];
-    return [];
+    if (lastMatchedIdx + 1 < expected.length) {
+      const i = lastMatchedIdx + 1;
+      return { words: [expected[i].orig], indices: [i], norms: [expected[i].norm], isMiss: false };
+    }
+    return empty;
   };
   const cancelContPrompt = () => {
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
@@ -1012,8 +1061,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     cancelCorrectionSpeech();
     contPromptingRef.current = false;
     setContPrompting(false);
+    contAwaitingRef.current = null;
   };
-  const speakContPrompt = (words: string[]) => {
+  const speakContPrompt = (words: string[], fixIdx?: number[], fixNorms?: string[]) => {
     if (words.length === 0 || contPromptingRef.current) return;
     const key = words.join('|');
     contPromptedKeyRef.current = key;
@@ -1025,6 +1075,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     recRef.current = null;
     liveRef.current.contListening = false;
     setContListening(false);
+    // These words are expected back from him right after the
+    // resume: saying them credits the fix (see checkContFix). A
+    // replay passes no fix args and leaves the expectation alone.
+    if (fixIdx && fixIdx.length > 0) {
+      contAwaitingRef.current = {
+        indices: fixIdx,
+        norms: fixNorms ?? [],
+        baseLen: spokenTokens(liveRef.current.contFinals).length,
+      };
+    }
     const resumeAfterPrompt = () => {
       try { contPromptAudioRef.current?.pause(); } catch {}
       contPromptAudioRef.current = null;
@@ -1046,15 +1106,32 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         } else resumeAfterPrompt();
       } catch { resumeAfterPrompt(); }
     };
-    const url = contPrefetchRef.current?.key === key ? contPrefetchRef.current.url : null;
-    cancelCorrectionSpeech();
-    if (url) {
+    const playUrl = (url: string) => {
       const a = new Audio(url);
       contPromptAudioRef.current = a;
       a.onended = resumeAfterPrompt;
       a.onerror = resumeAfterPrompt;
       a.play().catch(playTtsFallback);
-    } else playTtsFallback();
+    };
+    const url = contPrefetchRef.current?.key === key ? contPrefetchRef.current.url : null;
+    cancelCorrectionSpeech();
+    if (url) {
+      playUrl(url);
+    } else {
+      // No prefetched audio (a mid-flow interrupt cannot be
+      // prefetched — the miss is only known when it happens):
+      // generate the human-sounding voice now (~1-2s for a few
+      // words) while the "correcting" indicator shows. Browser TTS
+      // is only the failure fallback, never the default, because
+      // the user asked for a human-sounding voice, not a robotic one.
+      void requestCorrectionAudio(words).then((genUrl) => {
+        if (!contPromptingRef.current) return;
+        if (genUrl) {
+          contPrefetchRef.current = { key, url: genUrl };
+          playUrl(genUrl);
+        } else playTtsFallback();
+      });
+    }
   };
   // After every continuous result, (re)arm the 3s stall prompt. Any
   // new result — final or interim — resets the clock, so a slow but
@@ -1066,12 +1143,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!liveRef.current.contListening || contPromptingRef.current) return;
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
     const owed = contOwedWords();
-    if (owed.length === 0) return;
-    const key = owed.join('|');
+    if (owed.words.length === 0) return;
+    const key = owed.words.join('|');
     if (key !== contPrefetchRef.current?.key) {
       const token = ++corrFetchTokenRef.current;
       contPrefetchRef.current = { key, url: null };
-      void fetchCorrectionAudio(owed, token).then((url) => {
+      void fetchCorrectionAudio(owed.words, token).then((url) => {
         if (url && token === corrFetchTokenRef.current && contPrefetchRef.current?.key === key) {
           contPrefetchRef.current.url = url;
         }
@@ -1081,10 +1158,50 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       contStallTimerRef.current = null;
       if (!liveRef.current.contListening || contPromptingRef.current) return;
       const now = contOwedWords();
-      if (now.length === 0) return;
-      if (now.join('|') === contPromptedKeyRef.current) return;
-      speakContPrompt(now);
+      if (now.words.length === 0) return;
+      if (now.words.join('|') === contPromptedKeyRef.current) return;
+      speakContPrompt(now.words, now.indices, now.norms);
     }, 3000);
+  };
+  // Did he say back the prompted words after the resume? The fresh
+  // tokens since the prompt must contain them in order. A bounded
+  // window (first 20 fresh tokens): if he moved on without saying
+  // them, they stay missed — the teacher does not wait forever,
+  // and the replay button still offers them on demand.
+  const checkContFix = () => {
+    const aw = contAwaitingRef.current;
+    if (!aw) return;
+    const tokens = spokenTokens(liveRef.current.contFinals);
+    const fresh = tokens.slice(aw.baseLen);
+    if (fresh.length > 20) { contAwaitingRef.current = null; return; }
+    let p = 0;
+    for (let t = 0; t < fresh.length && p < aw.norms.length; t++) {
+      if (fresh[t] === aw.norms[p]) p++;
+    }
+    if (p === aw.norms.length) {
+      aw.indices.forEach((i) => contCreditedRef.current.add(i));
+      aw.norms.forEach((n) => contFixedNormsRef.current.add(n));
+      contAwaitingRef.current = null;
+    }
+  };
+  // Mid-flow miss interrupt (2026-10-28, the user's words): as soon
+  // as a passed-over miss is CONFIRMED — a later word matched, so
+  // he demonstrably moved past it — stop him at once and correct
+  // him, even if he never pauses. One correction at a time (while
+  // a fix is awaited, new misses wait for the next stall prompt),
+  // and a miss corrected once is never re-interrupted.
+  const checkContMissInterrupt = () => {
+    if (!liveRef.current.contListening || contPromptingRef.current) return;
+    if (contAwaitingRef.current) return;
+    const owed = contOwedWords();
+    // Only a confirmed passed-over miss interrupts mid-flow. The
+    // "next word" case is not a mistake — it is the stall prompt's
+    // job, after 3s of silence.
+    if (!owed.isMiss || owed.words.length === 0) return;
+    const key = owed.words.join('|');
+    if (key === contPromptedKeyRef.current) return;
+    if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
+    speakContPrompt(owed.words, owed.indices, owed.norms);
   };
 
   // Grade the whole range from the accumulated continuous transcript.
@@ -1096,11 +1213,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const result = strict
       ? alignWordsStrict(expected.map((w) => w.norm), spoken)
       : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
+    const { matched } = contEffectiveMatched();
     const ayahCount = expected.length ? expected[expected.length - 1].ayahIdx + 1 : 0;
     const gradesArr = new Array(ayahCount).fill(true);
     const missedByAyah: Record<number, string[]> = {};
     expected.forEach((w, i) => {
-      if (!result.matched[i]) {
+      if (!matched[i]) {
         gradesArr[w.ayahIdx] = false;
         (missedByAyah[w.ayahIdx] ||= []).push(w.orig);
       }
@@ -1112,7 +1230,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setSkipped(noSkips);
     setWrongByAyah(missedByAyah);
     setExtraByAyah({});
-    setContExtras(result.extras);
+    // A repeated fix word is not an "extra": he said it because the
+    // app asked him to, so it must not appear in the extras note.
+    setContExtras(result.extras.filter((e) => !contFixedNormsRef.current.has(e)));
     finishTest(gradesArr);
     return gradesArr.every(Boolean);
   };
@@ -1154,12 +1274,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (res.isFinal || r.isFinal) {
           liveRef.current.contFinals = `${liveRef.current.contFinals} ${r.transcript}`.trim();
           setTranscript(liveRef.current.contFinals);
-          const { allMatched } = updateContProgress(spokenTokens(liveRef.current.contFinals));
+          checkContFix();
+          const { allMatched } = updateContProgress();
           if (allMatched) {
             // Range fully recited: finish on its own, with a chime.
             stopContinuousMic();
             playCorrectChime();
             gradeContinuousNow();
+          } else {
+            // Mid-flow correction: a confirmed miss stops him at
+            // once, even if he never pauses (see checkContMissInterrupt).
+            checkContMissInterrupt();
           }
         } else {
           interimText += `${r.transcript} `;
@@ -1339,7 +1464,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-accent-500 mt-2 leading-relaxed">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
-                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو وقفت ٣ ثواني وعندك كلمة ناقصة، البرنامج ينطقها لك بصوت رجالي أو نسائي حسب حسابك وتكمّل. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
+                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ٣ ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p>
                 {!micSupported && (
                   <p className="text-sm text-amber-700 mt-1">الوضع المتصل يحتاج ميكروفون — جهازك مش بيدعمه، فالاختيار ده مقفول.</p>
