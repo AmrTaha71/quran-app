@@ -7,6 +7,7 @@ import { LINK_TYPES } from '../lib/types';
 import { SURAHS } from '../lib/surahs';
 import { useLang, speechLocale } from '../lib/LanguageContext';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
+import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { LANGUAGES } from '../lib/translations';
 import {
   BookOpen, Search, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -39,40 +40,18 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const [showFilters, setShowFilters] = useState(true);
   const [verseLinks, setVerseLinks] = useState<Record<number, AyahLink[]>>({});
   const [showLinksFor, setShowLinksFor] = useState<number | null>(null);
-  // Link audio voice: follows the user's registered gender by default
-  // (female → Rana's original recording, male → dignified male synthetic),
-  // and the user can switch between the two choices at any time; the
-  // choice persists.
+  // Link audio voice (2026-10-28 policy): the user's registered
+  // gender decides — male users always hear the generated male
+  // voice, female users hear the original or the generated female
+  // voice. There is no manual voice switch anymore; gender is set
+  // in Settings. Unknown gender → female side (historical default).
   const [profileGender, setProfileGender] = useState<'male' | 'female' | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [preferredName, setPreferredName] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameError, setNameError] = useState('');
-  const [voicePref, setVoicePref] = useState<'male' | 'female' | null>(() => {
-    const saved = localStorage.getItem('quran-link-voice');
-    return saved === 'male' || saved === 'female' ? saved : null;
-  });
-  const effectiveVoice: 'male' | 'female' = voicePref ?? profileGender ?? 'female';
-  const setLinkVoice = (v: 'male' | 'female') => {
-    setVoicePref(v);
-    localStorage.setItem('quran-link-voice', v);
-  };
-  // Resolve which audio a link plays for a voice choice, labeled by the
-  // choice names: female plays Rana's original voice, male plays the
-  // dignified human-sounding male synthetic; either falls back to
-  // whatever audio the link has, labeled by what it actually is.
-  const resolveLinkAudio = (link: AyahLink, voice: 'male' | 'female'): { url: string; label: string } | null => {
-    if (voice === 'female') {
-      if (link.audio_url) return { url: link.audio_url, label: 'صوت نسائي' };
-      if (link.synthetic_audio_url) return { url: link.synthetic_audio_url, label: link.voice_type === 'male' ? 'صوت رجالي' : 'صوت نسائي' };
-      return null;
-    }
-    if (link.synthetic_audio_url && link.voice_type === 'male') return { url: link.synthetic_audio_url, label: 'صوت رجالي' };
-    if (link.synthetic_audio_url) return { url: link.synthetic_audio_url, label: 'صوت نسائي' };
-    if (link.audio_url) return { url: link.audio_url, label: 'صوت نسائي' };
-    return null;
-  };
+  const linkGender = getStoredLinkGender(profileGender);
   const [longPressVerse, setLongPressVerse] = useState<QuranVerse | null>(null);
   const [longPressLink, setLongPressLink] = useState<{ verse: QuranVerse; link: AyahLink } | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -714,18 +693,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     {/* Links display */}
                     {showLinksFor === verse.id && links.length > 0 && (
                       <div className="mt-4 space-y-2 animate-slide-up">
-                        <div className="flex items-center gap-2 flex-wrap bg-white rounded-lg px-3 py-2 border border-gray-100">
-                          <span className="text-xs font-semibold text-accent-500">اسمع بـ:</span>
-                          <button onClick={() => setLinkVoice('female')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-smooth ${effectiveVoice === 'female' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-accent-600 hover:bg-gray-100'}`}>
-                            صوت نسائي
-                          </button>
-                          <button onClick={() => setLinkVoice('male')}
-                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-smooth ${effectiveVoice === 'male' ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-accent-600 hover:bg-gray-100'}`}>
-                            صوت رجالي
-                          </button>
-                          <span className="text-[11px] text-accent-400">الافتراضي حسب حسابك، وتقدر تغيّره في أي وقت</span>
-                        </div>
                         {links.map((link) => (
                           <div
                             key={link.id}
@@ -745,7 +712,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                               )}
                               <p className="text-accent-600 leading-relaxed text-base">{link.link_content}</p>
                               {(() => {
-                                const audio = resolveLinkAudio(link, effectiveVoice);
+                                const audio = resolveLinkAudio(link, linkGender);
                                 if (!audio) return null;
                                 return (
                                   <button onClick={() => new Audio(audio.url).play()}

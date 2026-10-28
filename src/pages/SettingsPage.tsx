@@ -43,12 +43,30 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     readStored('quran-reciter', DEFAULT_RECITER_ID, (raw) =>
       RECITERS.some((r) => r.id === raw) ? raw : null)
   );
-  const [voicePref, setVoicePref] = useState<'male' | 'female' | null>(() => {
+  // Link-voice gender (2026-10-28 policy): the user's gender decides
+  // which link voice plays — male users always hear the generated
+  // male voice, female users hear the original or the generated
+  // female voice. Saved to the profile (so it follows the account)
+  // and mirrored in localStorage for fast reads elsewhere.
+  const [linkGender, setLinkGender] = useState<'male' | 'female' | null>(() => {
     try {
-      const saved = localStorage.getItem('quran-link-voice');
+      const saved = localStorage.getItem('quran-user-gender');
       return saved === 'male' || saved === 'female' ? saved : null;
     } catch { return null; }
   });
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data.session?.user?.id;
+      if (!uid) return;
+      supabase.from('user_profiles').select('gender').eq('user_id', uid).maybeSingle()
+        .then(({ data: row }) => {
+          if (row?.gender === 'male' || row?.gender === 'female') {
+            setLinkGender(row.gender);
+            try { localStorage.setItem('quran-user-gender', row.gender); } catch {}
+          }
+        });
+    });
+  }, []);
   const [savedTick, setSavedTick] = useState(false);
   const [previewFailed, setPreviewFailed] = useState(false);
   // Mushaf pages on the device (one-tap full download, Hafidz
@@ -186,9 +204,14 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { localStorage.setItem('quran-reciter', id); } catch {}
     saved();
   };
-  const pickVoice = (v: 'male' | 'female') => {
-    setVoicePref(v);
-    try { localStorage.setItem('quran-link-voice', v); } catch {}
+  const pickGender = async (v: 'male' | 'female') => {
+    setLinkGender(v);
+    try { localStorage.setItem('quran-user-gender', v); } catch {}
+    try {
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user?.id;
+      if (uid) await supabase.from('user_profiles').update({ gender: v }).eq('user_id', uid);
+    } catch {}
     saved();
   };
   // Daily wird configuration: the FIRST section in Settings. The
@@ -212,12 +235,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setEditionIdx(0);
     setGoldFrame(false);
     setReciterId(DEFAULT_RECITER_ID);
-    setVoicePref(null);
+    setLinkGender(null);
     try {
       localStorage.setItem('quran-mushaf-edition', '0');
       localStorage.setItem('quran-gold-frame', '0');
       localStorage.setItem('quran-reciter', DEFAULT_RECITER_ID);
       localStorage.removeItem('quran-link-voice');
+      localStorage.removeItem('quran-user-gender');
     } catch {}
     setLang('ar-EG');
     saved();
@@ -506,7 +530,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Volume2 className="w-5 h-5 text-emerald-600" /> التلاوة والصوت
           </h2>
-          <p className="text-sm text-accent-500 mb-4">القارئ الافتراضي لتلاوة الآيات، وصوت روابط الآيات.</p>
+          <p className="text-sm text-accent-500 mb-4">القارئ الافتراضي لتلاوة الآيات.</p>
           <p className="text-sm font-semibold text-accent-700 mb-2">القارئ الافتراضي</p>
           <div className="flex flex-wrap gap-2 mb-5">
             {RECITERS.map((r) => (
@@ -516,18 +540,19 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             ))}
           </div>
-          <p className="text-sm font-semibold text-accent-700 mb-2">صوت الروابط الافتراضي</p>
+          <p className="text-sm font-semibold text-accent-700 mb-2">الجنس — يحدد صوت روابط الآيات</p>
+          <p className="text-xs text-accent-400 mb-3">للرجال: الصوت الرجالي المولّد دائماً. للنساء: الصوت النسائي.</p>
           <div className="flex gap-2">
-            <button onClick={() => pickVoice('female')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${voicePref === 'female' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
-              صوت نسائي
+            <button onClick={() => pickGender('female')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'female' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
+              امرأة
             </button>
-            <button onClick={() => pickVoice('male')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${voicePref === 'male' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
-              صوت رجالي
+            <button onClick={() => pickGender('male')}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'male' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-gray-200 hover:bg-gray-100'}`}>
+              رجل
             </button>
           </div>
-          {!voicePref && <p className="text-xs text-accent-400 mt-2">لم تختر بعد — التطبيق يستخدم الصوت الافتراضي حسب الجنس المسجل.</p>}
+          {!linkGender && <p className="text-xs text-accent-400 mt-2">لم تختر بعد — التطبيق يستخدم الصوت النسائي حتى تختار.</p>}
         </section>
 
         {/* Language */}

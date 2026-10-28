@@ -439,6 +439,9 @@ export default function LinkModal({
       audio_url: audioPublicUrl,
       synthetic_audio_url: syntheticAudioUrl,
       voice_type: syntheticAudioUrl ? voiceType : null,
+      // Gendered slot (2026-10-28) + legacy mirror, same as AdminPage.
+      synthetic_audio_url_female: syntheticAudioUrl && voiceType === 'female' ? syntheticAudioUrl : null,
+      synthetic_audio_url_male: syntheticAudioUrl && voiceType === 'male' ? syntheticAudioUrl : null,
       original_transcript: originalTranscript || null,
       status: 'pending',
       rephrase_command: rephraseCommand || null,

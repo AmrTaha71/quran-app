@@ -37,9 +37,11 @@ async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey:
   const ttsVoice = voice === "female" ? "nova" : "onyx";
   // gpt-4o-mini-tts first: far more natural prosody than tts-1-hd, and it
   // accepts style instructions. Falls back to tts-1-hd if it ever fails.
+  // Both voices must sound EXTREMELY human (2026-10-28): a real
+  // person in the room, not a reader — breathing, warmth, feeling.
   const instructions = voice === "female"
-    ? "A warm, gentle female voice, like a kind Quran teacher: natural pace, clear Arabic pronunciation, soft pauses between phrases, calm and reverent tone, human and expressive, never robotic."
-    : "A dignified, warm male voice, like a respected Quran teacher speaking to a student face to face: unhurried and natural, with real pauses between phrases, as if breathing between sentences; clear Arabic pronunciation, calm and reverent tone, gentle variation in pace, human and conversational, never rushed, never monotone, never like a news announcer or a robot.";
+    ? "An extremely human, warm, gentle female voice, like a kind Quran teacher sitting right beside you: natural pace, clear Arabic pronunciation, soft pauses and real breathing between phrases, calm and reverent tone, alive and expressive with genuine warmth and feeling in every phrase — never flat, never rushed, never robotic, never like an announcement."
+    : "An extremely human, dignified, warm male voice, like a respected Quran teacher speaking to a student face to face: unhurried and natural, with real pauses and breathing between phrases, clear Arabic pronunciation, calm and reverent tone, gentle variation in pace and emotion, alive and conversational with genuine human warmth — never rushed, never monotone, never like a news announcer or a robot.";
   // Male delivery was reported slow: 1.15 keeps it dignified without
   // dragging. Female stays 1.0 (no complaint). Cost is per character,
   // so speed changes nothing on billing.

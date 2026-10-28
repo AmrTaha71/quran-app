@@ -23,6 +23,12 @@ export interface AyahLink {
   audio_url: string | null;
   synthetic_audio_url: string | null;
   voice_type: 'male' | 'female' | null;
+  // Gendered synthetics (2026-10-28): one slot per gender, so
+  // generating the male voice never clobbers the female one.
+  // Legacy synthetic_audio_url + voice_type still hold the single
+  // synthetic written before these columns existed.
+  synthetic_audio_url_female: string | null;
+  synthetic_audio_url_male: string | null;
   original_transcript: string | null;
   status: LinkStatus;
   rephrase_command: string | null;

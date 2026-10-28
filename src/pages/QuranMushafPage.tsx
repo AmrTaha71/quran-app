@@ -13,6 +13,7 @@ import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTA
 import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
+import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
 import {
@@ -371,6 +372,17 @@ export default function QuranMushafPage({
     if (!session) return;
     supabase.from('user_profiles').select('gender').eq('user_id', session.user.id).maybeSingle()
       .then(({ data }) => { if (data?.gender === 'female' || data?.gender === 'male') setSuggestGender(data.gender); });
+  }, [session]);
+  // Link-voice gender (2026-10-28 policy): male users always hear
+  // the generated male voice, female users hear the original or the
+  // generated female voice. Same profile source as suggestGender;
+  // localStorage mirror ('quran-user-gender', written by Settings)
+  // covers the moment before the profile loads.
+  const [linkGender, setLinkGender] = useState<'male' | 'female'>(() => getStoredLinkGender(null));
+  useEffect(() => {
+    if (!session) return;
+    supabase.from('user_profiles').select('gender').eq('user_id', session.user.id).maybeSingle()
+      .then(({ data }) => { if (data?.gender === 'female' || data?.gender === 'male') setLinkGender(data.gender); });
   }, [session]);
   useEffect(() => { setSuggestOpen(false); setSuggestSent(false); setSuggestError(''); }, [selectedVerse?.id]);
   const submitSuggestion = async () => {
@@ -2506,24 +2518,23 @@ export default function QuranMushafPage({
                                     </span>
                                     {link.link_title && <p className="text-sm font-bold text-accent-700 mb-1">{link.link_title}</p>}
                                     <p className="text-base text-accent-600 leading-relaxed">{link.link_content}</p>
-                                    {/* Primary female voice = the original
-                                        recording; a generated voice is only
-                                        the additional fallback (same rule as
-                                        لوحتي's resolveLinkAudio). */}
-                                    <div className="flex gap-2 mt-2">
-                                      {(link.audio_url || link.synthetic_audio_url) && (
-                                        <button onClick={(e) => { e.stopPropagation(); playAudio(link.audio_url ?? link.synthetic_audio_url!); }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
-                                          <Volume2 className="w-4 h-4" /> {link.audio_url ? 'صوت نسائي' : link.voice_type === 'male' ? 'صوت رجالي' : 'صوت نسائي'}
-                                        </button>
-                                      )}
-                                      {link.audio_url && link.synthetic_audio_url && (
-                                        <button onClick={(e) => { e.stopPropagation(); playAudio(link.synthetic_audio_url!); }}
-                                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
-                                          <Volume2 className="w-4 h-4" /> صوت مولّد ({link.voice_type === 'male' ? 'رجالي' : 'نسائي'})
-                                        </button>
-                                      )}
-                                    </div>
+                                    {/* One voice button, resolved by the
+                                        2026-10-28 policy: male users always
+                                        hear the generated male voice,
+                                        female users hear the original or
+                                        the generated female voice. */}
+                                    {(() => {
+                                      const ra = resolveLinkAudio(link, linkGender);
+                                      if (!ra) return null;
+                                      return (
+                                        <div className="flex gap-2 mt-2">
+                                          <button onClick={(e) => { e.stopPropagation(); playAudio(ra.url); }}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                                            <Volume2 className="w-4 h-4" /> {ra.label}
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 ))}
                               </div>
@@ -2891,7 +2902,7 @@ export default function QuranMushafPage({
                       RetryPageImg above). Key remounts per page, so
                       attempts reset on every turn. */}
                   <RetryPageImg key={`${edition.id}-${displayedPage}`} src={edition.imageUrl(displayedPage)} alt={`صفحة ${displayedPage}`}
-                    className={`${fullscreenNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
+                    className={`${fullscreenNorm ? 'absolute touch-none max-w-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
                     style={fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%`, animation: slideAnim } : { animation: slideAnim }}
                     onLoad={(e) => {
                       const im = e.currentTarget;
@@ -3227,23 +3238,21 @@ export default function QuranMushafPage({
                               </span>
                               {link.link_title && <p className="text-base font-bold text-accent-700 mb-1">{link.link_title}</p>}
                               <p className="text-base text-accent-600 leading-relaxed">{link.link_content}</p>
-                              {/* Primary female voice = the original
-                                  recording; a generated voice is only the
-                                  additional fallback (same rule as لوحتي). */}
-                              <div className="flex gap-2 mt-2">
-                                {(link.audio_url || link.synthetic_audio_url) && (
-                                  <button onClick={() => playAudio(link.audio_url ?? link.synthetic_audio_url!)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
-                                    <Volume2 className="w-4 h-4" /> {link.audio_url ? 'صوت نسائي' : link.voice_type === 'male' ? 'صوت رجالي' : 'صوت نسائي'}
-                                  </button>
-                                )}
-                                {link.audio_url && link.synthetic_audio_url && (
-                                  <button onClick={() => playAudio(link.synthetic_audio_url!)}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg">
-                                    <Volume2 className="w-4 h-4" /> صوت مولّد ({link.voice_type === 'male' ? 'رجالي' : 'نسائي'})
-                                  </button>
-                                )}
-                              </div>
+                              {/* One voice button, resolved by the
+                                  2026-10-28 policy (see the normal-view
+                                  block above). */}
+                              {(() => {
+                                const ra = resolveLinkAudio(link, linkGender);
+                                if (!ra) return null;
+                                return (
+                                  <div className="flex gap-2 mt-2">
+                                    <button onClick={() => playAudio(ra.url)}
+                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg">
+                                      <Volume2 className="w-4 h-4" /> {ra.label}
+                                    </button>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           ))}
                         </div>

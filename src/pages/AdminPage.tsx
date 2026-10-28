@@ -328,7 +328,16 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       if (!res.ok) throw new Error('فشل');
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      await supabase.from('ayah_links').update({ synthetic_audio_url: data.audioUrl, voice_type: voice }).eq('id', link.id);
+      // Gendered slot (2026-10-28): generating one gender must never
+      // clobber the other. Legacy synthetic_audio_url + voice_type are
+      // mirrored so clients on the previous build still find a voice.
+      await supabase.from('ayah_links').update({
+        synthetic_audio_url: data.audioUrl,
+        voice_type: voice,
+        ...(voice === 'female'
+          ? { synthetic_audio_url_female: data.audioUrl }
+          : { synthetic_audio_url_male: data.audioUrl }),
+      }).eq('id', link.id);
       fetchPendingLinks();
     } catch {
       alert('تعذر توليد الصوت المخلّق');
@@ -781,12 +790,26 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
 
                       <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 mt-2">
                         <p className="text-xs font-semibold text-blue-700 mb-2">الصوت المخلّق للمستخدم</p>
-                        {link.synthetic_audio_url ? (
-                          <div className="flex items-center gap-2 mb-2">
-                            <button onClick={() => new Audio(link.synthetic_audio_url!).play()}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
-                              <Volume2 className="w-3.5 h-3.5" /> تشغيل ({link.voice_type === 'female' ? 'نسائي' : 'رجالي'})
-                            </button>
+                        {(link.synthetic_audio_url_female || link.synthetic_audio_url_male || link.synthetic_audio_url) ? (
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            {link.synthetic_audio_url_female && (
+                              <button onClick={() => new Audio(link.synthetic_audio_url_female!).play()}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
+                                <Volume2 className="w-3.5 h-3.5" /> تشغيل (نسائي)
+                              </button>
+                            )}
+                            {link.synthetic_audio_url_male && (
+                              <button onClick={() => new Audio(link.synthetic_audio_url_male!).play()}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
+                                <Volume2 className="w-3.5 h-3.5" /> تشغيل (رجالي)
+                              </button>
+                            )}
+                            {!link.synthetic_audio_url_female && !link.synthetic_audio_url_male && link.synthetic_audio_url && (
+                              <button onClick={() => new Audio(link.synthetic_audio_url!).play()}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg">
+                                <Volume2 className="w-3.5 h-3.5" /> تشغيل ({link.voice_type === 'female' ? 'نسائي' : 'رجالي'})
+                              </button>
+                            )}
                             <span className="text-[11px] text-blue-500">جاهز للنشر</span>
                           </div>
                         ) : (
@@ -796,12 +819,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <button onClick={() => generateVoiceForLink(link, 'male')} disabled={generatingVoiceId === link.id}
                             className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-50 disabled:opacity-50">
                             {generatingVoiceId === link.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <User className="w-3 h-3" />}
-                            {link.synthetic_audio_url && link.voice_type === 'male' ? 'إعادة' : 'صوت رجالي'}
+                            {link.synthetic_audio_url_male ? 'إعادة' : 'صوت رجالي'}
                           </button>
                           <button onClick={() => generateVoiceForLink(link, 'female')} disabled={generatingVoiceId === link.id}
                             className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-pink-200 text-pink-700 text-xs font-semibold rounded-lg hover:bg-pink-50 disabled:opacity-50">
                             {generatingVoiceId === link.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Heart className="w-3 h-3" />}
-                            {link.synthetic_audio_url && link.voice_type === 'female' ? 'إعادة' : 'صوت نسائي'}
+                            {link.synthetic_audio_url_female ? 'إعادة' : 'صوت نسائي'}
                           </button>
                         </div>
                       </div>
