@@ -1244,6 +1244,30 @@ export default function QuranMushafPage({
   // longer matches must abort instead of starting a stale loop.
   const followStartingRef = useRef(false);
   const followStartGenRef = useRef(0);
+  // E3 (mic-permission wait, 2026-10-28): explicit "waiting for the
+  // browser's mic permission" state. The live engine's rec.start()
+  // returns synchronously while Safari's permission prompt is still
+  // pending/queued, and until now the lobby claimed "listening" during
+  // that whole window — so a slow or queued prompt looked exactly like
+  // a frozen app, and repeated taps were silently swallowed by the
+  // starting/listening guards. The flag below is set synchronously at
+  // tap time and cleared ONLY by a permission decision: the first
+  // engine result (grant proven), any engine error (denied or engine
+  // ran), a grant/denial on the Whisper path, or a terminal stop.
+  // It is NEVER cleared by a timer or a retry: while it is set, no
+  // auto-restart may fire (see onend + the transient-safety guard).
+  // followMicWaitStartedAt is rendered in the lobby so the next device
+  // test can tell which side was slow: if the waiting line persists,
+  // Safari never showed the prompt; if it flips to the terminal
+  // message, the engine ended before any decision.
+  const [followMicWaiting, setFollowMicWaiting] = useState(false);
+  const [followMicWaitStartedAt, setFollowMicWaitStartedAt] = useState<number | null>(null);
+  const followMicWaitingRef = useRef(false);
+  const setFollowMicWaitingState = useCallback((waiting: boolean, startedAt: number | null = null) => {
+    followMicWaitingRef.current = waiting;
+    setFollowMicWaiting(waiting);
+    setFollowMicWaitStartedAt(waiting ? startedAt : null);
+  }, []);
   const followPosRef = useRef<TrackedPosition | null>(null);
   // MERGED auto-lock: there is NO confirmation card, NO pending lock,
   // and NO tracking after a lock. The single lock callback is
@@ -1362,6 +1386,9 @@ export default function QuranMushafPage({
   const stopFollowEngines = useCallback(() => {
     followListeningRef.current = false;
     followStartingRef.current = false;
+    // Ref only (no setState: this runs from the unmount cleanup too).
+    // The state half is cleared by stopFollow / stopLiveWithPrompt.
+    followMicWaitingRef.current = false;
     // S4: a pending safety restart must not fire after the engines
     // are dead (it would resurrect listening on a stopped session).
     if (followTransientSafetyRef.current) { clearTimeout(followTransientSafetyRef.current); followTransientSafetyRef.current = null; }
@@ -1433,6 +1460,8 @@ export default function QuranMushafPage({
     followJumpGenRef.current += 1;
     setFollowHeard('');
     setFollowError(null);
+    // E3: a fresh lobby never inherits a stale permission-wait display.
+    setFollowMicWaitingState(false);
     setFollowIndexLoading(false);
     setFollowChunkPhase('idle');
     setFollowChunkCount(0);
@@ -1449,7 +1478,7 @@ export default function QuranMushafPage({
     // the screen sleep on them. WakeLock.request needs no user gesture
     // (unlike getUserMedia), so this is safe from the route effect.
     ensureWakeLockTracking();
-  }, [ensureWakeLockTracking]);
+  }, [ensureWakeLockTracking, setFollowMicWaitingState]);
 
   const stopFollow = useCallback(() => {
     // Full teardown already bumps both generations (stale-start
@@ -1457,6 +1486,8 @@ export default function QuranMushafPage({
     // must abort instead of resurrecting listening after this stop),
     // clears the heard buffer, and releases the wake lock.
     teardownFollowResources();
+    // E3: إيقاف is the user's escape from a stuck permission wait.
+    setFollowMicWaitingState(false);
     setFollowOn(false);
     // Back to the START branch, not the listening branch: on the follow
     // route the lobby stays visible after a stop, and showing "listening"
@@ -1484,7 +1515,7 @@ export default function QuranMushafPage({
     setFollowStatus('listening');
     followStatusRef.current = 'listening';
     setFollowEngine(null);
-  }, [teardownFollowResources]);
+  }, [teardownFollowResources, setFollowMicWaitingState]);
 
   // MERGED auto-fullscreen + highlight: this is the ONLY page-open used
   // by a follow lock, and it is the SAME fullscreen branch a manual open
@@ -1886,6 +1917,13 @@ export default function QuranMushafPage({
     // stale-start checks below work on both paths.
     const startGen = followStartGenRef.current;
     followStartingRef.current = true;
+    // E3: ONE serialized permission attempt. This is set synchronously
+    // in the tap, before either engine starts, so the lobby shows
+    // "waiting for permission" (not "listening") from the first instant.
+    // A second tap while it is set is still blocked by the guards above
+    // — and now the start buttons are also disabled in the lobby, so
+    // the block is visible instead of a silent no-op.
+    setFollowMicWaitingState(true, Date.now());
     // Locale captured at tap time from the same source the language
     // provider uses (localStorage 'app-lang'): ar-EG -> ar-EG, anything
     // else -> ar-SA. A language change mid-session does NOT retune a
@@ -1926,6 +1964,11 @@ export default function QuranMushafPage({
       // Stops the live session with an honest prompt and returns the
       // user to the start branch (never a silent dead "listening").
       const stopLiveWithPrompt = (message: string) => {
+        // E3: every terminal live stop also ends the permission wait —
+        // a denied prompt, a dead engine, and the pre-decision onend
+        // below all land here, so no terminal state can strand the
+        // waiting display. Retry is by explicit re-tap only.
+        setFollowMicWaitingState(false);
         if (followTransientSafetyRef.current) { clearTimeout(followTransientSafetyRef.current); followTransientSafetyRef.current = null; }
         try { rec.stop(); } catch {}
         recognitionRef.current = null;
@@ -1946,6 +1989,11 @@ export default function QuranMushafPage({
           followTransientSafetyRef.current = null;
           if (!followListeningRef.current || followAutoLockedRef.current) return;
           if (recognitionRef.current !== rec) return;
+          // E3: NEVER restart while permission is undecided. This timer
+          // only arms on errors (which clear the wait), so this guard
+          // is belt-and-braces — but it is what guarantees "exactly one
+          // start attempt while pending" even if an error path changes.
+          if (followMicWaitingRef.current) return;
           try { rec.start(); } catch (err: any) {
             if (err && err.name === 'InvalidStateError') return;
             stopLiveWithPrompt('توقف الاستماع المباشر — اضغط «ابدأ الاستماع» من جديد');
@@ -1956,6 +2004,11 @@ export default function QuranMushafPage({
         // Post-lock/post-stop queued results neither deliver finals
         // (also guarded in onFollowFinal) nor update interim UI.
         if (!followListeningRef.current || followAutoLockedRef.current) return;
+        // E3: the first result — interim or final — proves Safari
+        // granted the mic, so the permission wait ends here. From now
+        // on the normal listening display (and the budgeted onend
+        // restart) apply.
+        if (followMicWaitingRef.current) setFollowMicWaitingState(false);
         // Any result resets the dead-mic restart budget (speech heard
         // = mic alive).
         liveRestartCountRef.current = 0;
@@ -1991,6 +2044,12 @@ export default function QuranMushafPage({
       };
       rec.onerror = (e: any) => {
         if (!followListeningRef.current || followAutoLockedRef.current) return;
+        // E3: ANY engine error is a permission decision (denied, or the
+        // engine ran, which implies granted) — the wait ends here even
+        // for transient errors, whose existing handling below is
+        // untouched. The 'not-allowed' branch then stops honestly via
+        // stopLiveWithPrompt with the existing denied wording.
+        if (followMicWaitingRef.current) setFollowMicWaitingState(false);
         // S4 taxonomy port (self-test P3 shape, lock semantics
         // untouched): transient errors are named, not swallowed.
         // 'no-speech' (imam silent) and 'aborted' are transient: the
@@ -2032,6 +2091,21 @@ export default function QuranMushafPage({
         // this IS the restart path the timer backstops.
         if (followTransientSafetyRef.current) { clearTimeout(followTransientSafetyRef.current); followTransientSafetyRef.current = null; }
         if (!followListeningRef.current || followAutoLockedRef.current) return;
+        // E3: the engine ended before ANY result or error while the
+        // permission wait is still set — i.e. the engine never ran.
+        // Do NOT auto-restart here: a restart while permission is
+        // undecided would re-prompt (or re-queue a prompt) behind the
+        // user's back and is exactly the loop the freeze complaint
+        // points at. Stop honestly instead; retry is one explicit tap.
+        // Wording is deliberately cause-neutral ("before any result")
+        // rather than claiming a permission cause: a bare pre-decision
+        // onend is also consistent with an engine-side early end, and
+        // the waiting-state + timestamp in the lobby is what lets the
+        // next device test tell those two apart.
+        if (followMicWaitingRef.current) {
+          stopLiveWithPrompt('انتهى الاستماع قبل وصول أي نتيجة — اضغط «ابدأ الاستماع» من جديد');
+          return;
+        }
         const now = Date.now();
         if (now - liveRestartWindowRef.current > LIVE_RESTART_WINDOW_MS) {
           liveRestartWindowRef.current = now;
@@ -2086,6 +2160,9 @@ export default function QuranMushafPage({
           recognitionRef.current = null;
           followListeningRef.current = false;
           followStartingRef.current = false;
+          // E3: an index failure after a granted-but-silent start is
+          // terminal too — it must not strand the waiting display.
+          setFollowMicWaitingState(false);
           setFollowReady(true);
           setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
         } finally {
@@ -2096,11 +2173,17 @@ export default function QuranMushafPage({
       // Live start threw synchronously: fall through to Whisper below
       // (same tap). The engine label is overwritten by the Whisper
       // branch; the starting guard stays set until Whisper resolves.
+      // E3: the permission wait stays set across this fallthrough —
+      // the Whisper getUserMedia prompt is now the pending decision,
+      // and the lobby must keep saying "waiting", not flip to a ready
+      // state that invites a second tap.
     }
     // Whisper path (Safari, and any browser without SpeechRecognition):
     // mic FIRST, inside the tap gesture.
     setFollowEngine('whisper');
     if (!window.MediaRecorder) {
+      // E3 (UI state only): no prompt will ever appear — end the wait.
+      setFollowMicWaitingState(false);
       followStartingRef.current = false;
       setFollowError('هذا المتصفح لا يدعم التسجيل — اكتب الكلمات يدوياً بالأسفل');
       setFollowReady(true);
@@ -2111,6 +2194,8 @@ export default function QuranMushafPage({
     // a TypeError, which the old generic catch misreported as a
     // permission refusal. Say what is actually missing instead.
     if (!navigator.mediaDevices?.getUserMedia) {
+      // E3 (UI state only): no prompt will ever appear — end the wait.
+      setFollowMicWaitingState(false);
       followStartingRef.current = false;
       setFollowError('الجهاز/المتصفح ده مش بيسمح بالوصول للميكروفون من هنا — افتح الرابط في المتصفح نفسه، أو اكتب الكلمات يدوياً بالأسفل');
       setFollowReady(true);
@@ -2120,6 +2205,9 @@ export default function QuranMushafPage({
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
+      // E3 (UI state only): getUserMedia denied — decision made, the
+      // existing honest denied wording below is the terminal state.
+      setFollowMicWaitingState(false);
       followStartingRef.current = false;
       setFollowError(micErrorMessage(err));
       setFollowReady(true);
@@ -2133,6 +2221,9 @@ export default function QuranMushafPage({
       // so a newer session's stream is never touched.
       stream.getTracks().forEach((t) => t.stop());
       if (followStreamRef.current === stream) followStreamRef.current = null;
+      // E3 (UI state only): stale grant — never resurrects listening,
+      // and must not strand the waiting display either.
+      setFollowMicWaitingState(false);
       followStartingRef.current = false;
       return;
     }
@@ -2140,10 +2231,16 @@ export default function QuranMushafPage({
     if (!uid) {
       stream.getTracks().forEach((t) => t.stop());
       followStreamRef.current = null;
+      // E3 (UI state only): terminal without listening — end the wait.
+      setFollowMicWaitingState(false);
       followStartingRef.current = false;
       setFollowError('الاستماع عبر الخادم يحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
       return;
     }
+    // E3 (UI state only): getUserMedia resolved — the mic decision is
+    // made (granted). Listening starts below; the wait is over even
+    // though the verse index still has to load.
+    setFollowMicWaitingState(false);
     followListeningRef.current = true;
     followStartingRef.current = false;
     setFollowReady(false);
@@ -2160,6 +2257,8 @@ export default function QuranMushafPage({
       followListeningRef.current = false;
       stream.getTracks().forEach((t) => t.stop());
       followStreamRef.current = null;
+      // E3 (UI state only): terminal index failure — end the wait.
+      setFollowMicWaitingState(false);
       setFollowReady(true);
       setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
       setFollowIndexLoading(false);
@@ -2175,7 +2274,7 @@ export default function QuranMushafPage({
       return;
     }
     void runWhisperLoop();
-  }, [runWhisperLoop, ensureWakeLockTracking, session]);
+  }, [runWhisperLoop, ensureWakeLockTracking, session, setFollowMicWaitingState]);
 
   // Manual ابحث (merged decision 5): typed input is NOT governed by
   // the 5-word trigger gate (it is not an engine transcript), and it
@@ -3076,16 +3175,23 @@ export default function QuranMushafPage({
                         or status bar. Entering first is harmless on a
                         fresh entry (it only resets an empty state). */}
                     <button onClick={() => { enterFollowMode(); startFollowListening(); }}
-                      disabled={followIndexLoading}
+                      disabled={followIndexLoading || followMicWaiting}
                       className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
                     <button onClick={() => { enterFollowMode(); startFollowListening(true); }}
-                      disabled={followIndexLoading}
+                      disabled={followIndexLoading || followMicWaiting}
                       className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
+                    {/* E3: Whisper-path permission wait renders in the ready
+                        branch (followReady is still true until the grant
+                        lands). No إيقاف button lives here, so no stop
+                        instruction — the wait ends on grant/denial, and
+                        the start buttons above are disabled meanwhile so
+                        a tap cannot silently stack a second attempt. */}
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">بانتظار إذن الميكروفون من المتصفح…{followMicWaitStartedAt ? ` (بدأت المحاولة الساعة ${new Date(followMicWaitStartedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })})` : ''}</p>}
                     <p className="text-xs text-emerald-200 mt-4">لو الميكروفون مش شغال — بديل يدوي (اختياري):</p>
                     <div className="flex gap-2 mt-2">
                       <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
@@ -3098,7 +3204,11 @@ export default function QuranMushafPage({
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-bold mt-4">جارٍ الاستماع للإمام...</p>
+                    {/* E3: while permission is undecided the header must
+                        NOT claim "listening" — that mislabel is what made
+                        a queued Safari prompt look like a frozen app. */}
+                    <p className="text-sm font-bold mt-4">{followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام...'}</p>
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">المتصفح لسه مطلعش نافذة الإذن — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد{followMicWaitStartedAt ? ` (بدأت المحاولة الساعة ${new Date(followMicWaitStartedAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })})` : ''}</p>}
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
@@ -3507,7 +3617,7 @@ export default function QuranMushafPage({
                     <span className="truncate">
                       {followStatus === 'locked' && followPos
                         ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
-                        : 'جارٍ الاستماع للإمام…'}
+                        : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
                     <button onClick={stopFollow} title="إيقاف المتابعة"
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>

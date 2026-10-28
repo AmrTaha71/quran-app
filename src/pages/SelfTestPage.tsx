@@ -335,8 +335,11 @@ function muqattaatMatchAt(expected: string[], i: number, spoken: string[], j: nu
   return null;
 }
 
-function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean } {
+function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[] } {
   const matched = new Array(expected.length).fill(false);
+  // E2: spoken index each expected word matched at (-1 if unmatched).
+  // Recording only — the match decisions below are untouched.
+  const positions = new Array(expected.length).fill(-1);
   let j = 0;
   let i = 0;
   while (i < expected.length) {
@@ -344,7 +347,7 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
     for (let k = j; k < spoken.length; k++) {
       if (spoken[k] === expected[i]) { found = k; break; }
     }
-    if (found >= 0) { matched[i] = true; j = found + 1; i++; continue; }
+    if (found >= 0) { matched[i] = true; positions[i] = found; j = found + 1; i++; continue; }
     let joined = -1;
     let joinedCount = 2;
     // Prefix prefilter (coordinator amendment, semantics-preserving):
@@ -384,9 +387,9 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
             !(joinBlocked && muqattaatIsLetterPiece(spoken[k]) && muqattaatIsLetterPiece(spoken[k + 1]) && muqattaatIsLetterPiece(spoken[k + 2]) && muqattaatIsLetterPiece(spoken[k + 3]))) { joined = k; joinedCount = 4; break; }
       }
     }
-    if (joined >= 0) { matched[i] = true; j = joined + joinedCount; i++; continue; }
+    if (joined >= 0) { matched[i] = true; positions[i] = joined; j = joined + joinedCount; i++; continue; }
     const muq = muqattaatMatchAt(expected, i, spoken, j);
-    if (muq) { matched[i] = true; j = muq.start + muq.count; i++; continue; }
+    if (muq) { matched[i] = true; positions[i] = muq.start; j = muq.start + muq.count; i++; continue; }
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
       const forms = assimilatedPairForms(expected[i], expected[i + 1]);
@@ -394,11 +397,11 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
       for (let k = j; k < spoken.length; k++) {
         if (spoken[k] === pair || forms.includes(spoken[k])) { foundPair = k; break; }
       }
-      if (foundPair >= 0) { matched[i] = true; matched[i + 1] = true; j = foundPair + 1; i += 2; continue; }
+      if (foundPair >= 0) { matched[i] = true; matched[i + 1] = true; positions[i] = foundPair; positions[i + 1] = foundPair; j = foundPair + 1; i += 2; continue; }
     }
     i++;
   }
-  return { matched, allMatched: matched.every(Boolean) };
+  return { matched, allMatched: matched.every(Boolean), positions };
 }
 
 // Strict alignment (intermediate/advanced levels): the same greedy
@@ -407,8 +410,9 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
 // start) are collected as extras instead of being silently ignored.
 // Joined-word merges consume their spoken tokens, so they are never
 // extras. A strict pass needs allMatched AND zero extras.
-function alignWordsStrict(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; extras: string[] } {
+function alignWordsStrict(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; extras: string[]; positions: number[] } {
   const matched = new Array(expected.length).fill(false);
+  const positions = new Array(expected.length).fill(-1);
   const extras: string[] = [];
   let j = 0;
   let i = 0;
@@ -421,7 +425,7 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
     for (let k = j; k < spoken.length; k++) {
       if (spoken[k] === expected[i]) { found = k; break; }
     }
-    if (found >= 0) { consumeThrough(found, 1); matched[i] = true; i++; continue; }
+    if (found >= 0) { consumeThrough(found, 1); matched[i] = true; positions[i] = found; i++; continue; }
     let joined = -1;
     let joinedCount = 2;
     // Prefix prefilter (coordinator amendment, semantics-preserving):
@@ -452,9 +456,9 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
             !(joinBlocked && muqattaatIsLetterPiece(spoken[k]) && muqattaatIsLetterPiece(spoken[k + 1]) && muqattaatIsLetterPiece(spoken[k + 2]) && muqattaatIsLetterPiece(spoken[k + 3]))) { joined = k; joinedCount = 4; break; }
       }
     }
-    if (joined >= 0) { consumeThrough(joined, joinedCount); matched[i] = true; i++; continue; }
+    if (joined >= 0) { consumeThrough(joined, joinedCount); matched[i] = true; positions[i] = joined; i++; continue; }
     const muq = muqattaatMatchAt(expected, i, spoken, j);
-    if (muq) { consumeThrough(muq.start, muq.count); matched[i] = true; i++; continue; }
+    if (muq) { consumeThrough(muq.start, muq.count); matched[i] = true; positions[i] = muq.start; i++; continue; }
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
       const forms = assimilatedPairForms(expected[i], expected[i + 1]);
@@ -462,13 +466,13 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
       for (let k = j; k < spoken.length; k++) {
         if (spoken[k] === pair || forms.includes(spoken[k])) { foundPair = k; break; }
       }
-      if (foundPair >= 0) { consumeThrough(foundPair, 1); matched[i] = true; matched[i + 1] = true; i += 2; continue; }
+      if (foundPair >= 0) { consumeThrough(foundPair, 1); matched[i] = true; matched[i + 1] = true; positions[i] = foundPair; positions[i + 1] = foundPair; i += 2; continue; }
     }
     i++;
   }
   // Trailing spoken words after the last match are extras too.
   for (let t = j; t < spoken.length; t++) extras.push(spoken[t]);
-  return { matched, allMatched: matched.every(Boolean), extras };
+  return { matched, allMatched: matched.every(Boolean), extras, positions };
 }
 
 // ---- Sounds (WebAudio, no files) -------------------------------------
@@ -685,6 +689,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // contHeardWords feed the done diagnostic line. Cleared on every
   // new test start (startTestGlobal) and on "تسميع جديد".
   const [contZeroMatch, setContZeroMatch] = useState(false);
+  // E1 full-transcript diagnostic (done screen only): the capped line
+  // (head 120 + tail 180 chars) made the 2026-10-28 device screenshot
+  // undecodable in the middle, and a mixed Arabic+digit line under
+  // dir=rtl leaves the true token order ambiguous (is "لام ميم 1000"
+  // the transcript order, or a display-order artifact?). The done
+  // screen therefore offers the FULL untruncated text plus a numbered
+  // token list (number = logical order, so no reader can mistake the
+  // order whatever the display direction). Listening cards keep the
+  // capped line unchanged. Cleared on every new test start and on
+  // "تسميع جديد", like contZeroMatch.
+  const [showFullHeard, setShowFullHeard] = useState(false);
   const [contMatchedWords, setContMatchedWords] = useState(0);
   const [contHeardWords, setContHeardWords] = useState(0);
   const [transcript, setTranscript] = useState('');
@@ -801,6 +816,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     spoken: string[];
     matched: boolean[];
     extras: string[];
+    positions: number[];
   } | null>(null);
   // Cached expected norms: contExpected is built once per test, so
   // mapping it to norms on every alignment call was pure allocation.
@@ -1012,6 +1028,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // D1: a new test starts with a clean honesty state (a previous
     // no-match panel must never leak into the next run's done screen).
     setContZeroMatch(false);
+    setShowFullHeard(false);
     setContMatchedWords(0);
     setContHeardWords(0);
     // Capture the mode up front: the setup chips stay tappable while
@@ -1844,7 +1861,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // new tokens. Any shape that is not a clean append falls back to
   // a full tokenize, and any cache-key change falls back to a full
   // alignment — so the raw result is always exactly the baseline's.
-  const contRawAlignment = (): { matched: boolean[]; extras: string[] } => {
+  const contRawAlignment = (): { matched: boolean[]; extras: string[]; positions: number[]; spoken: string[] } => {
     const expected = liveRef.current.contExpected;
     const finals = liveRef.current.contFinals;
     const strict = liveRef.current.contStrict;
@@ -1871,17 +1888,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const result = strict
       ? alignWordsStrict(normsEntry.norms, spoken)
       : { ...alignWords(normsEntry.norms, spoken), extras: [] as string[] };
-    const entry = { expected, finals, strict, spoken, matched: result.matched, extras: result.extras };
+    const entry = { expected, finals, strict, spoken, matched: result.matched, extras: result.extras, positions: result.positions };
     contAlignCacheRef.current = entry;
     return entry;
   };
-  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number } => {
+  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number; positions: number[] } => {
     const raw = contRawAlignment();
     const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i));
     raw.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
     let lastMatchedIdx = -1;
     matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
-    return { matched, lastMatchedIdx };
+    return { matched, lastMatchedIdx, positions: raw.positions };
   };
   const updateContProgress = () => {
     const expected = liveRef.current.contExpected;
@@ -2055,6 +2072,86 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       return { words: [expected[i].orig], indices: [i], norms: [expected[i].norm], isMiss: false };
     }
     return empty;
+  };
+  // ---- E2: overshoot confirmation for a passed-over next word ----
+  // WHY THIS EXISTS — the 23:38 device test (2:1–2:3, stamp 793ecff):
+  // the planted substitution هدى للمؤمنين for للمتقين never
+  // interrupted, although 5–6 words had matched. The old rule only
+  // confirms a miss when a LATER word matches (contOwedWords reports
+  // isMiss only for words before lastMatchedIdx). Here the next word
+  // للمتقين sits AFTER the last match (هدى), and everything after it
+  // — the whole of 2:3 plus out-of-range Ayat al-Kursi words — matched
+  // nothing, so no confirming token ever came, and the word stayed
+  // "not yet said" (the stall prompt's job) forever. Worse, the stall
+  // prompt could not reach it either: contOwedWords anchors at the
+  // EARLIEST miss before lastMatched (الم, unmatched because ASR
+  // heard only لام ميم), so every stall prompt names الم, never
+  // للمتقين, until الم is said or credited.
+  // THE PRINCIPLED SIGNAL — overshoot (pigeonhole, not a guess):
+  // take the next expected word after the last match, and count the
+  // words left in ITS ayah from it onward (remaining). Then look at
+  // the spoken tokens strictly after the last matched word's spoken
+  // position, and count DISTINCT tokens that are not repeats of an
+  // already-matched word. If that count STRICTLY EXCEEDS remaining,
+  // the speaker cannot still be inside that ayah: a continuation
+  // inside the ayah can contribute at most `remaining` new words
+  // before it must either say the owed word (which would match) or
+  // leave the ayah. So he has demonstrably moved past the owed word.
+  // WHY IT CANNOT FALSE-FIRE on the cases that matter:
+  // - Silence / pauses: no new tokens arrive, so the count is 0 and
+  //   the check only runs on new finals anyway (never on a timer) —
+  //   silence yields a stall prompt, never an interrupt.
+  // - A word he is about to say: before he says it, fresh tokens are
+  //   silence or repeats (excluded), so the count stays <= remaining.
+  // - A single slip followed by a self-correction: the slip is ONE
+  //   distinct new token, and remaining >= 1 (the owed word itself
+  //   counts), so 1 > remaining is false — the correction itself
+  //   matches and no interrupt ever fires. An interrupt needs at
+  //   least remaining+1 distinct new words, i.e. strictly more new
+  //   words than the ayah has left.
+  // - Slow recitation with repeats: repeats of matched words are
+  //   excluded from the count, so stumbling on earlier words cannot
+  //   accumulate toward confirmation.
+  // - Basmalah / isti'adha before the test starts: gated on
+  //   lastMatchedIdx >= 0 — with zero matches the no-match watchdog
+  //   owns the case, not this check.
+  // - Correct recitation: every new word matches and advances
+  //   lastMatched, resetting the window; the count never grows.
+  // WHAT IT DOES NOT DO: it never credits, un-credits, or grades a
+  // word. It only prompts (the same speakContPrompt as every other
+  // correction); the word stays missed until the user actually says
+  // it after the prompt (checkContFix credit, unchanged).
+  const contOvershootOwed = (): { words: string[]; indices: number[]; norms: string[] } | null => {
+    const expected = liveRef.current.contExpected;
+    if (expected.length === 0) return null;
+    const raw = contRawAlignment();
+    const { matched, lastMatchedIdx } = contEffectiveMatched();
+    if (lastMatchedIdx < 0) return null;
+    const nextIdx = lastMatchedIdx + 1;
+    if (nextIdx >= expected.length) return null;
+    const next = expected[nextIdx];
+    // Words left in the next word's ayah, from the next word onward.
+    let remaining = 0;
+    for (let i = nextIdx; i < expected.length && expected[i].ayahIdx === next.ayahIdx; i++) remaining++;
+    // Spoken position of the last RAW match at or before lastMatched
+    // (a credited-only word has no raw position; the last raw match
+    // is the safe anchor, and credited words are excluded below as
+    // repeats via the effective matched set).
+    let anchor = -1;
+    for (let i = lastMatchedIdx; i >= 0; i--) {
+      if (raw.matched[i] && raw.positions[i] >= 0) { anchor = raw.positions[i]; break; }
+    }
+    if (anchor < 0) return null;
+    const matchedNorms = new Set<string>();
+    matched.forEach((m, i) => { if (m) matchedNorms.add(expected[i].norm); });
+    const distinctNew = new Set<string>();
+    for (let t = anchor + 1; t < raw.spoken.length; t++) {
+      if (!matchedNorms.has(raw.spoken[t])) distinctNew.add(raw.spoken[t]);
+    }
+    if (distinctNew.size > remaining) {
+      return { words: [next.orig], indices: [nextIdx], norms: [next.norm] };
+    }
+    return null;
   };
   const cancelContPrompt = () => {
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
@@ -2268,16 +2365,51 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // and a miss corrected once is never re-interrupted.
   const checkContMissInterrupt = () => {
     if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
-    if (contAwaitingRef.current) return;
     const owed = contOwedWords();
-    // Only a confirmed passed-over miss interrupts mid-flow. The
-    // "next word" case is not a mistake — it is the stall prompt's
-    // job, after 3s of silence.
-    if (!owed.isMiss || owed.words.length === 0) return;
-    const key = owed.words.join('|');
-    if (key === contPromptedKeyRef.current) return;
-    if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
-    speakContPrompt(owed.words, owed.indices, owed.norms);
+    // Two confirmation signals, strongest first. (1) A confirmed
+    // passed-over miss: a later word matched, so he demonstrably
+    // moved past it. (2) E2 overshoot: the speaker has uttered
+    // strictly more distinct new words than the next word's ayah has
+    // left, so he demonstrably moved past the next word even though
+    // nothing after it matched. Without (2), a substitution at the
+    // end of an ayah followed by a wholly unmatched stretch (the
+    // 23:38 للمؤمنين case) can never interrupt.
+    // Candidates, strongest first: (1) the confirmed miss, (2) the
+    // overshoot next word. A candidate that is blocked (live
+    // expectation for the same or a later word, or the dedupe key)
+    // does NOT veto the next candidate: the 23:38 shape has BOTH a
+    // blocked confirmed miss (الم, awaited from an early stall
+    // prompt) and a live overshoot (للمتقين), and the interrupt must
+    // still fire for the latter.
+    const candidates: { words: string[]; indices: number[]; norms: string[] }[] = [];
+    if (owed.isMiss && owed.words.length > 0) {
+      candidates.push({ words: owed.words, indices: owed.indices, norms: owed.norms });
+    }
+    const over = contOvershootOwed();
+    if (over) candidates.push(over);
+    for (const target of candidates) {
+      // One correction at a time — EXCEPT when the speaker has moved
+      // beyond the awaited words: a live expectation for an EARLIER
+      // word must not veto a current error (the 23:38 shape, where an
+      // early stall prompt for الم would otherwise block the للمتقين
+      // interrupt forever). Replacing the expectation does not change
+      // grading: the earlier words stay missed, and a later stall may
+      // prompt them again. An expectation for the same or a later word
+      // still blocks this candidate, as before. The expectation is
+      // only dropped when this candidate actually prompts (a
+      // dedupe-blocked candidate must not silently discard it).
+      const aw = contAwaitingRef.current;
+      if (aw) {
+        const awaitedLast = aw.indices.length > 0 ? Math.max(...aw.indices) : -1;
+        if (target.indices[0] <= awaitedLast) continue;
+      }
+      const key = target.words.join('|');
+      if (key === contPromptedKeyRef.current) continue;
+      if (aw) contAwaitingRef.current = null;
+      if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
+      speakContPrompt(target.words, target.indices, target.norms);
+      return;
+    }
   };
 
   // D1 honesty finish (reporting only): a continuous run that ends
@@ -2613,6 +2745,38 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // a full-Surah transcript cannot flood the UI.
   const heardRawText = transcript && interim ? `${transcript} ${interim}`.trim() : (transcript || interim);
   const heardCapped = capHeardLine(heardRawText);
+  // E1 diagnostic pieces, shared by both done-screen branches below
+  // (only one branch renders at a time). The token list is rendered
+  // dir=ltr with an explicit number per token, so the logical order
+  // is unambiguous even when the raw line mixes Arabic words and
+  // Latin digits. Raw tokens are verbatim (whitespace split only, no
+  // normalization), so their count can exceed the graded heard count
+  // whenever normalization drops a token — that difference itself is
+  // diagnostic. A per-ayah heard-tokens breakdown is deliberately NOT
+  // built here: continuous grading works on one flat word list, so
+  // per-ayah heard spans would require threading consumption spans
+  // through the grader; the numbered full list plus the existing
+  // per-ayah wrong-words list on this screen decode the same facts
+  // without touching grading.
+  const heardFullTokens = heardRawText.split(/\s+/).filter(Boolean);
+  const fullHeardToggle = (
+    <button type="button" onClick={() => setShowFullHeard((v) => !v)} className="mt-2 text-sm font-bold text-emerald-700 hover:underline">
+      {showFullHeard ? 'إخفاء النص الكامل' : 'عرض النص الكامل'}
+    </button>
+  );
+  const fullHeardContent = showFullHeard ? (heardFullTokens.length > 0 ? (
+    <div className="mt-3 space-y-2">
+      <p dir="rtl" className="text-sm leading-relaxed bg-white border border-gray-200 rounded-xl p-3 select-text break-words text-accent-700">{heardRawText}</p>
+      <p className="text-xs text-accent-600">الكلمات الخام (قبل التطبيع، بالترتيب كما سمعها الجهاز): {heardFullTokens.length} — الرقم قبل كل كلمة هو ترتيبها، فلا يلتبس الترتيب باتجاه العرض.</p>
+      <div dir="ltr" className="flex flex-wrap gap-1">
+        {heardFullTokens.map((t, i) => (
+          <span key={i} className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-accent-700"><span dir="ltr">{i + 1}</span><bdi>{t}</bdi></span>
+        ))}
+      </div>
+    </div>
+  ) : (
+    <p className="text-xs text-accent-600 mt-2">لا يوجد نص مسموع لعرضه.</p>
+  )) : null;
 
   const openInMushaf = (surahNo: number, ayahNo: number) => {
     try { localStorage.setItem(TARGET_KEY, JSON.stringify({ surah: surahNo, ayah: ayahNo })); } catch {}
@@ -3207,6 +3371,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-accent-600 leading-relaxed mt-2" dir="rtl">
                   ما سمعه الجهاز حرفيًا (نص خام، مختصر للعرض): {heardCapped || '— لا يوجد نص مسموع —'}
                 </p>
+                {fullHeardToggle}
+                {fullHeardContent}
                 <p className="text-xs text-accent-500 mt-2">{stampLine}</p>
               </div>
             )}
@@ -3222,9 +3388,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>)}
             {!contZeroMatch && testMode === 'continuous' && (
-              <p className="text-sm text-accent-600 bg-white border border-gray-200 rounded-xl px-4 py-3 leading-relaxed" dir="rtl">
-                سمعت {contHeardWords.toLocaleString('ar-EG')} كلمة، وطابقت {contMatchedWords.toLocaleString('ar-EG')} كلمة • النص الخام (مختصر للعرض): {heardCapped || '—'}
-              </p>
+              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+                <p className="text-sm text-accent-600 leading-relaxed" dir="rtl">
+                  سمعت {contHeardWords.toLocaleString('ar-EG')} كلمة، وطابقت {contMatchedWords.toLocaleString('ar-EG')} كلمة • النص الخام (مختصر للعرض): {heardCapped || '—'}
+                </p>
+                {fullHeardToggle}
+                {fullHeardContent}
+              </div>
             )}
 
             {!contZeroMatch && missed.length > 0 && (
@@ -3240,8 +3410,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <BookOpen className="w-4 h-4" /> افتح في المصحف
                         </button>
                       </div>
-                      {wrongByAyah[i]?.length ? <p className="text-red-600 text-xs mt-1">الكلمات الغلط: {wrongByAyah[i].join(' ')}</p> : null}
-                      {extraByAyah[i]?.length ? <p className="text-amber-700 text-xs mt-1">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
+                      {wrongByAyah[i]?.length ? <p className="text-red-600 text-lg mt-1 font-arabic leading-relaxed" dir="rtl">الكلمات الغلط: {wrongByAyah[i].map((w, wi) => (<span key={wi}>{w} </span>))}</p> : null}
+                      {extraByAyah[i]?.length ? <p className="text-amber-700 text-xs mt-1" dir="rtl">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
                     </li>
                   ) : null))}
                 </ul>
@@ -3249,7 +3419,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
 
             {!contZeroMatch && contExtras.length > 0 && testMode === 'continuous' && (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed">
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed" dir="rtl">
                 كلمات زائدة سمعتها أثناء التسميع المتصل: {contExtras.join(' ')}
               </p>
             )}
@@ -3258,7 +3428,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <p className="text-xs text-accent-500 text-center">{stampLine}</p>
             )}
             <div className="flex gap-3">
-              <button onClick={() => { setContZeroMatch(false); setPhase('setup'); }}
+              <button onClick={() => { setContZeroMatch(false); setShowFullHeard(false); setPhase('setup'); }}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>

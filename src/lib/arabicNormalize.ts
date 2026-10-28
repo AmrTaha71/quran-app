@@ -252,7 +252,61 @@ export function correctionSpeechText(words: string[]): string {
 export function normalizeWords(text: string): string[] {
   return normalizeArabic(text)
     .split(/\s+/)
-    .filter((w) => w.length > 0);
+    .filter((w) => w.length > 0)
+    .map((w) => transcriptDigitToWord(w) ?? w);
+}
+
+// Transcript digit rendering (Safari ASR, device test 2026-10-28):
+// the engine renders the spoken number-word ألف as digits ("1000").
+// cleanToken (SelfTestPage) strips every non-Arabic letter, so the
+// digit token vanished before grading and the opening failed with
+// الم as its only wrong word. This maps the digit token back to
+// the word the engine heard — the inverse of ASR numeral rendering,
+// so a digit-derived token behaves EXACTLY like the spoken word
+// (same matches, same strict extras, same الم gate). It is NOT a
+// new leniency: it can only ever produce the token ألف, and ألف
+// matches only where the spoken word ألف would match.
+// Deliberately NARROW — only the value 1000 maps. Every other
+// numeral is gender/case/spelling ambiguous, and ASR digits erase
+// exactly the distinction grading must catch, so mapping them
+// would FALSE-PASS wrong recitations:
+//   1 -> واحد/واحدة (gender), 2 -> اثنان/اثنين/اثنتان/اثنتين
+//   (gender+case), 3 -> ثلاثة/ثلاث (gender), 20 -> عشرون/عشرين
+//   (case), 100 -> مئة/مائة (spelling variants that normalization
+//   does NOT merge: ميه vs مايه), 2000 -> ألفان/ألفين (case).
+// Those stay unmapped and fail closed (the digit token is dropped
+// as today). ألف is the unique safe case: its normalized form is
+// the same in every case, it has no gender variant, and it is the
+// one letter name that is also a number word (no other muqatta'at
+// letter name is a numeral, so openings need no other digit).
+// Recognized renderings: Western digits with optional grouping
+// (1000, 1,000, 1.000), Arabic-Indic digits (١٠٠٠, ١٬٠٠٠ with the
+// Arabic thousands separator U+066C), Extended Arabic-Indic digits
+// (۱۰۰۰), with surrounding punctuation stripped. A token containing
+// Arabic letters is never a digit token (1000ذلك is left alone, so
+// a fused token cannot smuggle a digit into a word). Space-grouped
+// digits (1 000 as two tokens) are NOT joined: two separate tokens
+// cannot be told apart from a genuine "1 ... 000" sequence.
+// Applied in normalizeWords, so both transcript tokenizers get it:
+// SelfTestPage spokenTokens (both aligners, ayah + continuous) and
+// imamTracker heardWords (follow matcher). The expected side never
+// sees it (expectedWordList uses normalizeArabic + cleanToken, not
+// normalizeWords), and correction speech never sees it either (it
+// speaks expected words, never transcripts).
+export function transcriptDigitToWord(token: string): string | null {
+  if (!token || /[\u0621-\u064A]/.test(token)) return null;
+  const trimmed = token.replace(/^[^0-9\u0660-\u0669\u06F0-\u06F9]+|[^0-9\u0660-\u0669\u06F0-\u06F9]+$/g, '');
+  const compact = trimmed.replace(/[,.\u066C]/g, '');
+  if (!compact) return null;
+  let value = '';
+  for (const ch of compact) {
+    const code = ch.codePointAt(0) || 0;
+    if (code >= 0x30 && code <= 0x39) value += ch;
+    else if (code >= 0x660 && code <= 0x669) value += String(code - 0x660);
+    else if (code >= 0x6f0 && code <= 0x6f9) value += String(code - 0x6f0);
+    else return null;
+  }
+  return Number(value) === 1000 ? 'الف' : null;
 }
 
 // ---- Muqatta'at spoken-shape parser (round 2, 2026-10-28) --------
@@ -373,7 +427,14 @@ export function muqattaatAlifLamMeemBlocked(expectedToken: string, nextToken: st
 // always terminates. Bounds keep it cheap: ≤14 tokens, ≤28 chars.
 export function muqattaatWindowMatches(window: string[], target: string): boolean {
   if (!window || window.length === 0 || !target) return false;
-  const toks = window.map((t) => t.replace(/[^\u0621-\u064A]/g, '')).filter(Boolean);
+  // E1: a digit token inside a window maps to ألف first (same rule as
+  // normalizeWords), so direct window callers get the digit shape
+  // even if their tokens never passed through a transcript tokenizer.
+  // Target-directed as ever: the digit can only ever become the
+  // letter ا inside a genuine opening parse, and the الم gate still
+  // applies above this function (in muqattaatMatchAt) and in the
+  // join guard — a digit-derived ألف never matches the word ألم.
+  const toks = window.map((t) => transcriptDigitToWord(t) ?? t.replace(/[^\u0621-\u064A]/g, '')).filter(Boolean);
   if (toks.length === 0 || toks.length > 14) return false;
   if (toks[0] === 'و' || toks[toks.length - 1] === 'و') return false;
   const kept: string[] = [];
