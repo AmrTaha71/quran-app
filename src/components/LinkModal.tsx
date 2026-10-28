@@ -84,6 +84,14 @@ export default function LinkModal({
   const [pendingRecording, setPendingRecording] = useState<{ blob: Blob; transcript: string } | null>(null);
   const [syntheticAudioUrl, setSyntheticAudioUrl] = useState<string | null>(null);
   const [voiceType, setVoiceType] = useState<'male' | 'female'>('male');
+  // Voice-source rule (2026-10-28, user's words): a generated voice
+  // says the ORIGINAL recorded words by default — never the AI
+  // rephrase. Only when she explicitly edits (manual textarea edit,
+  // picking a non-original version, or a rephrase with her own
+  // command) does generation follow the edited text. A fresh
+  // transcript resets to the original.
+  const [voiceFromEdited, setVoiceFromEdited] = useState(false);
+  useEffect(() => { setVoiceFromEdited(false); }, [originalTranscript]);
   const [rephraseCommand, setRephraseCommand] = useState('');
   // AI version history for the approve-or-re-request loop: every
   // successful rephrase appends a version instead of destroying the
@@ -352,6 +360,10 @@ export default function LinkModal({
       // Filter out placeholder text
       const finalResult = (result.includes('لم يتم تكوين') || result.includes('نص تجريبي')) ? text : result;
       setRephrasedText(finalResult);
+      // Voice source follows the edit rule: keep_original = original
+      // side (not an edit); a rephrase with her own command = her edit.
+      if (mode === 'keep_original') setVoiceFromEdited(false);
+      else if (command.trim()) setVoiceFromEdited(true);
       // Append to the version history (original first, then each AI
       // version). A re-request never overwrites an earlier version.
       setVersions((prev) => {
@@ -391,15 +403,18 @@ export default function LinkModal({
   };
 
   // --- Generate Synthetic Voice (with browser TTS fallback) ---
+  // Source follows the edit rule: the original transcript by default,
+  // the edited text only when she explicitly edited.
   const generateVoice = async () => {
-    if (!rephrasedText.trim()) return;
+    const voiceText = voiceFromEdited ? rephrasedText : (originalTranscript || rephrasedText);
+    if (!voiceText.trim()) return;
     setPhase('generating_voice');
     setError('');
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ text: rephrasedText, voice: voiceType }),
+        body: JSON.stringify({ text: voiceText, voice: voiceType }),
       });
       const data = await res.json();
 
@@ -652,7 +667,7 @@ export default function LinkModal({
                   <span className="text-xs font-semibold text-violet-600">{reviewMode === 'keep_original' ? 'النص المنقّى' : 'النص المعاد صياغته'}</span>
                   <button onClick={() => playTTS(rephrasedText)} className="text-violet-400 hover:text-violet-600"><Mic className="w-4 h-4" /></button>
                 </div>
-                <textarea value={rephrasedText} onChange={(e) => { setRephrasedText(e.target.value); setSyntheticAudioUrl(null); }}
+                <textarea value={rephrasedText} onChange={(e) => { setRephrasedText(e.target.value); setSyntheticAudioUrl(null); setVoiceFromEdited(true); }}
                   rows={4}
                   className="w-full px-3 py-2 bg-white border border-violet-200 rounded-lg text-sm text-accent-700 leading-relaxed focus:outline-none focus:border-violet-500 transition-smooth resize-none" />
               </div>
@@ -678,6 +693,9 @@ export default function LinkModal({
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-smooth">
                   <Mic className="w-4 h-4" /> {voiceType === 'male' ? 'يلا حوّل نسخة منه لصوت رجالي' : 'حوّل نسخة منه لصوت نسائي'}
                 </button>
+                <p className="text-[11px] text-accent-400 text-center mt-1.5">
+                  {voiceFromEdited ? 'سيُحوَّل النص المعدّل' : originalTranscript ? 'سيُحوَّل النص الأصلي المسجّل' : 'سيُحوَّل النص الحالي'}
+                </p>
                 {/* Browser TTS fallback button */}
                 {!syntheticAudioUrl && (
                   <button onClick={() => playBrowserTTS(rephrasedText, voiceType)}
@@ -723,7 +741,7 @@ export default function LinkModal({
                             <p className="text-xs text-accent-600 truncate">{v.text}</p>
                             {isActive && <p className="text-[11px] font-bold text-emerald-600 mt-0.5">✓ النسخة المعروضة حالياً</p>}
                           </div>
-                          <button onClick={() => { setRephrasedText(v.text); setSyntheticAudioUrl(null); }}
+                          <button onClick={() => { setRephrasedText(v.text); setSyntheticAudioUrl(null); setVoiceFromEdited(v.text.trim() !== originalTranscript.trim()); }}
                             className={`flex-shrink-0 px-2.5 py-1.5 text-white text-[11px] font-semibold rounded-lg ${isActive ? 'bg-emerald-600' : 'bg-violet-600 hover:bg-violet-700'}`}>
                             استخدام هذه النسخة
                           </button>

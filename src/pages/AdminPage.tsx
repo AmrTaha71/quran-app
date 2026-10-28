@@ -320,20 +320,33 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const generateVoiceForLink = async (link: AyahLink, voice: 'male' | 'female') => {
     setGeneratingVoiceId(link.id);
     try {
+      // Voice source (2026-10-28): the synthetic says the same words
+      // as the original recording by default. Only when the link text
+      // was deliberately edited after recording — link_content differs
+      // from original_transcript, which only happens through a saved
+      // modal choice or a direct admin edit — does the synthetic
+      // follow the edited text ("edit, then make again").
+      const srcText = link.original_transcript && link.link_content !== link.original_transcript
+        ? link.link_content
+        : (link.original_transcript || link.link_content);
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ text: link.link_content, voice }),
+        body: JSON.stringify({ text: srcText, voice }),
       });
       if (!res.ok) throw new Error('فشل');
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       // Gendered slot (2026-10-28): generating one gender must never
-      // clobber the other. Legacy synthetic_audio_url + voice_type are
-      // mirrored so clients on the previous build still find a voice.
+      // clobber the other. Legacy synthetic_audio_url + voice_type can
+      // only hold one voice, so they follow the female voice whenever
+      // one exists (the historical default); a male voice mirrors
+      // there only when no female voice exists yet.
+      const legacyUrl = voice === 'female' ? data.audioUrl : (link.synthetic_audio_url_female ?? data.audioUrl);
+      const legacyType = voice === 'female' ? 'female' : (link.synthetic_audio_url_female ? 'female' : 'male');
       await supabase.from('ayah_links').update({
-        synthetic_audio_url: data.audioUrl,
-        voice_type: voice,
+        synthetic_audio_url: legacyUrl,
+        voice_type: legacyType,
         ...(voice === 'female'
           ? { synthetic_audio_url_female: data.audioUrl }
           : { synthetic_audio_url_male: data.audioUrl }),
@@ -786,6 +799,19 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <summary className="text-xs text-accent-400 cursor-pointer hover:text-accent-600">النص الأصلي المنطوق</summary>
                           <p className="text-xs text-accent-400 mt-1 p-2 bg-white rounded">{link.original_transcript}</p>
                         </details>
+                      )}
+
+                      {/* Original voice FIRST (2026-10-28): an admin's
+                          first listen is the original recording, inline
+                          — the synthetic box below is only after it. */}
+                      {link.audio_url && (
+                        <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 mt-2">
+                          <p className="text-xs font-semibold text-emerald-700 mb-2">الصوت الأصلي</p>
+                          <button onClick={() => new Audio(link.audio_url!).play()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg">
+                            <Volume2 className="w-3.5 h-3.5" /> تشغيل الصوت الأصلي
+                          </button>
+                        </div>
                       )}
 
                       <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 mt-2">
