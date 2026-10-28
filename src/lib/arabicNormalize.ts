@@ -191,9 +191,9 @@ const MUQATTAAT_LETTER_TO_NAME: Record<string, string> = {
   'ك': 'كاف', 'ه': 'هاء', 'ي': 'ياء', 'ع': 'عين', 'ط': 'طاء',
   'س': 'سين', 'ح': 'حاء', 'ق': 'قاف', 'ن': 'نون',
 };
-// Second words of the five الم openings (2:1 ذلك، 29:1 أحسب،
+// Second words of the six الم openings (2:1 ذلك، 3:1 الله، 29:1 أحسب،
 // 30:1 غلبت، 31:1 تلك، 32:1 تنزيل), in normalized form.
-export const MUQATTAAT_ALIF_LAM_MEEM_SECONDS = ['ذلك', 'غلبت', 'احسب', 'تنزيل', 'تلك'];
+export const MUQATTAAT_ALIF_LAM_MEEM_SECONDS = ['ذلك', 'غلبت', 'احسب', 'تنزيل', 'تلك', 'الله'];
 
 // Canonical letter sequence of a normalized token, or null when the
 // token is not a muqatta'at opening in any of its seeded spellings.
@@ -233,7 +233,11 @@ export function correctionSpeechWords(words: string[]): string[] {
   for (const w of words) {
     const norm = w ? normalizeArabic(w).replace(/[^\u0621-\u064A]/g, '') : '';
     const letters = norm ? muqattaatLetters(norm) : null;
-    if (letters && (letters !== 'الم' || /[\u0653\u0670]/.test(w))) {
+    // Round 2: a dagger-form norm (الاما) can only be an opening — the
+    // word ألم always normalizes to plain الم — so it expands even
+    // when the original lost its marks upstream. Plain الم still
+    // needs its marks, exactly as before.
+    if (letters && (letters !== 'الم' || norm !== 'الم' || /[\u0653\u0670]/.test(w))) {
       for (const l of letters) out.push(MUQATTAAT_LETTER_TO_NAME[l]);
     } else {
       out.push(stripSpeechMarks(w));
@@ -249,4 +253,212 @@ export function normalizeWords(text: string): string[] {
   return normalizeArabic(text)
     .split(/\s+/)
     .filter((w) => w.length > 0);
+}
+
+// ---- Muqatta'at spoken-shape parser (round 2, 2026-10-28) --------
+// Round 1 covered spoken letter names in sequence (ألف لام ميم) and
+// canonical-equal single tokens (طاها، ياس، الاما). Device testing
+// (21:11 EEST 2026-10-28: 2:1 wrong = الم only, "letters are
+// disjointed", transcript writes "الألف") showed Apple ASR also
+// emits shapes round 1 misses. Measured against the real normalizer
+// + aligner on 093bc04 (every shape below was run, not reasoned):
+//   COVERED already: bare letter names + variants (طاء/طا، راء/را،
+//     ياء/يا، هاء/ها، nunation ألفٌ/لامٍ، Farsi yeh/kaf in names,
+//     hamza-less names) and bare single letters for openings whose
+//     expected norm is already canonical and ≤3 letters long
+//     (الم via the 3-token join path, عسق likewise, ص/ق/ن exact).
+//   MISSED (this parser closes them): single letters for every
+//     other opening (حم، طه، يس، كهيعص — the last also exceeds the
+//     join path's 3-token bound), dagger-marked singles (لٰ → لا،
+//     مٰ → ما، صٰ → صا، ... — the normalizer turns letter+dagger
+//     into letter+ا, which is NOT the letter alone), joined names
+//     (ألفلامميم as one token, ألف لامميم, ألفلام ميم), ال-prefixed
+//     names (الألف اللام الميم, الصاد, النون), mixed runs (ا لام
+//     ميم, ألف ل ميم), و-bridged names (ألف و لام و ميم), and
+//     mid-name fragments (أل ف لام ميم — the window is parsed as
+//     one character stream, so token boundaries inside a name do
+//     not matter).
+// The parser is TARGET-DIRECTED: given a window of spoken tokens
+// and one expected letter sequence, it answers only "can this
+// window be segmented, in full, into exactly those letters?" —
+// nothing else can match, so no new shape can leak into an
+// ordinary word. Segmentation options at each character position:
+//   (a) a token-start و skipped only when the rest of that token
+//       begins with a complete letter name (ولام → لام, وميم →
+//       ميم). Attached و before a NON-name (وما, ولا) is NOT
+//       skipped: وما + dagger reading would otherwise let
+//       "ألف وما" parse as الم.
+//   (b) ال + a complete name (الألف → ألف, اللام → لام), at any
+//       position (joined tokens keep their ال: الفاللامميم).
+//   (c) a complete letter name (الف، لام، ميم، صاد، را، كاف، ها،
+//       يا، عين، طا، سين، حا، قاف، نون).
+//   (d) a dagger-letter pair (لا → ل، ما → م، صا → ص، عا → ع،
+//       سا → س، كا → ك، قا → ق، نا → ن) — but ONLY when the pair
+//       is a COMPLETE token. This alignment is load-bearing: the
+//       name لام contains لا as a substring, so a mid-token dagger
+//       reading would let an INCOMPLETE recitation pass — "ألف لام"
+//       (ميم missing) would parse as ألف + لا + م = الم. With the
+//       token-alignment rule, "ألف لام" fails (correct) while "ا لا
+//       ما" (separate dagger-single tokens) still passes. طا/ها/
+//       يا/را/حا need no entry: their dagger spellings coincide
+//       with the name.
+//   (e) a single muqatta'at letter character.
+// A window must be consumed ENTIRELY (no leftover characters), so
+// a window that swallows the next word never matches, and a
+// standalone و may never start or end a window (a leading/trailing
+// conjunction belongs to neighbouring text: beginner ignores it,
+// strict counts it as an extra). Interior standalone و tokens
+// (ألف و لام و ميم) are dropped before parsing.
+// GATING (unchanged from round 1): the aligner only calls this
+// for an expected token that canonicalizes into the 14-token set,
+// and for الم only when the next expected word is a genuine
+// opening second word (ذلك، غلبت، أحسب، تنزيل، تلك). The follow
+// matcher only collapses a window whose parse IS a genuine opening
+// token. A bare single letter, name, or dagger pair can therefore
+// never join ordinary words: من/ما/لا/يا/ها never parse to an
+// opening on their own, and no ordinary Quranic phrase spells an
+// opening under these rules (see D3-EVIDENCE.md §5 for the
+// per-leniency negative proofs, incl. مالك/ملك and 105:1/94:1).
+// Deliberately NOT covered: a token whose و is attached to a
+// non-name (وما, ولا — see (a)), and a last name merged into the
+// following word (ميمذلك — that would need shared-token
+// accounting the greedy aligner does not have). Both are
+// documented residuals, not silent gaps: they fail closed (the
+// opening stays unmatched) rather than matching wrongly.
+// This parser works on the single transcript token stream as
+// delivered (top hypothesis only). It never touches the
+// alternatives rescue, which is assumed inert on WebKit.
+
+// Dagger-letter pairs (letter + dagger alef, normalized to letter + ا).
+const MUQATTAAT_DAGGER_PAIR_TO_LETTER: Record<string, string> = {
+  'لا': 'ل', 'ما': 'م', 'صا': 'ص', 'عا': 'ع',
+  'سا': 'س', 'كا': 'ك', 'قا': 'ق', 'نا': 'ن',
+};
+// Names sorted longest-first, derived from the round-1 map so the
+// two can never drift apart.
+const MUQATTAAT_NAMES_SORTED = Object.entries(MUQATTAAT_NAME_TO_LETTER)
+  .sort((a, b) => b[0].length - a[0].length);
+
+// One spoken token is a "letter piece" when it is, on its own, a
+// single muqatta'at letter, a letter name (with or without ال),
+// or a dagger-letter pair. Used by the aligner's join-path guard:
+// a join whose pieces are ALL letter pieces is a letter recitation,
+// not a split word (see SelfTestPage).
+export function muqattaatIsLetterPiece(token: string): boolean {
+  if (token.length === 1 && MUQATTAAT_LETTERS.includes(token)) return true;
+  if (MUQATTAAT_NAME_TO_LETTER[token]) return true;
+  if (token.startsWith('ال') && MUQATTAAT_NAME_TO_LETTER[token.slice(2)]) return true;
+  if (MUQATTAAT_DAGGER_PAIR_TO_LETTER[token]) return true;
+  return false;
+}
+
+// True when an expected token is الم AND the next expected word is
+// NOT a genuine opening second word — i.e. the الم letter path
+// (names, windows, joins) must stay closed because the token is
+// the word ألم ("did-not", e.g. 105:1, 94:1), not an opening.
+export function muqattaatAlifLamMeemBlocked(expectedToken: string, nextToken: string): boolean {
+  if (muqattaatLetters(expectedToken) !== 'الم') return false;
+  // End-of-list الم is not gated: no Quran ayah ends with the word
+  // ألم (105:1 and 94:1 both continue with verbs), so an end-of-list
+  // الم can only arise from a synthetic or truncated window. The
+  // gate exists to separate ألم from الم openings, and there is no
+  // ألم to confuse it with when nothing follows.
+  if (!nextToken) return false;
+  return !MUQATTAAT_ALIF_LAM_MEEM_SECONDS.includes(nextToken);
+}
+
+// Can this window of spoken tokens be segmented, in full, into
+// exactly the letters of `target`? Target-directed DFS with dead-end
+// memoization; every step consumes at least one character, so it
+// always terminates. Bounds keep it cheap: ≤14 tokens, ≤28 chars.
+export function muqattaatWindowMatches(window: string[], target: string): boolean {
+  if (!window || window.length === 0 || !target) return false;
+  const toks = window.map((t) => t.replace(/[^\u0621-\u064A]/g, '')).filter(Boolean);
+  if (toks.length === 0 || toks.length > 14) return false;
+  if (toks[0] === 'و' || toks[toks.length - 1] === 'و') return false;
+  const kept: string[] = [];
+  for (let i = 0; i < toks.length; i++) {
+    if (toks[i] === 'و') continue;
+    kept.push(toks[i]);
+  }
+  let chars = '';
+  const startAt: boolean[] = [];
+  const endAt: boolean[] = [];
+  for (const t of kept) {
+    for (let c = 0; c < t.length; c++) {
+      startAt.push(c === 0);
+      endAt.push(c === t.length - 1);
+      chars += t[c];
+    }
+  }
+  if (chars.length === 0 || chars.length > 28) return false;
+  const L = target.length;
+  const dead = new Set<string>();
+  function dfs(pos: number, li: number): boolean {
+    if (li === L) return pos === chars.length;
+    if (pos >= chars.length) return false;
+    const key = pos + ':' + li;
+    if (dead.has(key)) return false;
+    const want = target[li];
+    let ok = false;
+    // (a) token-start و bridging to a complete name.
+    if (startAt[pos] && chars[pos] === 'و') {
+      let e = pos;
+      while (e < chars.length && !endAt[e]) e++;
+      const rest = chars.slice(pos + 1, e + 1);
+      if (MUQATTAAT_NAMES_SORTED.some((entry) => rest.startsWith(entry[0]))) {
+        if (dfs(pos + 1, li)) ok = true;
+      }
+    }
+    // (b) ال + complete name.
+    if (!ok && chars.startsWith('ال', pos)) {
+      for (const entry of MUQATTAAT_NAMES_SORTED) {
+        if (entry[1] === want && chars.startsWith(entry[0], pos + 2)) {
+          if (dfs(pos + 2 + entry[0].length, li + 1)) { ok = true; break; }
+          // Tanwin-alif: a name spoken with nunation (ألفًا) normalizes
+          // to the name plus a trailing ا (الفا), because stripping
+          // removes the tanwin mark but not the alif letter. That ا
+          // carries no letter, so it may be skipped — but only when
+          // it ends the name's own token (!startAt): a standalone ا
+          // token, or the next word's initial ا, is never eaten.
+          const e = pos + 2 + entry[0].length;
+          if (chars[e] === 'ا' && endAt[e] && !startAt[e] && dfs(e + 1, li + 1)) { ok = true; break; }
+        }
+      }
+    }
+    // (c) complete name.
+    if (!ok) {
+      for (const entry of MUQATTAAT_NAMES_SORTED) {
+        if (entry[1] === want && chars.startsWith(entry[0], pos)) {
+          if (dfs(pos + entry[0].length, li + 1)) { ok = true; break; }
+          // Tanwin-alif, as in (b): skip a token-final ا after the name.
+          const e = pos + entry[0].length;
+          if (chars[e] === 'ا' && endAt[e] && !startAt[e] && dfs(e + 1, li + 1)) { ok = true; break; }
+        }
+      }
+    }
+    // (d) dagger-letter pair, only as a complete token (see header).
+    if (!ok && startAt[pos] && pos + 1 < chars.length && endAt[pos + 1]) {
+      const pairLetter = MUQATTAAT_DAGGER_PAIR_TO_LETTER[chars.slice(pos, pos + 2)];
+      if (pairLetter === want && dfs(pos + 2, li + 1)) ok = true;
+    }
+    // (e) single letter.
+    if (!ok && chars[pos] === want && dfs(pos + 1, li + 1)) ok = true;
+    if (!ok) dead.add(key);
+    return ok;
+  }
+  return dfs(0, 0);
+}
+
+// The genuine opening token a window of heard tokens parses to, or
+// null. At most one token can match (full consumption + exact
+// letter equality); the longest match is kept defensively.
+export function muqattaatParseRun(window: string[]): string | null {
+  let best: string | null = null;
+  for (const t of MUQATTAAT_TOKENS) {
+    if (muqattaatWindowMatches(window, t)) {
+      if (!best || t.length > best.length) best = t;
+    }
+  }
+  return best;
 }

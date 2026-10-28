@@ -20,7 +20,7 @@
 // but is NOT called by the merged flow.
 export const FOLLOW_TRIGGER_WORDS = 5;
 export const FOLLOW_LOCK_MIN_WORDS = 4;
-import { normalizeWords, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER } from './arabicNormalize';
+import { normalizeWords, muqattaatLetters, muqattaatParseRun } from './arabicNormalize';
 import type { VerseIndexEntry } from './searchIndex';
 
 export interface TrackedPosition {
@@ -51,41 +51,36 @@ export function buildOrderedVerses(verses: VerseIndexEntry[]): OrderedVerse[] {
 
 // Heard words, with the same muqatta'at gap closed as in self-test:
 // an imam reciting an opening says letter names, so a run of spoken
-// letter names collapses to the opening token (ألف لام ميم -> الم),
+// letter material collapses to the opening token (ألف لام ميم -> الم),
 // and a single spoken variant token canonicalizes the same way
-// (طاها -> طه، ياس -> يس). Runs collapse ONLY when they spell a
-// genuine opening token — a non-opening run is left alone, token by
-// token, so nothing else can merge. Length-1 runs collapse only for
-// صاد/قاف/نون: those names never occur as standalone Quranic
-// words, while single يا (the vocative particle, يا أيها) and ها
-// (ها أنتم) are real words and must never collapse. The 4-word
-// lock run itself disambiguates ألم (105:1 ألم تر...) from the 2:1
-// opening (الم ذلك...): their second words differ, so no false
-// lock is possible there. Known pre-existing limit, unchanged:
-// ayahs shorter than 4 words (e.g. 42:1 حم, 42:2 عسق alone) can
-// never finals-lock, since findLock needs 4 consecutive words in
-// ONE ayah; the interim lock needs 6.
+// (طاها -> طه، ياس -> يس). Round 2 generalizes the run to every
+// spoken shape the self-test parser covers (single letters ا ل م,
+// joined names ألفلامميم, ال-names الألف اللام الميم, dagger
+// singles ا لا ما, mixed runs, و-bridges, fragments) via the one
+// shared target-directed parser (muqattaatParseRun): a window
+// collapses ONLY when it parses, in full, to a genuine opening
+// token — longest window first, so المص wins over الم + صاد.
+// A non-opening window is left alone, token by token, so nothing
+// else can merge: single يا (the vocative particle, يا أيها) and
+// ها (ها أنتم) are real words and never collapse, and neither do
+// من/ما/لا or a lone سين/يا. The 4-word lock run itself
+// disambiguates ألم (105:1 ألم تر...) from the 2:1 opening
+// (الم ذلك...): their second words differ, so no false lock is
+// possible there. Known pre-existing limit, unchanged: ayahs
+// shorter than 4 words (e.g. 42:1 حم, 42:2 عسق alone) can never
+// finals-lock, since findLock needs 4 consecutive words in ONE
+// ayah; the interim lock needs 6.
 export function heardWords(text: string): string[] {
   const words = normalizeWords(text);
   const out: string[] = [];
   for (let i = 0; i < words.length;) {
-    let run = '';
-    let k = i;
-    for (; k < words.length; k++) {
-      const l = MUQATTAAT_NAME_TO_LETTER[words[k]];
-      if (!l) break;
-      run += l;
+    let matched: { token: string; count: number } | null = null;
+    const maxLen = Math.min(14, words.length - i);
+    for (let len = maxLen; len >= 1; len--) {
+      const tok = muqattaatParseRun(words.slice(i, i + len));
+      if (tok) { matched = { token: tok, count: len }; break; }
     }
-    const runLen = k - i;
-    if (runLen >= 2) {
-      const canon = muqattaatLetters(run);
-      if (canon) { out.push(canon); i = k; continue; }
-      // Not an opening: fall through and handle words[i] singly.
-    } else if (runLen === 1 && (words[i] === 'صاد' || words[i] === 'قاف' || words[i] === 'نون')) {
-      out.push(MUQATTAAT_NAME_TO_LETTER[words[i]]);
-      i++;
-      continue;
-    }
+    if (matched) { out.push(matched.token); i += matched.count; continue; }
     out.push(muqattaatLetters(words[i]) ?? words[i]);
     i++;
   }

@@ -368,6 +368,15 @@ export default function QuranMushafPage({
   const [pageAyahRefs, setPageAyahRefs] = useState<{ surah: number; ayah: number }[] | null>(null);
   const [spannedVerses, setSpannedVerses] = useState<QuranVerse[]>([]);
   const surahPageListCache = useRef<Record<number, { number: number; page_number: number }[]>>({});
+  // D4 (follow latency): in-flight page-list promises, keyed by surah.
+  // Without this, a follow pre-warm fetch and the lock's own fetch for
+  // the same surah run concurrently (the cache is only filled AFTER a
+  // fetch resolves), so the lock pays a second full network round trip
+  // for a list already being downloaded. Joining the in-flight promise
+  // costs nothing and changes no result: success still fills the cache,
+  // failure still throws to the caller, and the entry is cleared on
+  // settle so a later call can retry after a failure.
+  const surahPageListPromise = useRef<Record<number, Promise<{ number: number; page_number: number }[]>>>({});
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
   // SUGGEST-A-LINK (2026-10-28, requested 2026-10-27): users propose a
@@ -567,16 +576,29 @@ export default function QuranMushafPage({
         }
       }
     } catch { /* ignore a malformed cache entry */ }
-    const res = await fetch(`https://api.quranpedia.net/v1/mushafs/1/${surah}`);
-    if (!res.ok) throw new Error('page list fetch failed');
-    const json = await res.json();
-    const list = (Array.isArray(json) ? json : [])
-      .map((a: any) => ({ number: Number(a.number), page_number: Number(a.page_number) }))
-      .filter((a) => Number.isInteger(a.number) && Number.isInteger(a.page_number));
-    if (list.length === 0) throw new Error('empty page list');
-    surahPageListCache.current[surah] = list;
-    try { localStorage.setItem(`${PAGE_LIST_STORAGE_KEY}:${surah}`, JSON.stringify(list)); } catch { /* ignore */ }
-    return list;
+    // D4: join an in-flight fetch for this surah instead of starting a
+    // second one (see surahPageListPromise). The network result, the
+    // cache fill, and the throw-on-failure behaviour are unchanged.
+    const inFlight = surahPageListPromise.current[surah];
+    if (inFlight) return inFlight;
+    const p = (async () => {
+      const res = await fetch(`https://api.quranpedia.net/v1/mushafs/1/${surah}`);
+      if (!res.ok) throw new Error('page list fetch failed');
+      const json = await res.json();
+      const list = (Array.isArray(json) ? json : [])
+        .map((a: any) => ({ number: Number(a.number), page_number: Number(a.page_number) }))
+        .filter((a) => Number.isInteger(a.number) && Number.isInteger(a.page_number));
+      if (list.length === 0) throw new Error('empty page list');
+      surahPageListCache.current[surah] = list;
+      try { localStorage.setItem(`${PAGE_LIST_STORAGE_KEY}:${surah}`, JSON.stringify(list)); } catch { /* ignore */ }
+      return list;
+    })();
+    surahPageListPromise.current[surah] = p;
+    try {
+      return await p;
+    } finally {
+      if (surahPageListPromise.current[surah] === p) delete surahPageListPromise.current[surah];
+    }
   }, []);
 
   // The ayah refs printed on one page, in page order. Walks backwards
@@ -903,6 +925,17 @@ export default function QuranMushafPage({
     loadPageAyahs(currentPage);
   }, [currentPage, fetchPageVerses, loadPageAyahs]);
 
+  // D4 (follow latency): set by jumpToTracked immediately before a
+  // follow-lock page change, consumed by the neighbour-preload effect
+  // below. On the lock turn the target image itself is the critical
+  // download; firing six neighbour images at +400ms would share the
+  // connection with it on exactly the slow networks where lock latency
+  // hurts. Skipping ONE turn's neighbour preload is safe: the next
+  // manual turn re-arms preloading, and follow has no tracking after
+  // lock, so no page is ever needed "next" without a turn. This ref is
+  // declared here (not in the follow block) so the effect below can
+  // read it; refs are not useCallback deps, so there is no TDZ risk.
+  const followLockPreloadSkipRef = useRef(false);
   // Preload the neighbouring pages so turning feels instant — but
   // ONLY after the user settles (400ms without a turn). The old code
   // fired ±3 preloads on EVERY turn, so fast flips flooded the
@@ -912,6 +945,12 @@ export default function QuranMushafPage({
   // waiting for a settle is safe. ±1 first, then ±2, ±3, so the
   // nearest pages always win the race.
   useEffect(() => {
+    // D4: follow-lock turn — the target image owns the connection.
+    // Consume the flag exactly once; every other turn preloads as before.
+    if (followLockPreloadSkipRef.current) {
+      followLockPreloadSkipRef.current = false;
+      return;
+    }
     const timer = setTimeout(() => {
       for (const p of [currentPage - 1, currentPage + 1, currentPage - 2, currentPage + 2, currentPage - 3, currentPage + 3]) {
         if (p >= 1 && p <= TOTAL_PAGES) {
@@ -1123,6 +1162,15 @@ export default function QuranMushafPage({
   // the app-level fullscreen view (fixed overlay) is the real fullscreen
   // and opens regardless; this call is fire-and-forget on top of it.
   const requestNativeFullscreen = () => {
+    // D4: already in native fullscreen — follow entry already requested
+    // it and the lock path requests it again. A second request is pure
+    // overhead (and, from a non-gesture transcript callback, a second
+    // refusal); the app-level fixed overlay is already open either way,
+    // so skipping when already fullscreen cannot change what is shown.
+    try {
+      const d = document as any;
+      if (d.fullscreenElement || d.webkitFullscreenElement) return;
+    } catch {}
     // Installed PWA (standalone): there is no Safari chrome and no
     // fullscreen banner, so native fullscreen is redundant — skip it.
     // In a Safari tab the banner ("<site> is in full screen") is iOS's
@@ -1209,6 +1257,16 @@ export default function QuranMushafPage({
   // deleted with tracking itself: misses after a lock cannot happen,
   // because listening has stopped.)
   const followAutoLockedRef = useRef(false);
+  // D4 (follow latency) pre-warm state — see warmFollowCandidate below.
+  // followWarmPageRef: last page whose image + word-box JSON were
+  // warmed during listening, so each distinct candidate page is warmed
+  // at most once per app lifetime (a warmed page stays in the browser
+  // cache, so re-warming it across sessions would buy nothing).
+  // followWarmInterimLenRef: interim length at the last interim warm,
+  // so the engine's repeated revisions of the same interim text do not
+  // rescan on every delivery; reset on every fresh follow entry.
+  const followWarmPageRef = useRef<number | null>(null);
+  const followWarmInterimLenRef = useRef(0);
   // Live-engine restart budget state (see LIVE_RESTART_MAX above).
   const liveRestartCountRef = useRef(0);
   const liveRestartWindowRef = useRef(0);
@@ -1349,6 +1407,14 @@ export default function QuranMushafPage({
 
   // --- Follow-the-imam mode ---
   const enterFollowMode = useCallback(() => {
+    // D4: a Ratel intro left open (manual fullscreen button, 3s timer)
+    // would cover the follow lobby — the lobby renders only while
+    // !showRatelIntro — for up to 3s after entering follow. Dismiss it
+    // at entry; the pending timer's later setShowRatelIntro(false) is
+    // then a harmless no-op. The follow path itself never sets the
+    // intro (verified: only openFullscreen() sets it, and neither
+    // enterFollowMode nor jumpToTracked calls openFullscreen).
+    setShowRatelIntro(false);
     setFollowOn(true);
     // Follow mode gets its own fullscreen page at once (no intro, no
     // normal-view panel): the start button lives in the fullscreen
@@ -1372,6 +1438,7 @@ export default function QuranMushafPage({
     setFollowChunkCount(0);
     setFollowChunkFails(0);
     followBufferRef.current = [];
+    followWarmInterimLenRef.current = 0;
     setCleanMode(false);
     // Word-level highlighting needs the Madinah word boxes, so follow
     // mode always uses the Madinah edition (harmless if already selected).
@@ -1407,6 +1474,7 @@ export default function QuranMushafPage({
     liveRestartWindowRef.current = 0;
     setFollowHeard('');
     followBufferRef.current = [];
+    followWarmInterimLenRef.current = 0;
     // A stop must not leave a stale 'locked' status behind: the next
     // session starts from 'listening', and no post-stop transcript
     // (guarded in onFollowFinal) can ever read a dead status again.
@@ -1438,8 +1506,14 @@ export default function QuranMushafPage({
       if (gen !== followJumpGenRef.current) return;
       const entry = list.find((a) => a.number === pos.ayah);
       const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
+      // D4: the lock turn's connection belongs to the target image
+      // (neighbour preloads are skipped for this one turn — see
+      // followLockPreloadSkipRef), and the Ratel intro must never
+      // cover the locked page even if it was somehow opened mid-listen.
+      followLockPreloadSkipRef.current = true;
       goToPage(page);
       setSelectedVerse(null);
+      setShowRatelIntro(false);
       setShowFullscreen(true);
       requestNativeFullscreen();
       if (opts?.highlight) setSearchHighlight({ surah: pos.surah, ayah: pos.ayah });
@@ -1454,14 +1528,60 @@ export default function QuranMushafPage({
       // only if that ayah happens to be on the surah's first page, and
       // the user may need to turn pages manually to reach it. To revert:
       // replace this catch body with the old setFollowError line.
+      followLockPreloadSkipRef.current = true;
       goToPage(getSurahStartPage(pos.surah));
       setSelectedVerse(null);
+      setShowRatelIntro(false);
       setShowFullscreen(true);
       requestNativeFullscreen();
       if (opts?.highlight) setSearchHighlight({ surah: pos.surah, ayah: pos.ayah });
     }
     // goToPage / setters are stable enough here; loadSurahPageList is memoized.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadSurahPageList]);
+
+  // D4 (follow latency) — pre-warm the likely page DURING listening.
+  // Why this exists: on the old path, nothing about the target page was
+  // fetched until AFTER the lock, so the lock paid, serially, a
+  // Quranpedia page-list fetch (if uncached) + the Madinah image
+  // download + the word-box JSON fetch, all while the user stared at
+  // the old page. Warming moves all three onto the listening window —
+  // the imam is still reciting, the mic/recognition path is untouched
+  // (no awaits, no state updates, no engine calls here) — so a lock
+  // that lands on an already-warmed page pays ~0ms of network instead
+  // of seconds. Warming NEVER locks and NEVER changes lock semantics:
+  // the candidate is found with a WEAKER 3-word run purely to choose
+  // what to fetch; a wrong candidate only wastes one cached image +
+  // one small JSON (deduplicated per page), and the lock path still
+  // resolves the true page from the page list and highlights the true
+  // ayah. The word-box URL mirrors the loader's FIRST url
+  // (raw.githubusercontent.com); if that loader ever changes, the warm merely
+  // stops helping — it cannot break the highlight, which still loads
+  // normally on the page change.
+  const warmFollowCandidate = useCallback((words: string[], ordered: OrderedVerse[]) => {
+    if (followAutoLockedRef.current || words.length < 3) return;
+    const cand = findLock(words, ordered, 3);
+    if (!cand) return;
+    void loadSurahPageList(cand.surah).then((list) => {
+      if (followAutoLockedRef.current) return;
+      const entry = list.find((a) => a.number === cand.ayah);
+      const page = entry ? entry.page_number : getSurahStartPage(cand.surah);
+      if (page < 1 || page > TOTAL_PAGES) return;
+      if (followWarmPageRef.current === page) return;
+      followWarmPageRef.current = page;
+      try {
+        // Follow always uses the Madinah edition (enterFollowMode
+        // forces it), so warm that edition's image regardless of the
+        // edition state at warm time.
+        const madinah = EDITIONS.find((e) => e.id === 'madinah');
+        if (madinah) {
+          const img = new Image();
+          img.src = madinah.imageUrl(page);
+        }
+        const file = String(page).padStart(3, '0');
+        void fetch(`https://raw.githubusercontent.com/bodoorzahera/Quran-coordinate/master/src/qurancoor/data/page-${file}.json`).catch(() => {});
+      } catch { /* best-effort warm: a failure just means the lock path loads normally */ }
+    }).catch(() => { /* page-list warm failure: the lock path retries on its own */ });
   }, [loadSurahPageList]);
 
   // THE single lock callback (merged live + whisper + auto-stop +
@@ -1536,6 +1656,11 @@ export default function QuranMushafPage({
     // followPos is set, the lock callback has already stopped
     // listening, so this branch is a guard, not a tracker.
     if (followPosRef.current) return;
+    // D4: warm the likely page from the finals buffer as soon as a
+    // 3-word run names a candidate — usually whole ayahs before the
+    // 4-word lock fires. Warm-only: the trigger gate and lock below
+    // are untouched.
+    if (buffer.length >= 3) warmFollowCandidate(buffer, ordered);
     // TRIGGER GATE (shared constant, both engines): search runs only
     // once the cumulative buffer reaches FOLLOW_TRIGGER_WORDS (5).
     // The tracking branch that used to follow this gate is deleted:
@@ -1545,7 +1670,7 @@ export default function QuranMushafPage({
     const lock = findLock(buffer, ordered, FOLLOW_LOCK_MIN_WORDS);
     if (!lock) return;
     handleFollowAutoLock(lock);
-  }, [handleFollowAutoLock]);
+  }, [handleFollowAutoLock, warmFollowCandidate]);
 
   // Engine callbacks are registered once at start; they always call the
   // latest onFollowFinal through this ref so they never go stale.
@@ -1570,9 +1695,20 @@ export default function QuranMushafPage({
     const words = heardWords(trimmed);
     if (words.length < FOLLOW_INTERIM_MIN_WORDS) return;
     const lock = findInterimLock(words, ordered);
-    if (!lock) return;
+    if (!lock) {
+      // D4: warm the likely page mid-ayah from the last 20 interim
+      // words (the same window findInterimLock scans), but only when
+      // the interim GREW since the last warm — the engine redelivers
+      // revised copies of the same text, and rescanning those warms
+      // nothing new. Warm-only; the interim lock rule is untouched.
+      if (words.length > followWarmInterimLenRef.current) {
+        followWarmInterimLenRef.current = words.length;
+        warmFollowCandidate(words.slice(-20), ordered);
+      }
+      return;
+    }
     handleFollowAutoLock(lock);
-  }, [handleFollowAutoLock]);
+  }, [handleFollowAutoLock, warmFollowCandidate]);
   const followInterimRef = useRef(onFollowInterim);
   useEffect(() => { followInterimRef.current = onFollowInterim; });
 
