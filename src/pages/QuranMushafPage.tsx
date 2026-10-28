@@ -2375,9 +2375,11 @@ export default function QuranMushafPage({
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Mushaf page image */}
-          <div className="lg:col-span-3 flex flex-col items-center">
+        <div className="grid grid-cols-1 gap-6">
+          {/* Mushaf page image — full width: the page is the reading
+              surface, so it must fill the screen instead of sitting
+              beside the list (the list now follows below the page). */}
+          <div className="flex flex-col items-center">
             <div className="relative bg-gradient-to-br from-stone-50 to-white rounded-2xl shadow-xl border-2 border-amber-200 overflow-hidden p-3 sm:p-6 max-w-full">
               {imageLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-amber-50/80 z-10">
@@ -2421,8 +2423,9 @@ export default function QuranMushafPage({
 
           </div>
 
-          {/* Verses list with tap-to-show-links */}
-          <div className="lg:col-span-2">
+          {/* Verses list with tap-to-show-links — below the page now,
+              so the page itself fills the screen width. */}
+          <div>
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden sticky top-24">
               <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50 to-teal-50">
                 <div className="flex items-center gap-2">

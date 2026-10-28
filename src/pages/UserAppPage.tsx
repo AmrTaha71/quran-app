@@ -448,13 +448,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </p>
             <p className="text-sm text-accent-500 leading-relaxed mt-1">
               {listCounts.memorized > 0
-                ? 'آياتك المحفوظة تحت، ومع كل آية روابطها — راجع تربيطاتك وثبّتها.'
+                ? 'آياتك المحفوظة تحت، ومع كل آية روابطها.'
                 : 'لسه ما علّمتش آيات كمحفوظة — اضغط مطولًا على أي آية واختر «تم الحفظ»، وهنا هتتابع نسبتك.'}
             </p>
-            <button onClick={() => { setListFilter('memorized'); setPage(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              className="mt-4 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
-              راجع تربيطاتك
-            </button>
           </div>
         )}
 
