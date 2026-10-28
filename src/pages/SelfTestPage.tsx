@@ -4,6 +4,7 @@ import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { normalizeArabic, normalizeWords } from '../lib/arabicNormalize';
 import { currentSpeechLocale } from '../lib/LanguageContext';
+import { getStoredLinkGender } from '../lib/linkAudio';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
@@ -40,12 +41,15 @@ const TARGET_KEY = 'quran-mushaf-target';
 // Quiet gap after the last heard word before the reading is judged:
 // the user has paused, so the utterance is (probably) complete.
 const QUIET_GAP_MS = 1500;
-// Self-correction window after a mismatch, in seconds (the user's spec).
-// It depends on the verification level: beginners and intermediates get
-// 5s, advanced users only 3s (a faster, stricter check).
+// Self-correction window after a mismatch, in seconds (the user's
+// spec, 2026-10-28): THREE seconds for every level. The app speaks
+// the correction when the window expires, so a longer window would
+// only delay the correction he asked for within 3 seconds. Levels
+// still differ in strictness (beginner: word errors only, fix only
+// the wrong words; medium/advanced: strict + full re-recitation).
 type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
-function correctWindowFor(level: VerifyLevel): number {
-  return level === 'advanced' ? 3 : 5;
+function correctWindowFor(_level: VerifyLevel): number {
+  return 3;
 }
 // Recitation mode: 'ayah' grades one ayah at a time (the original
 // flow); 'continuous' lets the user recite the whole range without
@@ -292,17 +296,40 @@ function playCorrectChime() {
     o.stop(t + 0.3);
   } catch {}
 }
+// Spoken correction (2026-10-28): after a failed ayah the app SAYS
+// the correct words aloud, in a gendered voice — male for a man,
+// female for a woman — via the generate-voice engine (the same
+// extremely-human onyx/nova voices as link voices), with browser
+// Arabic TTS as an instant fallback so the correction never waits
+// on the network. The mic is always stopped before any correction
+// plays, so the device never "hears" its own correction.
+function speakCorrection(words: string[]) {
+  if (words.length === 0) return;
+  try {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(words.join(' '));
+    u.lang = 'ar-SA';
+    u.rate = 0.9;
+    window.speechSynthesis.speak(u);
+  } catch {}
+}
+function cancelCorrectionSpeech() {
+  try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch {}
+}
 
 // Mic-graded self-test (تسميع) v2.
 //
 // Flow per ayah: the text stays HIDDEN. The user taps the Mic button
 // and recites; the live transcript is compared word by word with the
 // expected ayah (same cross-rasm normalization as search). All words
-// correct -> the ayah reveals in GREEN. A mismatch -> a 5-second
+// correct -> the ayah reveals in GREEN. A mismatch -> a correction
 // window to self-correct (still listening; a corrected reading that
-// matches counts as correct). Still wrong after 5s -> the wrong-answer
-// buzzer plays and ONLY the wrong part (the mismatched/missing words)
-// reveals in RED, flashing — never the whole ayah.
+// matches counts as correct): 3s on every level (2026-10-28: the
+// user wants the app's correction within 3 seconds). Still wrong
+// after the window -> the wrong-answer buzzer plays, the wrong part
+// shows in RED, and the app SPEAKS the correct words aloud in his
+// gender's voice (prefetched during the window, TTS fallback).
 //
 // When the live engine is unavailable, the page falls back to v1's
 // manual self-grading (reveal + صح/خطأ) with a clear notice, and never
@@ -370,6 +397,74 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [contListening, setContListening] = useState(false);
   const [contProgress, setContProgress] = useState({ matched: 0, total: 0, ayahIdx: 0 });
 
+  // ---- Spoken correction machinery (2026-10-28) -------------------
+  // Gender for the correction voice: profile first, localStorage
+  // mirror ('quran-user-gender', written by Settings) while it
+  // loads, female side when unknown — the same policy as link
+  // voices. Male user -> male voice, female user -> female voice.
+  const [corrGender, setCorrGender] = useState<'male' | 'female'>(() => getStoredLinkGender(null));
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const uid = data.session?.user.id;
+      if (!uid) return;
+      supabase.from('user_profiles').select('gender').eq('user_id', uid).maybeSingle()
+        .then(({ data: p }) => {
+          if (p?.gender === 'male' || p?.gender === 'female') {
+            setCorrGender(p.gender);
+            try { localStorage.setItem('quran-user-gender', p.gender); } catch {}
+          }
+        });
+    }).catch(() => {});
+  }, []);
+  // Ayah mode: the correction audio prefetched during the 3s window
+  // (so it is ready the moment the window expires), keyed by ayah
+  // position + words. A newer fetch invalidates older results.
+  const corrAudioRef = useRef<HTMLAudioElement | null>(null);
+  const corrFetchTokenRef = useRef(0);
+  const corrPendingRef = useRef<{ index: number; wordsKey: string; url: string | null } | null>(null);
+  const [correctionAudioByAyah, setCorrectionAudioByAyah] = useState<Record<number, string>>({});
+  // Continuous mode: the 3s stall timer, the prompt in progress, the
+  // prefetched prompt audio, and the last spoken prompt (replayable).
+  const contStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const contPromptingRef = useRef(false);
+  const contPromptAudioRef = useRef<HTMLAudioElement | null>(null);
+  const contPrefetchRef = useRef<{ key: string; url: string | null } | null>(null);
+  const contPromptedKeyRef = useRef('');
+  const [contPrompting, setContPrompting] = useState(false);
+  const [contLastPrompt, setContLastPrompt] = useState<string[]>([]);
+  const stopCorrAudio = () => {
+    try { corrAudioRef.current?.pause(); } catch {}
+    corrAudioRef.current = null;
+  };
+  const fetchCorrectionAudio = async (words: string[], token: number): Promise<string | null> => {
+    if (words.length === 0) return null;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({ text: words.join(' '), voice: corrGender }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.audioUrl) return null;
+      if (token !== corrFetchTokenRef.current) return null;
+      return data.audioUrl;
+    } catch { return null; }
+  };
+  // Play a correction: prefetched gendered audio when ready, browser
+  // TTS otherwise (instant, so the 3s promise always holds). If the
+  // audio element is refused playback (timer-driven playback can be
+  // gesture-gated on some phones), fall back to TTS rather than
+  // staying silent.
+  const playCorrection = (words: string[], audioUrl?: string | null) => {
+    cancelCorrectionSpeech();
+    stopCorrAudio();
+    if (audioUrl) {
+      const a = new Audio(audioUrl);
+      corrAudioRef.current = a;
+      a.play().catch(() => { speakCorrection(words); });
+    } else speakCorrection(words);
+  };
+
   const applySettings = (level: VerifyLevel, mode: ReciteMode) => {
     setVerifyLevel(level);
     setReciteMode(mode);
@@ -410,6 +505,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const clearTimers = () => {
     if (quietTimerRef.current) { clearTimeout(quietTimerRef.current); quietTimerRef.current = null; }
     if (windowTimerRef.current) { clearInterval(windowTimerRef.current); windowTimerRef.current = null; }
+    // Never let a spoken correction bleed into the next ayah or
+    // keep playing after the user stops.
+    cancelCorrectionSpeech();
+    stopCorrAudio();
   };
 
   const stopRec = () => {
@@ -417,6 +516,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { recRef.current?.stop(); } catch {}
     recRef.current = null;
   };
+
+  // If the user leaves the test mid-correction, silence everything
+  // (refs only here — all declared above, so no TDZ risk).
+  useEffect(() => () => {
+    cancelCorrectionSpeech();
+    try { corrAudioRef.current?.pause(); } catch {}
+    try { contPromptAudioRef.current?.pause(); } catch {}
+    if (contStallTimerRef.current) clearTimeout(contStallTimerRef.current);
+  }, []);
 
   // Reset every per-ayah mic/manual state (called on ayah change, on
   // test start, and when the user stops listening mid-ayah).
@@ -637,6 +745,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setSkipped(nextSkipped);
     saveProgress(makeProgress(index, next, nextSkipped));
     if (ok) {
+      // A self-correction voids the prefetched correction audio.
+      corrFetchTokenRef.current++;
+      corrPendingRef.current = null;
       playCorrectChime();
       liveRef.current.micState = 'done-correct';
       setMicState('done-correct');
@@ -651,9 +762,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         ? alignWordsStrict(expected.map((w) => w.norm), spoken)
         : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
       setWrongIndices(expected.map((_, i) => i).filter((i) => !result.matched[i]));
-      setWrongByAyah((prev) => ({ ...prev, [index]: expected.filter((_, i) => !result.matched[i]).map((w) => w.orig) }));
+      const wrongWords = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
+      setWrongByAyah((prev) => ({ ...prev, [index]: wrongWords }));
       setWrongExtras(result.extras);
       if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
+      // The app corrects him aloud: after the 3s window expires, or
+      // when he taps "show me the mistake", the correct words are
+      // spoken in his gender's voice (prefetched gendered audio when
+      // ready, browser TTS otherwise). The mic is already stopped,
+      // so this cannot feed back into recognition.
+      const pending = corrPendingRef.current;
+      playCorrection(wrongWords, pending && pending.index === index && pending.wordsKey === wrongWords.join('|') ? pending.url : null);
       liveRef.current.micState = 'done-wrong';
       setMicState('done-wrong');
     }
@@ -697,8 +816,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Mismatch: open the correction window (still listening).
     // Record what was wrong and where the transcript stood, so the
     // window judges only the correction, not the old speech.
+    // Prefetch the gendered correction audio NOW, during the 3s
+    // window, so it is ready the moment the window expires.
     if (liveRef.current.micState === 'listening') {
       liveRef.current.correctingTargets = expected.filter((_, i) => !result.matched[i]).map((w) => w.norm);
+      const wrongOrig = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
+      const token = ++corrFetchTokenRef.current;
+      corrPendingRef.current = { index, wordsKey: wrongOrig.join('|'), url: null };
+      void fetchCorrectionAudio(wrongOrig, token).then((url) => {
+        if (url && token === corrFetchTokenRef.current && corrPendingRef.current?.index === index) {
+          corrPendingRef.current.url = url;
+          setCorrectionAudioByAyah((prev) => ({ ...prev, [index]: url }));
+        }
+      });
       liveRef.current.windowStartLen = spoken.length;
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
@@ -840,9 +970,121 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   const stopContinuousMic = () => {
+    cancelContPrompt();
     stopRec();
     liveRef.current.contListening = false;
     setContListening(false);
+  };
+
+  // ---- Continuous stall prompt (2026-10-28) -----------------------
+  // The user asked for corrections in continuous mode too, within
+  // 3 seconds. Interrupting a flowing recitation would be wrong, so
+  // the trigger is a STALL: no speech result for 3s while words are
+  // owed. Pausing the mic before speaking is essential — if the
+  // recognizer heard its own correction it would falsely match it
+  // as the user's recitation. Resume is guarded so a user stop or
+  // finish during the prompt never restarts listening.
+  const contOwedWords = (): string[] => {
+    const expected = liveRef.current.contExpected;
+    if (expected.length === 0) return [];
+    const spoken = spokenTokens(liveRef.current.contFinals);
+    const strict = liveRef.current.contStrict;
+    const result = strict
+      ? alignWordsStrict(expected.map((w) => w.norm), spoken)
+      : { ...alignWords(expected.map((w) => w.norm), spoken) };
+    let lastMatchedIdx = -1;
+    result.matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
+    let firstMissIdx = -1;
+    for (let i = 0; i < lastMatchedIdx; i++) {
+      if (!result.matched[i]) { firstMissIdx = i; break; }
+    }
+    if (firstMissIdx >= 0) {
+      const ayahIdx = expected[firstMissIdx].ayahIdx;
+      return expected.filter((w, i) => i < lastMatchedIdx && !result.matched[i] && w.ayahIdx === ayahIdx).map((w) => w.orig);
+    }
+    if (lastMatchedIdx + 1 < expected.length) return [expected[lastMatchedIdx + 1].orig];
+    return [];
+  };
+  const cancelContPrompt = () => {
+    if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
+    try { contPromptAudioRef.current?.pause(); } catch {}
+    contPromptAudioRef.current = null;
+    cancelCorrectionSpeech();
+    contPromptingRef.current = false;
+    setContPrompting(false);
+  };
+  const speakContPrompt = (words: string[]) => {
+    if (words.length === 0 || contPromptingRef.current) return;
+    const key = words.join('|');
+    contPromptedKeyRef.current = key;
+    setContLastPrompt(words);
+    contPromptingRef.current = true;
+    setContPrompting(true);
+    userStopRef.current = true;
+    try { recRef.current?.stop(); } catch {}
+    recRef.current = null;
+    liveRef.current.contListening = false;
+    setContListening(false);
+    const resumeAfterPrompt = () => {
+      try { contPromptAudioRef.current?.pause(); } catch {}
+      contPromptAudioRef.current = null;
+      cancelCorrectionSpeech();
+      if (!contPromptingRef.current) return;
+      contPromptingRef.current = false;
+      setContPrompting(false);
+      startContinuousMic();
+    };
+    const playTtsFallback = () => {
+      try {
+        if ('speechSynthesis' in window) {
+          const u = new SpeechSynthesisUtterance(words.join(' '));
+          u.lang = 'ar-SA';
+          u.rate = 0.9;
+          u.onend = resumeAfterPrompt;
+          u.onerror = resumeAfterPrompt;
+          window.speechSynthesis.speak(u);
+        } else resumeAfterPrompt();
+      } catch { resumeAfterPrompt(); }
+    };
+    const url = contPrefetchRef.current?.key === key ? contPrefetchRef.current.url : null;
+    cancelCorrectionSpeech();
+    if (url) {
+      const a = new Audio(url);
+      contPromptAudioRef.current = a;
+      a.onended = resumeAfterPrompt;
+      a.onerror = resumeAfterPrompt;
+      a.play().catch(playTtsFallback);
+    } else playTtsFallback();
+  };
+  // After every continuous result, (re)arm the 3s stall prompt. Any
+  // new result — final or interim — resets the clock, so a slow but
+  // ongoing recitation is never interrupted. The owed words are
+  // prefetched in the background, so the prompt is ready on time.
+  // A prompt never repeats for unchanged owed words (no nagging);
+  // the replay button covers "say it again".
+  const scheduleContStallPrompt = () => {
+    if (!liveRef.current.contListening || contPromptingRef.current) return;
+    if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
+    const owed = contOwedWords();
+    if (owed.length === 0) return;
+    const key = owed.join('|');
+    if (key !== contPrefetchRef.current?.key) {
+      const token = ++corrFetchTokenRef.current;
+      contPrefetchRef.current = { key, url: null };
+      void fetchCorrectionAudio(owed, token).then((url) => {
+        if (url && token === corrFetchTokenRef.current && contPrefetchRef.current?.key === key) {
+          contPrefetchRef.current.url = url;
+        }
+      });
+    }
+    contStallTimerRef.current = setTimeout(() => {
+      contStallTimerRef.current = null;
+      if (!liveRef.current.contListening || contPromptingRef.current) return;
+      const now = contOwedWords();
+      if (now.length === 0) return;
+      if (now.join('|') === contPromptedKeyRef.current) return;
+      speakContPrompt(now);
+    }, 3000);
   };
 
   // Grade the whole range from the accumulated continuous transcript.
@@ -924,6 +1166,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         }
       }
       if (interimText.trim()) setInterim(interimText.trim());
+      // Every result — final or interim — rearms the 3s stall
+      // prompt, so only true silence triggers a correction.
+      scheduleContStallPrompt();
     };
     rec.onerror = (e: any) => {
       if (e.error === 'not-allowed') {
@@ -1094,7 +1339,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-accent-500 mt-2 leading-relaxed">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
-                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
+                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو وقفت ٣ ثواني وعندك كلمة ناقصة، البرنامج ينطقها لك بصوت رجالي أو نسائي حسب حسابك وتكمّل. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p>
                 {!micSupported && (
                   <p className="text-sm text-amber-700 mt-1">الوضع المتصل يحتاج ميكروفون — جهازك مش بيدعمه، فالاختيار ده مقفول.</p>
@@ -1230,7 +1475,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
               <p className="text-xs text-accent-400 leading-relaxed">
                 {micSupported
-                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ' + (correctWindowFor(verifyLevel) === 3 ? '٣ ثواني' : '٥ ثواني') + ' تصلحها، وبعدها يظهر لك الجزء الغلط بس بالأحمر. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
+                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ٣ ثواني تصلحها، وبعدها يظهر لك الجزء الغلط بالأحمر وينطقه لك البرنامج بصوت رجالي أو نسائي حسب حسابك. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
                   : 'المتصفح ده مش بيدعم التسميع بالميكروفون — نص الآية لا يظهر إلا بعد أن تسمّعها وتضغط "أظهر الآية"، ثم تقيّم نفسك: صح أو خطأ.'}
               </p>
             </div>
@@ -1293,6 +1538,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <p className="text-sm font-bold text-emerald-700 mb-4">
                       الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
                     </p>
+                  )}
+                  {contPrompting && (
+                    <p className="text-sm font-bold text-blue-700 mb-4">بصحح لك… اسمع الكلمة الصح، وبعدها كمّل</p>
+                  )}
+                  {contLastPrompt.length > 0 && !contPrompting && (
+                    <button onClick={() => speakContPrompt(contLastPrompt)}
+                      className="mb-4 px-5 py-2.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-sm font-bold rounded-xl">
+                      🔊 أعد سماع التصحيح
+                    </button>
                   )}
                   {(transcript || interim) && (
                     <p className="text-sm text-accent-500 leading-relaxed mb-4" dir="rtl">
@@ -1397,6 +1651,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </p>
                   {wrongExtras.length > 0 && (
                     <p className="text-sm text-amber-700 mt-3">كلمات زائدة سمعتها: {wrongExtras.join(' ')}</p>
+                  )}
+                  {(wrongByAyah[index]?.length ?? 0) > 0 && (
+                    <button onClick={() => playCorrection(wrongByAyah[index] ?? [], correctionAudioByAyah[index] ?? null)}
+                      className="mt-3 px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-sm font-bold rounded-xl">
+                      🔊 أعد سماع التصحيح
+                    </button>
                   )}
                   <button onClick={nextAfterMic}
                     className="mt-5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow">
