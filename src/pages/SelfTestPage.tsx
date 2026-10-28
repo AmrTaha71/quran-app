@@ -41,16 +41,22 @@ const TARGET_KEY = 'quran-mushaf-target';
 // Quiet gap after the last heard word before the reading is judged:
 // the user has paused, so the utterance is (probably) complete.
 const QUIET_GAP_MS = 1500;
-// Self-correction window after a mismatch, in seconds (the user's
-// spec, 2026-10-28): THREE seconds for every level. The app speaks
-// the correction when the window expires, so a longer window would
-// only delay the correction he asked for within 3 seconds. Levels
-// still differ in strictness (beginner: word errors only, fix only
-// the wrong words; medium/advanced: strict + full re-recitation).
+// Correction timing (2026-10-28, the user's words): the user picks
+// both the wait before the correction is spoken (2-10s, default 3)
+// and how fast the correct word is pronounced — according to his
+// own recitation speed. The wait is the ayah-mode self-correction
+// window and the continuous stall threshold; the mid-flow interrupt
+// stays immediate (that is the automatic reply he asked for —
+// delaying it would defeat it). The rate applies to both engines:
+// the generated voice (OpenAI speed) and the browser TTS fallback
+// (utterance rate), so the choice never silently changes meaning.
 type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
-function correctWindowFor(_level: VerifyLevel): number {
-  return 3;
-}
+type CorrRate = 'slow' | 'normal' | 'fast' | 'veryFast';
+const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.25, veryFast: 1.5 };
+const CORR_RATE_LABEL: Record<CorrRate, string> = { slow: 'بطيء', normal: 'عادي', fast: 'سريع', veryFast: 'سريع جدًا' };
+const CORR_DELAY_MIN = 2;
+const CORR_DELAY_MAX = 10;
+const CORR_DELAY_DEFAULT = 3;
 // Recitation mode: 'ayah' grades one ayah at a time (the original
 // flow); 'continuous' lets the user recite the whole range without
 // stopping at each ayah, and reports missed words per ayah at the end.
@@ -59,17 +65,21 @@ type ReciteMode = 'ayah' | 'continuous';
 // Self-test settings (verification level + recitation mode) persist
 // across visits, so the user picks them once.
 const SETTINGS_KEY = 'quran-test-settings';
-function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode } {
+function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: number; corrRate: CorrRate } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const p = JSON.parse(raw);
       const level: VerifyLevel = p.level === 'intermediate' || p.level === 'advanced' ? p.level : 'beginner';
       const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
-      return { level, mode };
+      const corrDelay = typeof p.corrDelay === 'number' && Number.isFinite(p.corrDelay)
+        ? Math.min(CORR_DELAY_MAX, Math.max(CORR_DELAY_MIN, Math.round(p.corrDelay)))
+        : CORR_DELAY_DEFAULT;
+      const corrRate: CorrRate = p.corrRate === 'slow' || p.corrRate === 'fast' || p.corrRate === 'veryFast' ? p.corrRate : 'normal';
+      return { level, mode, corrDelay, corrRate };
     }
   } catch {}
-  return { level: 'beginner', mode: 'ayah' };
+  return { level: 'beginner', mode: 'ayah', corrDelay: CORR_DELAY_DEFAULT, corrRate: 'normal' };
 }
 
 function loadHistory(): TestRecord[] {
@@ -303,14 +313,14 @@ function playCorrectChime() {
 // Arabic TTS as an instant fallback so the correction never waits
 // on the network. The mic is always stopped before any correction
 // plays, so the device never "hears" its own correction.
-function speakCorrection(words: string[]) {
+function speakCorrection(words: string[], rate = 1.0) {
   if (words.length === 0) return;
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(words.join(' '));
     u.lang = 'ar-SA';
-    u.rate = 0.9;
+    u.rate = rate;
     window.speechSynthesis.speak(u);
   } catch {}
 }
@@ -325,11 +335,11 @@ function cancelCorrectionSpeech() {
 // expected ayah (same cross-rasm normalization as search). All words
 // correct -> the ayah reveals in GREEN. A mismatch -> a correction
 // window to self-correct (still listening; a corrected reading that
-// matches counts as correct): 3s on every level (2026-10-28: the
-// user wants the app's correction within 3 seconds). Still wrong
-// after the window -> the wrong-answer buzzer plays, the wrong part
-// shows in RED, and the app SPEAKS the correct words aloud in his
-// gender's voice (prefetched during the window, TTS fallback).
+// matches counts as correct): the user's chosen correction delay
+// (default 3s, set in إعدادات التسميع). Still wrong after the window
+// -> the wrong-answer buzzer plays, the wrong part shows in RED, and
+// the app SPEAKS the correct words aloud in his gender's voice at
+// his chosen rate (prefetched during the window, TTS fallback).
 //
 // When the live engine is unavailable, the page falls back to v1's
 // manual self-grading (reveal + صح/خطأ) with a clear notice, and never
@@ -375,7 +385,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [micState, setMicState] = useState<MicState>('idle');
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
-  const [countdown, setCountdown] = useState(() => correctWindowFor(loadTestSettings().level));
+  const [countdown, setCountdown] = useState(() => loadTestSettings().corrDelay);
   const [wrongIndices, setWrongIndices] = useState<number[]>([]);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
@@ -385,6 +395,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Verification level + recitation mode (setup choices, persisted).
   const [verifyLevel, setVerifyLevel] = useState<VerifyLevel>(() => loadTestSettings().level);
   const [reciteMode, setReciteMode] = useState<ReciteMode>(() => loadTestSettings().mode);
+  const [corrDelay, setCorrDelay] = useState<number>(() => loadTestSettings().corrDelay);
+  const [corrRate, setCorrRate] = useState<CorrRate>(() => loadTestSettings().corrRate);
   // The mode of the test actually running (resume always runs ayah
   // mode, whatever the setup preference says).
   const [testMode, setTestMode] = useState<ReciteMode>('ayah');
@@ -460,7 +472,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({ text: words.join(' '), voice: corrGender }),
+        body: JSON.stringify({ text: words.join(' '), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.audioUrl) return null;
@@ -478,16 +490,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (audioUrl) {
       const a = new Audio(audioUrl);
       corrAudioRef.current = a;
-      a.play().catch(() => { speakCorrection(words); });
-    } else speakCorrection(words);
+      a.play().catch(() => { speakCorrection(words, CORR_RATE_VALUE[liveRef.current.corrRate]); });
+    } else speakCorrection(words, CORR_RATE_VALUE[liveRef.current.corrRate]);
   };
 
-  const applySettings = (level: VerifyLevel, mode: ReciteMode) => {
+  const applySettings = (level: VerifyLevel, mode: ReciteMode, delay: number = corrDelay, rate: CorrRate = corrRate) => {
+    const d = Math.min(CORR_DELAY_MAX, Math.max(CORR_DELAY_MIN, Math.round(delay)));
     setVerifyLevel(level);
     setReciteMode(mode);
+    setCorrDelay(d);
+    setCorrRate(rate);
     liveRef.current.level = level;
     liveRef.current.mode = mode;
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ level, mode })); } catch {}
+    liveRef.current.corrDelay = d;
+    liveRef.current.corrRate = rate;
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ level, mode, corrDelay: d, corrRate: rate })); } catch {}
   };
 
   // Manual preference survives ayah changes (the old code reset it
@@ -509,6 +526,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     windowStartLen: 0,
     level: loadTestSettings().level,
     mode: loadTestSettings().mode,
+    corrDelay: loadTestSettings().corrDelay,
+    corrRate: loadTestSettings().corrRate,
     // Continuous mode: one recognition session over the whole range.
     contListening: false,
     contFinals: '',
@@ -553,7 +572,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setMicState('idle');
     setTranscript('');
     setInterim('');
-    setCountdown(correctWindowFor(liveRef.current.level));
+    setCountdown(liveRef.current.corrDelay);
     setWrongIndices([]);
     setWrongExtras([]);
     setMicError('');
@@ -857,7 +876,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       liveRef.current.windowStartLen = spoken.length;
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
-      const windowS = correctWindowFor(liveRef.current.level);
+      const windowS = liveRef.current.corrDelay;
       setCountdown(windowS);
       if (windowTimerRef.current) clearInterval(windowTimerRef.current);
       let left = windowS;
@@ -1099,7 +1118,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if ('speechSynthesis' in window) {
           const u = new SpeechSynthesisUtterance(words.join(' '));
           u.lang = 'ar-SA';
-          u.rate = 0.9;
+          u.rate = CORR_RATE_VALUE[liveRef.current.corrRate];
           u.onend = resumeAfterPrompt;
           u.onerror = resumeAfterPrompt;
           window.speechSynthesis.speak(u);
@@ -1161,7 +1180,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (now.words.length === 0) return;
       if (now.words.join('|') === contPromptedKeyRef.current) return;
       speakContPrompt(now.words, now.indices, now.norms);
-    }, 3000);
+    }, liveRef.current.corrDelay * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
@@ -1443,10 +1462,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
                 <p className="text-sm text-accent-500 mt-2 leading-relaxed">
                   {verifyLevel === 'beginner'
-                    ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه. مهلة التصحيح ٥ ثواني.'
+                    ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه.'
                     : verifyLevel === 'intermediate'
-                    ? 'يوقف عند أي خطأ في الكلمات: ناقصة أو مختلفة أو زائدة. مهلة التصحيح ٥ ثواني.'
-                    : 'زي المتوسط، لكن مهلة التصحيح ٣ ثواني فقط — تدقيق أسرع وأشد.'}
+                    ? 'يوقف عند أي خطأ في الكلمات: ناقصة أو مختلفة أو زائدة.'
+                    : 'نفس تدقيق المتوسط — والسرعة دلوقتي بتتظبط من فترة التريث وسرعة النطق تحت.'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-accent-700 mb-2">سرعة التصحيح</p>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm text-accent-700">فترة التريث قبل النطق:</span>
+                  <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay - 1, corrRate)} disabled={corrDelay <= CORR_DELAY_MIN}
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-bold disabled:opacity-40">-</button>
+                  <span className="text-sm font-bold text-accent-800 min-w-[70px] text-center">{corrDelay.toLocaleString('ar-EG')} ثواني</span>
+                  <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay + 1, corrRate)} disabled={corrDelay >= CORR_DELAY_MAX}
+                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-bold disabled:opacity-40">+</button>
+                </div>
+                <p className="text-sm font-bold text-accent-700 mb-2">سرعة نطق الكلمة الصحيحة:</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
+                    <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelay, r)}
+                      className={`py-2.5 rounded-xl font-bold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                      {CORR_RATE_LABEL[r]}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-sm text-accent-500 mt-2 leading-relaxed">
+                  فترة التريث هي المهلة اللي بتاخدها تصلح لنفسك قبل ما البرنامج ينطق التصحيح (في آية آية)، أو مدة سكوتك قبل ما ينبهك (في المتصل). أما المقاطعة الفورية للغلطة المؤكدة وانت ماشي فبتفضل فورية — دي الرد التلقائي.
                 </p>
               </div>
               <div>
@@ -1464,7 +1506,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-accent-500 mt-2 leading-relaxed">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
-                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ٣ ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
+                    : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p>
                 {!micSupported && (
                   <p className="text-sm text-amber-700 mt-1">الوضع المتصل يحتاج ميكروفون — جهازك مش بيدعمه، فالاختيار ده مقفول.</p>
@@ -1600,7 +1642,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
               <p className="text-xs text-accent-400 leading-relaxed">
                 {micSupported
-                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ٣ ثواني تصلحها، وبعدها يظهر لك الجزء الغلط بالأحمر وينطقه لك البرنامج بصوت رجالي أو نسائي حسب حسابك. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
+                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ' + corrDelay.toLocaleString('ar-EG') + ' ثواني تصلحها، وبعدها يظهر لك الجزء الغلط بالأحمر وينطقه لك البرنامج بصوت رجالي أو نسائي حسب حسابك. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
                   : 'المتصفح ده مش بيدعم التسميع بالميكروفون — نص الآية لا يظهر إلا بعد أن تسمّعها وتضغط "أظهر الآية"، ثم تقيّم نفسك: صح أو خطأ.'}
               </p>
             </div>

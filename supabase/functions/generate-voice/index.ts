@@ -33,7 +33,7 @@ async function generateAzureTTS(text: string, voice: "male" | "female", apiKey: 
   return response.arrayBuffer();
 }
 
-async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey: string): Promise<{ buffer: ArrayBuffer; model: string }> {
+async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey: string, speedOverride?: number): Promise<{ buffer: ArrayBuffer; model: string }> {
   const ttsVoice = voice === "female" ? "nova" : "onyx";
   // gpt-4o-mini-tts first: far more natural prosody than tts-1-hd, and it
   // accepts style instructions. Falls back to tts-1-hd if it ever fails.
@@ -44,8 +44,9 @@ async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey:
     : "An extremely human, dignified, warm male voice, like a respected Quran teacher speaking to a student face to face: unhurried and natural, with real pauses and breathing between phrases, clear Arabic pronunciation, calm and reverent tone, gentle variation in pace and emotion, alive and conversational with genuine human warmth — never rushed, never monotone, never like a news announcer or a robot.";
   // Male delivery was reported slow: 1.15 keeps it dignified without
   // dragging. Female stays 1.0 (no complaint). Cost is per character,
-  // so speed changes nothing on billing.
-  const speed = voice === "male" ? 1.15 : 1.0;
+  // so speed changes nothing on billing. A caller-supplied speed
+  // (self-test correction rate, 2026-10-28) overrides both defaults.
+  const speed = speedOverride ?? (voice === "male" ? 1.15 : 1.0);
   const attempts = [
     { model: "gpt-4o-mini-tts", body: { model: "gpt-4o-mini-tts", input: text, voice: ttsVoice, response_format: "mp3", speed, instructions } },
     { model: "tts-1-hd", body: { model: "tts-1-hd", input: text, voice: ttsVoice, response_format: "mp3", speed } },
@@ -69,7 +70,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { text, voice } = await req.json();
+    const { text, voice, speed: reqSpeed } = await req.json();
 
     if (!text || typeof text !== "string") {
       return new Response(
@@ -77,6 +78,10 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+    // Optional caller speed (0.25-4.0, OpenAI's range). Invalid or
+    // absent values keep the per-voice defaults, so older callers
+    // (admin/link generation) behave exactly as before.
+    const speedOverride = typeof reqSpeed === "number" && reqSpeed >= 0.25 && reqSpeed <= 4 ? reqSpeed : undefined;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -101,7 +106,7 @@ Deno.serve(async (req: Request) => {
     if (azureKey) {
       audioBuffer = await generateAzureTTS(text, voice || "male", azureKey, azureRegion);
     } else {
-      const result = await generateOpenAITTS(text, voice || "male", openaiKey!);
+      const result = await generateOpenAITTS(text, voice || "male", openaiKey!, speedOverride);
       audioBuffer = result.buffer;
       ttsModel = result.model;
     }
