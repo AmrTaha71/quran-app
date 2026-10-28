@@ -1,8 +1,10 @@
 // Generates the PWA icons at build time (no binary files in git — the
 // push tooling only handles UTF-8 text). Pure Node, no dependencies:
-// draws the app emblem — emerald rounded square, gold medallion
-// rings, 8-point star above an open gold-bound Mushaf — and writes
-// real PNGs via zlib + a small CRC32 implementation.
+// draws the app emblem as a CIRCLE — emerald disc, gold circular
+// frame, medallion rings with dots, filled 8-point star above an open
+// gold-bound Mushaf — and writes real PNGs via zlib + a small CRC32
+// implementation. Corners are transparent, so the home screen shows a
+// round icon under any platform mask.
 // Runs automatically before `vite build` via the `prebuild` script.
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -65,7 +67,6 @@ function png(size, pixels) {
 function makeIcon(size, { maskable = false, apple = false } = {}) {
   const pixels = new Array(size * size);
   const c = size / 2;
-  const rad = maskable || apple ? 0 : size / 5;
   const half = size / 2;
   // Maskable icons are cropped to the center 80% on install, so the
   // whole emblem scales in a little to stay inside the safe zone.
@@ -74,6 +75,9 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
   const w = size / 40; // thick gold line width — thin lines read as
   // "poor" at home-screen size; filled gold reads as luxurious.
   const frameW = size / 24; // gold frame just inside the icon edge
+  // Circular frame radius: at the disc edge, pulled in a little for
+  // maskable so the safe-zone crop never cuts it.
+  const edgeR = (half - frameW / 2) * (maskable ? 0.78 : 1);
   const R1 = 0.44 * size * ms; // medallion outer ring
   const R2 = 0.375 * size * ms; // medallion inner ring
   const midR = (R1 + R2) / 2; // ring of small gold dots
@@ -85,15 +89,6 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
   const bookH = 0.34 * size * ms;
   const bookDip = 0.05 * size * ms; // center top dips toward the spine
   const coverW = size / 34; // gold binding thickness around the pages
-  // Rounded-square membership test (for the frame): true when the
-  // pixel is inside a rounded square of the given half-size and
-  // corner radius.
-  const inRounded = (px, py, h, r) => {
-    if (r <= 0) return Math.abs(px) <= h && Math.abs(py) <= h;
-    const dx = Math.max(Math.abs(px) - (h - r), 0);
-    const dy = Math.max(Math.abs(py) - (h - r), 0);
-    return dx * dx + dy * dy <= r * r;
-  };
   // Open-book page test: top edge dips at the center spine, bottom
   // edge straight. Used twice: gold cover, then cream pages inset.
   const inBookShape = (px, py, bw, bh) => {
@@ -106,7 +101,10 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
     for (let x = 0; x < size; x++) {
       const px = x + 0.5 - c;
       const py = y + 0.5 - c;
-      if (rad > 0 && !inRounded(px, py, half, rad)) {
+      // Round icon: outside the disc is transparent, so the home
+      // screen shows a circle, not a square.
+      const dist0 = Math.hypot(px, py);
+      if (dist0 > half) {
         pixels[y * size + x] = [0, 0, 0, 0];
         continue;
       }
@@ -118,8 +116,8 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
         Math.round(94 + (60 - 94) * t),
         255,
       ];
-      // Gold frame (not for maskable: the safe-zone crop would cut it).
-      if (!maskable && !inRounded(px, py, half - frameW, Math.max(rad - frameW, 0))) color = GOLD;
+      // Circular gold frame at the disc's edge.
+      if (Math.abs(dist0 - edgeR) <= frameW / 2) color = GOLD;
       const dist = Math.hypot(px, py);
       if (Math.abs(dist - R1) <= w / 2 || Math.abs(dist - R2) <= w / 2) color = GOLD;
       // 12 small gold dots on the ring between the two medallion rings.

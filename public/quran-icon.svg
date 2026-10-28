@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- روابط الذكر الحكيم — app emblem (favicon). Matches the richer
-       PWA icon drawn by scripts/generate-icons.mjs: radial emerald,
-       gold frame, medallion rings with dots, filled 8-point star,
-       gold-bound open Mushaf, name in gold below. -->
+  <!-- روابط الذكر الحكيم — circular app emblem (favicon). Matches
+       the richer PWA icon drawn by scripts/generate-icons.mjs: radial
+       emerald disc, gold circular frame, medallion rings with dots,
+       filled 8-point star, gold-bound open Mushaf, name in gold. -->
   <defs>
     <radialGradient id="g" cx="50%" cy="50%" r="75%">
       <stop offset="0%" stop-color="#0b7a5e"/>
       <stop offset="100%" stop-color="#04543c"/>
     </radialGradient>
   </defs>
-  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#g)"/>
-  <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="#f0c85a" stroke-width="16"/>
+  <circle cx="256" cy="256" r="256" fill="url(#g)"/>
+  <circle cx="256" cy="256" r="240" fill="none" stroke="#f0c85a" stroke-width="16"/>
   <circle cx="256" cy="256" r="222" fill="none" stroke="#f0c85a" stroke-width="12"/>
   <circle cx="256" cy="256" r="190" fill="none" stroke="#f0c85a" stroke-width="7"/>
   <g fill="#f0c85a">
@@ -30,5 +30,5 @@
   <path d="M256 276 L138 246 L138 342 L256 370 Z" fill="#f8f1de"/>
   <path d="M256 276 L374 246 L374 342 L256 370 Z" fill="#f8f1de"/>
   <line x1="256" y1="262" x2="256" y2="384" stroke="#f0c85a" stroke-width="12"/>
-  <text x="256" y="456" text-anchor="middle" font-size="44" fill="#f0c85a" font-family="serif">روابط الذكر الحكيم</text>
+  <text x="256" y="444" text-anchor="middle" font-size="36" fill="#f0c85a" font-family="serif">روابط الذكر الحكيم</text>
 </svg>
