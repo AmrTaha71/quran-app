@@ -1,4 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2E7D32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-  <text x="12" y="14" text-anchor="middle" font-size="8" fill="#2E7D32" stroke="none" font-family="serif">القرآن</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- روابط الذكر الحكيم — app emblem (favicon). Deep emerald field,
+       gold medallion rings, 8-point star above an open gold-bound
+       Mushaf, name in gold below. Matches the AI logo approved
+       2026-10-28; the PWA icons are drawn from the same emblem by
+       scripts/generate-icons.mjs (pixel code, no text at icon sizes). -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="#065f46"/>
+  <circle cx="256" cy="256" r="222" fill="none" stroke="#f0c85a" stroke-width="7"/>
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#f0c85a" stroke-width="4"/>
+  <!-- 8-point star: square ring crossed by a diamond ring -->
+  <g fill="none" stroke="#f0c85a" stroke-width="6">
+    <rect x="212" y="96" width="88" height="88"/>
+    <rect x="212" y="96" width="88" height="88" transform="rotate(45 256 140)"/>
+  </g>
+  <rect x="244" y="128" width="24" height="24" fill="#f0c85a" transform="rotate(45 256 140)"/>
+  <!-- Open Mushaf: two cream pages, gold binding, dipped center -->
+  <path d="M256 252 L118 222 L118 356 L256 382 Z" fill="#f8f1de" stroke="#f0c85a" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M256 252 L394 222 L394 356 L256 382 Z" fill="#f8f1de" stroke="#f0c85a" stroke-width="7" stroke-linejoin="round"/>
+  <line x1="256" y1="252" x2="256" y2="382" stroke="#f0c85a" stroke-width="9"/>
+  <text x="256" y="452" text-anchor="middle" font-size="46" fill="#f0c85a" font-family="serif">روابط الذكر الحكيم</text>
 </svg>

@@ -1,13 +1,15 @@
 // Generates the PWA icons at build time (no binary files in git — the
 // push tooling only handles UTF-8 text). Pure Node, no dependencies:
-// draws an emerald rounded square with a gold 8-point star (Rub el Hizb
-// style) and writes real PNGs via zlib + a small CRC32 implementation.
+// draws the app emblem — emerald rounded square, gold medallion
+// rings, 8-point star above an open gold-bound Mushaf — and writes
+// real PNGs via zlib + a small CRC32 implementation.
 // Runs automatically before `vite build` via the `prebuild` script.
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 
 const EMERALD = [6, 95, 70, 255];
 const GOLD = [240, 200, 90, 255];
+const CREAM = [248, 241, 222, 255];
 
 const CRC_TABLE = (() => {
   const table = new Int32Array(256);
@@ -63,9 +65,30 @@ function png(size, pixels) {
 function makeIcon(size, { maskable = false, apple = false } = {}) {
   const pixels = new Array(size * size);
   const c = size / 2;
-  const r = maskable || apple ? size / 5 : size / 4;
   const rad = maskable || apple ? 0 : size / 5;
   const half = size / 2;
+  // Maskable icons are cropped to the center 80% on install, so the
+  // whole emblem scales in a little to stay inside the safe zone.
+  const ms = maskable ? 0.86 : 1;
+  const w = size / 72; // gold line width
+  const R1 = 0.44 * size * ms; // medallion outer ring
+  const R2 = 0.39 * size * ms; // medallion inner ring
+  const starCy = -0.205 * size * ms; // 8-point star center (above book)
+  const starR = 0.085 * size * ms;
+  const bookCy = 0.13 * size * ms; // open book center
+  const bookW = 0.56 * size * ms;
+  const bookH = 0.30 * size * ms;
+  const bookDip = 0.055 * size * ms; // center top dips toward the spine
+  // Open-book page test: top edge dips at the center spine, bottom
+  // edge straight. Returns true when (px, py) is inside the page
+  // shape of the given width/height (used twice: gold backing, then
+  // cream pages on top for the outline effect).
+  const inBookShape = (px, py, bw, bh) => {
+    if (Math.abs(px) > bw / 2) return false;
+    const t = 1 - Math.abs(px) / (bw / 2); // 1 at spine, 0 at outer edge
+    const top = bookCy - bh / 2 + bookDip * t;
+    return py >= top && py <= bookCy + bh / 2;
+  };
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const px = x + 0.5 - c;
@@ -82,16 +105,22 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
         pixels[y * size + x] = [0, 0, 0, 0];
         continue;
       }
-      // Gold 8-point star as intersecting outlines (like the original
-      // emblem): a square ring crossed by a diamond ring, plus a small
-      // filled diamond at the center. (A filled square + diamond union
-      // would just be a square — the diamond sits inside it.)
-      const w = size / 42;
-      const nearSquareRing = Math.abs(Math.max(Math.abs(px), Math.abs(py)) - r) <= w / 2;
-      const nearDiamondRing = Math.abs(Math.abs(px) + Math.abs(py) - r) <= w / 2;
-      const inCenter = Math.abs(px) + Math.abs(py) <= r / 6;
-      const gold = nearSquareRing || nearDiamondRing || inCenter;
-      pixels[y * size + x] = gold ? GOLD : EMERALD;
+      const dist = Math.hypot(px, py);
+      let color = EMERALD;
+      if (Math.abs(dist - R1) <= w / 2 || Math.abs(dist - R2) <= w / 2) color = GOLD;
+      // 8-point star as intersecting outlines: a square ring crossed
+      // by a diamond ring, plus a small filled diamond at the center.
+      const sx = px;
+      const sy = py - starCy;
+      if (Math.abs(Math.max(Math.abs(sx), Math.abs(sy)) - starR) <= w / 2
+        || Math.abs(Math.abs(sx) + Math.abs(sy) - starR) <= w / 2
+        || Math.abs(sx) + Math.abs(sy) <= starR / 3.5) color = GOLD;
+      // Open Mushaf: gold backing slightly larger, cream pages on top,
+      // gold spine down the middle.
+      if (inBookShape(px, py, bookW + 3 * w, bookH + 3 * w)) color = GOLD;
+      if (inBookShape(px, py, bookW, bookH)) color = CREAM;
+      if (Math.abs(px) <= w * 0.9 && py >= bookCy - bookH / 2 + bookDip && py <= bookCy + bookH / 2) color = GOLD;
+      pixels[y * size + x] = color;
     }
   }
   return png(size, pixels);
