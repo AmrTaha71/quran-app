@@ -69,20 +69,33 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
   const half = size / 2;
   // Maskable icons are cropped to the center 80% on install, so the
   // whole emblem scales in a little to stay inside the safe zone.
-  const ms = maskable ? 0.86 : 1;
-  const w = size / 72; // gold line width
+  // (Apple's mask only rounds the corners, so it keeps full size.)
+  const ms = maskable ? 0.82 : 1;
+  const w = size / 40; // thick gold line width — thin lines read as
+  // "poor" at home-screen size; filled gold reads as luxurious.
+  const frameW = size / 24; // gold frame just inside the icon edge
   const R1 = 0.44 * size * ms; // medallion outer ring
-  const R2 = 0.39 * size * ms; // medallion inner ring
-  const starCy = -0.205 * size * ms; // 8-point star center (above book)
-  const starR = 0.085 * size * ms;
-  const bookCy = 0.13 * size * ms; // open book center
-  const bookW = 0.56 * size * ms;
-  const bookH = 0.30 * size * ms;
-  const bookDip = 0.055 * size * ms; // center top dips toward the spine
+  const R2 = 0.375 * size * ms; // medallion inner ring
+  const midR = (R1 + R2) / 2; // ring of small gold dots
+  const dotR = size / 64;
+  const starCy = -0.21 * size * ms; // filled 8-point star above book
+  const starR = 0.105 * size * ms;
+  const bookCy = 0.14 * size * ms; // gold-bound open book center
+  const bookW = 0.60 * size * ms;
+  const bookH = 0.34 * size * ms;
+  const bookDip = 0.05 * size * ms; // center top dips toward the spine
+  const coverW = size / 34; // gold binding thickness around the pages
+  // Rounded-square membership test (for the frame): true when the
+  // pixel is inside a rounded square of the given half-size and
+  // corner radius.
+  const inRounded = (px, py, h, r) => {
+    if (r <= 0) return Math.abs(px) <= h && Math.abs(py) <= h;
+    const dx = Math.max(Math.abs(px) - (h - r), 0);
+    const dy = Math.max(Math.abs(py) - (h - r), 0);
+    return dx * dx + dy * dy <= r * r;
+  };
   // Open-book page test: top edge dips at the center spine, bottom
-  // edge straight. Returns true when (px, py) is inside the page
-  // shape of the given width/height (used twice: gold backing, then
-  // cream pages on top for the outline effect).
+  // edge straight. Used twice: gold cover, then cream pages inset.
   const inBookShape = (px, py, bw, bh) => {
     if (Math.abs(px) > bw / 2) return false;
     const t = 1 - Math.abs(px) / (bw / 2); // 1 at spine, 0 at outer edge
@@ -93,33 +106,43 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
     for (let x = 0; x < size; x++) {
       const px = x + 0.5 - c;
       const py = y + 0.5 - c;
-      let inside = true;
-      if (rad > 0) {
-        const qx = Math.abs(px);
-        const qy = Math.abs(py);
-        const dx = Math.max(qx - (half - rad), 0);
-        const dy = Math.max(qy - (half - rad), 0);
-        inside = dx * dx + dy * dy <= rad * rad;
-      }
-      if (!inside) {
+      if (rad > 0 && !inRounded(px, py, half, rad)) {
         pixels[y * size + x] = [0, 0, 0, 0];
         continue;
       }
+      // Radial emerald gradient: lighter jewel center, deeper edge.
+      const t = Math.min(Math.hypot(px, py) / (half), 1);
+      let color = [
+        Math.round(11 + (4 - 11) * t),
+        Math.round(122 + (84 - 122) * t),
+        Math.round(94 + (60 - 94) * t),
+        255,
+      ];
+      // Gold frame (not for maskable: the safe-zone crop would cut it).
+      if (!maskable && !inRounded(px, py, half - frameW, Math.max(rad - frameW, 0))) color = GOLD;
       const dist = Math.hypot(px, py);
-      let color = EMERALD;
       if (Math.abs(dist - R1) <= w / 2 || Math.abs(dist - R2) <= w / 2) color = GOLD;
-      // 8-point star as intersecting outlines: a square ring crossed
-      // by a diamond ring, plus a small filled diamond at the center.
+      // 12 small gold dots on the ring between the two medallion rings.
+      if (dist > 0.3 * size) {
+        const ang = Math.atan2(py, px);
+        const dotAng = Math.round(ang / (Math.PI / 6)) * (Math.PI / 6);
+        const ddx = px - midR * Math.cos(dotAng);
+        const ddy = py - midR * Math.sin(dotAng);
+        if (ddx * ddx + ddy * ddy <= dotR * dotR) color = GOLD;
+      }
+      // Filled 8-point star: union of a square and a larger diamond
+      // (diamond circumradius starR*√2, so its vertices poke out of
+      // the square's edges while the square's corners poke out of the
+      // diamond — 8 points total; a same-size diamond would just
+      // vanish inside the square).
       const sx = px;
       const sy = py - starCy;
-      if (Math.abs(Math.max(Math.abs(sx), Math.abs(sy)) - starR) <= w / 2
-        || Math.abs(Math.abs(sx) + Math.abs(sy) - starR) <= w / 2
-        || Math.abs(sx) + Math.abs(sy) <= starR / 3.5) color = GOLD;
-      // Open Mushaf: gold backing slightly larger, cream pages on top,
-      // gold spine down the middle.
-      if (inBookShape(px, py, bookW + 3 * w, bookH + 3 * w)) color = GOLD;
-      if (inBookShape(px, py, bookW, bookH)) color = CREAM;
-      if (Math.abs(px) <= w * 0.9 && py >= bookCy - bookH / 2 + bookDip && py <= bookCy + bookH / 2) color = GOLD;
+      if (Math.max(Math.abs(sx), Math.abs(sy)) <= starR
+        || Math.abs(sx) + Math.abs(sy) <= starR * Math.SQRT2) color = GOLD;
+      // Open Mushaf: solid gold binding, cream pages inset, gold spine.
+      if (inBookShape(px, py, bookW, bookH)) color = GOLD;
+      if (inBookShape(px, py, bookW - 2 * coverW, bookH - 2 * coverW)) color = CREAM;
+      if (Math.abs(px) <= coverW * 0.55 && py >= bookCy - bookH / 2 + bookDip && py <= bookCy + bookH / 2) color = GOLD;
       pixels[y * size + x] = color;
     }
   }
