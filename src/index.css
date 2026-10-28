@@ -69,3 +69,15 @@ body {
 .tasmii-flash {
   animation: tasmii-flash 0.9s ease-in-out infinite;
 }
+
+/* Mushaf page slide (Golden-Quran-like flip): the new page slides in
+   from the turn direction over the paper-cream backdrop. RTL: the
+   next page enters from the left, the previous from the right. */
+@keyframes mushaf-slide-next {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+@keyframes mushaf-slide-prev {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

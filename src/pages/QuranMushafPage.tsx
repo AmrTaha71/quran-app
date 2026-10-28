@@ -234,6 +234,11 @@ export default function QuranMushafPage({
   // the verse strip still follow currentPage instantly (tap feedback).
   const [displayedPage, setDisplayedPage] = useState(readStoredPage);
   const displayedPageGenRef = useRef(0);
+  // Book-slide direction for the fullscreen flip animation (RTL:
+  // next page enters from the left). Updated in the gate below, so
+  // every path (arrows, swipe, jumps, follow) gets the right direction.
+  const [turnDir, setTurnDir] = useState<1 | -1>(1);
+  const displayedPageRef = useRef(displayedPage);
   const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
   const [ayahFilter, setAyahFilter] = useState('');
   // Search-jump highlight: the ayah tapped in لوحتي, marked amber on
@@ -874,7 +879,14 @@ export default function QuranMushafPage({
       if (displayedPageGenRef.current !== g) return;
       const img = new Image();
       img.src = edition.imageUrl(p);
-      const done = () => { clearTimer(); if (displayedPageGenRef.current === g) setDisplayedPage(p); };
+      const done = () => {
+        clearTimer();
+        if (displayedPageGenRef.current !== g) return;
+        const old = displayedPageRef.current;
+        if (old !== p) setTurnDir(p > old ? 1 : -1);
+        displayedPageRef.current = p;
+        setDisplayedPage(p);
+      };
       const onFail = () => {
         clearTimer();
         if (displayedPageGenRef.current !== g) return;
@@ -992,6 +1004,16 @@ export default function QuranMushafPage({
   // the app-level fullscreen view (fixed overlay) is the real fullscreen
   // and opens regardless; this call is fire-and-forget on top of it.
   const requestNativeFullscreen = () => {
+    // Installed PWA (standalone): there is no Safari chrome and no
+    // fullscreen banner, so native fullscreen is redundant — skip it.
+    // In a Safari tab the banner ("<site> is in full screen") is iOS's
+    // own UI that no website can remove; it auto-hides after a few
+    // seconds. The app-level fixed overlay is the real fullscreen and
+    // opens regardless; this call is fire-and-forget on top of it.
+    try {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      if (standalone) return;
+    } catch {}
     try {
       const el = document.documentElement as any;
       const p = el.requestFullscreen?.() || el.webkitRequestFullscreen?.();
@@ -2104,6 +2126,12 @@ export default function QuranMushafPage({
   const fullscreenNorm = useMadinahCover && displayedPage !== currentPage
     ? coverNormForPaperBox(MADINAH_PAPER_BOXES[displayedPage - 1], viewportAspect, madinahFrameBand(displayedPage))
     : madinahNorm;
+  // Book-slide animation for the fullscreen flip (RTL: next page
+  // slides in from the left, previous from the right). The image
+  // remounts per displayedPage, so the animation runs fresh on every
+  // turn; taps during the 300ms still map correctly because
+  // getBoundingClientRect follows the transform.
+  const slideAnim = turnDir === 1 ? 'mushaf-slide-next 300ms ease-out' : 'mushaf-slide-prev 300ms ease-out';
   // Main paper's top edge in viewport-height % (cover mode only), used
   // to vertically align the facing sliver with the main page.
   const coverMainPaperTop = useMadinahCover && madinahNorm
@@ -2859,7 +2887,7 @@ export default function QuranMushafPage({
                       attempts reset on every turn. */}
                   <RetryPageImg key={`${edition.id}-${displayedPage}`} src={edition.imageUrl(displayedPage)} alt={`صفحة ${displayedPage}`}
                     className={`${fullscreenNorm ? 'absolute touch-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
-                    style={fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%` } : undefined}
+                    style={fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%`, animation: slideAnim } : { animation: slideAnim }}
                     onLoad={(e) => {
                       const im = e.currentTarget;
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
