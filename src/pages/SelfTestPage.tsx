@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
-import { normalizeArabic, normalizeWords, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
+import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import { formatAr } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
@@ -154,8 +154,52 @@ function cleanToken(t: string): string {
   return t.replace(/[^\u0621-\u064A]/g, '');
 }
 function spokenTokens(text: string): string[] {
-  return normalizeWords(text).map(cleanToken).filter(Boolean);
+  const out: string[] = [];
+  for (const w of normalizeWords(text)) {
+    const c = cleanToken(w);
+    if (c) { out.push(c); continue; }
+    // P1 opaque: a numeral that maps to no digit-word is kept
+    // (honest heard counts/display), never matched, never a strict
+    // extra — cleanToken would otherwise delete it silently.
+    const opaque = digitTokenToOpaque(w);
+    if (opaque) out.push(opaque);
+  }
+  return out;
 }
+
+// P1: an opaque numeral token (see digitTokenToOpaque) — digits
+// with no Arabic letters. Spoken tokens are either cleanToken output
+// (Arabic letters only) or opaque tokens, so this test is exact on
+// spoken-token arrays. It must NOT be applied to expected norms
+// (which never contain digits) or raw text.
+function isOpaqueToken(t: string): boolean {
+  return /\d/.test(t) && !/[\u0621-\u064A]/.test(t);
+}
+
+// Normalized Levenshtein similarity for the overshoot exclusion
+// (P0-1): 1 - distance / max length. Inputs are short normalized
+// words, so the quadratic DP is trivial per call.
+function normLevSim(a: string, b: string): number {
+  if (a === b) return 1;
+  const m = a.length, n = b.length;
+  if (m === 0 || n === 0) return 0;
+  let prev: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur: number[] = [i];
+    for (let j = 1; j <= n; j++) {
+      cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
+    }
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+
+// Liturgical phrases skipped (leading only) by the overshoot count
+// (F2). Normalized forms — spoken tokens are already normalized,
+// verified against the real normalizer (بسم الله الرحمن الرحيم,
+// أعوذ بالله من الشيطان الرجيم).
+const OVERSHOOT_BASMALAH = ['بسم', 'الله', 'الرحمن', 'الرحيم'];
+const OVERSHOOT_ISTIADHA = ['اعوذ', 'بالله', 'من', 'الشيطان', 'الرجيم'];
 
 // ---- D1 diagnostics (transcript-truth) -------------------------------
 // (a) App shell, recorded next to the build stamp and the raw
@@ -335,11 +379,18 @@ function muqattaatMatchAt(expected: string[], i: number, spoken: string[], j: nu
   return null;
 }
 
-function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[] } {
+function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   // E2: spoken index each expected word matched at (-1 if unmatched).
   // Recording only — the match decisions below are untouched.
   const positions = new Array(expected.length).fill(-1);
+  // F1: how many spoken tokens each match consumed (exact = 1, join =
+  // joinedCount, muq = run length, pair = 1 for both entries).
+  // Recording only, like positions: the overshoot anchor needs the
+  // END of the consumed span (positions[i] + consumed[i] - 1), not
+  // the start — anchoring at the start counted a match's own
+  // fragments (letter names, split pieces) as new words.
+  const consumed = new Array(expected.length).fill(1);
   let j = 0;
   let i = 0;
   while (i < expected.length) {
@@ -387,9 +438,9 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
             !(joinBlocked && muqattaatIsLetterPiece(spoken[k]) && muqattaatIsLetterPiece(spoken[k + 1]) && muqattaatIsLetterPiece(spoken[k + 2]) && muqattaatIsLetterPiece(spoken[k + 3]))) { joined = k; joinedCount = 4; break; }
       }
     }
-    if (joined >= 0) { matched[i] = true; positions[i] = joined; j = joined + joinedCount; i++; continue; }
+    if (joined >= 0) { matched[i] = true; positions[i] = joined; consumed[i] = joinedCount; j = joined + joinedCount; i++; continue; }
     const muq = muqattaatMatchAt(expected, i, spoken, j);
-    if (muq) { matched[i] = true; positions[i] = muq.start; j = muq.start + muq.count; i++; continue; }
+    if (muq) { matched[i] = true; positions[i] = muq.start; consumed[i] = muq.count; j = muq.start + muq.count; i++; continue; }
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
       const forms = assimilatedPairForms(expected[i], expected[i + 1]);
@@ -401,7 +452,7 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
     }
     i++;
   }
-  return { matched, allMatched: matched.every(Boolean), positions };
+  return { matched, allMatched: matched.every(Boolean), positions, consumed };
 }
 
 // Strict alignment (intermediate/advanced levels): the same greedy
@@ -410,9 +461,11 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
 // start) are collected as extras instead of being silently ignored.
 // Joined-word merges consume their spoken tokens, so they are never
 // extras. A strict pass needs allMatched AND zero extras.
-function alignWordsStrict(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; extras: string[]; positions: number[] } {
+function alignWordsStrict(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; extras: string[]; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   const positions = new Array(expected.length).fill(-1);
+  // F1: consumed counts, same sites as alignWords (see above).
+  const consumed = new Array(expected.length).fill(1);
   const extras: string[] = [];
   let j = 0;
   let i = 0;
@@ -456,9 +509,9 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
             !(joinBlocked && muqattaatIsLetterPiece(spoken[k]) && muqattaatIsLetterPiece(spoken[k + 1]) && muqattaatIsLetterPiece(spoken[k + 2]) && muqattaatIsLetterPiece(spoken[k + 3]))) { joined = k; joinedCount = 4; break; }
       }
     }
-    if (joined >= 0) { consumeThrough(joined, joinedCount); matched[i] = true; positions[i] = joined; i++; continue; }
+    if (joined >= 0) { consumeThrough(joined, joinedCount); matched[i] = true; positions[i] = joined; consumed[i] = joinedCount; i++; continue; }
     const muq = muqattaatMatchAt(expected, i, spoken, j);
-    if (muq) { consumeThrough(muq.start, muq.count); matched[i] = true; positions[i] = muq.start; i++; continue; }
+    if (muq) { consumeThrough(muq.start, muq.count); matched[i] = true; positions[i] = muq.start; consumed[i] = muq.count; i++; continue; }
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
       const forms = assimilatedPairForms(expected[i], expected[i + 1]);
@@ -472,7 +525,11 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
   }
   // Trailing spoken words after the last match are extras too.
   for (let t = j; t < spoken.length; t++) extras.push(spoken[t]);
-  return { matched, allMatched: matched.every(Boolean), extras, positions };
+  // P1: opaque numeral tokens are never extras — they are ASR
+  // artifacts (Safari wrote "2", the user did not say it), so
+  // counting one as an extra would penalize the engine's rendering,
+  // not the recitation. They stay visible in heard counts/display.
+  return { matched, allMatched: matched.every(Boolean), extras: extras.filter((t) => !isOpaqueToken(t)), positions, consumed };
 }
 
 // ---- Sounds (WebAudio, no files) -------------------------------------
@@ -571,6 +628,13 @@ function pickArabicTtsVoice(): SpeechSynthesisVoice | null {
     return null;
   }
 }
+// DIAG (Claude P0-5): speakCorrection is module-level, outside the
+// component, so its TTS start/end cannot reach the component's event
+// log directly. An optional listener bridges it: the component
+// registers its log push on mount and clears it on unmount. Null by
+// default, so behaviour without a listener is exactly unchanged.
+type DiagTtsFn = (kind: 'tts-start' | 'tts-end' | 'tts-error', label: string) => void;
+let diagTtsListener: DiagTtsFn | null = null;
 function speakCorrection(words: string[], rate = 1.0, onFailed?: () => void) {
   if (words.length === 0) return;
   try {
@@ -589,7 +653,9 @@ function speakCorrection(words: string[], rate = 1.0, onFailed?: () => void) {
         u.lang = 'ar-SA';
         u.rate = rate;
         if (voice) u.voice = voice;
-        u.onerror = () => { if (voice) speakOnce(null); else { try { onFailed?.(); } catch {} } };
+        u.onstart = () => { try { diagTtsListener?.('tts-start', 'tts-correction'); } catch {} };
+        u.onend = () => { try { diagTtsListener?.('tts-end', 'tts-correction'); } catch {} };
+        u.onerror = () => { try { diagTtsListener?.('tts-error', 'tts-correction'); } catch {} if (voice) speakOnce(null); else { try { onFailed?.(); } catch {} } };
         window.speechSynthesis.speak(u);
       } catch { try { onFailed?.(); } catch {} }
     };
@@ -702,6 +768,99 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [showFullHeard, setShowFullHeard] = useState(false);
   const [contMatchedWords, setContMatchedWords] = useState(0);
   const [contHeardWords, setContHeardWords] = useState(0);
+  // DIAG (Claude P0-5): on-screen event log + Copy JSON export.
+  // Recording only: every push below is a log call, never a branch
+  // condition, so grading, matching, interrupts and prompts are
+  // untouched. Events cap at 2000 (oldest dropped, flag set); the
+  // finals list is uncapped because replay needs every final.
+  // `rel` is ms since the current test started (performance.now);
+  // `t` is the wall-clock epoch ms. Timestamps come from the same
+  // clock the watchdog uses, so log order matches engine order.
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean };
+  const DIAG_EVENT_CAP = 2000;
+  const DIAG_DISPLAY_CAP = 500;
+  const diagEventsRef = useRef<DiagEvent[]>([]);
+  const diagFinalsRef = useRef<string[]>([]);
+  const diagStartRef = useRef(0);
+  const diagTruncatedRef = useRef(false);
+  const diagRangeRef = useRef<{ surah: number; from: number; to: number; startGlobal: number; endGlobal: number; level: string; mode: string; corrDelay: number; corrRate: string } | null>(null);
+  const [micPerm, setMicPerm] = useState('unknown');
+  const micPermRef = useRef('unknown');
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagCopied, setDiagCopied] = useState('');
+  const diagPush = (k: string, extra?: Partial<DiagEvent>) => {
+    try {
+      const ev: DiagEvent = { k, t: Date.now(), rel: diagStartRef.current ? Math.round(performance.now() - diagStartRef.current) : 0, ...(extra || {}) };
+      const arr = diagEventsRef.current;
+      if (arr.length >= DIAG_EVENT_CAP) { arr.shift(); diagTruncatedRef.current = true; }
+      arr.push(ev);
+    } catch {}
+  };
+  const diagClear = () => {
+    diagEventsRef.current = [];
+    diagFinalsRef.current = [];
+    diagTruncatedRef.current = false;
+    diagStartRef.current = performance.now();
+    setDiagOpen(false);
+    setDiagCopied('');
+  };
+  // Display-only microphone permission hint (never gates anything).
+  const diagPermRefresh = () => {
+    try {
+      const nav = navigator as any;
+      if (nav?.permissions?.query) {
+        nav.permissions.query({ name: 'microphone' }).then((r: any) => {
+          const s = r?.state || 'unknown';
+          micPermRef.current = s;
+          setMicPerm(s);
+        }).catch(() => {});
+      }
+    } catch {}
+  };
+  // Bridge the module-level speakCorrection TTS events into this log.
+  useEffect(() => {
+    diagTtsListener = (kind, label) => diagPush(kind, { label });
+    return () => { diagTtsListener = null; };
+  }, []);
+  // Export shape (format 'quran-test-diag/v1', documented in the
+  // followup-diag evidence file): meta + settings + range + the
+  // recorded outcome (grades, wrongByAyah) + the full event list +
+  // every chosen final transcript + the expected ayah texts, so an
+  // offline runner can replay the finals through the real aligners.
+  const diagExport = () => ({
+    format: 'quran-test-diag/v1',
+    version: BUILD_SHA,
+    shell: appShell,
+    ua: (() => { try { return navigator.userAgent; } catch { return ''; } })(),
+    micPermission: micPermRef.current,
+    settings: diagRangeRef.current ? { level: diagRangeRef.current.level, mode: diagRangeRef.current.mode, corrDelay: diagRangeRef.current.corrDelay, corrRate: diagRangeRef.current.corrRate } : null,
+    range: diagRangeRef.current ? { surah: diagRangeRef.current.surah, from: diagRangeRef.current.from, to: diagRangeRef.current.to, startGlobal: diagRangeRef.current.startGlobal, endGlobal: diagRangeRef.current.endGlobal } : null,
+    grades,
+    wrongByAyah,
+    events: diagEventsRef.current,
+    finals: diagFinalsRef.current,
+    expected: ayahs.map((a) => ({ surah: a.surah_no, ayah: a.ayah_no, text: a.ayah_text })),
+    truncated: diagTruncatedRef.current,
+  });
+  const diagCopyJson = async () => {
+    try {
+      diagPermRefresh();
+      const text = JSON.stringify(diagExport(), null, 2);
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      setDiagCopied('تم نسخ سجل التشخيص — الصقه في أي مكان');
+    } catch {
+      setDiagCopied('تعذر النسخ — افتح السجل وانسخه يدويًا');
+    }
+  };
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [countdown, setCountdown] = useState(() => loadTestSettings().corrDelay);
@@ -817,6 +976,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     matched: boolean[];
     extras: string[];
     positions: number[];
+    consumed: number[];
   } | null>(null);
   // Cached expected norms: contExpected is built once per test, so
   // mapping it to norms on every alignment call was pure allocation.
@@ -826,6 +986,22 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   } | null>(null);
   const contFixedNormsRef = useRef<Set<string>>(new Set());
   const contAwaitingRef = useRef<{ indices: number[]; norms: string[]; baseLen: number; key: string } | null>(null);
+  // P0-1 later-word-cancel fix: expectations displaced by a newer
+  // prompt are PRESERVED here (not silently dropped), so repeating
+  // the earlier prompted words still credits them via checkContFix.
+  // The old code nulled the expectation when a later word prompted
+  // (interrupt loop) or overwrote it (stall path via speakContPrompt):
+  // the earlier words stayed missed, and a repeat of exactly those
+  // words earned no credit through the fix path. Displacement keeps
+  // "one correction at a time" on screen (only the newest prompt
+  // shows and vetoes) while no prompted expectation is ever lost.
+  // Cleared with the live expectation on cancel / new test, and
+  // preserved across a silent restart like the live one.
+  const contDisplacedRef = useRef<{ indices: number[]; norms: string[]; baseLen: number; key: string }[]>([]);
+  const displaceContAwaiting = () => {
+    const aw = contAwaitingRef.current;
+    if (aw) contDisplacedRef.current = [...contDisplacedRef.current, aw];
+  };
   const [contPrompting, setContPrompting] = useState(false);
   const [contLastPrompt, setContLastPrompt] = useState<string[]>([]);
   // D2: honest no-match state (grading paused, transcript kept,
@@ -881,7 +1057,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (audioUrl) {
       const a = new Audio(audioUrl);
       corrAudioRef.current = a;
-      a.onerror = () => { speakCorrection(words, rate, onFailed); };
+      a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction' }); };
+      a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); };
+      a.onerror = () => { diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed); };
       a.play().catch(() => { speakCorrection(words, rate, onFailed); });
     } else speakCorrection(words, rate, onFailed);
   };
@@ -1031,6 +1209,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setShowFullHeard(false);
     setContMatchedWords(0);
     setContHeardWords(0);
+    // DIAG: tap + fresh-test log reset. A restore keeps appending:
+    // a resumed test continues the same session's log.
+    if (!restore) diagClear();
+    diagPush('tap', { label: 'start-test' });
+    diagPermRefresh();
     // Capture the mode up front: the setup chips stay tappable while
     // ayahs load, and a mid-load switch must not hijack this test.
     // Resume forces ayah mode; fresh starts use the setup choice.
@@ -1039,6 +1222,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const hi = Math.min(Math.max(startGlobal, endGlobal), 6236);
     const startPt = globalToPoint(lo);
     const endPt = globalToPoint(hi);
+    // DIAG: snapshot the range + settings for the export header.
+    diagRangeRef.current = { surah: startPt.surah, from: startPt.ayah, to: endPt.ayah, startGlobal: lo, endGlobal: hi, level: liveRef.current.level, mode: modeAtStart, corrDelay: liveRef.current.corrDelay, corrRate: liveRef.current.corrRate };
     setSurah(startPt.surah);
     setError('');
     setLoading(true);
@@ -1087,6 +1272,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         contExpectedNormsRef.current = null;
         contFixedNormsRef.current = new Set();
         contAwaitingRef.current = null;
+        contDisplacedRef.current = [];
         contPromptedKeyRef.current = '';
         contPrefetchRef.current = null;
         // D2: a new range starts with a clean interrupt-silence
@@ -1512,14 +1698,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const trySilentRestart = (): boolean => {
     if (silentRestartUsedRef.current) return false;
     silentRestartUsedRef.current = true;
+    diagPush('restart', { label: 'silent' });
     if (liveRef.current.contListening) {
       // Preserve a pending fix expectation across the restart: the
       // token count it measures against is unchanged (finals are
-      // preserved), so the expectation stays valid.
+      // preserved), so the expectation stays valid. Displaced
+      // expectations are preserved the same way (stopContinuousMic
+      // cancels the prompt, which clears both).
       const aw = contAwaitingRef.current;
+      const displaced = contDisplacedRef.current;
       stopContinuousMic();
       startContinuousMic();
       if (aw) contAwaitingRef.current = aw;
+      if (displaced.length > 0) contDisplacedRef.current = displaced;
       return liveRef.current.contListening;
     }
     const ms = liveRef.current.micState;
@@ -1576,7 +1767,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (recRef.current !== rec || userStopRef.current) return;
       if (liveRef.current.contListening) {
         if (contPromptingRef.current) return;
-        try { rec.start(); } catch (err: any) {
+        try { rec.start(); diagPush('rec-start', { label: 'transient-safety', ok: true }); } catch (err: any) {
           if (err && err.name === 'InvalidStateError') return;
           onDead();
         }
@@ -1584,7 +1775,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       const ms = liveRef.current.micState;
       if (ms !== 'listening' && ms !== 'correcting') return;
-      try { rec.start(); } catch (err: any) {
+      try { rec.start(); diagPush('rec-start', { label: 'transient-safety', ok: true }); } catch (err: any) {
         if (err && err.name === 'InvalidStateError') return;
         onDead();
       }
@@ -1635,6 +1826,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   const startMic = (preserveArg?: boolean) => {
+    // DIAG: startMic is only reached from mic/كمّل taps (silent
+    // restarts route through trySilentRestart, which logs its own
+    // 'restart' event first — so a 'resume-mic' here after a
+    // 'restart' is the silent restart, not a tap).
+    diagPush('tap', { label: preserveArg === true ? 'resume-mic' : 'start-mic' });
     // S4: resume (كمّل) passes exactly true; a tap handler's event
     // object must never count as "preserve" — hence === true.
     const preserveFinals = preserveArg === true;
@@ -1682,6 +1878,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // this simply return one alternative and pickFinalTranscript
     // degrades to the top hypothesis. Guarded: never throw here.
     try { rec.maxAlternatives = 3; } catch {}
+    // DIAG: record-only lifecycle handlers (assigning them changes
+    // no recognition behaviour; they only append to the event log).
+    rec.onstart = () => { if (recRef.current !== rec) return; diagPush('onstart'); };
+    rec.onaudiostart = () => { if (recRef.current !== rec) return; diagPush('onaudiostart'); };
+    rec.onspeechstart = () => { if (recRef.current !== rec) return; diagPush('onspeechstart'); };
     rec.onresult = (e: any) => {
       // [P4] Stale-recognizer guard: a late final from a previous
       // session (e.g. after stop() + ayah change) must never land
@@ -1708,6 +1909,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           sawFinal = true;
           // [P5] Narrow alternative-rescue (see helpers).
           const chosen = pickFinalTranscript(res, expectedNorms);
+          diagPush('result', { final: true, text: chosen });
+          diagFinalsRef.current.push(chosen);
           liveRef.current.finals = `${liveRef.current.finals} ${chosen}`.trim();
           setTranscript(liveRef.current.finals);
           // Spoken enough words to cover the ayah? Judge at once.
@@ -1730,6 +1933,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (interimText.trim()) {
         lastInterimRef.current = interimText.trim();
         setInterim(interimText.trim());
+        diagPush('result', { final: false, text: interimText.trim() });
       } else if (sawFinal) {
         lastInterimRef.current = '';
         setInterim('');
@@ -1747,6 +1951,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // comes (the old code hung on "retrying" forever then).
       if (recRef.current !== rec) return;
       const code = e && e.error;
+      diagPush('error', { code: String(code || 'unknown') });
       const stallMessage = 'الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع';
       if (code === 'no-speech' || code === 'aborted') {
         armTransientSafety(rec, () => tripAyahStalled(stallMessage));
@@ -1759,7 +1964,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       if (code === 'language-not-supported' && !(rec as any).__triedLocaleFallback) {
         (rec as any).__triedLocaleFallback = true;
-        try { rec.lang = otherArabicLocale(rec.lang); rec.start(); return; } catch {}
+        try { rec.lang = otherArabicLocale(rec.lang); rec.start(); diagPush('rec-start', { label: 'locale-fallback', ok: true }); return; } catch { diagPush('rec-start', { label: 'locale-fallback', ok: false }); }
       }
       if (code === 'not-allowed') {
         setMicError('الميكروفون مقفول — اسمح بيه من إعدادات المتصفح، أو قيّم يدوي بدل كده');
@@ -1787,6 +1992,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       clearTransientSafety();
       if (recRef.current !== rec || userStopRef.current) return;
       if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
+      diagPush('onend');
       // [P1] Rescue the orphaned interim: it will never finalize
       // now, and dropping it loses the last spoken words.
       const orphan = takePendingInterim();
@@ -1809,6 +2015,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       try {
         rec.start();
+        diagPush('rec-start', { label: 'onend-restart', ok: true });
       } catch (err: any) {
         // Already running (double onend): not an error, stay live.
         if (err && err.name === 'InvalidStateError') return;
@@ -1819,7 +2026,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     resetRecRestartBudget();
     try {
       rec.start();
-    } catch {
+      diagPush('rec-start', { label: 'start-mic', ok: true });
+    } catch (err: any) {
+      diagPush('rec-start', { label: 'start-mic', ok: false, code: err?.name || 'error' });
       setMicError('تعذر بدء الاستماع — جرّب تاني أو قيّم يدوي بدل كده');
       recRef.current = null;
       return;
@@ -1861,7 +2070,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // new tokens. Any shape that is not a clean append falls back to
   // a full tokenize, and any cache-key change falls back to a full
   // alignment — so the raw result is always exactly the baseline's.
-  const contRawAlignment = (): { matched: boolean[]; extras: string[]; positions: number[]; spoken: string[] } => {
+  const contRawAlignment = (): { matched: boolean[]; extras: string[]; positions: number[]; consumed: number[]; spoken: string[] } => {
     const expected = liveRef.current.contExpected;
     const finals = liveRef.current.contFinals;
     const strict = liveRef.current.contStrict;
@@ -1888,17 +2097,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const result = strict
       ? alignWordsStrict(normsEntry.norms, spoken)
       : { ...alignWords(normsEntry.norms, spoken), extras: [] as string[] };
-    const entry = { expected, finals, strict, spoken, matched: result.matched, extras: result.extras, positions: result.positions };
+    const entry = { expected, finals, strict, spoken, matched: result.matched, extras: result.extras, positions: result.positions, consumed: result.consumed };
     contAlignCacheRef.current = entry;
     return entry;
   };
-  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number; positions: number[] } => {
+  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
     const raw = contRawAlignment();
     const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i));
     raw.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
     let lastMatchedIdx = -1;
     matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
-    return { matched, lastMatchedIdx, positions: raw.positions };
+    return { matched, lastMatchedIdx, positions: raw.positions, consumed: raw.consumed };
   };
   const updateContProgress = () => {
     const expected = liveRef.current.contExpected;
@@ -2015,6 +2224,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         u.lang = 'ar-SA';
         const v = pickArabicTtsVoice();
         if (v) u.voice = v;
+        u.onstart = () => { diagPush('tts-start', { label: 'nomatch-banner' }); };
+        u.onend = () => { diagPush('tts-end', { label: 'nomatch-banner' }); };
         window.speechSynthesis.speak(u);
       }
     } catch {}
@@ -2124,8 +2335,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const contOvershootOwed = (): { words: string[]; indices: number[]; norms: string[] } | null => {
     const expected = liveRef.current.contExpected;
     if (expected.length === 0) return null;
+    // P0-1(c): the overshoot check never runs while a prompt is
+    // playing — checkContMissInterrupt already early-returns then,
+    // and this self-guard means no future caller can fire one
+    // mid-prompt either. No tokens can be appended while prompting
+    // anyway (the mic is stopped and recRef nulled by speakContPrompt,
+    // and both append paths — live finals and onend orphan rescue —
+    // are guarded by recRef identity + contListening), so there is
+    // no "received during TTS" token set left to filter: the
+    // exclusion is the guard itself, not a filter. Finals-only
+    // holds by construction: the check runs only from the
+    // final-result handler and the onend orphan-rescue path, never
+    // on a timer and never on interim tokens.
+    if (contPromptingRef.current) return null;
     const raw = contRawAlignment();
-    const { matched, lastMatchedIdx } = contEffectiveMatched();
+    const { matched, lastMatchedIdx, consumed } = contEffectiveMatched();
     if (lastMatchedIdx < 0) return null;
     const nextIdx = lastMatchedIdx + 1;
     if (nextIdx >= expected.length) return null;
@@ -2133,22 +2357,75 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Words left in the next word's ayah, from the next word onward.
     let remaining = 0;
     for (let i = nextIdx; i < expected.length && expected[i].ayahIdx === next.ayahIdx; i++) remaining++;
-    // Spoken position of the last RAW match at or before lastMatched
-    // (a credited-only word has no raw position; the last raw match
-    // is the safe anchor, and credited words are excluded below as
-    // repeats via the effective matched set).
+    // F1: anchor at the END of the last raw match's consumed span.
+    // The old code anchored at positions[i] (the span START), so a
+    // match's own fragments — letter names of an opening, pieces of
+    // a split word — counted as new words and fired false
+    // interrupts. A credited-only word has no raw position; the last
+    // raw match is the safe anchor, and credited words are excluded
+    // below as repeats via the effective matched set. Defensive
+    // fallback: a missing/short consumed array (stale cache) anchors
+    // at the start rather than producing a NaN anchor.
     let anchor = -1;
     for (let i = lastMatchedIdx; i >= 0; i--) {
-      if (raw.matched[i] && raw.positions[i] >= 0) { anchor = raw.positions[i]; break; }
+      if (raw.matched[i] && raw.positions[i] >= 0) {
+        const span = consumed && consumed[i] ? consumed[i] : 1;
+        anchor = raw.positions[i] + span - 1;
+        break;
+      }
     }
     if (anchor < 0) return null;
+    // F2: skip a LEADING run of liturgical phrases after the anchor
+    // — a basmalah and/or isti'adha, each in order, each possibly a
+    // prefix (the user may pause mid-phrase). Only exact in-order
+    // contiguous phrases are skipped; the scan stops permanently at
+    // the first non-phrase token, so out-of-order phrase words still
+    // count. Counting only — grading is untouched.
+    let scan = anchor + 1;
+    for (;;) {
+      let took = 0;
+      for (const phrase of [OVERSHOOT_BASMALAH, OVERSHOOT_ISTIADHA]) {
+        let k = 0;
+        while (k < phrase.length && raw.spoken[scan + k] === phrase[k]) k++;
+        if (k > 0) { took = k; break; }
+      }
+      if (took === 0) break;
+      scan += took;
+    }
     const matchedNorms = new Set<string>();
     matched.forEach((m, i) => { if (m) matchedNorms.add(expected[i].norm); });
+    // P0-1(b): the owed ayah's own words, for the near-miss
+    // exclusion below (a token similar to something owed is a
+    // variant of it, not forward movement).
+    const owedAyahNorms: string[] = [];
+    expected.forEach((w) => { if (w.ayahIdx === next.ayahIdx) owedAyahNorms.push(w.norm); });
     const distinctNew = new Set<string>();
-    for (let t = anchor + 1; t < raw.spoken.length; t++) {
-      if (!matchedNorms.has(raw.spoken[t])) distinctNew.add(raw.spoken[t]);
+    for (let t = scan; t < raw.spoken.length; t++) {
+      const tok = raw.spoken[t];
+      if (matchedNorms.has(tok)) continue;
+      // P1: opaque numeral artifacts carry no lexical evidence of
+      // movement (they are engine renderings, not spoken words).
+      if (isOpaqueToken(tok)) continue;
+      // P0-1(b): near-miss variants of owed words are not movement.
+      // Verified against the planted device replay: للمؤمنين vs
+      // للمتقين scores 0.625 (< 0.7), so the replay still fires.
+      let nearMiss = false;
+      for (const w of owedAyahNorms) {
+        if (normLevSim(tok, w) >= 0.7) { nearMiss = true; break; }
+      }
+      if (nearMiss) continue;
+      distinctNew.add(tok);
     }
-    if (distinctNew.size > remaining) {
+    // P0-1 threshold + F3 conflict resolution: fire only when the
+    // pigeonhole holds (strictly more distinct new words than the
+    // ayah has left) AND the count clears the noise floor (>= 4) —
+    // EXCEPT when remaining == 1, where the pigeonhole is tightest
+    // (any 2 distinct new words already exceed 1 slot) and reviewer
+    // 1's F3 REQUIRES the 2-junk fire (join-anchor +2 junk). The
+    // threshold keeps protecting every roomier case; the exemption
+    // keeps the required end-of-ayah fire. A single slip (distinct
+    // 1) never fires under either branch.
+    if (distinctNew.size > remaining && (distinctNew.size >= 4 || remaining === 1)) {
       return { words: [next.orig], indices: [nextIdx], norms: [next.norm] };
     }
     return null;
@@ -2165,6 +2442,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     contPromptingRef.current = false;
     setContPrompting(false);
     contAwaitingRef.current = null;
+    contDisplacedRef.current = [];
   };
   // D2: a prompt whose audio failed unheard must not silently
   // dedupe-block the same words forever. One auto-retry is armed
@@ -2201,6 +2479,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // resume: saying them credits the fix (see checkContFix). A
     // replay passes no fix args and leaves the expectation alone.
     if (fixIdx && fixIdx.length > 0) {
+      // A newer expectation displaces (never drops) a live one:
+      // the earlier words stay creditable via checkContFix even
+      // though the screen now shows only the newer correction.
+      displaceContAwaiting();
       contAwaitingRef.current = {
         indices: fixIdx,
         norms: fixNorms ?? [],
@@ -2247,9 +2529,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             const v = pickArabicTtsVoice();
             if (v) u.voice = v;
             u.rate = CORR_RATE_VALUE[liveRef.current.corrRate];
-            u.onstart = () => { promptAudioStarted = true; };
-            u.onend = resumeAfterPrompt;
-            u.onerror = () => { noteContPromptAudioFailed(key); resumeAfterPrompt(); };
+            u.onstart = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-tts' }); };
+            u.onend = () => { diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
+            u.onerror = () => { diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
             window.speechSynthesis.speak(u);
           } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
         } catch { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
@@ -2258,12 +2540,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const playUrl = (url: string) => {
       const a = new Audio(url);
       contPromptAudioRef.current = a;
-      a.onplaying = () => { promptAudioStarted = true; };
-      a.onended = resumeAfterPrompt;
+      a.onplaying = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio' }); };
+      a.onended = () => { diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
       // D2: an audio-file error used to resume WITHOUT trying TTS,
       // unlike a refused play() — now both fall back to TTS, and
       // only a TTS failure as well produces the visible note.
-      a.onerror = playTtsFallback;
+      a.onerror = () => { diagPush('tts-error', { label: 'cont-prompt-audio' }); playTtsFallback(); };
       a.play().catch(playTtsFallback);
     };
     const url = contPrefetchRef.current?.key === key ? contPrefetchRef.current.url : null;
@@ -2329,32 +2611,39 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // them, they stay missed — the teacher does not wait forever,
   // and the replay button still offers them on demand.
   const checkContFix = () => {
-    const aw = contAwaitingRef.current;
-    if (!aw) return;
     const tokens = spokenTokens(liveRef.current.contFinals);
-    const fresh = tokens.slice(aw.baseLen);
-    // D2: the old code dropped the expectation here but NEVER
-    // released the prompt dedupe, so the same missed words could
-    // never be prompted again for the rest of the test — the stall
-    // timer body and the interrupt both returned early on the key
-    // forever. Dedupe now means "no repeat while the current
-    // expectation is live", not "never again": once the user has
-    // demonstrably moved on (20 fresh tokens), a later stall may
-    // prompt the still-missed words once more. Grading is
-    // untouched — the words stay missed until actually repeated.
-    if (fresh.length > 20) {
-      if (aw.key && contPromptedKeyRef.current === aw.key) contPromptedKeyRef.current = '';
-      contAwaitingRef.current = null;
-      return;
-    }
-    let p = 0;
-    for (let t = 0; t < fresh.length && p < aw.norms.length; t++) {
-      if (fresh[t] === aw.norms[p]) p++;
-    }
-    if (p === aw.norms.length) {
-      aw.indices.forEach((i) => contCreditedRef.current.add(i));
-      aw.norms.forEach((n) => contFixedNormsRef.current.add(n));
-      contAwaitingRef.current = null;
+    // The live expectation plus any expectations displaced by later
+    // prompts (see displaceContAwaiting): a prompted word the user
+    // repeats late still earns its credit, even though a newer prompt
+    // superseded it on screen. Each entry measures its own fresh
+    // window from its own baseLen; credit and drop are per entry.
+    const settle = (entry: { indices: number[]; norms: string[]; baseLen: number; key: string }, remove: () => void) => {
+      const fresh = tokens.slice(entry.baseLen);
+      // D2: once the user has demonstrably moved on (20 fresh
+      // tokens), a later stall may prompt the still-missed words
+      // once more — so the drop releases the prompt dedupe, as the
+      // old code did for the live expectation. Grading is
+      // untouched — the words stay missed until actually repeated.
+      if (fresh.length > 20) {
+        if (entry.key && contPromptedKeyRef.current === entry.key) contPromptedKeyRef.current = '';
+        remove();
+        return;
+      }
+      let p = 0;
+      for (let t = 0; t < fresh.length && p < entry.norms.length; t++) {
+        if (fresh[t] === entry.norms[p]) p++;
+      }
+      if (p === entry.norms.length) {
+        entry.indices.forEach((i) => contCreditedRef.current.add(i));
+        entry.norms.forEach((n) => contFixedNormsRef.current.add(n));
+        remove();
+      }
+    };
+    const aw = contAwaitingRef.current;
+    if (aw) settle(aw, () => { contAwaitingRef.current = null; });
+    // Displaced entries: iterate over a copy (settle may remove).
+    for (const d of [...contDisplacedRef.current]) {
+      settle(d, () => { contDisplacedRef.current = contDisplacedRef.current.filter((x) => x !== d); });
     }
   };
   // Mid-flow miss interrupt (2026-10-28, the user's words): as soon
@@ -2392,12 +2681,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // beyond the awaited words: a live expectation for an EARLIER
       // word must not veto a current error (the 23:38 shape, where an
       // early stall prompt for الم would otherwise block the للمتقين
-      // interrupt forever). Replacing the expectation does not change
-      // grading: the earlier words stay missed, and a later stall may
-      // prompt them again. An expectation for the same or a later word
+      // interrupt forever). Displacing the expectation (inside
+      // speakContPrompt's fix branch, below) does not change grading:
+      // the earlier words stay missed, a later stall may prompt them
+      // again, AND repeating them still credits via checkContFix's
+      // displaced entries. An expectation for the same or a later word
       // still blocks this candidate, as before. The expectation is
-      // only dropped when this candidate actually prompts (a
-      // dedupe-blocked candidate must not silently discard it).
+      // only displaced when this candidate actually prompts (a
+      // dedupe-blocked candidate must not disturb it).
       const aw = contAwaitingRef.current;
       if (aw) {
         const awaitedLast = aw.indices.length > 0 ? Math.max(...aw.indices) : -1;
@@ -2405,7 +2696,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       const key = target.words.join('|');
       if (key === contPromptedKeyRef.current) continue;
-      if (aw) contAwaitingRef.current = null;
       if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
       speakContPrompt(target.words, target.indices, target.norms);
       return;
@@ -2500,6 +2790,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   const startContinuousMic = () => {
+    // DIAG: tap (button text is ابدأ vs كمّل by transcript state;
+    // silent restarts route through trySilentRestart, which logs
+    // its own 'restart' event first).
+    diagPush('tap', { label: liveRef.current.contFinals ? 'resume-cont' : 'start-cont' });
     getAudioCtx();
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
@@ -2543,6 +2837,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     rec.interimResults = true;
     // [P5] N-best hypotheses (degrades to top hypothesis if ignored).
     try { rec.maxAlternatives = 3; } catch {}
+    // DIAG: record-only lifecycle handlers (see the ayah path).
+    rec.onstart = () => { if (recRef.current !== rec) return; diagPush('onstart'); };
+    rec.onaudiostart = () => { if (recRef.current !== rec) return; diagPush('onaudiostart'); };
+    rec.onspeechstart = () => { if (recRef.current !== rec) return; diagPush('onspeechstart'); };
     rec.onresult = (e: any) => {
       // [P4] Stale-recognizer guard (see ayah path).
       if (recRef.current !== rec) return;
@@ -2562,6 +2860,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           sawFinal = true;
           // [P5] Narrow alternative-rescue (see helpers).
           const chosen = pickFinalTranscript(res, expectedNorms);
+          diagPush('result', { final: true, text: chosen });
+          diagFinalsRef.current.push(chosen);
           liveRef.current.contFinals = `${liveRef.current.contFinals} ${chosen}`.trim();
           setTranscript(liveRef.current.contFinals);
           checkContFix();
@@ -2591,6 +2891,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (interimText.trim()) {
         lastInterimRef.current = interimText.trim();
         setInterim(interimText.trim());
+        diagPush('result', { final: false, text: interimText.trim() });
       } else if (sawFinal) {
         lastInterimRef.current = '';
         setInterim('');
@@ -2607,6 +2908,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // and its dead-end preserves (never wipes) the transcript.
       if (recRef.current !== rec) return;
       const code = e && e.error;
+      diagPush('error', { code: String(code || 'unknown') });
       if (code === 'no-speech' || code === 'aborted') {
         armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
         return;
@@ -2618,7 +2920,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       if (code === 'language-not-supported' && !(rec as any).__triedLocaleFallback) {
         (rec as any).__triedLocaleFallback = true;
-        try { rec.lang = otherArabicLocale(rec.lang); rec.start(); return; } catch {}
+        try { rec.lang = otherArabicLocale(rec.lang); rec.start(); diagPush('rec-start', { label: 'locale-fallback', ok: true }); return; } catch { diagPush('rec-start', { label: 'locale-fallback', ok: false }); }
       }
       if (code === 'not-allowed') {
         setMicError('الميكروفون مقفول — اسمح بيه من إعدادات المتصفح');
@@ -2641,6 +2943,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       clearTransientSafety();
       if (recRef.current !== rec || userStopRef.current) return;
       if (!liveRef.current.contListening) return;
+      diagPush('onend');
       const orphan = takePendingInterim();
       if (orphan) {
         liveRef.current.contFinals = `${liveRef.current.contFinals} ${orphan}`.trim();
@@ -2666,6 +2969,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       try {
         rec.start();
+        diagPush('rec-start', { label: 'onend-restart', ok: true });
       } catch (err: any) {
         if (err && err.name === 'InvalidStateError') return;
         tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل');
@@ -2675,7 +2979,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     resetRecRestartBudget();
     try {
       rec.start();
-    } catch {
+      diagPush('rec-start', { label: 'start-cont', ok: true });
+    } catch (err: any) {
+      diagPush('rec-start', { label: 'start-cont', ok: false, code: err?.name || 'error' });
       setMicError('تعذر بدء الاستماع — جرّب تاني');
       recRef.current = null;
       return;
@@ -2758,7 +3064,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // through the grader; the numbered full list plus the existing
   // per-ayah wrong-words list on this screen decode the same facts
   // without touching grading.
-  const heardFullTokens = heardRawText.split(/\s+/).filter(Boolean);
+  // P0-4: the numbered token list is built ONLY on the done screen
+  // with the full text open — on every other render it is empty, so
+  // a long run never pays the split + chip render per keystroke.
+  // Rendered chips are capped at 400 (the full text above stays
+  // complete and copyable via the toggle).
+  const heardFullTokens = useMemo(() => {
+    if (phase !== 'done' || !showFullHeard) return [] as string[];
+    return heardRawText.split(/\s+/).filter(Boolean);
+  }, [phase, showFullHeard, heardRawText]);
+  const HEARD_CHIP_CAP = 400;
   const fullHeardToggle = (
     <button type="button" onClick={() => setShowFullHeard((v) => !v)} className="mt-2 text-sm font-bold text-emerald-700 hover:underline">
       {showFullHeard ? 'إخفاء النص الكامل' : 'عرض النص الكامل'}
@@ -2767,9 +3082,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const fullHeardContent = showFullHeard ? (heardFullTokens.length > 0 ? (
     <div className="mt-3 space-y-2">
       <p dir="rtl" className="text-sm leading-relaxed bg-white border border-gray-200 rounded-xl p-3 select-text break-words text-accent-700">{heardRawText}</p>
-      <p className="text-xs text-accent-600">الكلمات الخام (قبل التطبيع، بالترتيب كما سمعها الجهاز): {heardFullTokens.length} — الرقم قبل كل كلمة هو ترتيبها، فلا يلتبس الترتيب باتجاه العرض.</p>
+      <p className="text-xs text-accent-600">الكلمات الخام (قبل التطبيع، بالترتيب كما سمعها الجهاز): {heardFullTokens.length} — الرقم قبل كل كلمة هو ترتيبها، فلا يلتبس الترتيب باتجاه العرض.{heardFullTokens.length > HEARD_CHIP_CAP ? ` (عرض أول ${HEARD_CHIP_CAP} كلمة فقط — النص الكامل أعلاه)` : ''}</p>
       <div dir="ltr" className="flex flex-wrap gap-1">
-        {heardFullTokens.map((t, i) => (
+        {heardFullTokens.slice(0, HEARD_CHIP_CAP).map((t, i) => (
           <span key={i} className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-accent-700"><span dir="ltr">{i + 1}</span><bdi>{t}</bdi></span>
         ))}
       </div>
@@ -3134,7 +3449,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
                       أنهيت التسميع
                     </button>
-                    <button onClick={stopContinuousMic}
+                    <button onClick={() => { diagPush('tap', { label: 'stop-cont' }); stopContinuousMic(); }}
                       className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-bold rounded-xl flex items-center gap-2">
                       <Square className="w-4 h-4" /> قف
                     </button>
@@ -3146,7 +3461,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
             <p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>
-            <button onClick={() => { stopContinuousMic(); setPhase('setup'); }}
+            <button onClick={() => { diagPush('tap', { label: 'stop-to-setup' }); stopContinuousMic(); setPhase('setup'); }}
               className="block mx-auto text-sm font-bold text-accent-600 hover:text-accent-700 underline">
               إلغاء التسميع والعودة للإعدادات
             </button>
@@ -3335,7 +3650,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
                   )}
                   {micError && (
-                    <button onClick={() => { stopRec(); clearTimers(); manualPreferredRef.current = true; setManualMode(true); }}
+                    <button onClick={() => { diagPush('tap', { label: 'manual-mode' }); stopRec(); clearTimers(); manualPreferredRef.current = true; setManualMode(true); }}
                       className="mt-2 text-sm font-bold text-accent-600 underline">
                       قيّم يدوي بدل كده
                     </button>
@@ -3427,6 +3742,41 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             {!contZeroMatch && (
               <p className="text-xs text-accent-500 text-center">{stampLine}</p>
             )}
+            {/* DIAG (Claude P0-5): collapsible event log + Copy JSON.
+                Renders on every done screen (both modes, zero-match
+                or scored) so a failed run always has an exportable
+                record — screenshots are no longer the only evidence. */}
+            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-bold text-accent-800">سجل التشخيص</h2>
+                <button type="button" onClick={() => { setDiagOpen((v) => !v); diagPermRefresh(); }} className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
+                  {diagOpen ? 'إخفاء السجل' : `عرض السجل (${diagEventsRef.current.length})`}
+                </button>
+              </div>
+              <p className="text-xs text-accent-600 mt-2 leading-relaxed" dir="rtl">
+                يسجل كل أحداث الميكروفون والصوت بالأوقات — انسخه وأرسله مع أي بلاغ عن مشكلة، بدل لقطة الشاشة.
+              </p>
+              {diagOpen && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-accent-600" dir="rtl">{stampLine} • إذن الميكروفون: {micPerm}</p>
+                  <div className="max-h-64 overflow-y-auto bg-stone-50 border border-gray-200 rounded-xl p-3 space-y-1" dir="ltr">
+                    {diagEventsRef.current.slice(-DIAG_DISPLAY_CAP).map((ev, i) => (
+                      <p key={i} className="text-xs text-accent-700 break-words">
+                        <span className="text-accent-400">{ev.rel}ms</span> <span className="font-bold">{ev.k}</span>
+                        {ev.label ? ` ${ev.label}` : ''}{ev.code ? ` (${ev.code})` : ''}{ev.final !== undefined ? (ev.final ? ' final' : ' interim') : ''}{ev.text ? `: ${ev.text}` : ''}
+                      </p>
+                    ))}
+                    {diagEventsRef.current.length === 0 && <p className="text-xs text-accent-500">لا توجد أحداث مسجلة.</p>}
+                  </div>
+                  {diagTruncatedRef.current && <p className="text-xs text-amber-700" dir="rtl">السجل تجاوز 2000 حدث — الأقدم حُذف من الأحداث (قائمة النهائيات كاملة في JSON).</p>}
+                  {diagEventsRef.current.length > DIAG_DISPLAY_CAP && <p className="text-xs text-accent-500" dir="rtl">معروض آخر 500 حدث فقط — باقي الأحداث في JSON.</p>}
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => void diagCopyJson()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl">نسخ JSON التشخيصي</button>
+                    {diagCopied && <span className="text-xs text-emerald-700">{diagCopied}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="flex gap-3">
               <button onClick={() => { setContZeroMatch(false); setShowFullHeard(false); setPhase('setup'); }}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">

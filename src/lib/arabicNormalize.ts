@@ -287,6 +287,14 @@ export function normalizeWords(text: string): string[] {
 // a fused token cannot smuggle a digit into a word). Space-grouped
 // digits (1 000 as two tokens) are NOT joined: two separate tokens
 // cannot be told apart from a genuine "1 ... 000" sequence.
+// P0-3 STRICT FORMAT (2026-10-29): after digit normalization,
+// accept ONLY a bare digit run or a properly grouped run (1-3
+// leading digits, then groups of exactly 3 separated by , . or
+// U+066C) — plus an explicit leading-zero rejection. The old code
+// stripped ALL separators and compared numerically, so "10.00",
+// "1,0,0,0" and "10,00" all compacted to 1000 and FALSE-MAPPED to
+// ألف; those are now rejected ("1000." with a sentence-final dot
+// still maps, because surrounding punctuation is trimmed first).
 // Applied in normalizeWords, so both transcript tokenizers get it:
 // SelfTestPage spokenTokens (both aligners, ayah + continuous) and
 // imamTracker heardWords (follow matcher). The expected side never
@@ -295,18 +303,53 @@ export function normalizeWords(text: string): string[] {
 // speaks expected words, never transcripts).
 export function transcriptDigitToWord(token: string): string | null {
   if (!token || /[\u0621-\u064A]/.test(token)) return null;
-  const trimmed = token.replace(/^[^0-9\u0660-\u0669\u06F0-\u06F9]+|[^0-9\u0660-\u0669\u06F0-\u06F9]+$/g, '');
-  const compact = trimmed.replace(/[,.\u066C]/g, '');
-  if (!compact) return null;
-  let value = '';
-  for (const ch of compact) {
+  // Normalize digit shapes to ASCII first, keeping separators and
+  // other punctuation for the format check below.
+  let ascii = '';
+  for (const ch of token) {
     const code = ch.codePointAt(0) || 0;
-    if (code >= 0x30 && code <= 0x39) value += ch;
-    else if (code >= 0x660 && code <= 0x669) value += String(code - 0x660);
-    else if (code >= 0x6f0 && code <= 0x6f9) value += String(code - 0x6f0);
-    else return null;
+    if (code >= 0x30 && code <= 0x39) ascii += ch;
+    else if (code >= 0x660 && code <= 0x669) ascii += String(code - 0x660);
+    else if (code >= 0x6f0 && code <= 0x6f9) ascii += String(code - 0x6f0);
+    else ascii += ch;
   }
-  return Number(value) === 1000 ? 'الف' : null;
+  // Trim surrounding punctuation (quotes, commas, sentence-final
+  // dots) — the same trim the old code applied, now explicit.
+  const trimmed = ascii.replace(/^[^0-9]+|[^0-9]+$/g, '');
+  if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed) && !/^\d{1,3}([,.\u066C]\d{3})+$/.test(trimmed)) return null;
+  const digits = trimmed.replace(/[,.\u066C]/g, '');
+  if (digits.length > 1 && digits.startsWith('0')) return null;
+  return Number(digits) === 1000 ? 'الف' : null;
+}
+
+// P1 opaque numeral tokens (2026-10-29): a spoken token that is a
+// numeral but maps to no digit-word (every non-1000 numeral) is kept
+// as an opaque token instead of being silently dropped by cleanToken.
+// It is honest (heard counts and display include it), it can NEVER
+// match (it contains digits; expected norms are Arabic letters
+// only), and it is NOT a strict extra (alignWordsStrict filters it
+// out — the user did not say "2", Safari wrote "2", so penalizing
+// it as an extra would punish the engine's rendering, not the
+// recitation). Returns the ASCII-digit form (ends trimmed of
+// punctuation, interior kept as spoken), or null when the token is
+// not a pure numeral (Arabic or Latin letters, or no digits at all).
+// No format validation here on purpose: a malformed numeral like
+// "10.00" is an ASR artifact too, and dropping it would re-hide
+// exactly the evidence the next device test needs.
+export function digitTokenToOpaque(token: string): string | null {
+  if (!token || /[\u0621-\u064A]/.test(token) || /[A-Za-z]/.test(token)) return null;
+  let ascii = '';
+  for (const ch of token) {
+    const code = ch.codePointAt(0) || 0;
+    if (code >= 0x30 && code <= 0x39) ascii += ch;
+    else if (code >= 0x660 && code <= 0x669) ascii += String(code - 0x660);
+    else if (code >= 0x6f0 && code <= 0x6f9) ascii += String(code - 0x6f0);
+    else ascii += ch;
+  }
+  const trimmed = ascii.replace(/^[^0-9]+|[^0-9]+$/g, '');
+  if (!trimmed || !/\d/.test(trimmed)) return null;
+  return trimmed;
 }
 
 // ---- Muqatta'at spoken-shape parser (round 2, 2026-10-28) --------
