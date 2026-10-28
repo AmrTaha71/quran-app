@@ -2654,9 +2654,7 @@ export default function QuranMushafPage({
                 <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-teal-400 rounded-full blur-3xl animate-pulse-soft" />
               </div>
               <div className="relative flex flex-col items-center animate-slide-up">
-                <div className="w-24 h-24 bg-white/10 backdrop-blur rounded-3xl flex items-center justify-center shadow-2xl mb-8 border border-white/20">
-                  <BookOpen className="w-12 h-12 text-emerald-300" />
-                </div>
+                <img src="/icon-512.png" alt="روابط الذكر الحكيم" className="w-40 h-40 sm:w-48 sm:h-48 object-contain rounded-3xl shadow-2xl mb-8" />
                 <h2 className="text-4xl sm:text-5xl font-bold text-white mb-3 leading-relaxed text-center max-w-3xl px-6" style={{ fontFamily: '"Noto Naskh Arabic", "Amiri", serif' }}>
                   اقرأ وارتق، ورتل
                 </h2>
