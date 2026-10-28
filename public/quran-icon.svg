@@ -1,34 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- روابط الذكر الحكيم — circular app emblem (favicon). Matches
-       the richer PWA icon drawn by scripts/generate-icons.mjs: radial
-       emerald disc, gold circular frame, medallion rings with dots,
-       filled 8-point star, gold-bound open Mushaf, name in gold. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <!-- روابط الذكر الحكيم — favicon: the medallion icon variant
+       (src/components/EmblemMedallion.tsx), no text — text cannot
+       survive at favicon sizes. Disc has a 2-unit margin inside the
+       canvas so the rim never clips. -->
   <defs>
-    <radialGradient id="g" cx="50%" cy="50%" r="75%">
-      <stop offset="0%" stop-color="#0b7a5e"/>
-      <stop offset="100%" stop-color="#04543c"/>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f9e08a"/>
+      <stop offset="45%" stop-color="#f0c85a"/>
+      <stop offset="100%" stop-color="#c9932b"/>
+    </linearGradient>
+    <radialGradient id="e" cx="50%" cy="42%" r="72%">
+      <stop offset="0%" stop-color="#13946e"/>
+      <stop offset="55%" stop-color="#065f46"/>
+      <stop offset="100%" stop-color="#033b2a"/>
     </radialGradient>
   </defs>
-  <circle cx="256" cy="256" r="256" fill="url(#g)"/>
-  <circle cx="256" cy="256" r="240" fill="none" stroke="#f0c85a" stroke-width="16"/>
-  <circle cx="256" cy="256" r="222" fill="none" stroke="#f0c85a" stroke-width="12"/>
-  <circle cx="256" cy="256" r="190" fill="none" stroke="#f0c85a" stroke-width="7"/>
-  <g fill="#f0c85a">
-    <circle cx="467" cy="256" r="9"/><circle cx="439" cy="362" r="9"/><circle cx="362" cy="439" r="9"/>
-    <circle cx="256" cy="467" r="9"/><circle cx="150" cy="439" r="9"/><circle cx="73" cy="362" r="9"/>
-    <circle cx="45" cy="256" r="9"/><circle cx="73" cy="150" r="9"/><circle cx="150" cy="73" r="9"/>
-    <circle cx="256" cy="45" r="9"/><circle cx="362" cy="73" r="9"/><circle cx="439" cy="150" r="9"/>
+  <circle cx="120" cy="120" r="118" fill="url(#e)"/>
+  <circle cx="120" cy="120" r="110" fill="none" stroke="url(#g)" stroke-width="14"/>
+  <circle cx="120" cy="120" r="100" fill="none" stroke="#f0c85a" stroke-width="2.5" opacity="0.9"/>
+  <g fill="url(#g)">
+    <rect x="95" y="63" width="50" height="50"/>
+    <polygon points="120,52.6 155.4,88 120,123.4 84.6,88"/>
   </g>
-  <!-- Filled 8-point star: square + larger diamond -->
-  <g fill="#f0c85a">
-    <rect x="202" y="94" width="108" height="108"/>
-    <rect x="202" y="94" width="108" height="108" transform="rotate(45 256 148)"/>
+  <polygon points="120,79 129,88 120,97 111,88" fill="#065f46"/>
+  <g fill="url(#g)">
+    <path d="M120 120 Q82 116 45 104 L45 188 L120 188 Z"/>
+    <path d="M120 120 Q158 116 195 104 L195 188 L120 188 Z"/>
   </g>
-  <!-- Open Mushaf: solid gold binding, cream pages inset -->
-  <path d="M256 262 L120 232 L120 356 L256 384 Z" fill="#f0c85a" stroke="#f0c85a" stroke-width="6" stroke-linejoin="round"/>
-  <path d="M256 262 L392 232 L392 356 L256 384 Z" fill="#f0c85a" stroke="#f0c85a" stroke-width="6" stroke-linejoin="round"/>
-  <path d="M256 276 L138 246 L138 342 L256 370 Z" fill="#f8f1de"/>
-  <path d="M256 276 L374 246 L374 342 L256 370 Z" fill="#f8f1de"/>
-  <line x1="256" y1="262" x2="256" y2="384" stroke="#f0c85a" stroke-width="12"/>
-  <text x="256" y="444" text-anchor="middle" font-size="36" fill="#f0c85a" font-family="serif">روابط الذكر الحكيم</text>
+  <g fill="#f8f1de">
+    <path d="M120 130 Q87 126 55 116 L55 178 L120 178 Z"/>
+    <path d="M120 130 Q153 126 185 116 L185 178 L120 178 Z"/>
+  </g>
+  <rect x="116" y="120" width="8" height="68" fill="url(#g)"/>
 </svg>

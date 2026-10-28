@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import AppLogo from '../components/AppLogo';
+import EmblemMedallion from '../components/EmblemMedallion';
 import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
@@ -100,20 +100,19 @@ export default function HomeStartPage({ session, onNavigate }: {
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-            <Link className="w-7 h-7 text-white" />
-          </div>
+          <EmblemMedallion className="w-12 h-12 shrink-0" />
           <div>
-            <h1 className="text-lg font-bold text-accent-800">روابط الذكر الحكيم</h1>
+            <h1 className="text-lg font-bold text-accent-800" style={{ fontFamily: "'Noto Naskh Arabic', serif" }}>روابط الذكر الحكيم</h1>
             <p className="text-sm text-accent-500">للحفظ بالتربيطات</p>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
-        {/* Big app logo (SVG version of the luxurious AI logo) */}
+        {/* App mark: the medallion, sized so the greeting and the
+            resume action stay visible without scrolling on phones. */}
         <div className="flex justify-center mb-5">
-          <AppLogo className="w-72 sm:w-80 h-auto drop-shadow-md" />
+          <EmblemMedallion className="w-56 h-auto drop-shadow-md" />
         </div>
 
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">

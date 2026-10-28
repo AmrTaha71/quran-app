@@ -10,8 +10,10 @@ html {
 
 body {
   font-family: 'Cairo', system-ui, sans-serif;
-  background-color: #f8fafc;
-  color: #1e293b;
+  /* Warm paper canvas (theme system): the old cold slate #f8fafc
+     fought the cream/gold emblem. Ink is warm, not slate-blue. */
+  background-color: #fffdf7;
+  color: #1c2b26;
   /* Responsive default: readable on a phone, roomier on a large screen.
      Individual controls can still override this (e.g. the Mushaf zoom). */
   font-size: clamp(1.02rem, 2vw + 0.6rem, 1.15rem);

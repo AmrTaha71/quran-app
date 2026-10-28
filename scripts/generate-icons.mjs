@@ -1,10 +1,11 @@
 // Generates the PWA icons at build time (no binary files in git — the
 // push tooling only handles UTF-8 text). Pure Node, no dependencies:
-// draws the app emblem as a CIRCLE — emerald disc, gold circular
-// frame, medallion rings with dots, filled 8-point star above an open
-// gold-bound Mushaf — and writes real PNGs via zlib + a small CRC32
-// implementation. Corners are transparent, so the home screen shows a
-// round icon under any platform mask.
+// draws the app emblem as a CIRCLE — the medallion from
+// src/components/EmblemMedallion.tsx (luminous emerald disc, thick
+// gold coin frame, fused star-and-book mark, 3-value gold foil) —
+// and writes real PNGs via zlib + a small CRC32 implementation.
+// Corners are transparent, so the home screen shows a round icon
+// under any platform mask.
 // Runs automatically before `vite build` via the `prebuild` script.
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
@@ -71,30 +72,58 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
   // Maskable icons are cropped to the center 80% on install, so the
   // whole emblem scales in a little to stay inside the safe zone.
   // (Apple's mask only rounds the corners, so it keeps full size.)
+  // The medallion (EmblemMedallion.tsx), translated to pixel tests.
+  // Medallion viewBox is 240, center (120,120); every fraction below
+  // is viewBox value / 240, times `size`.
+  // Maskable icons are cropped to the center 80% on install, so the
+  // WHOLE medallion scales by ms = 0.82 there (the frame band's
+  // outer edge then lands at 0.3998 x size — just inside the 0.40
+  // safe circle). Apple keeps full size (its mask only rounds
+  // corners).
   const ms = maskable ? 0.82 : 1;
-  const w = size / 40; // thick gold line width — thin lines read as
-  // "poor" at home-screen size; filled gold reads as luxurious.
-  const frameW = size / 24; // gold frame just inside the icon edge
-  // Circular frame radius: at the disc edge, pulled in a little for
-  // maskable so the safe-zone crop never cuts it.
-  const edgeR = (half - frameW / 2) * (maskable ? 0.78 : 1);
-  const R1 = 0.44 * size * ms; // medallion outer ring
-  const R2 = 0.375 * size * ms; // medallion inner ring
-  const midR = (R1 + R2) / 2; // ring of small gold dots
-  const dotR = size / 64;
-  const starCy = -0.21 * size * ms; // filled 8-point star above book
-  const starR = 0.105 * size * ms;
-  const bookCy = 0.14 * size * ms; // gold-bound open book center
-  const bookW = 0.60 * size * ms;
-  const bookH = 0.34 * size * ms;
-  const bookDip = 0.05 * size * ms; // center top dips toward the spine
-  const coverW = size / 34; // gold binding thickness around the pages
-  // Open-book page test: top edge dips at the center spine, bottom
-  // edge straight. Used twice: gold cover, then cream pages inset.
+  const discR = 0.4917 * size * ms; // emerald disc (r=118)
+  const frameR = 0.4583 * size * ms; // thick coin frame band (r=110)
+  const frameW = 0.0583 * size * ms; // frame band width (14)
+  const hairR = 0.4167 * size * ms; // bright hairline (r=100)
+  const starCy = -0.1333 * size * ms; // star center (88 -> -32)
+  const starR = 0.1042 * size * ms; // star half-side (25)
+  const jewelR = 0.0375 * size * ms; // emerald diamond heart (9)
+  const bookCy = 0.1083 * size * ms; // book center (146 -> +26)
+  const bookW = 0.625 * size * ms; // book width (150)
+  const bookH = 0.35 * size * ms; // book height (84)
+  const bookDip = 0.0667 * size * ms; // spine dip (16)
+  const coverW = 0.0417 * size * ms; // gold binding inset (10)
+  // Gold foil: 3 values with one light direction (diagonal, bright
+  // top-left to deep bottom-right) — flat single gold is what made
+  // the old icon read as poster paint.
+  const goldAt = (px, py) => {
+    const t = Math.max(0, Math.min(1, ((px + py) / (2 * half)) * 0.5 + 0.5));
+    const lerp = (a, b, k) => Math.round(a + (b - a) * k);
+    if (t < 0.45) {
+      const k = t / 0.45;
+      return [lerp(249, 240, k), lerp(224, 200, k), lerp(138, 90, k), 255];
+    }
+    const k = (t - 0.45) / 0.55;
+    return [lerp(240, 201, k), lerp(200, 147, k), lerp(90, 43, k), 255];
+  };
+  // Emerald jewel: luminous center, deep rim (3 stops).
+  const emeraldAt = (dist) => {
+    const t = Math.min(dist / discR, 1);
+    const lerp = (a, b, k) => Math.round(a + (b - a) * k);
+    if (t < 0.55) {
+      const k = t / 0.55;
+      return [lerp(19, 6, k), lerp(148, 95, k), lerp(110, 70, k), 255];
+    }
+    const k = (t - 0.55) / 0.45;
+    return [lerp(6, 3, k), lerp(95, 59, k), lerp(70, 42, k), 255];
+  };
+  // Open-book page test: top edge CURLS down toward the spine
+  // (sine curl — steep near the spine, flat toward the outer edge),
+  // bottom edge straight. Used twice: gold cover, cream pages inset.
   const inBookShape = (px, py, bw, bh) => {
     if (Math.abs(px) > bw / 2) return false;
-    const t = 1 - Math.abs(px) / (bw / 2); // 1 at spine, 0 at outer edge
-    const top = bookCy - bh / 2 + bookDip * t;
+    const s = Math.sin((Math.PI / 2) * (1 - Math.abs(px) / (bw / 2)));
+    const top = bookCy - bh / 2 + bookDip * s;
     return py >= top && py <= bookCy + bh / 2;
   };
   for (let y = 0; y < size; y++) {
@@ -103,44 +132,26 @@ function makeIcon(size, { maskable = false, apple = false } = {}) {
       const py = y + 0.5 - c;
       // Round icon: outside the disc is transparent, so the home
       // screen shows a circle, not a square.
-      const dist0 = Math.hypot(px, py);
-      if (dist0 > half) {
+      const dist = Math.hypot(px, py);
+      if (dist > discR) {
         pixels[y * size + x] = [0, 0, 0, 0];
         continue;
       }
-      // Radial emerald gradient: lighter jewel center, deeper edge.
-      const t = Math.min(Math.hypot(px, py) / (half), 1);
-      let color = [
-        Math.round(11 + (4 - 11) * t),
-        Math.round(122 + (84 - 122) * t),
-        Math.round(94 + (60 - 94) * t),
-        255,
-      ];
-      // Circular gold frame at the disc's edge.
-      if (Math.abs(dist0 - edgeR) <= frameW / 2) color = GOLD;
-      const dist = Math.hypot(px, py);
-      if (Math.abs(dist - R1) <= w / 2 || Math.abs(dist - R2) <= w / 2) color = GOLD;
-      // 12 small gold dots on the ring between the two medallion rings.
-      if (dist > 0.3 * size) {
-        const ang = Math.atan2(py, px);
-        const dotAng = Math.round(ang / (Math.PI / 6)) * (Math.PI / 6);
-        const ddx = px - midR * Math.cos(dotAng);
-        const ddy = py - midR * Math.sin(dotAng);
-        if (ddx * ddx + ddy * ddy <= dotR * dotR) color = GOLD;
-      }
-      // Filled 8-point star: union of a square and a larger diamond
-      // (diamond circumradius starR*√2, so its vertices poke out of
-      // the square's edges while the square's corners poke out of the
-      // diamond — 8 points total; a same-size diamond would just
-      // vanish inside the square).
+      let color = emeraldAt(dist);
+      // Thick coin frame band + bright hairline.
+      if (Math.abs(dist - frameR) <= frameW / 2) color = goldAt(px, py);
+      if (Math.abs(dist - hairR) <= 0.0052 * size * ms) color = GOLD;
+      // Fused star: filled 8-point star (square + sqrt2 diamond).
       const sx = px;
       const sy = py - starCy;
       if (Math.max(Math.abs(sx), Math.abs(sy)) <= starR
-        || Math.abs(sx) + Math.abs(sy) <= starR * Math.SQRT2) color = GOLD;
+        || Math.abs(sx) + Math.abs(sy) <= starR * Math.SQRT2) color = goldAt(px, py);
+      // Jewel heart: small emerald diamond at the star's center.
+      if (Math.abs(sx) + Math.abs(sy) <= jewelR) color = EMERALD;
       // Open Mushaf: solid gold binding, cream pages inset, gold spine.
-      if (inBookShape(px, py, bookW, bookH)) color = GOLD;
+      if (inBookShape(px, py, bookW, bookH)) color = goldAt(px, py);
       if (inBookShape(px, py, bookW - 2 * coverW, bookH - 2 * coverW)) color = CREAM;
-      if (Math.abs(px) <= coverW * 0.55 && py >= bookCy - bookH / 2 + bookDip && py <= bookCy + bookH / 2) color = GOLD;
+      if (Math.abs(px) <= 0.0167 * size * ms && py >= bookCy - bookH / 2 + bookDip && py <= bookCy + bookH / 2) color = goldAt(px, py);
       pixels[y * size + x] = color;
     }
   }
