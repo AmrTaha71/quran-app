@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { BookOpen, LayoutDashboard, Mic, Headphones, Settings } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
@@ -41,6 +41,19 @@ export default function HomeStartPage({ session, onNavigate }: {
   onNavigate: (r: Route) => void;
 }) {
   const [preferredName, setPreferredName] = useState<string | null>(null);
+  // تربيط اليوم: one approved link, picked deterministically by
+  // day-of-year (offset = (dayOfYear - 1) % approvedCount, ordered by
+  // id). Any failure or empty result hides the card entirely — link
+  // content is never invented.
+  const [linkOfDay, setLinkOfDay] = useState<{ surah: number; surahName: string; ayah: number; title: string | null; text: string } | null>(null);
+  // First-run 3-step screen: home only, once per device, dismissible.
+  const [showIntro, setShowIntro] = useState(() => {
+    try { return localStorage.getItem('quran-first-run-seen') !== '1'; } catch { return false; }
+  });
+  const dismissIntro = () => {
+    try { localStorage.setItem('quran-first-run-seen', '1'); } catch { /* ignore */ }
+    setShowIntro(false);
+  };
   const [lastPage] = useState(readLastPage);
   const [wird] = useState(loadWird);
   const today = new Date().toLocaleDateString('en-CA');
@@ -48,6 +61,27 @@ export default function HomeStartPage({ session, onNavigate }: {
   const pagesText =
     wird.target === 1 ? 'صفحة واحدة' : wird.target === 2 ? 'صفحتين' : `${wird.target.toLocaleString('ar-EG')} صفحات`;
   const juz = getJuzFromPage(lastPage.page);
+
+  useEffect(() => {
+    const loadLinkOfDay = async () => {
+      try {
+        const now = new Date();
+        const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+        const { count } = await supabase.from('ayah_links').select('id', { count: 'exact', head: true }).eq('status', 'approved');
+        if (!count || count <= 0) return;
+        const offset = (dayOfYear - 1) % count;
+        const { data: link } = await supabase.from('ayah_links')
+          .select('id, verse_id, link_content, link_title').eq('status', 'approved')
+          .order('id', { ascending: true }).range(offset, offset).single();
+        if (!link || !link.link_content) return;
+        const { data: verse } = await supabase.from('quran_verses')
+          .select('surah_no, surah_name, ayah_no').eq('id', link.verse_id).single();
+        if (!verse) return;
+        setLinkOfDay({ surah: verse.surah_no, surahName: verse.surah_name, ayah: verse.ayah_no, title: link.link_title, text: link.link_content });
+      } catch { /* hide the card entirely on any failure */ }
+    };
+    loadLinkOfDay();
+  }, []);
 
   useEffect(() => {
     const loadName = async () => {
@@ -66,7 +100,7 @@ export default function HomeStartPage({ session, onNavigate }: {
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-            <BookOpen className="w-7 h-7 text-white" />
+            <Link className="w-7 h-7 text-white" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-accent-800">روابط الذكر الحكيم</h1>
@@ -116,6 +150,31 @@ export default function HomeStartPage({ session, onNavigate }: {
           </p>
         </button>
 
+        {/* تربيط اليوم: real approved link only; hidden on any failure */}
+        {linkOfDay && (
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-4 mb-4">
+            <p className="font-bold text-accent-800 flex items-center gap-2">
+              <Link className="w-5 h-5 text-amber-600" /> تربيط اليوم
+            </p>
+            <p className="text-sm text-accent-500 mt-1">
+              سورة {linkOfDay.surahName} — آية {linkOfDay.ayah.toLocaleString('ar-EG')}
+              {linkOfDay.title ? ` — ${linkOfDay.title}` : ''}
+            </p>
+            <p className="text-base text-accent-700 leading-relaxed mt-2">
+              {linkOfDay.text.length > 140 ? `${linkOfDay.text.slice(0, 140)}…` : linkOfDay.text}
+            </p>
+            <button
+              onClick={() => {
+                try { localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: linkOfDay.surah, ayah: linkOfDay.ayah })); } catch { /* ignore */ }
+                onNavigate('mushaf');
+              }}
+              className="mt-3 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl"
+            >
+              افتح الآية وسمّعها
+            </button>
+          </div>
+        )}
+
         {/* Quick buttons only */}
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -132,9 +191,9 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
           <button
             onClick={() => onNavigate('test')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+            className="py-3.5 bg-white border border-amber-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
           >
-            <Headphones className="w-5 h-5 text-emerald-600" /> سمّع لنفسك
+            <Headphones className="w-5 h-5 text-amber-600" /> سمّع لنفسك
           </button>
           <button
             onClick={() => onNavigate('settings')}
@@ -148,6 +207,25 @@ export default function HomeStartPage({ session, onNavigate }: {
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
         </p>
       </main>
+
+      {/* First-run screen (home only, once per device): 3 steps, dismissible */}
+      {showIntro && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50" onClick={dismissIntro}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <p className="text-lg font-bold text-accent-800 mb-1">احفظ القرآن بالتربيطات</p>
+            <p className="text-sm text-accent-500 mb-4">٣ خطوات، وكل آية تثبت في ذهنك:</p>
+            <ol className="text-right space-y-3 text-base text-accent-700">
+              <li><span className="font-bold text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
+              <li><span className="font-bold text-amber-700">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>
+              <li><span className="font-bold text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
+            </ol>
+            <button onClick={dismissIntro}
+              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
+              ابدأ
+            </button>
+          </div>
+        </div>
+      )}
 
       <BottomNav current="home" onNavigate={onNavigate} />
     </div>

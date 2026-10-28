@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Headphones, Globe, BookMarked, Share2 } from 'lucide-react';
+import { Headphones, Globe, BookMarked, Share2, Link } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { TOTAL_VERSES } from '../lib/types';
@@ -34,7 +34,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-              <BookOpen className="w-6 h-6 text-white" />
+              <Link className="w-6 h-6 text-white" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-accent-800">{t('appName')}</h1>
@@ -86,7 +86,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
 
         <div className="relative max-w-4xl mx-auto text-center">
           <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-3xl flex items-center justify-center shadow-2xl mx-auto mb-6">
-            <BookOpen className="w-10 h-10 text-white" />
+            <Link className="w-10 h-10 text-white" />
           </div>
 
           <h2 className="text-4xl md:text-6xl font-bold text-accent-800 mb-4 leading-tight">

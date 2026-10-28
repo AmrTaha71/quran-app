@@ -833,7 +833,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
               {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
               <button onClick={() => void startTestGlobal(unitPreview.start.global, unitPreview.end.global)} disabled={loading || !unitPreviewValid}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                 {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع من الوحدة'}
               </button>
             </div>
@@ -874,7 +874,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
               {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
               <button onClick={() => void startTest()} disabled={loading}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                 {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
               </button>
               <p className="text-xs text-accent-400 leading-relaxed">

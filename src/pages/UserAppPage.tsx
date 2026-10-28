@@ -434,6 +434,30 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           </p>
         </div>
 
+        {/* مركز الحفظ: memorization % from the user's own memorized
+            list (distinct verse ids / 6236 — no invented numbers), plus
+            a one-tap filter to the memorized ayahs and their links. */}
+        {session && (
+          <div className="mb-5 bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <BadgeCheck className="w-5 h-5 text-amber-600" />
+              <h2 className="font-bold text-accent-800">مركز الحفظ</h2>
+            </div>
+            <p className="text-2xl font-bold text-accent-800">
+              حفظت {listCounts.memorized.toLocaleString('ar-EG')} آية من 6,236 — {Math.round((listCounts.memorized / 6236) * 100).toLocaleString('ar-EG')}٪
+            </p>
+            <p className="text-sm text-accent-500 leading-relaxed mt-1">
+              {listCounts.memorized > 0
+                ? 'آياتك المحفوظة تحت، ومع كل آية روابطها — راجع تربيطاتك وثبّتها.'
+                : 'لسه ما علّمتش آيات كمحفوظة — اضغط مطولًا على أي آية واختر «تم الحفظ»، وهنا هتتابع نسبتك.'}
+            </p>
+            <button onClick={() => { setListFilter('memorized'); setPage(0); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className="mt-4 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
+              راجع تربيطاتك
+            </button>
+          </div>
+        )}
+
         {/* Progress Widget */}
         <div className="mb-5">
           <ProgressWidget />
@@ -444,14 +468,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <DailyWird onNavigate={onNavigate} />
           <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-1">
-              <Mic className="w-5 h-5 text-emerald-600" />
+              <Mic className="w-5 h-5 text-amber-600" />
               <h2 className="font-bold text-accent-800">سمّع لنفسك</h2>
             </div>
             <p className="text-sm text-accent-500 leading-relaxed flex-1">
               بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٥ ثواني وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة. ولو المتصفح مش بيدعم الميكروفون، التقييم بيبقى يدوي.
             </p>
             <button onClick={() => onNavigate('test')}
-              className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
+              className="mt-4 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
               ابدأ التسميع
             </button>
           </div>

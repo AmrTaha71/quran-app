@@ -24,12 +24,17 @@ export default function ShareButton({
   }, []);
 
   const appUrl = 'https://rawabit-alziker-alhakim.vercel.app';
-  const shareText = `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${appUrl}`;
+  const isGenericAppShare = ayahNo === 0;
+  const shareText = isGenericAppShare
+    ? `روابط الذكر الحكيم\n\nاحفظها بالتربيط:\n${appUrl}`
+    : `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${appUrl}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(appUrl);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(`${shareText}\n${appUrl}`);
+    // Generic share text already contains the URL; per-ayah keeps the
+    // previous copy behavior unchanged.
+    navigator.clipboard.writeText(isGenericAppShare ? shareText : `${shareText}\n${appUrl}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

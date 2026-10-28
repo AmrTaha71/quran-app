@@ -285,6 +285,21 @@ export default function QuranMushafPage({
   // chips, side strips, verse strip) so only the page shows. Word taps
   // and swipes keep working; tapping the page margin restores controls.
   const [cleanMode, setCleanMode] = useState(false);
+  // وضع الحفظ (identity): in fullscreen, the ayah popup hides the ayah
+  // text and shows its links first, with an "أظهر الآية" reveal. This
+  // touches ONLY the popup text rendering — never page geometry, word
+  // boxes, or tap mapping. Persisted across visits like goldFrame.
+  const [hifzMode, setHifzMode] = useState(() => {
+    try { return localStorage.getItem('quran-hifz-mode') === '1'; } catch { return false; }
+  });
+  const [hifzRevealed, setHifzRevealed] = useState(false);
+  const toggleHifzMode = () => {
+    setHifzMode((v) => {
+      const next = !v;
+      try { localStorage.setItem('quran-hifz-mode', next ? '1' : '0'); } catch { /* ignore */ }
+      return next;
+    });
+  };
   // Golden frame: a pointer-events-none overlay above the page image.
   // It never touches layout, so tap mapping and the no-dance geometry
   // are unaffected. Persisted across visits.
@@ -348,7 +363,9 @@ export default function QuranMushafPage({
     setReciterId(id);
     try { localStorage.setItem('quran-reciter', id); } catch { /* ignore */ }
   };
-  useEffect(() => { stopRecitation(); setShowReciters(false); }, [selectedVerse?.id, stopRecitation]);
+  useEffect(() => { stopRecitation(); setShowReciters(false); setHifzRevealed(false); }, [selectedVerse?.id, stopRecitation]);
+  // In وضع الحفظ the popup always opens on its links first.
+  useEffect(() => { if (selectedVerse && hifzMode) setPopupTab('links'); }, [selectedVerse, hifzMode]);
   const startRecitation = (verse: QuranVerse, r: Reciter) => {
     stopRecitation();
     changeReciter(r.id);
@@ -2611,6 +2628,15 @@ export default function QuranMushafPage({
             </button>
           )}
 
+          {/* وضع الحفظ toggle: hides the popup ayah text until revealed. */}
+          {!showRatelIntro && !cleanMode && (
+            <button onClick={(e) => { e.stopPropagation(); toggleHifzMode(); }}
+              title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار روابطها أولًا'}
+              className={`absolute top-[124px] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-500/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
+              وضع الحفظ {hifzMode ? '✓' : ''}
+            </button>
+          )}
+
           {/* Juz / Hizb info in fullscreen */}
           {!showRatelIntro && !cleanMode && (
             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-3 z-30 pointer-events-none">
@@ -2864,18 +2890,19 @@ export default function QuranMushafPage({
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
                   </div>
                 )}
-                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح المتشابهات والروابط والإعراب والتفسير</p>
+                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح روابطها • النقطة الذهبية تعني أن للآية تربيطات</p>
                 <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
                   <div className="flex gap-2">
                     {stripVerses.map((v) => (
                       <button key={v.id} onClick={() => handleVerseClick(v)}
-                        className={`flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
+                        className={`relative flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 ${
                           followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           searchHighlight && searchHighlight.surah === v.surah_no && searchHighlight.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
                           v.has_links ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50' : 'bg-white/20 text-white hover:bg-white/30'
                         }`}>
                         {v.ayah_no}
+                        {v.has_links && <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-amber-400 ring-1 ring-white/70" title="للآية تربيطات" />}
                       </button>
                     ))}
                   </div>
@@ -2904,13 +2931,24 @@ export default function QuranMushafPage({
                       </button>
                     </div>
                     <div className="p-4 overflow-y-auto min-h-0 flex-1">
-                      <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
+                      {hifzMode && !hifzRevealed ? (
+                        <div className="mb-3 text-center bg-amber-50 border border-amber-200 rounded-xl p-4">
+                          <p className="text-sm font-bold text-amber-800">الآية مخفية في وضع الحفظ — سمّعها من حفظك الأول</p>
+                          <p className="text-xs text-accent-500 mt-1">روابطها ظاهرة تحت، والنص يظهر لما تضغط الزر</p>
+                          <button onClick={() => setHifzRevealed(true)}
+                            className="mt-3 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl">
+                            أظهر الآية
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
+                      )}
                       {/* الروابط first and above everything: the app is
                           about the links, so it gets its own full-width
                           green button on top, not just a tab. Tapping it
                           always shows the links; the ring marks it active. */}
                       <button onClick={() => setPopupTab('links')}
-                        className={`w-full mb-3 py-3 rounded-xl transition-smooth flex flex-col items-center justify-center gap-0.5 ${popupTab === 'links' ? 'bg-emerald-600 text-white ring-2 ring-emerald-300' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                        className={`w-full mb-3 py-3 rounded-xl transition-smooth flex flex-col items-center justify-center gap-0.5 ${popupTab === 'links' ? 'bg-amber-600 text-white ring-2 ring-amber-300' : 'bg-amber-600 text-white hover:bg-amber-700'}`}>
                         <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
                         <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
                       </button>
