@@ -153,7 +153,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* استمع للقرآن: directly after the resume card, before the wird button. */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
+            <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن مع غلق الشاشة
           </p>
           <p className="text-sm text-accent-600 mt-1">
             تلاوة متواصلة مع القراءة — تعمل والشاشة مطفية، ويمكن تحميل السورة للاستماع دون اتصال
@@ -175,44 +175,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           >
             <Headphones className="w-5 h-5" />
             استمع للقرآن
-          </button>
-        </div>
-
-        {/* إذاعة القرآن الكريم: SHIP-GATED — disabled "قريبًا" card only.
-            No navigation, no playback: the button must not go live on
-            an unverified or unpermitted stream (Maspero permission
-            pending). The #/radio route stays for testing only; adding
-            the live card later is one card + onNavigate('radio'). */}
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
-          <p className="font-bold text-accent-800 flex items-center gap-2">
-            <Radio className="w-5 h-5 text-stone-500" /> استمع لإذاعة القرآن الكريم
-            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            بث مباشر لإذاعة القرآن الكريم من القاهرة — بانتظار إذن البث من الهيئة الوطنية للإعلام.
-          </p>
-          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
-            قريبًا
-          </button>
-        </div>
-
-        {/* أذكار الصباح والمساء: CARD ONLY — audio out of scope (no
-            licensed source yet: Duraihem confirmation / Alafasy
-            permission pending). Disabled "قريبًا" card; nothing built,
-            nothing hotlinked. Future wiring shape (types only, see
-            src/lib/adhkarFuture.ts): one audio file per wird +
-            timing table [{text, count, startMs, endMs}] for
-            per-dhikr skip. */}
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
-          <p className="font-bold text-accent-800 flex items-center gap-2">
-            <SunMoon className="w-5 h-5 text-stone-500" /> استمع لأذكار الصباح والمساء
-            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            أذكار الصباح والمساء صوتًا — بانتظار مصدر صوتي مرخّص.
-          </p>
-          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
-            قريبًا
           </button>
         </div>
 
@@ -253,6 +215,44 @@ export default function HomeStartPage({ session, onNavigate }: {
             </button>
           </div>
         )}
+
+        {/* إذاعة القرآن الكريم: SHIP-GATED — disabled "قريبًا" card only.
+            No navigation, no playback: the button must not go live on
+            an unverified or unpermitted stream (Maspero permission
+            pending). The #/radio route stays for testing only; adding
+            the live card later is one card + onNavigate('radio'). */}
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <Radio className="w-5 h-5 text-stone-500" /> استمع لإذاعة القرآن الكريم
+            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
+          </p>
+          <p className="text-sm text-accent-600 mt-1">
+            بث مباشر لإذاعة القرآن الكريم من القاهرة — بانتظار إذن البث من الهيئة الوطنية للإعلام.
+          </p>
+          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
+            قريبًا
+          </button>
+        </div>
+
+        {/* أذكار الصباح والمساء: CARD ONLY — audio out of scope (no
+            licensed source yet: Duraihem confirmation / Alafasy
+            permission pending). Disabled "قريبًا" card; nothing built,
+            nothing hotlinked. Future wiring shape (types only, see
+            src/lib/adhkarFuture.ts): one audio file per wird +
+            timing table [{text, count, startMs, endMs}] for
+            per-dhikr skip. */}
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <SunMoon className="w-5 h-5 text-stone-500" /> استمع لأذكار الصباح والمساء
+            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
+          </p>
+          <p className="text-sm text-accent-600 mt-1">
+            أذكار الصباح والمساء صوتًا — بانتظار مصدر صوتي مرخّص.
+          </p>
+          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
+            قريبًا
+          </button>
+        </div>
 
         {/* Quick buttons only */}
         <div className="grid grid-cols-2 gap-3">
