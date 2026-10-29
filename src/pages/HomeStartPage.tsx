@@ -173,13 +173,13 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
           <p className="text-sm text-accent-600 mt-1">
-            تلاوة متواصلة مع القراءة — استمع للقرآن واقفل الشاشة لو عاوز، ويمكن تحميل السورة للاستماع دون اتصال
+            تلاوة متواصلة مع القراءة — واقفل الشاشة لو عاوز.
           </p>
           {/* أوفلاين — headline feature of this entry (Amr's explicit
               "أوفلاين"): streaming (play) and per-surah download are
               both reachable from the listen page this card opens. */}
           <p className="text-sm text-amber-700 font-bold mt-1">
-            أوفلاين: حمّل أي سورة واستمع دون اتصال
+            أوفلاين: حمّل أي سورة.
           </p>
           {listeningWird && (
             <p className="text-sm text-amber-700 font-bold mt-2">
@@ -198,7 +198,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* Khatma entries, directly after the listen card, in
             mode order: ختمة منوّعة, then ختمة وتدبّر. */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800">{khatmaVaried?.name ?? 'ختمة منوّعة'}</p>
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <Headphones className="w-5 h-5 text-emerald-600" />{khatmaVaried?.name ?? 'ختمة منوّعة'}
+          </p>
           <p className="text-sm text-accent-600 mt-1">
             {khatmaVaried?.description ?? 'المصحف كاملًا، كل سورة بقارئ مختلف من القراء الثمانية.'}
           </p>
@@ -216,7 +218,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800">{khatmaTadabbur?.name ?? 'ختمة وتدبّر'}</p>
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <Headphones className="w-5 h-5 text-emerald-600" />{khatmaTadabbur?.name ?? 'ختمة وتدبّر'}
+          </p>
           <p className="text-sm text-accent-600 mt-1">
             {khatmaTadabbur?.description ?? 'ختمة منوّعة مع تفسير ميسّر بعد كل ربع.'}
           </p>

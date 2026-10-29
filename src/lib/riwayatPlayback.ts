@@ -94,6 +94,13 @@ export class RiwayaEngine {
   private internalPauseTokens = 0;
   private internalPauseAt = 0;
   private lastPositionStateAt = 0;
+  // Periodic persist (2026-10-29): without this, a position
+  // exists only after a pause/hide/destroy event — closing or
+  // killing the tab mid-playback saved NOTHING, so hadr/riwaya
+  // resume silently vanished. Throttled to 10s: localStorage
+  // writes stay cheap, and any listening longer than 10s
+  // leaves a recoverable position.
+  private lastPersistAt = 0;
 
   private readonly audio: HTMLAudioElement;
   private currentSrc = '';
@@ -157,6 +164,13 @@ export class RiwayaEngine {
     if (now - this.lastPositionStateAt < 1000) return;
     this.lastPositionStateAt = now;
     this.updatePositionState();
+    // Periodic persist (see lastPersistAt): only while actually
+    // playing, so a seek that has not applied yet can never
+    // overwrite a resumed position with 0.
+    if (this.playingFlag && now - this.lastPersistAt >= 10000) {
+      this.lastPersistAt = now;
+      this.persistPosition();
+    }
   };
 
   private readonly handleLoadedMetadata = (): void => {

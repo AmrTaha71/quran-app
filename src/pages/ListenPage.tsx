@@ -58,6 +58,7 @@ import {
   isSurahDownloaded,
   resolveListenUrl,
 } from '../lib/listenOffline';
+import { getSharedAudio } from '../lib/sharedAudio';
 
 type Route =
   | 'home'
@@ -91,6 +92,73 @@ function readPersistedRiwaya(): string | null {
     if (RIWAYAT.some((r) => r.id === saved)) return saved;
   } catch {}
   return null;
+}
+
+// Continuity (user request 2026-10-29): leaving Listen
+// mid-playback pauses instead of stopping, and returning
+// resumes by itself — no tap. The unmount effect records a
+// ONE-TIME intent in sessionStorage (per-tab: a fresh tab
+// never auto-plays); the mount effect consumes it. Stored
+// resumes (hadr key, riwaya map, wird, per-mode) are
+// untouched, so tap-resume always remains as the fallback
+// if the browser blocks the auto-play. Locking the screen
+// or backgrounding the app is different: the engines never
+// pause on hide, so audio keeps playing there (see the
+// visible-sync effect); only in-app navigation pauses.
+const AUTO_RESUME_KEY = 'quran-listen-auto-resume';
+const AUTO_RESUME_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+type AutoResumeIntent =
+  | { kind: 'hadr'; surah: number; time: number; at: number }
+  | { kind: 'riwaya'; riwaya: string; surah: number; time: number; at: number }
+  | { kind: 'hafs'; surah: number; reciter: string; mode: ListenMode; ayah: number; time: number; at: number }
+  | { kind: 'journey'; position: ThreeModePosition; at: number };
+
+function validResumeSurah(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 114;
+}
+function validResumeTime(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0;
+}
+function readAutoResumeIntent(): AutoResumeIntent | null {
+  try {
+    const raw = sessionStorage.getItem(AUTO_RESUME_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof p !== 'object' || p === null) return null;
+    if (!validResumeTime(p.at) || (p.at as number) > Date.now() + 60000 || Date.now() - (p.at as number) > AUTO_RESUME_MAX_AGE_MS) return null;
+    const at = p.at as number;
+    if (p.kind === 'hadr' && validResumeSurah(p.surah) && validResumeTime(p.time)) {
+      return { kind: 'hadr', surah: p.surah, time: p.time, at };
+    }
+    if (p.kind === 'riwaya' && typeof p.riwaya === 'string' && RIWAYAT.some((r) => r.id === p.riwaya) && validResumeSurah(p.surah) && validResumeTime(p.time)) {
+      return { kind: 'riwaya', riwaya: p.riwaya, surah: p.surah, time: p.time, at };
+    }
+    if (p.kind === 'hafs' && validResumeSurah(p.surah) && typeof p.reciter === 'string' && RECITERS.some((r) => r.id === p.reciter) && (p.mode === 'free' || p.mode === 'wird') && typeof p.ayah === 'number' && Number.isInteger(p.ayah) && (p.ayah as number) >= 1 && validResumeTime(p.time)) {
+      return { kind: 'hafs', surah: p.surah, reciter: p.reciter, mode: p.mode, ayah: p.ayah, time: p.time, at };
+    }
+    if (p.kind === 'journey' && typeof p.position === 'object' && p.position !== null) {
+      const pos = p.position as Record<string, unknown>;
+      const inter = pos.interstitial;
+      const interOk = inter === undefined || (Array.isArray(inter) && inter.every((it) => typeof it === 'object' && it !== null && validResumeSurah((it as Record<string, unknown>).surah) && typeof (it as Record<string, unknown>).ayah === 'number' && Number.isInteger((it as Record<string, unknown>).ayah) && ((it as Record<string, unknown>).ayah as number) >= 1));
+      if (THREE_MODES.some((m) => m.id === pos.mode) && validResumeSurah(pos.startSurah) && typeof pos.startReciterId === 'string' && RECITERS.some((r) => r.id === pos.startReciterId) && (pos.kind === 'ayah' || pos.kind === 'tafsir') && validResumeSurah(pos.surah) && typeof pos.ayah === 'number' && Number.isInteger(pos.ayah) && (pos.ayah as number) >= 1 && validResumeTime(pos.time) && interOk) {
+        return { kind: 'journey', position: pos as unknown as ThreeModePosition, at };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+function writeAutoResumeIntent(intent: AutoResumeIntent): void {
+  try {
+    sessionStorage.setItem(AUTO_RESUME_KEY, JSON.stringify(intent));
+  } catch {}
+}
+function clearAutoResumeIntent(): void {
+  try {
+    sessionStorage.removeItem(AUTO_RESUME_KEY);
+  } catch {}
 }
 
 // Electronic speed (audio.playbackRate), persisted under
@@ -448,6 +516,12 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
       playbackRate,
       onEnded: () => {
         setPlaying(false);
+        // Finished: same dead-position rule as hadr — clear so
+        // the resume card never offers the end of a done surah.
+        try {
+          clearRiwayaResume(riwaya);
+        } catch {}
+        setSavedRiwayatResume(null);
       },
       onError: (message) => {
         setEngineError(message);
@@ -505,6 +579,13 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
       },
       onEnded: () => {
         setPlaying(false);
+        // Finished: no position left to resume — clear so the
+        // resume card (and any auto-resume) never offers a dead
+        // end-of-file position.
+        try {
+          clearHadrResume();
+        } catch {}
+        setSavedHadrResume(null);
       },
       onError: (message) => {
         setEngineError(message);
@@ -807,6 +888,73 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     setShowHadrResume(false);
   };
 
+  // Continuity: auto-resume a playback that was paused by
+  // LEAVING this page (see the unmount effect). One attempt
+  // only: the intent is consumed up front. A home khatma
+  // preselection wins (a fresh choice): the intent is dropped
+  // and that effect runs normally. If the browser blocks the
+  // play (no gesture in this load), the intent is re-saved so
+  // the next visit retries, and the stored resume cards stay
+  // as the tap fallback. Declared BEFORE the preselect effect
+  // on purpose: effects run in declaration order, so this one
+  // still sees the preselect flag before that effect consumes it.
+  useEffect(() => {
+    const intent = readAutoResumeIntent();
+    if (!intent) return;
+    try {
+      if (sessionStorage.getItem('quran-listen-preselect')) {
+        clearAutoResumeIntent();
+        return;
+      }
+    } catch {}
+    clearAutoResumeIntent();
+    void (async () => {
+      try {
+        if (intent.kind === 'hadr') await startHadrPlayback(intent.surah, intent.time);
+        else if (intent.kind === 'riwaya') await startRiwayaPlayback(intent.surah, intent.riwaya, intent.time);
+        else if (intent.kind === 'hafs') await startPlayback(intent.surah, intent.reciter, intent.mode, intent.ayah, intent.time);
+        else await startJourney(intent.position.mode, intent.position);
+      } catch {}
+      // The start functions swallow a blocked play into an
+      // error line instead of throwing, so check reality: if
+      // no engine is actually playing, keep the intent for the
+      // next visit instead of dropping the position.
+      try {
+        const anyPlaying =
+          journeyEngineRef.current?.playing ||
+          riwayaEngineRef.current?.playing ||
+          engineRef.current?.playing;
+        if (!anyPlaying) writeAutoResumeIntent(intent);
+      } catch {}
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Lock/background return sync: the engines never pause on
+  // hide, so audio keeps playing through a lock — but their
+  // hidden handler still reports "interrupted", so a return
+  // from lock could show "paused" while audio plays. On
+  // becoming visible again, trust the element: playing →
+  // clear the interrupted UI; paused → leave it (a real
+  // suspension, e.g. a phone call, still needs the tap).
+  useEffect(() => {
+    const onVis = () => {
+      try {
+        if (document.visibilityState !== 'visible') return;
+        const anyEngine = journeyEngineRef.current || riwayaEngineRef.current || engineRef.current;
+        if (!anyEngine) return;
+        const audio = getSharedAudio();
+        if (!audio.paused) {
+          setInterrupted(false);
+          setPlaying(true);
+        }
+      } catch {}
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Home khatma card preselection (one-time flag, same pattern
   // as 'quran-open-fullscreen'): a home card sets
   // 'quran-listen-preselect' to 'varied' | 'tadabbur' and
@@ -989,8 +1137,36 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   }, [surah, reciterId]);
 
   // Engine destroyed on unmount (and on Stop, via stopPlayback).
+  // Continuity: if playback is LIVE at unmount (the user opened
+  // another in-app page mid-listen), record a one-time
+  // auto-resume intent FIRST — the mount effect resumes it on
+  // return, from the pause point, with no tap. destroyEngine()
+  // then persists the stored resumes, so tap-resume still works
+  // if auto-play is ever blocked. Explicit stops and finished
+  // surahs never reach here with playing=true, so they never
+  // record an intent. Engine refs (not state) are read here:
+  // this cleanup closes over the first render's state.
   useEffect(() => {
     return () => {
+      try {
+        const j = journeyEngineRef.current;
+        const r = riwayaEngineRef.current;
+        const e = engineRef.current;
+        let intent: AutoResumeIntent | null = null;
+        if (j?.playing) {
+          intent = { kind: 'journey', position: j.getPosition(), at: Date.now() };
+        } else if (r?.playing) {
+          const pos = r.getPosition();
+          intent = activeHadrRef.current
+            ? { kind: 'hadr', surah: pos.surah, time: pos.time, at: Date.now() }
+            : { kind: 'riwaya', riwaya: r.current.riwaya, surah: pos.surah, time: pos.time, at: Date.now() };
+        } else if (e?.playing) {
+          const pos = e.getPosition();
+          intent = { kind: 'hafs', surah: pos.surah, reciter: pos.reciter, mode: activeModeRef.current, ayah: pos.ayah, time: pos.time ?? 0, at: Date.now() };
+        }
+        if (intent) writeAutoResumeIntent(intent);
+        else clearAutoResumeIntent();
+      } catch {}
       destroyEngine();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1151,13 +1327,13 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           {riwayaId === null && !hadrOn && (
             <>
           <p className="font-bold text-accent-800 mt-5 mb-2">القراء للاختيار بينهم</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {RECITERS.map((r) => (
               <button
                 key={r.id}
                 disabled={locked}
                 onClick={() => changeReciter(r.id)}
-                className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
+                className={`w-full px-4 py-2.5 rounded-xl font-bold text-center disabled:opacity-50 ${
                   reciterId === r.id
                     ? 'bg-emerald-600 text-white'
                     : 'bg-white border border-emerald-200 text-accent-800'
@@ -1187,7 +1363,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
                 }`}
               >
                 {r.name}
-                {riwayaId === r.id && <Check className="w-5 h-5 shrink-0" />}
+                {riwayaId === r.id ? <Check className="w-5 h-5 shrink-0" /> : <span className="w-5 h-5 shrink-0" aria-hidden="true" />}
               </button>
             ))}
           </div>
@@ -1204,13 +1380,13 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               so speed cannot desync it (no timers in the ayah
               advance path — verified by grep, see EVIDENCE.md). */}
           <p className="font-bold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {PLAYBACK_RATES.map((rate) => (
               <button
                 key={rate}
                 disabled={locked || hadrOn}
                 onClick={() => changeRate(rate)}
-                className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
+                className={`w-full px-4 py-2.5 rounded-xl font-bold text-center disabled:opacity-50 ${
                   playbackRate === rate
                     ? 'bg-emerald-600 text-white'
                     : 'bg-white border border-emerald-200 text-accent-800'
@@ -1244,7 +1420,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           >
             {HADR_FULL_LABEL}
             <span className={`block text-sm font-normal mt-1 ${hadrOn ? 'text-emerald-100' : 'text-accent-600'}`}>
-              تلاوة سريعة طبيعية بصوت عبد الله عواد الجهني — ملف السورة كاملًا، دون تتبع للآيات، مع استئناف من حيث توقفت.
+              ملف السورة كاملًا، دون تتبع للآيات.
             </span>
           </button>
 
