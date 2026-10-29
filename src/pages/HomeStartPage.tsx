@@ -201,7 +201,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
-            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
+            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">تلاوة وصوت مولّد</span>
           </p>
           <p className="text-sm text-accent-600 mt-1">
             أذكار الصباح والمساء صوتًا — بصوت رجالي أو نسائي، والتكرار يتم في المشغّل.

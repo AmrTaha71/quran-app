@@ -4,6 +4,11 @@
 // Player repeats each clip `count` times (repeat-in-player rule); no clip
 // itself contains repetitions. All URLs are public Supabase storage URLs
 // (the same bucket the generate-voice function uploads to).
+// EXCEPTION, hand-added 2026-10-29 (Amr's decision): the two Quranic
+// items carry `quranic: true`. Regeneration MUST preserve those flags:
+// the male voice plays them as REAL recitation via reciters.ts (see
+// AdhkarPage segmentsFor), not from maleUrl; the female voice keeps
+// the synthetic clip (no female reciter exists in the app's set).
 
 export type AdhkarVoice = 'male' | 'female';
 export type AdhkarWird = 'morning' | 'evening';
@@ -14,13 +19,17 @@ export interface AdhkarClip {
   display: string;
   /** Repetitions the player performs for this dhikr. */
   count: number;
+  /** True for Quranic items (Kursi, the three surahs): the male voice
+      plays real recitation (AdhkarPage segmentsFor); the female voice
+      keeps the synthetic clip. Hand-added 2026-10-29 — preserve on regen. */
+  quranic?: boolean;
   maleUrl: string;
   femaleUrl: string;
 }
 
 export const ADHKAR_CLIPS: Record<string, AdhkarClip> = {
-  "kursi": { id: "kursi", display: "آية الكرسي (البقرة 255)", count: 1, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793302712906.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793302647642.mp3" },
-  "surahs3": { id: "surahs3", display: "الإخلاص والفلق والناس", count: 3, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303252919.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303192717.mp3" },
+  "kursi": { id: "kursi", display: "آية الكرسي (البقرة 255)", count: 1, quranic: true, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793302712906.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793302647642.mp3" },
+  "surahs3": { id: "surahs3", display: "الإخلاص والفلق والناس", count: 3, quranic: true, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303252919.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303192717.mp3" },
   "asbahna": { id: "asbahna", display: "أصبحنا وأصبح الملك لله، والحمد لله، لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير، رب أسألك خير ما في هذا اليوم وخير ما بعده، وأعوذ بك من شر ما في هذا اليوم وشر ما بعده، رب أعوذ بك من الكسل وسوء الكبر، رب أعوذ بك من عذاب في النار وعذاب في القبر", count: 1, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303166664.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303340522.mp3" },
   "istighfar": { id: "istighfar", display: "سيد الاستغفار: اللهم أنت ربي لا إله إلا أنت، خلقتني وأنا عبدك، وأنا على عهدك ووعدك ما استطعت، أعوذ بك من شر ما صنعت، أبوء لك بنعمتك علي، وأبوء بذنبي فاغفر لي فإنه لا يغفر الذنوب إلا أنت", count: 1, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793302723064.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793302669040.mp3" },
   "raditu": { id: "raditu", display: "رضيت بالله ربًا، وبالإسلام دينًا، وبمحمد ﷺ نبيًا", count: 3, maleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303191690.mp3", femaleUrl: "https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/rana-audio/synthetic-1793303200266.mp3" },

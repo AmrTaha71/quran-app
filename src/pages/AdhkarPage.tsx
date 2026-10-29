@@ -13,13 +13,19 @@
 // in localStorage, so leaving and returning resumes where you stopped.
 // Completion clears the saved position; the wird restarts from the top.
 //
-// Honesty: the voice is GENERATED. The player carries a permanent
-// "صوت مولّد" label; it is never presented as a human recording.
+// Honesty: the wird MIXES sources since 2026-10-29 (Amr's decision).
+// Quranic items (Kursi, the three surahs) play REAL recitation in the
+// male voice; every supplication, and every Quranic item in the female
+// voice, plays generated audio. The now-playing card carries a
+// per-item source badge ("تلاوة — {reciter}" vs "صوت مولّد بالذكاء
+// الاصطناعي"), so the label is accurate at every moment, not just
+// in the description.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } from 'lucide-react';
 import { acquireAudio, currentAudioOwner, releaseAudio } from '../lib/sharedAudio';
 import { adhkarClipUrl, adhkarList, type AdhkarClip, type AdhkarVoice, type AdhkarWird } from '../lib/adhkarClips';
+import { DEFAULT_RECITER_ID, RECITERS, type Reciter } from '../lib/reciters';
 
 type Route = 'home' | 'adhkar';
 
@@ -62,6 +68,46 @@ function preview(text: string, max = 64): string {
   return text.length > max ? text.slice(0, max).trimEnd() + '…' : text;
 }
 
+// The reciter for Quranic items: the user's listen preference
+// ('quran-reciter'), default المنشاوي. Read once at mount; a change
+// in Settings takes effect on the next adhkar open.
+function resolveReciter(): Reciter {
+  try {
+    const id = localStorage.getItem('quran-reciter');
+    if (id) {
+      const found = RECITERS.find((r) => r.id === id);
+      if (found) return found;
+    }
+  } catch { /* ignore */ }
+  return RECITERS.find((r) => r.id === DEFAULT_RECITER_ID) ?? RECITERS[0];
+}
+
+// Segments one repetition of a dhikr plays, for the male voice.
+// Quranic items play REAL recitation via the shared reciters.ts
+// builders: Kursi is one ayah file (2:255 = global 262, verified
+// against the ayah text); the three surahs chain 15 ayah files per
+// rep (Ikhlas 4 + Falaq 5 + Nas 6). Surah files were NOT used:
+// cdn.islamic.network audio-surah returns 403 for ar.minshawi
+// (verified 2026-10-29), the default reciter — ayah chaining works
+// for all 8 reciters through the one verified builder.
+// The female voice has no reciter in the app's set, so Quranic items
+// keep their synthetic clips there. Non-Quranic items are single
+// synthetic clips in both voices.
+function segmentsFor(clip: AdhkarClip, voice: AdhkarVoice, reciter: Reciter): string[] {
+  if (voice !== 'male' || !clip.quranic) return [adhkarClipUrl(clip, voice)];
+  if (clip.id === 'kursi') return [reciter.audioUrl(2, 255)];
+  const segs: string[] = [];
+  const surahs: Array<[number, number]> = [[112, 4], [113, 5], [114, 6]];
+  for (const [surah, n] of surahs) {
+    for (let a = 1; a <= n; a++) segs.push(reciter.audioUrl(surah, a));
+  }
+  return segs;
+}
+
+function isRecitation(clip: AdhkarClip, voice: AdhkarVoice): boolean {
+  return voice === 'male' && !!clip.quranic;
+}
+
 export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [wird, setWird] = useState<AdhkarWird>(readWird);
   const [voice, setVoice] = useState<AdhkarVoice>(readVoice);
@@ -70,15 +116,18 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ t: 0, d: 0 });
+  const [seg, setSeg] = useState(0);
 
   const list = useMemo(() => adhkarList(wird), [wird]);
   const index = Math.min(pos.index, list.length - 1);
   const clip: AdhkarClip = list[index];
   const rep = Math.min(pos.rep, clip.count);
+  const reciter = useMemo(resolveReciter, []);
+  const segments = useMemo(() => segmentsFor(clip, voice, reciter), [clip, voice, reciter]);
 
   // Refs mirror state for the shared-element handlers (attached once).
-  const stateRef = useRef({ wird, voice, index, rep, playing, list });
-  stateRef.current = { wird, voice, index, rep, playing, list };
+  const stateRef = useRef({ wird, voice, index, rep, playing, list, seg, segments });
+  stateRef.current = { wird, voice, index, rep, playing, list, seg, segments };
   const elRef = useRef<HTMLAudioElement | null>(null);
   const wiredRef = useRef(false);
 
@@ -89,12 +138,12 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
       if (nav.mediaSession && MM) {
         nav.mediaSession.metadata = new MM({
           title: `أذكار ${w === 'morning' ? 'الصباح' : 'المساء'} — ${preview(c.display, 40)}`,
-          artist: 'صوت مولّد بالذكاء الاصطناعي',
+          artist: isRecitation(c, stateRef.current.voice) ? `تلاوة — ${reciter.name}` : 'صوت مولّد بالذكاء الاصطناعي',
         });
       }
       if (nav.mediaSession) nav.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     } catch { /* ignore */ }
-  }, []);
+  }, [reciter]);
 
   const savePosition = useCallback((w: AdhkarWird, i: number, r: number) => {
     try {
@@ -103,13 +152,14 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
   }, []);
 
   const loadClip = useCallback((c: AdhkarClip, v: AdhkarVoice, el: HTMLAudioElement) => {
-    const url = adhkarClipUrl(c, v);
+    const url = segmentsFor(c, v, reciter)[0];
     if (el.src !== url) {
       el.src = url;
       el.load();
     }
+    setSeg(0);
     setProgress({ t: 0, d: 0 });
-  }, []);
+  }, [reciter]);
 
   const handlePreempted = useCallback(() => {
     setPlaying(false);
@@ -126,21 +176,32 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
         const s = stateRef.current;
         const cur = s.list[s.index];
         if (!cur) return;
+        // More segments left in this repetition (Quranic items chain
+        // several ayah files per rep): advance within the rep.
+        if (s.seg + 1 < s.segments.length) {
+          const nextSeg = s.seg + 1;
+          setSeg(nextSeg);
+          el.src = s.segments[nextSeg];
+          el.load();
+          void el.play().catch(() => setPlaying(false));
+          return;
+        }
         if (s.rep < cur.count) {
           const nextRep = s.rep + 1;
           setPos({ index: s.index, rep: nextRep });
+          setSeg(0);
           savePosition(s.wird, s.index, nextRep);
-          try {
-            el.currentTime = 0;
-            void el.play();
-          } catch { /* ignore */ }
+          el.src = s.segments[0];
+          el.load();
+          void el.play().catch(() => setPlaying(false));
         } else if (s.index + 1 < s.list.length) {
           const nextIndex = s.index + 1;
           setPos({ index: nextIndex, rep: 1 });
+          setSeg(0);
           savePosition(s.wird, nextIndex, 1);
           const next = s.list[nextIndex];
           if (next) {
-            el.src = adhkarClipUrl(next, s.voice);
+            el.src = segmentsFor(next, s.voice, reciter)[0];
             el.load();
             setMediaSession(next, s.wird, true);
             void el.play().catch(() => setPlaying(false));
@@ -164,7 +225,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
       });
     }
     return el;
-  }, [handlePreempted, savePosition, setMediaSession]);
+  }, [handlePreempted, savePosition, setMediaSession, reciter]);
 
   // Persist position on change (not after completion).
   useEffect(() => {
@@ -206,6 +267,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
     setCompleted(false);
     setError(null);
     setPos({ index: target, rep: 1 });
+    setSeg(0);
     savePosition(wird, target, 1);
     if (autoplay) {
       const el = ensureElement();
@@ -235,6 +297,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
     setCompleted(false);
     setError(null);
     setPos(start.index >= adhkarList(w).length ? { index: 0, rep: 1 } : start);
+    setSeg(0);
     setPlaying(false);
   }, [wird]);
 
@@ -247,6 +310,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
     setError(null);
     // Restart the current dhikr in the new voice (rep 1).
     setPos({ index, rep: 1 });
+    setSeg(0);
     savePosition(wird, index, 1);
     if (playing) {
       const el = ensureElement();
@@ -260,6 +324,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
     setCompleted(false);
     setError(null);
     setPos({ index: 0, rep: 1 });
+    setSeg(0);
     savePosition(wird, 0, 1);
     if (playing) {
       const el = ensureElement();
@@ -281,7 +346,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
         <div className="flex items-center gap-2 mt-3">
           <SunMoon className="w-6 h-6 text-emerald-700" />
           <h1 className="text-xl font-bold text-accent-800">أذكار الصباح والمساء</h1>
-          <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
+          <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">تلاوة وصوت مولّد</span>
         </div>
 
         {/* Wird tabs */}
@@ -330,6 +395,13 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
             <>
               <p className="text-sm text-accent-500 font-semibold">
                 الذكر {index + 1} من {list.length} — التكرار {rep} من {clip.count}
+              </p>
+              <p className="mt-1">
+                {isRecitation(clip, voice) ? (
+                  <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة — {reciter.name}</span>
+                ) : (
+                  <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
+                )}
               </p>
               <p className="text-lg leading-relaxed text-accent-800 font-semibold mt-2">{clip.display}</p>
               <div className="h-2 bg-stone-200 rounded-full mt-4 overflow-hidden" dir="ltr">
@@ -386,13 +458,16 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
                 {i < index ? '✓' : i === index && !completed ? '▶' : i + 1}
               </span>
               <span className="flex-1 text-sm text-accent-800">{preview(item.display)}</span>
+              {isRecitation(item, voice) && (
+                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة</span>
+              )}
               <span className="text-xs font-bold bg-stone-100 text-stone-600 px-2 py-1 rounded-full">×{item.count}</span>
             </button>
           ))}
         </div>
 
         <p className="text-center text-xs text-stone-500 mt-4">
-          الصوت مولّد بالذكاء الاصطناعي — وليس تسجيلًا بشريًا. التكرار يتم في المشغّل؛ كل مقطع مولّد مرة واحدة.
+          آيات القرآن تُتلى بصوت قارئ، والأدعية بصوت مولّد بالذكاء الاصطناعي. التكرار يتم في المشغّل.
         </p>
       </div>
     </main>
