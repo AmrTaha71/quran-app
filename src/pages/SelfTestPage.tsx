@@ -6,6 +6,7 @@ import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unit
 import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
 import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
+import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
@@ -766,7 +767,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `rel` is ms since the current test started (performance.now);
   // `t` is the wall-clock epoch ms. Timestamps come from the same
   // clock the watchdog uses, so log order matches engine order.
-  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string };
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number };
   const DIAG_EVENT_CAP = 2000;
   const DIAG_DISPLAY_CAP = 500;
   const diagEventsRef = useRef<DiagEvent[]>([]);
@@ -774,6 +775,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const diagStartRef = useRef(0);
   const diagTruncatedRef = useRef(false);
   const diagRangeRef = useRef<{ surah: number; from: number; to: number; startGlobal: number; endGlobal: number; level: string; mode: string; corrDelay: number; corrRate: string } | null>(null);
+  // RECORDER (Phase 0): ONE wall-clock reference per session. The
+  // per-event `rel` offsets already use performance.now() (never
+  // Date.now(), whose device clock can shift); this single Date.now()
+  // exists only to link sessions (case date + id).
+  const diagStartWallRef = useRef(0);
   const [micPerm, setMicPerm] = useState('unknown');
   const micPermRef = useRef('unknown');
   const [diagOpen, setDiagOpen] = useState(false);
@@ -791,6 +797,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     diagFinalsRef.current = [];
     diagTruncatedRef.current = false;
     diagStartRef.current = performance.now();
+    diagStartWallRef.current = Date.now();
+    recPromptDedupeRef.current = new Set();
+    recAyahFinalsRef.current = {};
     setDiagOpen(false);
     setDiagCopied('');
   };
@@ -888,6 +897,146 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setDiagCopied('تم نسخ سجل التشخيص — الصقه في أي مكان');
     } catch {
       setDiagCopied('تعذر النسخ — افتح السجل وانسخه يدويًا');
+    }
+  };
+  // RECORDER (Phase 0): recording-mode state. Default OFF. When OFF,
+  // nothing below runs: no prompt/interrupt events, no plan UI, no
+  // classification, no case export — the test behaves exactly as
+  // today (the toggle itself is the only setup-screen addition).
+  const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false);
+  const [recTags, setRecTags] = useState<VoiceTags>({ dialect: '', gender: '', pace: 'normal', noise: 'low' });
+  const [recPlan, setRecPlan] = useState<PlanEntry[]>([]);
+  const [recActual, setRecActual] = useState<Record<string, ActualAyah>>({});
+  const [recConsent, setRecConsent] = useState(false);
+  const [recCaseCopied, setRecCaseCopied] = useState('');
+  const [plDraft, setPlDraft] = useState<{ surah: number; ayah: number; spoken: string; expected: string; type: FixedTaxonomy }>({ surah: 2, ayah: 1, spoken: '', expected: '', type: 'substitution' });
+  const [unDraft, setUnDraft] = useState<Record<string, { spoken: string; expected: string; type: FixedTaxonomy; free: string }>>({});
+  const [scDraft, setScDraft] = useState<Record<string, string>>({});
+  // Snapshot fixed at test start (plan + tags + wall clock). A
+  // resumed test re-snapshots from the current setup screen: the
+  // plan/tags are the tester's current ones, while the diag log
+  // itself continues (diagClear is skipped on restore).
+  const recSessionRef = useRef<{ recording: boolean; plan: PlanEntry[]; tags: VoiceTags; wall: number } | null>(null);
+  // Ayah-mode finals per "surah:ayah" (continuous finals already
+  // live in diagFinalsRef). Filled only while recording.
+  const recAyahFinalsRef = useRef<Record<string, string[]>>({});
+  const recPromptDedupeRef = useRef<Set<string>>(new Set());
+  const toggleRecording = () => {
+    const next = !recording;
+    setRecording(next);
+    recordingRef.current = next;
+    if (next && !recTags.gender) {
+      const g = corrGender === 'male' ? 'male' : corrGender === 'female' ? 'female' : '';
+      if (g) setRecTags((t) => ({ ...t, gender: g }));
+    }
+  };
+  // RECORDER: first-class prompt/interrupt events. Only when
+  // recording is ON (OFF path pushes nothing — diag output
+  // identical to today). Ayah-mode prompts dedupe by (ayah,
+  // words): one ayah has one evaluation, so a repeat is a
+  // re-fire, not a new episode. Continuous prompts are NOT
+  // deduped here: distinct stall episodes for the same words are
+  // distinct prompts (speakContPrompt's own gating already
+  // prevents overlaps), and replays pass no trigger at all.
+  const recPushPrompt = (trigger: 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode', words: string[], indices: number[], ayahPos?: number) => {
+    if (!recordingRef.current) return;
+    try {
+      if (trigger === 'ayah-mode') {
+        const key = `${ayahPos ?? -1}|${words.join('|')}`;
+        if (recPromptDedupeRef.current.has(key)) return;
+        recPromptDedupeRef.current.add(key);
+      }
+      const extra: Partial<DiagEvent> = { words, indices, trigger };
+      if (ayahPos !== undefined) extra.ayah = ayahPos;
+      diagPush('prompt', extra);
+      // Interrupts are the mid-flow subset: confirmed-miss and
+      // overshoot only. Stall and ayah-mode prompts never
+      // interrupt a live recitation.
+      if (trigger === 'confirmed-miss' || trigger === 'overshoot') diagPush('interrupt', extra);
+    } catch {}
+  };
+  // RECORDER: assemble the case preview/export from the finished
+  // test. Pure lib call; returns status + reasons + cases (empty
+  // when the range cannot be a case, e.g. multi-surah).
+  const recBuildPreview = () => {
+    const sess = recSessionRef.current;
+    const range = diagRangeRef.current;
+    if (!sess || !range) return { cases: [] as Record<string, unknown>[], status: 'partial' as const, reasons: ['no recorded session'], droppedOutOfRange: 0 };
+    const endSurah = globalToPoint(range.endGlobal).surah;
+    const ua = (() => { try { return navigator.userAgent; } catch { return ''; } })();
+    const finalsByAyah: Record<string, string> = {};
+    for (const [k, arr] of Object.entries(recAyahFinalsRef.current)) finalsByAyah[k] = arr.join(' ');
+    return buildCase({
+      build: BUILD_SHA,
+      shell: appShell,
+      ua,
+      iosVersion: parseIosVersion(ua),
+      sessionWall: sess.wall,
+      settings: { level: range.level, mode: range.mode, corrDelay: range.corrDelay, corrRate: range.corrRate },
+      range: { surah: range.surah, from: range.from, to: range.to, startGlobal: range.startGlobal, endGlobal: range.endGlobal, endSurah },
+      ayahs: ayahs.map((a) => ({ surah: a.surah_no, ayah: a.ayah_no, text: a.ayah_text, orig: expectedWordList(a.ayah_text).map((w) => w.orig) })),
+      grades,
+      wrongByAyah,
+      skipped,
+      finalsByAyah: range.mode === 'ayah' ? finalsByAyah : null,
+      finalsJoined: range.mode === 'continuous' ? diagFinalsRef.current.join(' ') : null,
+      events: diagEventsRef.current.filter((e) => e.k === 'prompt' || e.k === 'interrupt').map((e) => ({ k: e.k as 'prompt' | 'interrupt', words: e.words ?? [], indices: e.indices ?? [], trigger: (e.trigger ?? 'stall') as 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode', rel: e.rel, ayah: e.ayah })),
+      plan: sess.plan,
+      actual: recActual,
+      consent: recConsent,
+      voiceTags: sess.tags,
+      zeroMatch: contZeroMatch,
+      eventsTruncated: diagTruncatedRef.current,
+    });
+  };
+  // RECORDER: case export through the SAME copy pattern as diag
+  // (clipboard first, execCommand, full-JSON manual textarea on
+  // failure, never a false success toast). Distinct manual-layer
+  // ids so it cannot collide with the diag layer. No auto-upload:
+  // the JSON leaves the device only when the user pastes it.
+  const recCaseCopyJson = async () => {
+    const preview = recBuildPreview();
+    if (preview.cases.length === 0) {
+      setRecCaseCopied(`لا يمكن تصدير حالة: ${preview.reasons.join('؛ ')} — استخدم نسخ JSON التشخيصي بدلًا من ذلك.`);
+      return;
+    }
+    const text = JSON.stringify(preview.cases[0], null, 2);
+    try {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        const ok = document.execCommand('copy');
+        ta.remove();
+        if (!ok) {
+          document.getElementById('quran-case-manual-copy')?.remove();
+          document.getElementById('quran-case-manual-close')?.remove();
+          const manual = document.createElement('textarea');
+          manual.id = 'quran-case-manual-copy';
+          manual.value = text;
+          manual.readOnly = true;
+          manual.style.cssText = 'position:fixed;inset:10px;z-index:9999;width:calc(100vw - 20px);height:calc(100dvh - 20px);font-size:16px;background:#ffffff;color:#111827;';
+          document.body.appendChild(manual);
+          manual.select();
+          manual.setSelectionRange(0, manual.value.length);
+          const close = document.createElement('button');
+          close.id = 'quran-case-manual-close';
+          close.textContent = 'إغلاق';
+          close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
+          close.onclick = () => { manual.remove(); close.remove(); };
+          document.body.appendChild(close);
+          setRecCaseCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق. اضغط مطوّلًا ثم «تحديد الكل»');
+          return;
+        }
+      }
+      setRecCaseCopied(`تم نسخ حالة الاختبار (${preview.status === 'complete' ? 'مكتملة' : 'جزئية'}) — الصقها لإضافتها إلى المدونة.`);
+    } catch {
+      setRecCaseCopied('تعذر النسخ — افتح الحالة وانسخها يدويًا');
     }
   };
   const [transcript, setTranscript] = useState('');
@@ -1364,6 +1513,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const endPt = globalToPoint(hi);
     // DIAG: snapshot the range + settings for the export header.
     diagRangeRef.current = { surah: startPt.surah, from: startPt.ayah, to: endPt.ayah, startGlobal: lo, endGlobal: hi, level: liveRef.current.level, mode: modeAtStart, corrDelay: liveRef.current.corrDelay, corrRate: liveRef.current.corrRate };
+    // RECORDER: snapshot the recording session at test start
+    // (plan + tags + the single wall-clock reference). A resumed
+    // test re-snapshots from the current setup screen; the diag
+    // log itself continues (diagClear is skipped on restore).
+    recSessionRef.current = recordingRef.current
+      ? { recording: true, plan: recPlan, tags: recTags, wall: diagStartWallRef.current }
+      : null;
     setSurah(startPt.surah);
     setError('');
     setTextOfflineNotice(false);
@@ -1627,6 +1783,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // cannot kill a live recognizer (321436 discipline).
       ayahCorrFailedForRef.current = index;
       setAyahAudioFailed(false);
+      // RECORDER: first-class ayah-mode prompt event (never an
+      // interrupt: ayah mode has no mid-flow to interrupt).
+      recPushPrompt('ayah-mode', wrongWords, expected.map((_, i) => i).filter((i) => !result.matched[i]), index);
       playCorrection(wrongWords, pending && pending.index === index && pending.wordsKey === wrongWords.join('|') ? pending.url : null, () => {
         if (ayahCorrFailedForRef.current === index) setAyahAudioFailed(true);
       });
@@ -2087,6 +2246,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           const chosen = pickFinalTranscript(res, expectedNorms);
           diagPush('result', { final: true, text: chosen });
           diagFinalsRef.current.push(chosen);
+          // RECORDER: ayah-mode finals per ayah (continuous finals
+          // already accumulate in diagFinalsRef). Keyed by the live
+          // ayah, so the case transcript attributes finals exactly.
+          if (recordingRef.current && diagRangeRef.current?.mode === 'ayah') {
+            const ay = liveRef.current.ayah;
+            if (ay) {
+              const key = `${ay.surah_no}:${ay.ayah_no}`;
+              const arr = recAyahFinalsRef.current[key] || [];
+              arr.push(chosen);
+              recAyahFinalsRef.current[key] = arr;
+            }
+          }
           liveRef.current.finals = `${liveRef.current.finals} ${chosen}`.trim();
           setTranscript(liveRef.current.finals);
           // Spoken enough words to cover the ayah? Judge at once.
@@ -2587,13 +2758,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (contPromptedKeyRef.current === key) contPromptedKeyRef.current = '';
     }
   };
-  const speakContPrompt = (words: string[], fixIdx?: number[], fixNorms?: string[]) => {
+  const speakContPrompt = (words: string[], fixIdx?: number[], fixNorms?: string[], trigger?: 'stall' | 'confirmed-miss' | 'overshoot') => {
     if (words.length === 0 || contPromptingRef.current) return;
     // Iteration 2: generation token + settled flag + prompt-entry
     // timestamp (detection proxy for the diag voice-start timing).
     const gen = ++speakGenRef.current;
     promptSettledRef.current = false;
     const promptStartedAt = Date.now();
+    // RECORDER: first-class prompt event (interrupt too when the
+    // trigger is a mid-flow interrupt). Replays pass no trigger
+    // and record nothing: a replay is not a new prompt.
+    if (trigger) recPushPrompt(trigger, words, fixIdx ?? []);
     // N1 (Claude reply 6, item 6): the dedupe key is built from
     // INDICES, not words — repeated words at different positions
     // (e.g. ذلك twice) used to share one key and wrongly suppress
@@ -2845,7 +3020,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (now.words.length === 0) return;
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
-      speakContPrompt(now.words, now.indices, now.norms);
+      speakContPrompt(now.words, now.indices, now.norms, 'stall');
     }, liveRef.current.corrDelay * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
@@ -2947,7 +3122,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // indices/norms go in unchanged, so grading and fix-credit
       // see exactly the missed words; only the displayed + spoken
       // correction carries the context word.
-      speakContPrompt(withPrecedingContextWord(target.words, target.indices, liveRef.current.contExpected), target.indices, target.norms);
+      // RECORDER: the trigger distinguishes the two interrupt kinds
+      // in the case file (confirmed-miss vs overshoot).
+      const via = over && target === over ? 'overshoot' : 'confirmed-miss';
+      speakContPrompt(withPrecedingContextWord(target.words, target.indices, liveRef.current.contExpected), target.indices, target.norms, via);
       return;
     }
   };
@@ -3383,8 +3561,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   ، واقف عند الآية رقم {savedProgress.index + 1}
                 </p>
                 <div className="flex gap-3">
-                  <button onClick={resumeTest}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
+                  <button onClick={resumeTest} disabled={recording && !!savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
                     استكمال الاختبار
                   </button>
                   <button onClick={() => { try { localStorage.removeItem(PROGRESS_KEY); } catch {} setSavedProgress(null); }}
@@ -3469,6 +3647,118 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
             </div>
 
+            {/*
+              RECORDER (Phase 0): recording-mode toggle + voice tags
+              + planting plan. Setup only; when OFF it is just the
+              toggle row. Recording requires a single-surah range
+              (schema v1): the start buttons disable when the chosen
+              range spans surahs.
+            */}
+            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <input type="checkbox" checked={recording} onChange={toggleRecording} className="w-5 h-5 accent-emerald-600" />
+                <div>
+                  <p className="font-bold text-accent-800">وضع التسجيل (لمدونة الاختبار)</p>
+                  <p className="text-sm text-accent-600 leading-relaxed">عند التشغيل، يسجّل الاختبار أحداث التصحيح وخطة الأخطاء المزروعة لتصديرها كحالة اختبار — لا يغيّر التقييم ولا يرفع أي شيء تلقائيًا. مغلق افتراضيًا.</p>
+                </div>
+              </div>
+              {recording && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                      <span className="text-sm font-bold text-accent-700">لهجة الصوت</span>
+                      <select value={recTags.dialect} onChange={(e) => setRecTags((t) => ({ ...t, dialect: e.target.value }))}
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        <option value="">اختر…</option>
+                        <option value="مصري">مصري</option>
+                        <option value="شامي">شامي</option>
+                        <option value="خليجي">خليجي</option>
+                        <option value="مغربي">مغربي</option>
+                        <option value="فصحى">فصحى</option>
+                        <option value="أخرى">أخرى</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-bold text-accent-700">جنس الصوت</span>
+                      <select value={recTags.gender} onChange={(e) => setRecTags((t) => ({ ...t, gender: e.target.value }))}
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        <option value="">اختر…</option>
+                        <option value="male">رجالي</option>
+                        <option value="female">نسائي</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-bold text-accent-700">سرعة التلاوة</span>
+                      <select value={recTags.pace} onChange={(e) => setRecTags((t) => ({ ...t, pace: e.target.value as VoiceTags['pace'] }))}
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        <option value="slow">بطيئة</option>
+                        <option value="normal">عادية</option>
+                        <option value="fast">سريعة</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-sm font-bold text-accent-700">ضجيج المكان</span>
+                      <select value={recTags.noise} onChange={(e) => setRecTags((t) => ({ ...t, noise: e.target.value as VoiceTags['noise'] }))}
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        <option value="low">هادئ</option>
+                        <option value="medium">متوسط</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-accent-700 mb-2">خطة الأخطاء المزروعة (قبل البدء)</p>
+                    <p className="text-sm text-accent-600 leading-relaxed mb-2">سجّل هنا ما ستنطقه خطأً وأين — قبل أن ترى نتيجة التطبيق. عند النهاية ستؤكد ما نفذته فعلًا. الخطة والواقع حقلان منفصلان، وهذا يلتقط الأخطاء غير المقصودة أيضًا. بنود خارج النطاق المبدوء تُحذف عند التصدير.</p>
+                    {recPlan.map((p, pi) => (
+                      <div key={pi} className="flex items-center gap-2 mb-2 text-sm">
+                        <span className="flex-1 text-accent-700" dir="rtl">سورة {SURAHS.find((s) => s.no === p.surah)?.name || p.surah} آية {p.ayah}: ستقول «{p.spoken}» بدل «{p.expectedWord}» ({TAXONOMY_LABELS[p.type]})</span>
+                        <button onClick={() => setRecPlan((prev) => prev.filter((_, i) => i !== pi))} className="px-3 py-1.5 text-sm font-bold text-red-700 bg-red-50 rounded-lg">حذف</button>
+                      </div>
+                    ))}
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block">
+                        <span className="text-xs font-bold text-accent-700">السورة</span>
+                        <select value={plDraft.surah} onChange={(e) => setPlDraft((d) => ({ ...d, surah: Number(e.target.value) }))}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base bg-white">
+                          {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
+                        </select>
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold text-accent-700">الآية</span>
+                        <input type="number" min={1} max={SURAH_AYAH_COUNTS[plDraft.surah - 1] || 1} value={plDraft.ayah}
+                          onChange={(e) => setPlDraft((d) => ({ ...d, ayah: Math.max(1, Math.min(SURAH_AYAH_COUNTS[d.surah - 1] || 1, Number(e.target.value) || 1)) }))}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold text-accent-700">ستقول (خطأً)</span>
+                        <input value={plDraft.spoken} onChange={(e) => setPlDraft((d) => ({ ...d, spoken: e.target.value }))}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base" dir="rtl" />
+                      </label>
+                      <label className="block">
+                        <span className="text-xs font-bold text-accent-700">بدل كلمة</span>
+                        <input value={plDraft.expected} onChange={(e) => setPlDraft((d) => ({ ...d, expected: e.target.value }))}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base" dir="rtl" />
+                      </label>
+                      <label className="block col-span-2">
+                        <span className="text-xs font-bold text-accent-700">نوع الخطأ</span>
+                        <select value={plDraft.type} onChange={(e) => setPlDraft((d) => ({ ...d, type: e.target.value as FixedTaxonomy }))}
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base bg-white">
+                          {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
+                        </select>
+                      </label>
+                    </div>
+                    <button onClick={() => {
+                      if (!plDraft.spoken.trim() || !plDraft.expected.trim()) return;
+                      setRecPlan((prev) => [...prev, { surah: plDraft.surah, ayah: plDraft.ayah, spoken: plDraft.spoken.trim(), expectedWord: plDraft.expected.trim(), type: plDraft.type }]);
+                      setPlDraft((d) => ({ ...d, spoken: '', expected: '' }));
+                    }} className="mt-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة إلى الخطة</button>
+                  </div>
+                  {(unitPreview.start.surah !== unitPreview.end.surah || (savedProgress?.endSurah && savedProgress.endSurah !== savedProgress.surah)) && (
+                    <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — النطاق المختار (بالوحدة/الاستكمال) يمتد لأكثر من سورة، فزر البدء معطل حتى تختار نطاقًا داخل سورة واحدة أو توقف التسجيل.</p>
+                  )}
+                </>
+              )}
+            </div>
+
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
               <h2 className="font-bold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
@@ -3547,7 +3837,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-red-600 font-semibold">نهاية النطاق قبل بدايته — اختر نهاية أبعد (جزء/حزب/سورة أكبر)</p>
               )}
               {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-              <button onClick={() => void startTestGlobal(unitPreview.start.global, unitPreview.end.global)} disabled={loading || !unitPreviewValid}
+              <button onClick={() => void startTestGlobal(unitPreview.start.global, unitPreview.end.global)} disabled={loading || !unitPreviewValid || (recording && unitPreview.start.surah !== unitPreview.end.surah)}
                 className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                 {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع من الوحدة'}
               </button>
@@ -4034,8 +4324,174 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               )}
             </div>
+            {recSessionRef.current?.recording && (
+              <div className="bg-white border border-amber-200 rounded-2xl shadow-sm p-5 space-y-4">
+                <h2 className="font-bold text-accent-800">تسجيل حالة اختبار</h2>
+                <p className="text-sm text-accent-600 leading-relaxed">هذا الاختبار سُجّل لمدونة الاختبار. صنّف كل آية، ثم أكّد الموافقة وصدّر الحالة.</p>
+                {(() => {
+                  const preview = recBuildPreview();
+                  const sess = recSessionRef.current!;
+                  const plannedFor = (surah: number, ayah: number) => sess.plan.filter((p) => p.surah === surah && p.ayah === ayah);
+                  const entriesOf = (key: string): ActualEntry[] => recActual[key]?.entries || [];
+                  const derived = (key: string): string => {
+                    const entries = entriesOf(key);
+                    if (entries.length === 0) return 'correct';
+                    const kinds = new Set(entries.map((e) => e.kind));
+                    if (kinds.size > 1) return 'mixed';
+                    return entries[0].kind;
+                  };
+                  const setStatus = (key: string, surah: number, ayah: number, st: string) => {
+                    if (st === 'mixed') return;
+                    setRecActual((prev) => {
+                      const cur = prev[key];
+                      const kinds = cur ? new Set(cur.entries.map((e) => e.kind)) : new Set<string>();
+                      if (st === 'correct') return { ...prev, [key]: { entries: [] } };
+                      if (st === 'planted') {
+                        if (kinds.size > 0 && [...kinds].every((k) => k === 'planted')) return prev;
+                        return { ...prev, [key]: { entries: plannedFor(surah, ayah).map((p) => ({ kind: 'planted' as const, spoken: p.spoken, expectedWord: p.expectedWord, type: p.type, executed: false })) } };
+                      }
+                      if (kinds.size > 0 && [...kinds].every((k) => k === st)) return prev;
+                      return { ...prev, [key]: { entries: [] } };
+                    });
+                  };
+                  const toggleExecuted = (key: string, idx: number) => {
+                    setRecActual((prev) => {
+                      const a = prev[key]; if (!a) return prev;
+                      return { ...prev, [key]: { entries: a.entries.map((e, i) => (i === idx ? { ...e, executed: !e.executed } : e)) } };
+                    });
+                  };
+                  const removeEntry = (key: string, idx: number) => {
+                    setRecActual((prev) => {
+                      const a = prev[key]; if (!a) return prev;
+                      return { ...prev, [key]: { entries: a.entries.filter((_, i) => i !== idx) } };
+                    });
+                  };
+                  const addUnintended = (key: string) => {
+                    const d = unDraft[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' };
+                    if (!d.spoken.trim() || !d.expected.trim()) return;
+                    setRecActual((prev) => ({ ...prev, [key]: { entries: [...(prev[key]?.entries || []), { kind: 'unintended' as const, spoken: d.spoken.trim(), expectedWord: d.expected.trim(), type: d.type, free: d.free.trim() || undefined }] } }));
+                    setUnDraft((prev) => ({ ...prev, [key]: { ...d, spoken: '', expected: '', free: '' } }));
+                  };
+                  const addSelfCorrected = (key: string) => {
+                    const w = (scDraft[key] || '').trim();
+                    if (!w) return;
+                    setRecActual((prev) => ({ ...prev, [key]: { entries: [...(prev[key]?.entries || []), { kind: 'self-corrected' as const, spoken: w, expectedWord: w }] } }));
+                    setScDraft((prev) => ({ ...prev, [key]: '' }));
+                  };
+                  const allCorrect = () => {
+                    setRecActual((prev) => {
+                      const next = { ...prev };
+                      for (const a of ayahs) {
+                        const key = `${a.surah_no}:${a.ayah_no}`;
+                        if (plannedFor(a.surah_no, a.ayah_no).length === 0) next[key] = { entries: [] };
+                      }
+                      return next;
+                    });
+                  };
+                  return (
+                    <>
+                      {ayahs.map((a) => {
+                        const key = `${a.surah_no}:${a.ayah_no}`;
+                        const planned = plannedFor(a.surah_no, a.ayah_no);
+                        const st = derived(key);
+                        return (
+                          <div key={a.id} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-bold text-accent-800">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
+                              <select value={st} onChange={(e) => setStatus(key, a.surah_no, a.ayah_no, e.target.value)}
+                                className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
+                                <option value="correct">صحيح</option>
+                                <option value="planted">خطأ مزروع (مخطط)</option>
+                                <option value="unintended">أخطأت دون قصد</option>
+                                <option value="self-corrected">تعثر ثم صححت نفسي</option>
+                                <option value="mixed">مختلط (مدخلات متعددة)</option>
+                              </select>
+                            </div>
+                            {st === 'planted' && (planned.length === 0 ? (
+                              <p className="text-sm text-amber-700">لا توجد خطة لهذه الآية — إن زرعت خطأً غير مخطط، اختر «أخطأت دون قصد».</p>
+                            ) : (
+                              <div className="space-y-1">
+                                {planned.map((p, pi) => {
+                                  const entry = entriesOf(key).find((e) => e.kind === 'planted' && e.spoken === p.spoken && e.expectedWord === p.expectedWord);
+                                  const idx = entry ? entriesOf(key).indexOf(entry) : -1;
+                                  return (
+                                    <label key={pi} className="flex items-center gap-2 text-sm text-accent-700">
+                                      <input type="checkbox" checked={!!entry?.executed} onChange={() => { if (idx >= 0) toggleExecuted(key, idx); }} className="w-4 h-4 accent-emerald-600" />
+                                      <span dir="rtl">نفذتها: قلت «{p.spoken}» بدل «{p.expectedWord}» ({TAXONOMY_LABELS[p.type]})</span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                            {st === 'unintended' && (
+                              <div className="space-y-2">
+                                {entriesOf(key).filter((e) => e.kind === 'unintended').map((e) => {
+                                  const idx = entriesOf(key).indexOf(e);
+                                  return (
+                                    <div key={idx} className="flex items-center gap-2 text-sm">
+                                      <span className="flex-1 text-accent-700" dir="rtl">قلت «{e.spoken}» بدل «{e.expectedWord}» ({e.type ? TAXONOMY_LABELS[e.type] : ''}){e.free ? ` — ${e.free}` : ''}</span>
+                                      <button onClick={() => removeEntry(key, idx)} className="px-3 py-1 text-sm font-bold text-red-700 bg-red-50 rounded-lg">حذف</button>
+                                    </div>
+                                  );
+                                })}
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input placeholder="قلت (خطأً)" value={(unDraft[key]?.spoken) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), spoken: e.target.value } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
+                                  <input placeholder="بدل كلمة" value={(unDraft[key]?.expected) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), expected: e.target.value } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
+                                  <select value={(unDraft[key]?.type) || 'substitution'} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: e.target.value as FixedTaxonomy } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
+                                    {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
+                                  </select>
+                                  <input placeholder="تفاصيل اختيارية" value={(unDraft[key]?.free) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), free: e.target.value } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
+                                </div>
+                                <button onClick={() => addUnintended(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة خطأ غير مقصود</button>
+                              </div>
+                            )}
+                            {st === 'self-corrected' && (
+                              <div className="space-y-2">
+                                {entriesOf(key).filter((e) => e.kind === 'self-corrected').map((e) => {
+                                  const idx = entriesOf(key).indexOf(e);
+                                  return (
+                                    <div key={idx} className="flex items-center gap-2 text-sm">
+                                      <span className="flex-1 text-accent-700" dir="rtl">تعثرت في «{e.spoken}» ثم صححتها لنفسي</span>
+                                      <button onClick={() => removeEntry(key, idx)} className="px-3 py-1 text-sm font-bold text-red-700 bg-red-50 rounded-lg">حذف</button>
+                                    </div>
+                                  );
+                                })}
+                                <div className="flex gap-2">
+                                  <input placeholder="الكلمة التي تعثرت فيها" value={scDraft[key] || ''} onChange={(e) => setScDraft((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
+                                  <button onClick={() => addSelfCorrected(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button onClick={allCorrect} className="px-4 py-2 bg-white border border-gray-200 text-accent-700 text-sm font-bold rounded-xl">كلها صحيحة (ما عدا الآيات ذات الخطة)</button>
+                      {preview.status === 'complete' ? (
+                        <p className="text-sm font-bold text-emerald-700">الحالة مكتملة — جاهزة للمدونة.</p>
+                      ) : (
+                        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                          <p className="font-bold">الحالة جزئية (لن تُحسب في التقرير):</p>
+                          <ul className="list-disc pr-5 mt-1 space-y-1">
+                            {preview.reasons.map((r, i) => (<li key={i}>{r}</li>))}
+                          </ul>
+                        </div>
+                      )}
+                      <label className="flex items-start gap-2 text-sm text-accent-700">
+                        <input type="checkbox" checked={recConsent} onChange={(e) => setRecConsent(e.target.checked)} className="w-5 h-5 accent-emerald-600 mt-0.5" />
+                        <span>أوافق على حفظ نص هذا التسميع كحالة اختبار في المدونة.</span>
+                      </label>
+                      <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 leading-relaxed">تحذير خصوصية: نصوص التسميع بيانات صوتية. لا يُرفع أي شيء تلقائيًا — هذه الحالة لا تغادر جهازك إلا إذا نسختها ولصقتها بنفسك. إن كان الصوت لطفل أو لشخص آخر، لا تصدّره إلا بإذنه الصريح. وإن أُضيف الصوت الخام لاحقًا، فسيبقى على الجهاز ويُحذف مع الحالة ولا يُرفع أبدًا دون إذن صريح.</p>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => void recCaseCopyJson()} disabled={!recConsent} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl">تصدير حالة الاختبار (JSON)</button>
+                        {recCaseCopied && <span className="text-xs text-emerald-700">{recCaseCopied}</span>}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
             <div className="flex gap-3">
-              <button onClick={() => { setContZeroMatch(false); setShowFullHeard(false); setPhase('setup'); }}
+              <button onClick={() => { setContZeroMatch(false); setShowFullHeard(false); setRecPlan([]); setRecActual({}); setRecConsent(false); setRecCaseCopied(''); setPhase('setup'); }}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>
