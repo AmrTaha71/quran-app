@@ -326,11 +326,11 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         {/* أذكار الصباح والمساء: CARD ONLY — audio out of scope until the
-            generated-voice clips exist (path A decided 2026-10-29: TTS
-            pilot + ear check first, labelled "صوت مولّد"; no licensed
-            source pursued anymore). Disabled "قريبًا" card; nothing
-            built, nothing hotlinked. Future wiring shape (types only,
-            see src/lib/adhkarFuture.ts): one audio file per wird +
+            human recording exists (path B decided 2026-10-29: human
+            performer, best-sounding option; TTS path A cancelled).
+            Disabled "قريبًا" card; nothing built, nothing hotlinked.
+            Future wiring shape (types only, see
+            src/lib/adhkarFuture.ts): one audio file per wird +
             timing table [{text, count, startMs, endMs}] for
             per-dhikr skip. */}
         <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
@@ -339,7 +339,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
           </p>
           <p className="text-sm text-accent-600 mt-1">
-            أذكار الصباح والمساء صوتًا — قيد التجهيز بصوت مولّد.
+            أذكار الصباح والمساء صوتًا — قيد التجهيز بتسجيل بشري.
           </p>
           <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
             قريبًا

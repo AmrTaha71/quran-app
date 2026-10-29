@@ -69,8 +69,7 @@ type Route =
   | 'settings'
   | 'follow'
   | 'test'
-  | 'listen'
-  | 'radio';
+  | 'listen';
 
 function readPersistedReciter(): string {
   try {
