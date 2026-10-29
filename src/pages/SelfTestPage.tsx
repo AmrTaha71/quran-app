@@ -841,14 +841,24 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           // ignored it — a silent failure (possible on Safari) showed
           // a false success toast. On failure, show the full JSON in
           // a textarea for manual copying and do NOT claim success.
+          // N3' (Claude reply 7): the manual layer gets a FIXED id
+          // and any previous copy is removed first, so repeated
+          // taps cannot stack layers; it is also removed on
+          // unmount (see the cleanup effect). 16px + explicit
+          // background: Safari zooms on focus below 16px, and a
+          // transparent background shows the page behind the text.
+          document.getElementById('quran-diag-manual-copy')?.remove();
+          document.getElementById('quran-diag-manual-close')?.remove();
           const manual = document.createElement('textarea');
+          manual.id = 'quran-diag-manual-copy';
           manual.value = text;
           manual.readOnly = true;
-          manual.style.cssText = 'position:fixed;inset:10px;z-index:9999;width:calc(100vw - 20px);height:calc(100dvh - 20px);';
+          manual.style.cssText = 'position:fixed;inset:10px;z-index:9999;width:calc(100vw - 20px);height:calc(100dvh - 20px);font-size:16px;background:#ffffff;color:#111827;';
           document.body.appendChild(manual);
           manual.select();
           manual.setSelectionRange(0, manual.value.length);
           const close = document.createElement('button');
+          close.id = 'quran-diag-manual-close';
           close.textContent = 'إغلاق';
           close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
           close.onclick = () => { manual.remove(); close.remove(); };
@@ -1159,6 +1169,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { corrAudioRef.current?.pause(); } catch {}
     try { contPromptAudioRef.current?.pause(); } catch {}
     if (contStallTimerRef.current) clearTimeout(contStallTimerRef.current);
+    // N3': the manual-copy layer (diagCopyJson fallback) is
+    // imperative DOM, so it must die with the component, not
+    // linger across route changes.
+    document.getElementById('quran-diag-manual-copy')?.remove();
+    document.getElementById('quran-diag-manual-close')?.remove();
   }, []);
 
   // Reset every per-ayah mic/manual state (called on ayah change, on
@@ -2409,7 +2424,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const speakContPrompt = (words: string[], fixIdx?: number[], fixNorms?: string[]) => {
     if (words.length === 0 || contPromptingRef.current) return;
-    const key = words.join('|');
+    // N1 (Claude reply 6, item 6): the dedupe key is built from
+    // INDICES, not words — repeated words at different positions
+    // (e.g. ذلك twice) used to share one key and wrongly suppress
+    // the second-position prompt. Every fix call site passes its
+    // indices; only the replay button passes none, and it replays
+    // the live awaiting entry's words, so the key falls back to
+    // that entry's indices (words only if no expectation is live).
+    // Parent amendment: without the awaiting fallback, a replay
+    // would flip the stored key to words and a later stall for the
+    // same position could re-prompt (duplicate prompt only —
+    // grading unaffected, since the key gates prompting alone).
+    const key = fixIdx && fixIdx.length > 0 ? fixIdx.join('|') : (contAwaitingRef.current && contAwaitingRef.current.indices.length > 0 ? contAwaitingRef.current.indices.join('|') : words.join('|'));
     contPromptedKeyRef.current = key;
     setContLastPrompt(words);
     // D2: the words are on screen from the first instant of the
@@ -2550,7 +2576,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
       const now = contOwedWords();
       if (now.words.length === 0) return;
-      if (now.words.join('|') === contPromptedKeyRef.current) return;
+      // N1: indices-based dedupe key (see speakContPrompt).
+      if (now.indices.join('|') === contPromptedKeyRef.current) return;
       speakContPrompt(now.words, now.indices, now.norms);
     }, liveRef.current.corrDelay * 1000);
   };
@@ -2643,7 +2670,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         const awaitedLast = aw.indices.length > 0 ? Math.max(...aw.indices) : -1;
         if (target.indices[0] <= awaitedLast) continue;
       }
-      const key = target.words.join('|');
+      // N1: indices-based dedupe key (see speakContPrompt).
+      const key = target.indices.join('|');
       if (key === contPromptedKeyRef.current) continue;
       if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
       speakContPrompt(target.words, target.indices, target.norms);

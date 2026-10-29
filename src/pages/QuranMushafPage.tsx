@@ -1277,11 +1277,49 @@ export default function QuranMushafPage({
   // grant / result / stop / cancel ends the wait, so the note can
   // never strand past the wait it describes.
   const [followWaitRetryNote, setFollowWaitRetryNote] = useState<string | null>(null);
+  // N4 (Claude reply 7, Q4): rAF heartbeat diagnostic for the follow
+  // mic-permission wait. The tick counter is a REF, not state — it
+  // never re-renders on its own; the lobby's existing 1s ticker
+  // re-renders while waiting, so the visible line below refreshes
+  // every second from the ref. Only MILESTONE entries are recorded
+  // (never per-frame), so the capped log cannot flood. The loop
+  // starts with the wait (the setter is called with true only on a
+  // tap) and stops on every wait clear via this same setter, plus
+  // teardown belt-and-braces — it never leaks past the wait.
+  // Diagnostic-only: no follow behavior reads these values.
+  const followHeartbeatTicksRef = useRef(0);
+  const followHeartbeatRafRef = useRef<number | null>(null);
+  const followHeartbeatEventsRef = useRef<{ event: string; ticks: number; at: number }[]>([]);
+  const followHeartbeatFirstResultRef = useRef(false);
+  const followHeartbeatStop = () => {
+    if (followHeartbeatRafRef.current !== null) {
+      cancelAnimationFrame(followHeartbeatRafRef.current);
+      followHeartbeatRafRef.current = null;
+    }
+  };
+  const followHeartbeatPush = (event: string) => {
+    followHeartbeatEventsRef.current.push({ event, ticks: followHeartbeatTicksRef.current, at: Date.now() });
+    if (followHeartbeatEventsRef.current.length > 200) followHeartbeatEventsRef.current.shift();
+  };
+  const followHeartbeatStart = () => {
+    followHeartbeatTicksRef.current = 0;
+    followHeartbeatEventsRef.current = [];
+    followHeartbeatFirstResultRef.current = false;
+    followHeartbeatStop();
+    const loop = () => {
+      followHeartbeatTicksRef.current += 1;
+      followHeartbeatRafRef.current = requestAnimationFrame(loop);
+    };
+    followHeartbeatRafRef.current = requestAnimationFrame(loop);
+    followHeartbeatPush('tap');
+  };
   const setFollowMicWaitingState = useCallback((waiting: boolean, startedAt: number | null = null) => {
     followMicWaitingRef.current = waiting;
     setFollowMicWaiting(waiting);
     setFollowMicWaitStartedAt(waiting ? startedAt : null);
     setFollowWaitRetryNote(null);
+    if (waiting) followHeartbeatStart();
+    else followHeartbeatStop();
   }, []);
   // P0-2 (Claude): true once the live engine has begun capturing audio
   // in this session (onaudiostart, fallback onstart — both fire only
@@ -1509,6 +1547,10 @@ export default function QuranMushafPage({
     followJumpGenRef.current += 1;
     followBufferRef.current = [];
     stopFollowEngines();
+    // N4: belt-and-braces — the setter inside stopFollowEngines
+    // already stops the heartbeat; this makes the guarantee
+    // independent of that path.
+    followHeartbeatStop();
     followActiveRef.current = false;
     if (followVisListenerRef.current) {
       document.removeEventListener('visibilitychange', handleFollowVisibility);
@@ -2077,8 +2119,11 @@ export default function QuranMushafPage({
         followPreAudioRetryRef.current = 0;
         if (followMicWaitingRef.current) setFollowMicWaitingState(false);
       };
-      rec.onaudiostart = markFollowAudioStarted;
-      rec.onstart = markFollowAudioStarted;
+      // N4: distinct milestones — the push precedes the handler,
+      // because the handler itself clears the wait (which stops
+      // the loop); pushing after it would record nothing.
+      rec.onaudiostart = () => { followHeartbeatPush('onaudiostart'); markFollowAudioStarted(); };
+      rec.onstart = () => { followHeartbeatPush('onstart'); markFollowAudioStarted(); };
       // Stops the live session with an honest prompt and returns the
       // user to the start branch (never a silent dead "listening").
       const stopLiveWithPrompt = (message: string) => {
@@ -2134,6 +2179,14 @@ export default function QuranMushafPage({
         // Post-lock/post-stop queued results neither deliver finals
         // (also guarded in onFollowFinal) nor update interim UI.
         if (!followListeningRef.current || followAutoLockedRef.current) return;
+        // N4: first result (interim or final) — recorded once per
+        // wait. If the wait already cleared (grant), the loop has
+        // stopped, so ticks show the count at clear time while the
+        // timestamp stays exact.
+        if (!followHeartbeatFirstResultRef.current) {
+          followHeartbeatFirstResultRef.current = true;
+          followHeartbeatPush('first-result');
+        }
         // E3: the first result — interim or final — proves Safari
         // granted the mic, so the permission wait ends here. From now
         // on the normal listening display (and the budgeted onend
@@ -2178,12 +2231,27 @@ export default function QuranMushafPage({
       };
       rec.onerror = (e: any) => {
         if (!followListeningRef.current || followAutoLockedRef.current) return;
-        // E3: ANY engine error is a permission decision (denied, or the
-        // engine ran, which implies granted) — the wait ends here even
-        // for transient errors, whose existing handling below is
-        // untouched. The 'not-allowed' branch then stops honestly via
-        // stopLiveWithPrompt with the existing denied wording.
-        if (followMicWaitingRef.current) setFollowMicWaitingState(false);
+        // N2 (Claude reply 6, item 7): error taxonomy for the
+        // permission wait. The old code cleared the wait for ANY
+        // error, claiming every error is a permission decision —
+        // wrong for aborted, network, and service-not-allowed,
+        // which can fire BEFORE the decision while the prompt is
+        // still pending. The wait is now cleared only where the
+        // error itself proves a decision or a grant: not-allowed
+        // (denied, via the terminal stop below) and no-speech
+        // (the engine ran, so the mic was granted). Transient
+        // errors keep the wait: aborted and network keep the
+        // session (onend restarts it), and service-not-allowed
+        // keeps the wait while the session runs out its R3 retry
+        // budget — the honest stop on exhaustion clears the wait
+        // as terminal teardown, not as error classification.
+        // Terminal branches (audio-capture, language-not-
+        // supported, unknown) still stop honestly, and that
+        // teardown clears the wait. No path leaves a waiting
+        // display on a stopped engine: every stop goes through
+        // stopLiveWithPrompt or stopFollowEngines, both of which
+        // clear the wait, and the live wait's exit (إيقاف) is
+        // always visible in the listening branch.
         // S4 taxonomy port (self-test P3 shape, lock semantics
         // untouched): transient errors are named, not swallowed.
         // 'no-speech' (imam silent) and 'aborted' are transient: the
@@ -2194,13 +2262,26 @@ export default function QuranMushafPage({
         // kept saying "listening" on a dead engine; unknown errors
         // now stop honestly with a re-tap prompt instead.
         if (e.error === 'no-speech' || e.error === 'aborted') {
+          // N2: no-speech means the engine ran (granted) — the wait
+          // ends. An aborted error before any audio start means the
+          // decision is still pending — the wait stands (the session
+          // continues via onend; a post-grant abort finds the wait
+          // already cleared by onaudiostart, so this is a no-op there).
+          if (e.error === 'no-speech' && followMicWaitingRef.current) setFollowMicWaitingState(false);
           armFollowTransientSafety();
         } else if (e.error === 'not-allowed') {
           stopLiveWithPrompt(micErrorMessage({ name: 'NotAllowedError' }));
         } else if (e.error === 'audio-capture') {
           stopLiveWithPrompt('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط «ابدأ الاستماع» من جديد');
         } else if (e.error === 'service-not-allowed') {
-          stopLiveWithPrompt('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب الإدخال اليدوي بالأسفل، أو متصفح تاني');
+          // N2: the wait stands here (see the taxonomy above) — no
+          // terminal stop yet. The session runs out its R3
+          // pre-audiostart retry budget via onend (each retry is
+          // visible in the waiting line), and the honest stop on
+          // exhaustion ends the wait as terminal teardown. If
+          // onend never comes, the listening branch still shows
+          // إيقاف (full stop) — never a stranded display.
+          setFollowError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب الإدخال اليدوي بالأسفل، أو متصفح تاني');
         } else if (e.error === 'language-not-supported') {
           stopLiveWithPrompt('الاستماع المباشر مش بيدعم لغة الواجهة الحالية على الجهاز ده — جرّب الإدخال اليدوي بالأسفل');
         } else if (e.error === 'network') {
@@ -2208,6 +2289,8 @@ export default function QuranMushafPage({
           // message must NOT tell the user to re-tap or to go back
           // to the start branch — it clears on the next good result.
           // The safety timer covers a missing onend here too.
+          // N2: the wait stands — a network error can fire before
+          // the permission decision, and the session continues.
           setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت — بيحاول تاني لوحده');
           armFollowTransientSafety();
         } else {
@@ -2317,6 +2400,9 @@ export default function QuranMushafPage({
         recognitionRef.current = null;
       }
       if (liveStarted) {
+        // N4: rec.start() returned (the prompt may still be pending —
+        // that gap is exactly what the heartbeat measures).
+        followHeartbeatPush('rec.start-return');
         followListeningRef.current = true;
         followStartingRef.current = false;
         setFollowReady(false);
@@ -2479,18 +2565,17 @@ export default function QuranMushafPage({
         followStreamRef.current = null;
         setFollowReady(true);
         setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
-        setFollowIndexLoading(false);
-      } else {
-        // Next-patch: the loading line is shared UI state (same
-        // reasoning as the live branch's unguarded finally) — a
-        // stale failure must still clear it, or cancel + stale
-        // failure strands "جارٍ تحميل فهرس الآيات…" until the next
-        // tap. Session state above stays guarded; only the line
-        // clears here, so a new session's mid-load line may vanish
-        // early (transient, cosmetic — same accepted tradeoff as
-        // the live branch).
-        setFollowIndexLoading(false);
       }
+      // N5 (Claude reply 7): the loading line is shared UI state
+      // (same reasoning as the live branch's unguarded finally) —
+      // cleared unconditionally, outside the guard, so a stale
+      // failure cannot strand "جارٍ تحميل فهرس الآيات…" until the
+      // next tap. Session state above stays guarded; only the line
+      // clears here, so a new session's mid-load line may vanish
+      // early (transient, cosmetic — same accepted tradeoff as
+      // the live branch). Previously this call was duplicated in
+      // both branches; hoisting it is behavior-identical.
+      setFollowIndexLoading(false);
       // E3 (UI state only): terminal index failure — end the wait.
       // P0-2: generation-guarded (post-await catch; see live branch).
       if (startGen === followStartGenRef.current) setFollowMicWaitingState(false);
@@ -3457,7 +3542,7 @@ export default function QuranMushafPage({
                         NOT claim "listening" — that mislabel is what made
                         a queued Safari prompt look like a frozen app. */}
                     <p className="text-sm font-bold mt-4">{followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام...'}</p>
-                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">لم يبدأ الالتقاط بعد — (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}{followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">لسه الالتقاط ما بدأش (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}{followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
@@ -3475,6 +3560,17 @@ export default function QuranMushafPage({
                       </button>
                     </div>
                   </>
+                )}
+                {/* N4: heartbeat diagnostic, visible only while the
+                    permission wait is up. Ticks refresh every second
+                    via the existing ticker re-render; if the main
+                    thread blocks, this line freezes too — that frozen
+                    number IS the evidence (alive = advancing). */}
+                {followMicWaiting && (
+                  <p className="text-xs text-emerald-200/70 mt-2">
+                    تشخيص النبض: {followHeartbeatTicksRef.current} إطار
+                    {followHeartbeatEventsRef.current.length > 0 ? ` — آخر حدث: ${followHeartbeatEventsRef.current[followHeartbeatEventsRef.current.length - 1].event}` : ''}
+                  </p>
                 )}
                 {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
               </div>
