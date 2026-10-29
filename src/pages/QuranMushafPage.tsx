@@ -1365,6 +1365,30 @@ export default function QuranMushafPage({
   const [followMicWaiting, setFollowMicWaiting] = useState(false);
   const [followMicWaitStartedAt, setFollowMicWaitStartedAt] = useState<number | null>(null);
   const followMicWaitingRef = useRef(false);
+  // Mic-permission foreground gate (2026-10-29, Amr's request):
+  // the iOS system prompt is always rendered by iOS itself in front
+  // of everything — the app cannot move it — so what the app CAN do
+  // is show its own window in front of the app FIRST, explaining why
+  // the mic is needed, and only then (on the modal's own tap, which
+  // is itself a user gesture, so the getUserMedia/SpeechRecognition
+  // prompt still appears) start listening. Returning users who
+  // already granted skip the explainer via a localStorage flag —
+  // the check is synchronous on purpose: awaiting anything (e.g.
+  // permissions.query) before startFollowListening would leave the
+  // tap gesture and Safari would reject getUserMedia with
+  // NotAllowedError and NO prompt at all.
+  const [followMicGate, setFollowMicGate] = useState<null | 'live' | 'whisper'>(null);
+  const [followMicDenied, setFollowMicDenied] = useState(false);
+  const FOLLOW_MIC_GRANTED_KEY = 'quran-follow-mic-granted';
+  const micGrantedBefore = (): boolean => {
+    try { return localStorage.getItem(FOLLOW_MIC_GRANTED_KEY) === '1'; } catch { return false; }
+  };
+  const markMicGranted = () => {
+    try { localStorage.setItem(FOLLOW_MIC_GRANTED_KEY, '1'); } catch {}
+  };
+  const clearMicGranted = () => {
+    try { localStorage.removeItem(FOLLOW_MIC_GRANTED_KEY); } catch {}
+  };
   // B4 (Bolt note 2): the silent pre-audiostart retry is made VISIBLE
   // in the lobby waiting line (e.g. "محاولة 2/2 بعد إنهاء صامت قبل
   // الإذن") alongside the elapsed ticker, so a device test can
@@ -2235,6 +2259,9 @@ export default function QuranMushafPage({
       // onaudiostart only; the onend decision below stays correct
       // either way, because it keys on the same flag.
       const markFollowAudioStarted = () => {
+        // onaudiostart/onstart only fire post-grant: remember it so
+        // the next tap skips the permission explainer.
+        markMicGranted();
         followAudioStartedRef.current = true;
         // R3: a grant resets the pre-audiostart retry budget (the
         // session is alive; a later silent end takes the budgeted
@@ -2401,6 +2428,12 @@ export default function QuranMushafPage({
           if (e.error === 'no-speech' && followMicWaitingRef.current) setFollowMicWaitingState(false);
           armFollowTransientSafety();
         } else if (e.error === 'not-allowed') {
+          // Dismissed or denied: the system window may not reappear
+          // on the next tap, so show the foreground recovery card
+          // (with the Settings path) and drop the granted flag so
+          // the next tap shows the explainer again.
+          clearMicGranted();
+          setFollowMicDenied(true);
           stopLiveWithPrompt(micErrorMessage({ name: 'NotAllowedError' }));
         } else if (e.error === 'audio-capture') {
           stopLiveWithPrompt('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط «ابدأ الاستماع» من جديد');
@@ -2628,6 +2661,10 @@ export default function QuranMushafPage({
       if (startGen === followStartGenRef.current) {
         setFollowMicWaitingState(false);
         followStartingRef.current = false;
+        if ((err as any)?.name === 'NotAllowedError') {
+          clearMicGranted();
+          setFollowMicDenied(true);
+        }
         setFollowError(micErrorMessage(err));
         setFollowReady(true);
       }
@@ -2659,6 +2696,9 @@ export default function QuranMushafPage({
     // rec.start-return) — owning path only: the stale branch
     // above already returned.
     followHeartbeatPush('gum-resolved');
+    // getUserMedia resolved = mic granted: remember it so the next
+    // tap skips the permission explainer.
+    markMicGranted();
     const uid = session?.user?.id;
     if (!uid) {
       stream.getTracks().forEach((t) => t.stop());
@@ -2780,6 +2820,23 @@ export default function QuranMushafPage({
     enterFollowMode();
     void startFollowListening();
   }, [enterFollowMode, startFollowListening]);
+
+  // Foreground permission gate (2026-10-29): the lobby buttons call
+  // this instead of starting directly. Granted-before users start at
+  // once (same synchronous gesture as before); everyone else gets
+  // the explainer window first, and its own button tap (also a
+  // gesture) launches the start — so the iOS system prompt still
+  // appears in front of the app, now with the user expecting it.
+  // Plain function, not a callback: it must never enter a deps array.
+  const openMicGate = (kind: 'live' | 'whisper') => {
+    if (micGrantedBefore()) {
+      enterFollowMode();
+      startFollowListening(kind === 'whisper');
+      return;
+    }
+    setFollowMicDenied(false);
+    setFollowMicGate(kind);
+  };
 
   // MERGED deletions (exit + auto-stop roles): resyncFollow (the old
   // "re-lock after lost" control), confirmFollowLock and
@@ -3627,12 +3684,12 @@ export default function QuranMushafPage({
                         alone would track without showing any highlight
                         or status bar. Entering first is harmless on a
                         fresh entry (it only resets an empty state). */}
-                    <button onClick={() => { enterFollowMode(); startFollowListening(); }}
+                    <button onClick={() => openMicGate('live')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
-                    <button onClick={() => { enterFollowMode(); startFollowListening(true); }}
+                    <button onClick={() => openMicGate('whisper')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
@@ -3713,6 +3770,51 @@ export default function QuranMushafPage({
                   </p>
                 )}
                 {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Mic-permission foreground windows (2026-10-29, Amr's
+              request): the pre-permission explainer before the
+              system prompt, and the recovery card when the system
+              window was dismissed/denied. Both are fixed, z-[100],
+              above the lobby overlay (z-30) and the page, so the
+              user always sees them in front of the app window.
+              Backdrops stop propagation so a tap here never turns
+              a page or exits fullscreen underneath. */}
+          {followMicGate && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"
+              onClick={(e) => { e.stopPropagation(); setFollowMicGate(null); }}>
+              <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white"
+                onClick={(e) => e.stopPropagation()}>
+                <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> إذن الميكروفون</p>
+                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
+                  عشان نتابع الإمام، التطبيق محتاج يسمع من الميكروفون. لما تدوس «موافق»، هتظهر نافذة النظام أمام التطبيق — اختار «Allow» للسماح.
+                </p>
+                <button onClick={() => { const kind = followMicGate; setFollowMicGate(null); enterFollowMode(); startFollowListening(kind === 'whisper'); }}
+                  className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                  <Mic className="w-5 h-5" /> موافق، افتح طلب الإذن
+                </button>
+                <button onClick={() => setFollowMicGate(null)}
+                  className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 text-white text-sm font-bold rounded-xl transition-smooth">
+                  مش دلوقتي
+                </button>
+              </div>
+            </div>
+          )}
+          {followMicDenied && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"
+              onClick={(e) => { e.stopPropagation(); setFollowMicDenied(false); }}>
+              <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white"
+                onClick={(e) => e.stopPropagation()}>
+                <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> تم رفض إذن الميكروفون</p>
+                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
+                  نافذة النظام ما ظهرتش أو اترفضت. لو كنت رفضت الإذن، سفاري مش هيعرض النافذة تاني من نفسه — اسمح بالميكروفون من إعدادات الموقع (علامة AA في شريط العنوان ← Website Settings ← Microphone ← Allow) وبعدين ارجع ودوس «ابدأ الاستماع» من جديد. ولو قفلت النافذة بالغلط، دوس «ابدأ» من جديد وهتظهر تاني.
+                </p>
+                <button onClick={() => setFollowMicDenied(false)}
+                  className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth">
+                  فهمت
+                </button>
               </div>
             </div>
           )}

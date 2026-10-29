@@ -1,3 +1,29 @@
+// generate-voice — v10 (2026-10-29, TTS migration, ordered by Amr 2026-10-29)
+// ORDER OF GENERATION:
+//   1. Azure TTS first (unchanged; Azure is NOT affected by OpenAI's
+//      2027-01-06 shutdown, and its -10% prosody survives here).
+//   2. OpenAI Realtime gpt-realtime-2.1-mini via WebSocket (NEW): the
+//      vendor's designated replacement for the Speech API models.
+//      One-shot flow: session.update -> item.create (the text) ->
+//      response.create with a verbatim instruction -> PCM16 deltas
+//      -> WAV. The model's spoken transcript is compared to the input
+//      (diacritics/punctuation/whitespace stripped, letters exact);
+//      on mismatch the audio is discarded and the old chain runs.
+//   3. Old Speech chain (gpt-4o-mini-tts -> tts-1-hd) as FALLBACK
+//      ONLY. Both models shut down 2027-01-06: after that date this
+//      fallback is dead code and must be removed in a cleanup push.
+// REALTIME VOICES ARE PROVISIONAL (2026-10-29): onyx/nova do not
+// exist in Realtime. cedar (male) / marin (female) are OpenAI's
+// recommended pair; Amr's ear is the final judge — if he dislikes
+// either, change REALTIME_VOICES below and redeploy (one line).
+// SPEED: Realtime supports post-processing speed 0.25-1.5, so the
+// male 1.15 / female 1.0 defaults survive; caller speeds above 1.5
+// are clamped to 1.5 on this path (the old chain keeps 0.25-4.0).
+// CONTRACT UNCHANGED: {audioUrl, voice}. Only the file format
+// changes on the Realtime path (WAV instead of MP3); players play
+// the URL, so no app change is needed. Logging privacy unchanged:
+// no text or audio content is ever logged.
+
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -9,6 +35,13 @@ const corsHeaders = {
 const AZURE_VOICES: Record<string, { name: string; locale: string }> = {
   male: { name: "ar-SA-Hamed", locale: "ar-SA" },
   female: { name: "ar-SA-Zariyah", locale: "ar-SA" },
+};
+
+const REALTIME_MODEL = "gpt-realtime-2.1-mini";
+// Provisional pilot mapping (see header): OpenAI's recommended pair.
+const REALTIME_VOICES: Record<string, string> = {
+  male: "cedar",
+  female: "marin",
 };
 
 async function generateAzureTTS(text: string, voice: "male" | "female", apiKey: string, region: string): Promise<ArrayBuffer> {
@@ -62,6 +95,226 @@ async function generateOpenAITTS(text: string, voice: "male" | "female", apiKey:
     lastError = await response.text();
   }
   throw new Error(`OpenAI TTS error: ${lastError}`);
+}
+
+// ---- Realtime one-shot speech (v10) ----
+
+// Chunked base64 decode (deltas are small, totals can be megabytes).
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// PCM16 mono @ 24kHz -> WAV (44-byte header, no encoder needed).
+function pcm16ToWav(pcm: Uint8Array): ArrayBuffer {
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + pcm.length, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, 24000, true);
+  view.setUint32(28, 48000, true); // byte rate = 24000 * 2
+  view.setUint16(32, 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
+  writeStr(36, "data");
+  view.setUint32(40, pcm.length, true);
+  const wav = new Uint8Array(44 + pcm.length);
+  wav.set(new Uint8Array(header), 0);
+  wav.set(pcm, 44);
+  return wav.buffer;
+}
+
+// Transcript gate: strip only diacritics, tatweel, punctuation and
+// whitespace. Letters stay exact (normalizing ى/ي or ة/ه would mask
+// real word changes, e.g. على vs علي). A mismatch is a safe-direction
+// failure: the audio is discarded and the old chain runs.
+function normalizeForCompare(s: string): string {
+  return s.replace(/[ْ-ٖـ\s\p{P}]/gu, "");
+}
+
+function realtimePersona(voice: "male" | "female"): string {
+  return voice === "female"
+    ? "An extremely human, warm, gentle female voice, like a kind Quran teacher sitting right beside you: natural pace, clear Arabic pronunciation, soft pauses and real breathing between phrases, calm and reverent tone, alive and expressive with genuine warmth and feeling in every phrase — never flat, never rushed, never robotic, never like an announcement."
+    : "An extremely human, dignified, warm male voice, like a respected Quran teacher speaking to a student face to face: unhurried and natural, with real pauses and breathing between phrases, clear Arabic pronunciation, calm and reverent tone, gentle variation in pace and emotion, alive and conversational with genuine human warmth — never rushed, never monotone, never like a news announcer or a robot.";
+}
+
+const REALTIME_VERBATIM =
+  "Repeat the user's message aloud, exactly as written, word for word, in Arabic. Do not add, remove, or change any word, do not add greetings, explanations, or any other speech, and do not paraphrase. Speak only the message text itself, with natural pauses and breathing.";
+
+function realtimeCostFromUsage(usage: any): number | null {
+  try {
+    const inD = usage?.input_token_details;
+    const outD = usage?.output_token_details;
+    if (!inD || !outD) return null;
+    const textIn = Number(inD.text_tokens) || 0;
+    const audioIn = Number(inD.audio_tokens) || 0;
+    const textOut = Number(outD.text_tokens) || 0;
+    const audioOut = Number(outD.audio_tokens) || 0;
+    // gpt-realtime-2.1-mini: text in $0.60, audio in $10, text out
+    // $2.40, audio out $20 per 1M tokens.
+    return (textIn * 0.6 + audioIn * 10 + textOut * 2.4 + audioOut * 20) / 1_000_000;
+  } catch {
+    return null;
+  }
+}
+
+// One-shot Realtime speech. Resolves only with verified audio: if the
+// model's spoken transcript differs from the input, it throws and the
+// caller falls back to the old Speech chain. Deno's WebSocket has no
+// custom headers, so auth travels via the documented subprotocols.
+async function generateViaRealtime(
+  text: string,
+  voice: "male" | "female",
+  apiKey: string,
+  speedOverride?: number,
+): Promise<{ wav: ArrayBuffer; costUsd: number | null }> {
+  const voiceName = REALTIME_VOICES[voice] || REALTIME_VOICES.male;
+  // Realtime speed is post-processing, range 0.25-1.5 (old chain
+  // allowed 0.25-4.0): clamp, never reject a caller speed here.
+  const rawSpeed = speedOverride ?? (voice === "male" ? 1.15 : 1.0);
+  const speed = Math.min(1.5, Math.max(0.25, rawSpeed));
+
+  return await new Promise((resolve, reject) => {
+    let finished = false;
+    let phase: "session" | "response" | "streaming" = "session";
+    let speedRetried = false;
+    const pcmChunks: Uint8Array[] = [];
+    let pcmLen = 0;
+    const transcriptParts: string[] = [];
+    let transcriptDone: string | null = null;
+
+    const ws = new WebSocket(
+      `wss://api.openai.com/v1/realtime?model=${REALTIME_MODEL}`,
+      ["realtime", `openai-insecure-api-key.${apiKey}`],
+    );
+
+    const fail = (msg: string) => {
+      if (finished) return;
+      finished = true;
+      try { ws.close(); } catch { /* already closed */ }
+      reject(new Error(msg));
+    };
+
+    const timer = setTimeout(() => fail("Realtime timed out (60s)"), 60_000);
+
+    const sendResponseCreate = (withSpeed: boolean) => {
+      const response: Record<string, unknown> = {
+        output_modalities: ["audio"],
+        instructions: REALTIME_VERBATIM,
+      };
+      if (withSpeed) response.output = { speed };
+      ws.send(JSON.stringify({ type: "response.create", response }));
+    };
+
+    ws.addEventListener("open", () => {
+      ws.send(JSON.stringify({
+        type: "session.update",
+        session: {
+          type: "realtime",
+          model: REALTIME_MODEL,
+          output_modalities: ["audio"],
+          audio: {
+            input: { format: { type: "audio/pcm", rate: 24000 } },
+            output: { format: { type: "audio/pcm", rate: 24000 }, voice: voiceName },
+          },
+          instructions: realtimePersona(voice),
+        },
+      }));
+    });
+
+    ws.addEventListener("message", (ev) => {
+      if (finished) return;
+      const data = typeof ev.data === "string" ? ev.data : null;
+      if (!data) return;
+      let msg: any;
+      try {
+        msg = JSON.parse(data);
+      } catch {
+        return;
+      }
+      const t = msg.type as string;
+      if (t === "session.updated") {
+        phase = "response";
+        ws.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text }],
+          },
+        }));
+        sendResponseCreate(true);
+      } else if (t === "response.output_audio.delta" || t === "response.audio.delta") {
+        phase = "streaming";
+        if (typeof msg.delta === "string" && msg.delta) {
+          const bytes = b64ToBytes(msg.delta);
+          pcmChunks.push(bytes);
+          pcmLen += bytes.length;
+        }
+      } else if (t === "response.output_audio_transcript.delta" || t === "response.audio_transcript.delta") {
+        if (typeof msg.delta === "string") transcriptParts.push(msg.delta);
+      } else if (t === "response.output_audio_transcript.done" || t === "response.audio_transcript.done") {
+        if (typeof msg.transcript === "string") transcriptDone = msg.transcript;
+      } else if (t === "response.done" || t === "response.completed") {
+        finished = true;
+        clearTimeout(timer);
+        try { ws.close(); } catch { /* ignore */ }
+        if (pcmLen === 0) {
+          reject(new Error("Realtime returned no audio"));
+          return;
+        }
+        const transcript = transcriptDone ?? transcriptParts.join("");
+        if (transcript && normalizeForCompare(transcript) !== normalizeForCompare(text)) {
+          // Spoken words differ from the requested text: discard.
+          // Lengths only in the log — never the texts themselves.
+          console.warn(
+            `realtime transcript mismatch: input ${text.length} chars, spoken ${transcript.length} chars`,
+          );
+          reject(new Error("realtime transcript mismatch"));
+          return;
+        }
+        const pcm = new Uint8Array(pcmLen);
+        let off = 0;
+        for (const c of pcmChunks) {
+          pcm.set(c, off);
+          off += c.length;
+        }
+        resolve({ wav: pcm16ToWav(pcm), costUsd: realtimeCostFromUsage(msg.response?.usage) });
+      } else if (t === "error") {
+        const detail = msg.error?.message || msg.error?.code || "unknown realtime error";
+        // A response.create rejected before any audio (e.g. the
+        // output/speed field unsupported): retry once without it.
+        // Session-phase or mid-stream errors fail straight through
+        // to the old chain.
+        if (phase === "response" && !speedRetried) {
+          speedRetried = true;
+          try {
+            sendResponseCreate(false);
+            return;
+          } catch {
+            // fall through to fail
+          }
+        }
+        fail(`Realtime error: ${detail}`);
+      }
+    });
+
+    ws.addEventListener("error", () => {
+      if (!finished) fail("Realtime websocket error");
+    });
+    ws.addEventListener("close", () => {
+      if (!finished) fail("Realtime connection closed before response.done");
+    });
+  });
 }
 
 Deno.serve(async (req: Request) => {
@@ -122,7 +375,8 @@ Deno.serve(async (req: Request) => {
     }
     // Optional caller speed (0.25-4.0, OpenAI's range). Invalid or
     // absent values keep the per-voice defaults, so older callers
-    // (admin/link generation) behave exactly as before.
+    // (admin/link generation) behave exactly as before. On the
+    // Realtime path the speed is clamped to its 0.25-1.5 range.
     const speedOverride = typeof reqSpeed === "number" && reqSpeed >= 0.25 && reqSpeed <= 4 ? reqSpeed : undefined;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL");
@@ -189,21 +443,42 @@ Deno.serve(async (req: Request) => {
 
     let audioBuffer: ArrayBuffer;
     let ttsModel = "azure";
+    let ttsProvider = "azure";
+    let ttsCost: number | null = null;
+    let audioMime = "audio/mp3";
+    let audioExt = "mp3";
 
     if (azureKey) {
       audioBuffer = await generateAzureTTS(text, voice || "male", azureKey, azureRegion);
     } else {
-      const result = await generateOpenAITTS(text, voice || "male", openaiKey!, speedOverride);
-      audioBuffer = result.buffer;
-      ttsModel = result.model;
+      // v10: Realtime first; the old Speech chain is the fallback.
+      try {
+        const rt = await generateViaRealtime(text, voice || "male", openaiKey!, speedOverride);
+        audioBuffer = rt.wav;
+        ttsModel = REALTIME_MODEL;
+        ttsProvider = "realtime";
+        ttsCost = rt.costUsd;
+        audioMime = "audio/wav";
+        audioExt = "wav";
+      } catch (rtErr) {
+        console.warn("realtime failed, falling back to speech api:", String((rtErr as Error)?.message || rtErr).slice(0, 200));
+        const result = await generateOpenAITTS(text, voice || "male", openaiKey!, speedOverride);
+        audioBuffer = result.buffer;
+        ttsModel = result.model;
+        ttsProvider = "openai";
+        // gpt-4o-mini-tts ≈ $0.015/min at ~1000 chars/min; tts-1-hd $0.030/1k chars.
+        ttsCost = ttsModel === "gpt-4o-mini-tts"
+          ? (text.length / 1000) * 0.015
+          : (text.length / 1000) * 0.030;
+      }
     }
 
-    const audioBlob = new Blob([audioBuffer], { type: "audio/mp3" });
-    const fileName = `synthetic-${Date.now()}.mp3`;
+    const audioBlob = new Blob([audioBuffer], { type: audioMime });
+    const fileName = `synthetic-${Date.now()}.${audioExt}`;
 
     const { error: uploadError } = await supabaseClient.storage
       .from("rana-audio")
-      .upload(fileName, audioBlob, { contentType: "audio/mp3" });
+      .upload(fileName, audioBlob, { contentType: audioMime });
 
     if (uploadError) {
       throw new Error("فشل رفع الصوت: " + uploadError.message);
@@ -213,23 +488,19 @@ Deno.serve(async (req: Request) => {
       .from("rana-audio")
       .getPublicUrl(fileName);
 
-    // 4. Best-effort usage log for the Admin balance monitor, BOTH
+    // 4. Best-effort usage log for the Admin balance monitor, ALL
     // paths (previously OpenAI only; Azure billing is separate, so
-    // its cost is logged as null). Wrapped so logging can never
-    // break the response.
-    // gpt-4o-mini-tts ≈ $0.015/min at ~1000 chars/min; tts-1-hd $0.030/1k chars.
+    // its cost is logged as null; Realtime cost comes from the
+    // response usage when the API reports it, else null). Wrapped
+    // so logging can never break the response. No text or audio
+    // content is ever logged.
     try {
-      const cost = azureKey
-        ? null
-        : ttsModel === "gpt-4o-mini-tts"
-          ? (text.length / 1000) * 0.015
-          : (text.length / 1000) * 0.030;
       await supabaseClient.from("ai_usage_events").insert({
         function_name: "generate-voice",
         model: ttsModel,
-        cost_usd: cost,
+        cost_usd: ttsCost,
         user_id: userId,
-        provider: azureKey ? "azure" : "openai",
+        provider: ttsProvider,
         chars: text.length,
       });
     } catch { /* ignore logging errors */ }
@@ -245,4 +516,3 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
-// force redeploy Sun Oct 11 13:28:30 UTC 2026
