@@ -14,6 +14,10 @@ import {
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
+import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
+import type { RiwayaPosition } from '../lib/riwayat';
+import { RiwayaEngine as RiwayaEngineClass } from '../lib/riwayatPlayback';
+import type { RiwayaEngine } from '../lib/riwayatPlayback';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import type { CachedTextRow } from '../lib/quranTextCache';
 import {
@@ -52,6 +56,17 @@ function readPersistedReciter(): string {
   return DEFAULT_RECITER_ID;
 }
 
+// Riwaya mode (v1, listening-only): null = Hafs (the existing
+// behaviour, unchanged). A persisted riwaya id that is not one of
+// the five verified editions is ignored, never trusted blindly.
+function readPersistedRiwaya(): string | null {
+  try {
+    const saved = localStorage.getItem('quran-riwaya') || '';
+    if (RIWAYAT.some((r) => r.id === saved)) return saved;
+  } catch {}
+  return null;
+}
+
 function surahName(no: number): string {
   return SURAHS.find((s) => s.no === no)?.name || `سورة ${no}`;
 }
@@ -70,6 +85,16 @@ function surahCount(no: number): number {
 export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [surah, setSurah] = useState(1);
   const [reciterId, setReciterId] = useState(readPersistedReciter);
+  const [riwayaId, setRiwayaId] = useState<string | null>(readPersistedRiwaya);
+  const [savedRiwayatResume, setSavedRiwayatResume] = useState<RiwayaPosition | null>(() => {
+    try {
+      const id = readPersistedRiwaya();
+      return id ? readRiwayaResume(id) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [showRiwayatResume, setShowRiwayatResume] = useState(true);
   const [mode, setMode] = useState<ListenMode>('free');
   const [savedWird, setSavedWird] = useState<ListenPosition | null>(() => {
     try {
@@ -106,9 +131,11 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
   const engineRef = useRef<ListenEngine | null>(null);
+  const riwayaEngineRef = useRef<RiwayaEngine | null>(null);
   const currentAyahRef = useRef(1);
   const activeSurahRef = useRef(1);
   const activeReciterRef = useRef(reciterId);
+  const activeRiwayaRef = useRef<string | null>(riwayaId);
   const activeModeRef = useRef<ListenMode>('free');
 
   const setCurrent = (ayah: number) => {
@@ -149,10 +176,18 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const destroyEngine = () => {
+    // Both engines share the single audio element, but only one
+    // ever exists at a time (mode switch destroys first) — so
+    // destroying both here is safe and keeps the stop path one
+    // call for both modes.
     try {
       engineRef.current?.destroy();
     } catch {}
     engineRef.current = null;
+    try {
+      riwayaEngineRef.current?.destroy();
+    } catch {}
+    riwayaEngineRef.current = null;
   };
 
   // Start (or restart) playback. Takes explicit values so the resume
@@ -217,6 +252,30 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const stopPlayback = () => {
+    // Riwaya mode: stopping saves the surah AND time-in-surah
+    // (per-riwaya resume), so the next visit returns to exactly
+    // here. The Hafs wird path below is untouched.
+    if (riwayaEngineRef.current) {
+      let pos: RiwayaPosition | null = null;
+      try {
+        pos = riwayaEngineRef.current.getPosition();
+      } catch {}
+      if (pos) {
+        try {
+          writeRiwayaResume(pos);
+        } catch {}
+      }
+      const id = activeRiwayaRef.current;
+      try {
+        setSavedRiwayatResume(id ? readRiwayaResume(id) : null);
+      } catch {}
+      destroyEngine();
+      setActive(false);
+      setPlaying(false);
+      setInterrupted(false);
+      setShowRiwayatResume(true);
+      return;
+    }
     // ورد استماع: stopping saves the exact ayah AND time-in-ayah
     // (redirect A), so the next visit resumes from precisely here.
     if (activeModeRef.current === 'wird') {
@@ -244,9 +303,67 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     setShowResume(true);
   };
 
+  // Riwaya mode: start (or restart) surah-file playback. Takes
+  // explicit values so the resume card can start at the saved
+  // position without waiting for state updates. Always called
+  // from a tap (user gesture), which iOS requires before audio
+  // may play. No ayah chaining, no read-along: one file plays
+  // to its end and stops.
+  const startRiwayaPlayback = async (
+    surahNo: number,
+    riwaya: string,
+    startTime = 0,
+  ) => {
+    setEngineError(null);
+    setInterrupted(false);
+    destroyEngine();
+    activeSurahRef.current = surahNo;
+    activeRiwayaRef.current = riwaya;
+    setSurah(surahNo);
+    setRiwayaId(riwaya);
+    const engine = new RiwayaEngineClass({
+      riwayaId: riwaya,
+      surah: surahNo,
+      startTime,
+      onEnded: () => {
+        setPlaying(false);
+      },
+      onError: (message) => {
+        setEngineError(message);
+        setPlaying(false);
+      },
+      onInterrupted: () => {
+        // Same rule as Hafs: show the resume button; do NOT auto-play.
+        setInterrupted(true);
+        setPlaying(false);
+      },
+    });
+    riwayaEngineRef.current = engine;
+    setActive(true);
+    try {
+      await engine.play();
+      setPlaying(true);
+    } catch {
+      setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      setPlaying(false);
+    }
+  };
+
   // Redirect B: the interruption resume button. A tap only — the
   // page never calls this on its own after an interruption.
   const resumeAfterInterruption = async () => {
+    const rEngine = riwayaEngineRef.current;
+    if (rEngine) {
+      setEngineError(null);
+      try {
+        await rEngine.play();
+        setInterrupted(false);
+        setPlaying(true);
+      } catch {
+        setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      }
+      return;
+    }
     const engine = engineRef.current;
     if (!engine) return;
     setEngineError(null);
@@ -260,6 +377,23 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const togglePlayPause = async () => {
+    const rEngine = riwayaEngineRef.current;
+    if (rEngine) {
+      setEngineError(null);
+      try {
+        if (playing) {
+          rEngine.pause();
+          setPlaying(false);
+        } else {
+          await rEngine.play();
+          setInterrupted(false);
+          setPlaying(true);
+        }
+      } catch {
+        setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      }
+      return;
+    }
     const engine = engineRef.current;
     if (!engine) return;
     setEngineError(null);
@@ -283,6 +417,37 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     try {
       localStorage.setItem('quran-reciter', id);
     } catch {}
+  };
+
+  const changeRiwaya = (id: string | null) => {
+    if (id !== null && !RIWAYAT.some((r) => r.id === id)) return;
+    setRiwayaId(id);
+    try {
+      if (id === null) localStorage.removeItem('quran-riwaya');
+      else localStorage.setItem('quran-riwaya', id);
+    } catch {}
+    try {
+      setSavedRiwayatResume(id ? readRiwayaResume(id) : null);
+    } catch {}
+    setShowRiwayatResume(true);
+  };
+
+  const resumeRiwayatSaved = () => {
+    if (!savedRiwayatResume) return;
+    setShowRiwayatResume(false);
+    void startRiwayaPlayback(
+      savedRiwayatResume.surah,
+      savedRiwayatResume.riwaya,
+      savedRiwayatResume.time ?? 0,
+    );
+  };
+
+  const dismissRiwayatResume = () => {
+    try {
+      if (savedRiwayatResume) clearRiwayaResume(savedRiwayatResume.riwaya);
+    } catch {}
+    setSavedRiwayatResume(null);
+    setShowRiwayatResume(false);
   };
 
   const resumeSaved = () => {
@@ -346,6 +511,14 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   useEffect(() => {
     let cancelled = false;
     const loadText = async () => {
+      // Riwaya mode is listening-only: no Hafs text is shown
+      // under a non-Hafs voice (the words differ between readings).
+      if (riwayaId !== null) {
+        setAyahs(null);
+        setTextLoading(false);
+        setTextError(null);
+        return;
+      }
       setTextLoading(true);
       setTextError(null);
       const expected = surahCount(surah);
@@ -383,7 +556,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     return () => {
       cancelled = true;
     };
-  }, [surah]);
+  }, [surah, riwayaId]);
 
   // Offline status for the selected surah + reciter.
   useEffect(() => {
@@ -464,6 +637,33 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           </div>
         )}
 
+        {/* Riwaya resume card, when a position is saved for the
+            selected riwaya. Per-riwaya: switching riwaya shows
+            that riwaya's own saved position, not another's. */}
+        {riwayaId !== null && savedRiwayatResume && showRiwayatResume && (
+          <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-5 mb-4">
+            <p className="font-bold text-accent-800">
+              استئناف — سورة {surahName(savedRiwayatResume.surah)}، رواية{' '}
+              {RIWAYAT.find((r) => r.id === savedRiwayatResume.riwaya)?.name || ''}
+            </p>
+            <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بهذه الرواية.</p>
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={resumeRiwayatSaved}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+              >
+                استئناف
+              </button>
+              <button
+                onClick={dismissRiwayatResume}
+                className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+              >
+                ابدأ من الأول
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Pickers BEFORE start; locked while an engine is active */}
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <label className="block font-bold text-accent-800 mb-2" htmlFor="listen-surah">
@@ -489,6 +689,46 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             ))}
           </select>
 
+          {/* Riwaya picker (v1, listening-only). Hafs is the first
+              choice and the default; the five riwayat play a whole
+              surah file each, with no ayah-by-ayah chaining and no
+              read-along text. Locked while any engine is active. */}
+          <p className="font-bold text-accent-800 mt-5 mb-2">الرواية</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              disabled={locked}
+              onClick={() => changeRiwaya(null)}
+              className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
+                riwayaId === null
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-white border border-emerald-200 text-accent-800'
+              }`}
+            >
+              حفص (القراء الثمانية)
+            </button>
+            {RIWAYAT.map((r) => (
+              <button
+                key={r.id}
+                disabled={locked}
+                onClick={() => changeRiwaya(r.id)}
+                className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
+                  riwayaId === r.id
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-white border border-emerald-200 text-accent-800'
+                }`}
+              >
+                {r.name}
+              </button>
+            ))}
+          </div>
+          {riwayaId !== null && (
+            <p className="text-sm text-accent-600 mt-3">
+              وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة.
+            </p>
+          )}
+
+          {riwayaId === null && (
+            <>
           <p className="font-bold text-accent-800 mt-5 mb-2">اختر القارئ</p>
           <div className="flex flex-wrap gap-2">
             {RECITERS.map((r) => (
@@ -506,7 +746,11 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               </button>
             ))}
           </div>
+            </>
+          )}
 
+          {riwayaId === null && (
+            <>
           <p className="font-bold text-accent-800 mt-5 mb-2">نوع الاستماع</p>
           <div className="grid grid-cols-2 gap-3">
             <button
@@ -538,15 +782,23 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               </span>
             </button>
           </div>
+            </>
+          )}
           {locked && (
             <p className="text-sm text-accent-600 mt-3">
-              السورة والقارئ ونوع الاستماع مقفلة أثناء التشغيل — أوقف التشغيل أولا لتغييرها.
+              {riwayaId !== null
+                ? 'السورة والرواية مقفلتان أثناء التشغيل — أوقف التشغيل أولا لتغييرهما.'
+                : 'السورة والقارئ ونوع الاستماع مقفلة أثناء التشغيل — أوقف التشغيل أولا لتغييرها.'}
             </p>
           )}
 
           {!active && (
             <button
-              onClick={() => void startPlayback(surah, reciterId, mode, 1)}
+              onClick={() =>
+                riwayaId !== null
+                  ? void startRiwayaPlayback(surah, riwayaId, 0)
+                  : void startPlayback(surah, reciterId, mode, 1)
+              }
               className="mt-5 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
             >
               <Play className="w-5 h-5" />
@@ -559,7 +811,9 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
         {active && (
           <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
             <p className="font-bold text-accent-800">
-              سورة {surahName(surah)} — آية {currentAyah} من {count}
+              {riwayaId !== null
+                ? `سورة ${surahName(surah)} — ${RIWAYAT.find((r) => r.id === riwayaId)?.name || ''}`
+                : `سورة ${surahName(surah)} — آية ${currentAyah} من ${count}`}
             </p>
             {engineError && <p className="text-sm text-red-600 font-bold mt-2">{engineError}</p>}
             {/* Redirect B: interruption resume — prominent, tap-only */}
@@ -583,6 +837,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
                 {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                 {playing ? 'إيقاف مؤقت' : 'تشغيل'}
               </button>
+            {/* Ayah-step buttons exist only in Hafs mode: a riwaya
+                surah file has no ayah steps to move between. */}
+            {riwayaId === null && (
+              <>
               <button
                 onClick={() => void engineRef.current?.prev()}
                 className="px-4 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center gap-2"
@@ -595,8 +853,14 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               >
                 الآية التالية <SkipForward className="w-5 h-5" />
               </button>
+              </>
+            )}
               <button
-                onClick={() => void engineRef.current?.restart()}
+                onClick={() =>
+                  riwayaId !== null
+                    ? void riwayaEngineRef.current?.restart()
+                    : void engineRef.current?.restart()
+                }
                 className="px-4 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center gap-2"
               >
                 <RotateCcw className="w-5 h-5" /> من أول السورة
@@ -620,7 +884,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           </div>
         )}
 
-        {/* Read-along text */}
+        {/* Read-along text — Hafs only: riwaya mode is
+            listening-only (the Hafs text does not match a non-Hafs
+            voice), so this block hides under a riwaya. */}
+        {riwayaId === null && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 mb-3">سورة {surahName(surah)}</p>
           {textLoading && <p className="text-accent-600">جارٍ تحميل نص السورة…</p>}
@@ -647,12 +914,14 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               ))}
             </div>
           )}
-        </div>
+        </div>)}
 
         {/* Offline section (redirect E: additive only — playback,
             highlight and resume above never wait on any download
             state; deleting this block leaves the page fully working) */}
-        {/* Offline section: this surah + reciter only, never whole-Quran */}
+        {/* Offline section: this surah + reciter only, never whole-Quran.
+            Hafs only in v1 — riwaya mode has no offline downloads. */}
+        {riwayaId === null && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800">الاستماع دون اتصال</p>
           <p className="text-sm text-accent-600 mt-1">
@@ -717,7 +986,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               )}
             </div>
           )}
-        </div>
+        </div>)}
 
         <p className="text-center text-sm text-emerald-700 font-semibold mt-6">
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
