@@ -161,7 +161,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
           <p className="text-sm text-accent-600 mt-1">
-            تلاوة متواصلة مع القراءة — صُمّمت للاستماع مع غلق الشاشة، ويمكن تحميل السورة للاستماع دون اتصال
+            تلاوة متواصلة مع القراءة — استمع للقرآن واقفل الشاشة لو عاوز، ويمكن تحميل السورة للاستماع دون اتصال
           </p>
           {/* أوفلاين — headline feature of this entry (Amr's explicit
               "أوفلاين"): streaming (play) and per-surah download are
@@ -182,19 +182,6 @@ export default function HomeStartPage({ session, onNavigate }: {
             استمع للقرآن
           </button>
         </div>
-
-        {/* Today's wird, one line only — the full card lives on لوحتي */}
-        <button
-          onClick={() => onNavigate('app')}
-          className="w-full bg-white rounded-2xl border border-amber-200 shadow-sm p-4 mb-4 text-right"
-        >
-          <p className="font-bold text-accent-800">
-            ورد اليوم: {WIRD_TYPE_LABEL[wird.type]} — {pagesText}
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            {doneToday ? 'تم ✓ تقبل الله منك.' : 'لم ينجز بعد — من لوحتي علّمه منجزا.'}
-          </p>
-        </button>
 
         {/* تربيط اليوم: real approved link only; hidden on any failure */}
         {linkOfDay && (
@@ -254,6 +241,29 @@ export default function HomeStartPage({ session, onNavigate }: {
             className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
           >
             <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
+          </button>
+        </div>
+
+        {/* Today's wird, moved below the quick buttons (Amr 20:02) —
+            the full card lives on لوحتي; the hint opens Settings,
+            where the daily wird is configured (first section). */}
+        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-4 mb-4">
+          <button
+            onClick={() => onNavigate('app')}
+            className="w-full text-right"
+          >
+            <p className="font-bold text-accent-800">
+              ورد اليوم: {WIRD_TYPE_LABEL[wird.type]} — {pagesText}
+            </p>
+            <p className="text-sm text-accent-600 mt-1">
+              {doneToday ? 'تم ✓ تقبل الله منك.' : 'لم ينجز بعد — من لوحتي علّمه منجزا.'}
+            </p>
+          </button>
+          <button
+            onClick={() => onNavigate('settings')}
+            className="mt-2 text-sm text-emerald-700 font-semibold underline"
+          >
+            اظبط وردك اليومي من الإعدادات
           </button>
         </div>
 
