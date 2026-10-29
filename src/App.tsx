@@ -126,12 +126,12 @@ function AppContent() {
         void retryPendingProfile(supabase, data.session.user.id).catch(() => {});
       }
       // Returning user with a valid session and no explicit deep link
-      // goes straight to لوحتي — no landing page, no login taps.
+      // goes straight to الرئيسية — no landing page, no login taps.
       // A hash of any kind (including a Mushaf deep link) counts as an
       // explicit destination and is left alone. Recovery sessions never
       // take this branch either: the reset form owns them.
       if (data.session && !window.location.hash && !recoveryRef.current) {
-        setRoute('app');
+        setRoute('home');
       }
     };
     void boot();
@@ -153,14 +153,14 @@ function AppContent() {
         setAuthNotice(null);
         void retryPendingProfile(supabase, session.user.id).catch(() => {});
         setAuthJustSucceeded(true);
-        // The app opens on لوحتي after login (not the Mushaf page):
+        // The app opens on الرئيسية after login (not the Mushaf page):
         // it is lighter to load, and the Mushaf opens from there.
         // EXCEPTION: a share deep link in the hash survives login —
         // a recipient who logs in from a shared ayah link must still
-        // land on that ayah, not be diverted to لوحتي.
+        // land on that ayah, not be diverted to الرئيسية.
         const parsed = parseHash(window.location.hash);
         if (!(parsed.route === 'mushaf' && (parsed.page || parsed.surah))) {
-          setRoute('app');
+          setRoute('home');
         }
         setTimeout(() => setAuthJustSucceeded(false), 2500);
         return;
