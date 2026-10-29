@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Download,
   Headphones,
+  Moon,
   Pause,
   Play,
   RotateCcw,
@@ -95,6 +96,14 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [offlineError, setOfflineError] = useState<string | null>(null);
+  // Black-screen mode: a fullscreen black overlay that hides the UI
+  // while audio keeps playing untouched. It never touches the audio
+  // engine, Media Session, or Wake Lock (none is used here). Exit is
+  // long-press (>=1000ms) or swipe (>60px) only — never a single
+  // tap, so pocket touches cannot dismiss it.
+  const [blackScreen, setBlackScreen] = useState(false);
+  const [showBlackHint, setShowBlackHint] = useState(false);
+  const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
   const engineRef = useRef<ListenEngine | null>(null);
   const currentAyahRef = useRef(1);
@@ -105,6 +114,31 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   const setCurrent = (ayah: number) => {
     currentAyahRef.current = ayah;
     setCurrentAyah(ayah);
+  };
+
+  // Faint exit hint: shows when the overlay opens, hides itself.
+  useEffect(() => {
+    if (!blackScreen) return;
+    setShowBlackHint(true);
+    const timer = setTimeout(() => setShowBlackHint(false), 4000);
+    return () => clearTimeout(timer);
+  }, [blackScreen]);
+
+  const blackPressStart = (x: number, y: number) => {
+    blackPressRef.current = { t: Date.now(), x, y };
+  };
+  const blackPressMove = (x: number, y: number) => {
+    const p = blackPressRef.current;
+    if (!p) return;
+    if (Math.hypot(x - p.x, y - p.y) > 60) {
+      blackPressRef.current = null;
+      setBlackScreen(false);
+    }
+  };
+  const blackPressEnd = () => {
+    const p = blackPressRef.current;
+    blackPressRef.current = null;
+    if (p && Date.now() - p.t >= 1000) setBlackScreen(false);
   };
 
   const scrollToAyah = (ayah: number) => {
@@ -574,6 +608,15 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
                 <Square className="w-5 h-5" /> إيقاف
               </button>
             </div>
+            <button
+              onClick={() => setBlackScreen(true)}
+              className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+              aria-label="شاشة سوداء"
+            >
+              <Moon className="w-5 h-5" />
+              شاشة سوداء
+            </button>
+            <p className="text-sm text-accent-600 mt-1 text-center">يخفي الواجهة والصوت مستمر</p>
           </div>
         )}
 
@@ -680,6 +723,34 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
         </p>
       </main>
+      {blackScreen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none touch-none"
+          style={{ WebkitTouchCallout: 'none' }}
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={(e) => {
+            const t = e.touches[0];
+            if (t) blackPressStart(t.clientX, t.clientY);
+          }}
+          onTouchMove={(e) => {
+            const t = e.touches[0];
+            if (t) blackPressMove(t.clientX, t.clientY);
+          }}
+          onTouchEnd={blackPressEnd}
+          onTouchCancel={() => {
+            blackPressRef.current = null;
+          }}
+          onMouseDown={(e) => blackPressStart(e.clientX, e.clientY)}
+          onMouseMove={(e) => {
+            if (blackPressRef.current) blackPressMove(e.clientX, e.clientY);
+          }}
+          onMouseUp={blackPressEnd}
+        >
+          {showBlackHint && (
+            <p className="text-white/20 text-sm font-bold">اضغط مطوّلًا للعودة</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

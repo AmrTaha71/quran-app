@@ -142,7 +142,12 @@ export default function HomeStartPage({ session, onNavigate }: {
             صفحة {lastPage.page.toLocaleString('ar-EG')} — سورة {pageSurah(lastPage.page)} — جزء {juz.number.toLocaleString('ar-EG')}
           </p>
           <button
-            onClick={() => onNavigate('mushaf')}
+            onClick={() => {
+              try {
+                sessionStorage.setItem('quran-open-fullscreen', '1');
+              } catch {}
+              onNavigate('mushaf');
+            }}
             className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2"
           >
             <BookOpen className="w-5 h-5" />
@@ -171,7 +176,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           )}
           <button
             onClick={() => onNavigate('listen')}
-            className="mt-4 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
           >
             <Headphones className="w-5 h-5" />
             استمع للقرآن
@@ -221,15 +226,21 @@ export default function HomeStartPage({ session, onNavigate }: {
             (Amr 17:48); لوحتي + الإعدادات stay a small 2-col row. */}
         <button
           onClick={() => onNavigate('follow')}
-          className="w-full py-4 mb-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 text-lg"
+          className="w-full py-4 mb-3 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30"
         >
-          <Mic className="w-6 h-6 text-emerald-600" /> الحق الإمام
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <Mic className="w-6 h-6 text-white" />
+          </span>
+          الحق الإمام
         </button>
         <button
           onClick={() => onNavigate('test')}
-          className="w-full py-4 mb-3 bg-white border border-amber-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 text-lg"
+          className="w-full py-4 mb-3 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30"
         >
-          <Headphones className="w-6 h-6 text-amber-600" /> سمّع لنفسك
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <Headphones className="w-6 h-6 text-white" />
+          </span>
+          سمّع لنفسك
         </button>
         <div className="grid grid-cols-2 gap-3">
           <button

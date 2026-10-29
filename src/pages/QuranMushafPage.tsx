@@ -1276,6 +1276,26 @@ export default function QuranMushafPage({
     setSearchHighlight(null);
   };
 
+  // Resume-to-fullscreen entry: HomeStartPage's resume action sets
+  // sessionStorage 'quran-open-fullscreen' before navigating here.
+  // Consumed once on mount (read then remove): a later refresh or a
+  // shared link never reopens fullscreen, and shared links never
+  // carry the flag. Native fullscreen is fire-and-forget — a silent
+  // refusal (notably iPhone Safari, which lacks the API for page
+  // elements) never shows an error; the fixed overlay is the real
+  // fullscreen and opens regardless.
+  useEffect(() => {
+    let present = false;
+    try {
+      present = sessionStorage.getItem('quran-open-fullscreen') !== null;
+      if (present) sessionStorage.removeItem('quran-open-fullscreen');
+    } catch {}
+    if (!present) return;
+    setShowFullscreen(true);
+    requestNativeFullscreen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Follow-the-imam state + wake-lock helpers. These MUST sit above the
   // follow-functions block: useCallback deps arrays are evaluated eagerly
   // during render, so a deps entry referencing a const declared below
@@ -3925,12 +3945,22 @@ export default function QuranMushafPage({
                       .sort((a, b) => a.wordNo - b.wordNo);
                     if (boxes.length === 0) return null;
                     return (<>
+                      <style>{`
+                        @keyframes mushaf-follow-pulse {
+                          0%, 100% { box-shadow: 0 0 10px 2px rgba(251,191,36,0.35); }
+                          50% { box-shadow: 0 0 20px 5px rgba(251,191,36,0.55); }
+                        }
+                        .mushaf-follow-pulse { animation: mushaf-follow-pulse 2s ease-in-out 3; }
+                        @media (prefers-reduced-motion: reduce) {
+                          .mushaf-follow-pulse { animation: none; }
+                        }
+                      `}</style>
                       {boxes.map((b) => {
                         const f = imageBoxToContainer(clampBoxToPaper(b));
                         const isCurrent = b.wordNo - 1 === followPos.word;
                         const isPassed = b.wordNo - 1 < followPos.word;
                         return (
-                          <div key={b.key} className={`absolute rounded-sm pointer-events-none ${isCurrent ? 'bg-amber-400/70 ring-2 ring-amber-500' : isPassed ? 'bg-amber-400/40' : 'bg-amber-300/25'}`}
+                          <div key={b.key} className={`absolute rounded-md pointer-events-none ${isCurrent ? 'bg-amber-400/30 shadow-[0_0_14px_3px_rgba(251,191,36,0.45)] mushaf-follow-pulse' : isPassed ? 'bg-amber-400/40' : 'bg-amber-300/25'}`}
                             style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
                         );
                       })}
@@ -3946,10 +3976,57 @@ export default function QuranMushafPage({
                       {boxes.map((b) => {
                         const f = imageBoxToContainer(clampBoxToPaper(b));
                         return (
-                          <div key={b.key} className="absolute rounded-sm pointer-events-none bg-amber-400/50 ring-1 ring-amber-400"
+                          <div key={b.key} className="absolute rounded-md pointer-events-none bg-amber-400/30 shadow-[0_0_14px_3px_rgba(251,191,36,0.45)]"
                             style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
                         );
                       })}
+                    </>);
+                  })()}
+                  {/* Fullscreen ayah tap zones: one transparent zone per
+                      ayah from the bounding rect of its word boxes —
+                      no new geometry, same clamp+norm pipeline as the
+                      highlights. Rendered only in fullscreen, never
+                      while following, while a popup is open, or while
+                      the fullscreen edition picker is open. A zone tap
+                      opens the ayah popup without exiting fullscreen
+                      (stopPropagation); in clean mode it also restores
+                      the controls, like any other page tap. */}
+                  {showFullscreen && !followOn && !selectedVerse && !showEditionPickerInFullscreen && pageWordBoxes && displayedPage === currentPage && (() => {
+                    const byAyah: Record<string, { surah: number; ayah: number; left: number; top: number; right: number; bottom: number }> = {};
+                    for (const b of pageWordBoxes) {
+                      const key = `${b.surah}:${b.ayah}`;
+                      const cur = byAyah[key];
+                      if (!cur) {
+                        byAyah[key] = { surah: b.surah, ayah: b.ayah, left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height };
+                      } else {
+                        cur.left = Math.min(cur.left, b.left);
+                        cur.top = Math.min(cur.top, b.top);
+                        cur.right = Math.max(cur.right, b.left + b.width);
+                        cur.bottom = Math.max(cur.bottom, b.top + b.height);
+                      }
+                    }
+                    const zones: { verse: QuranVerse; left: number; top: number; width: number; height: number }[] = [];
+                    for (const key of Object.keys(byAyah)) {
+                      const z = byAyah[key];
+                      const verse = stripVerses.find((v) => v.surah_no === z.surah && v.ayah_no === z.ayah);
+                      if (!verse) continue;
+                      const f = imageBoxToContainer(clampBoxToPaper({ key: `${z.surah}:${z.ayah}`, surah: z.surah, ayah: z.ayah, left: z.left, top: z.top, width: z.right - z.left, height: z.bottom - z.top }));
+                      if (f.width <= 0 || f.height <= 0) continue;
+                      zones.push({ verse, left: f.left, top: f.top, width: f.width, height: f.height });
+                    }
+                    if (zones.length === 0) return null;
+                    return (<>
+                      {zones.map((z) => (
+                        <button key={`tap-${z.verse.id}`} aria-label={`فتح آية ${z.verse.ayah_no}`}
+                          className="absolute bg-transparent border-0 p-0 cursor-pointer"
+                          style={{ left: `${z.left}%`, top: `${z.top}%`, width: `${z.width}%`, height: `${z.height}%` }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (Date.now() - lastSwipeAt.current < 500) return;
+                            if (cleanMode) setCleanMode(false);
+                            handleVerseClick(z.verse);
+                          }} />
+                      ))}
                     </>);
                   })()}
                 </div>
