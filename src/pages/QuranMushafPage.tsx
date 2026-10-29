@@ -1914,6 +1914,19 @@ export default function QuranMushafPage({
     if (!followListeningRef.current || followAutoLockedRef.current || !followActiveRef.current) return;
     const words = heardWords(text);
     if (words.length === 0) return;
+    // DISPLAY FIX (2026-10-29): finals are the ONLY writing iOS ever
+    // produces — it sends no interim text — so show every final here,
+    // in the existing "سمعت:" line. Before this, the live iOS path
+    // fed finals to the matcher invisibly and the lobby showed
+    // nothing for the whole session, so "listening but not writing"
+    // was indistinguishable from a dead mic. Now any heard sentence
+    // appears on screen at once; if the line stays empty, the mic is
+    // genuinely not delivering transcripts (distance / acoustics),
+    // and if sentences appear but no lock follows, the matcher —
+    // not the mic — is the next fix, with the misheard words as
+    // evidence. Placed before the index guard on purpose: finals
+    // display even while the ayah index is still loading.
+    setFollowHeard(text);
     const ordered = followOrderedRef.current;
     if (!ordered) return;
     // Cumulative buffer (trigger role): words are HELD here, never
