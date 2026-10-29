@@ -154,6 +154,13 @@ export interface ListenEngineOptions {
   // play() after the first clip's metadata loads, clamped to the
   // clip duration. Ignored when missing, non-finite, or negative.
   startTime?: number;
+  // ELECTRONIC speed (audio.playbackRate): 1, 1.25, or 1.5 from
+  // the Listen page's speed picker. This is NOT hadr — hadr is a
+  // naturally fast recording (see hadr.ts), never a playbackRate.
+  // Applied to the shared element on every play site (applyRate),
+  // so each engine re-applies its own rate and no rate leaks
+  // across modes. Defaults to 1 when missing or invalid.
+  playbackRate?: number;
   resolveUrl?: UrlResolver;
   onAyahChange?: (surah: number, ayah: number) => void;
   onEnded?: () => void;
@@ -217,6 +224,7 @@ function revokeBlob(url: string | null): void {
 export class ListenEngine {
   private readonly reciterId: string;
   private readonly mode: ListenMode;
+  private readonly playbackRate: number;
   private readonly resolveUrl: UrlResolver;
   private readonly onAyahChange?: (surah: number, ayah: number) => void;
   private readonly onEnded?: () => void;
@@ -305,6 +313,8 @@ export class ListenEngine {
     if (url !== null) {
       this.setSrc(url);
       this.playingFlag = true;
+      // Synchronous rate application: safe on the hot path.
+      this.applyRate();
       try {
         const p = this.audio.play() as unknown as Promise<void> | undefined;
         if (p && typeof p.catch === 'function') {
@@ -443,6 +453,14 @@ export class ListenEngine {
       ? opts.reciterId
       : DEFAULT_RECITER_ID;
     this.mode = opts.mode;
+    // Electronic speed, validated: a non-finite or non-positive
+    // rate would silence or break playback, so it falls back to 1.
+    this.playbackRate =
+      typeof opts.playbackRate === 'number' &&
+      Number.isFinite(opts.playbackRate) &&
+      opts.playbackRate > 0
+        ? opts.playbackRate
+        : 1;
     this.resolveUrl = opts.resolveUrl ?? defaultResolveUrl;
     this.onAyahChange = opts.onAyahChange;
     this.onEnded = opts.onEnded;
@@ -529,6 +547,7 @@ export class ListenEngine {
     // Resume mid-ayah on the already-loaded src when possible.
     if (this.loadedKey === positionKey(this.surah, this.ayah) && this.currentSrc) {
       this.applyPendingStartTime();
+      this.applyRate();
       try {
         await this.audio.play();
         this.playingFlag = true;
@@ -637,6 +656,7 @@ export class ListenEngine {
       // Swallow: some elements reject currentTime before metadata.
     }
     if (wasPlaying) {
+      this.applyRate();
       try {
         await this.audio.play();
         this.playingFlag = true;
@@ -822,6 +842,22 @@ export class ListenEngine {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  // Apply this engine's electronic speed to the shared element.
+  // playbackRate persists across src changes on the same element,
+  // but it is re-applied at EVERY play site anyway, so the
+  // invariant never depends on that persistence — and so a rate
+  // left by another engine (or by radio, which never sets one)
+  // cannot leak into this engine's playback. Synchronous, so it
+  // is safe on the 'ended' hot path too. Best-effort: a failure
+  // here must never break playback (the clip then plays at 1x).
+  private applyRate(): void {
+    try {
+      this.audio.playbackRate = this.playbackRate;
+    } catch {
+      // Swallow.
     }
   }
 
@@ -1049,6 +1085,7 @@ export class ListenEngine {
     // First-clip resume offset: applied here (after src, before
     // play) so playback starts at startTime, not at 0.
     this.applyPendingStartTime();
+    this.applyRate();
     await this.audio.play();
     this.playingFlag = true;
     this.updateMediaSession();
@@ -1078,6 +1115,7 @@ export class ListenEngine {
       this.holdsAudio = true;
       if (preResolved !== null) {
         this.setSrc(preResolved);
+        this.applyRate();
         try {
           await this.audio.play();
           this.playingFlag = true;
@@ -1135,7 +1173,7 @@ export class ListenEngine {
       }
       if (!Number.isFinite(pos)) pos = 0;
       pos = Math.min(Math.max(0, pos), d);
-      ms.setPositionState({ duration: d, playbackRate: 1, position: pos });
+      ms.setPositionState({ duration: d, playbackRate: this.playbackRate, position: pos });
     } catch {
       // Swallow: Media Session is entirely best-effort.
     }

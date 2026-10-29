@@ -272,6 +272,10 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
       setConnecting(false);
     });
     audioRef.current = audio;
+    // Radio must never inherit a listen speed: the shared element
+    // keeps the last playbackRate, so a radio session started
+    // after 1.5x listening would otherwise play at 1.5x.
+    audio.playbackRate = 1;
     activeRef.current = true;
     setError(null);
     // Live-edge resume: a source already loaded (paused, not

@@ -2,6 +2,13 @@
 // to ListenEngine (listenPlayback.ts), kept deliberately SEPARATE
 // so the Hafs ayah-chaining engine is untouched.
 //
+// HADR (see hadr.ts) reuses this engine with the edition / label /
+// persist options: Juhani's surah files are the same shape as a
+// riwaya's (one file per surah, no ayah steps, no read-along), so
+// a second engine would only duplicate the Media Session +
+// interruption behaviour. The riwaya picker still renders only
+// the five RIWAYAT entries; hadr is selected from the pace area.
+//
 // MODEL: one surah file per playback (the riwaya editions are
 // surahbysurah). The engine plays that single file to its end and
 // then stops — it NEVER auto-advances to the next surah, chains
@@ -31,6 +38,22 @@ export interface RiwayaEngineOptions {
   surah: number;
   /** Seconds into the surah file to resume from. Clamped to duration. */
   startTime?: number;
+  // ELECTRONIC speed (audio.playbackRate), applied on every play
+  // site like ListenEngine. Defaults to 1. This is NOT hadr.
+  playbackRate?: number;
+  // HADR GENERALISATION (see hadr.ts): when an edition override
+  // is given, the engine plays that edition's surah files instead
+  // of a RIWAYAT entry, riwayaId is accepted as-is (it is then a
+  // caller-supplied mode id, e.g. 'hadr', not a RIWAYAT id), and
+  // `label` replaces the RIWAYAT name in Media Session metadata.
+  // The riwaya picker itself never sees these options — it still
+  // renders only the five RIWAYAT entries.
+  edition?: string;
+  label?: string;
+  // Persist override: when given, positions go here instead of
+  // writeRiwayaResume (which would silently drop a non-RIWAYAT
+  // id). Hadr passes writeHadrResume.
+  onPersistPosition?: (pos: RiwayaPosition) => void;
   onEnded?: () => void;
   onError?: (message: string) => void;
   /** Fired on tab-hide and on external 'pause' events. Never auto-resumes. */
@@ -55,6 +78,10 @@ function getMediaSession(): MediaSessionLike | null {
 
 export class RiwayaEngine {
   private readonly riwayaId: string;
+  private readonly playbackRate: number;
+  private readonly editionOverride: string | null;
+  private readonly labelOverride: string | null;
+  private readonly onPersistPosition?: (pos: RiwayaPosition) => void;
   private readonly onEnded?: () => void;
   private readonly onError?: (message: string) => void;
   private readonly onInterrupted?: () => void;
@@ -158,7 +185,26 @@ export class RiwayaEngine {
   constructor(opts: RiwayaEngineOptions) {
     const surah =
       Number.isInteger(opts.surah) && opts.surah >= 1 && opts.surah <= 114 ? opts.surah : 1;
-    this.riwayaId = RIWAYAT.some((r) => r.id === opts.riwayaId) ? opts.riwayaId : RIWAYAT[0].id;
+    // With an edition override (hadr), the id is a mode id, not a
+    // RIWAYAT id, so it is accepted as-is; without one, the
+    // original validation stands (unknown id -> first riwaya).
+    this.riwayaId =
+      typeof opts.edition === 'string' && opts.edition.length > 0
+        ? opts.riwayaId
+        : RIWAYAT.some((r) => r.id === opts.riwayaId)
+          ? opts.riwayaId
+          : RIWAYAT[0].id;
+    this.playbackRate =
+      typeof opts.playbackRate === 'number' &&
+      Number.isFinite(opts.playbackRate) &&
+      opts.playbackRate > 0
+        ? opts.playbackRate
+        : 1;
+    this.editionOverride =
+      typeof opts.edition === 'string' && opts.edition.length > 0 ? opts.edition : null;
+    this.labelOverride =
+      typeof opts.label === 'string' && opts.label.length > 0 ? opts.label : null;
+    this.onPersistPosition = opts.onPersistPosition;
     this.onEnded = opts.onEnded;
     this.onError = opts.onError;
     this.onInterrupted = opts.onInterrupted;
@@ -218,6 +264,7 @@ export class RiwayaEngine {
     // Resume on the already-loaded surah file when possible.
     if (this.loadedSurah === this.surah && this.currentSrc) {
       this.applyPendingStartTime();
+      this.applyRate();
       try {
         await this.audio.play();
         this.playingFlag = true;
@@ -270,6 +317,7 @@ export class RiwayaEngine {
       // Swallow: some elements reject currentTime before metadata.
     }
     if (wasPlaying) {
+      this.applyRate();
       try {
         await this.audio.play();
         this.playingFlag = true;
@@ -351,11 +399,25 @@ export class RiwayaEngine {
 
   private persistPosition(): void {
     // Riwaya resume is unconditional (unlike Hafs free mode):
-    // remembering the position IS the feature.
+    // remembering the position IS the feature. With a persist
+    // override (hadr), positions go to the override instead —
+    // writeRiwayaResume would silently drop a non-RIWAYAT id.
     try {
-      writeRiwayaResume(this.getPosition());
+      if (this.onPersistPosition) this.onPersistPosition(this.getPosition());
+      else writeRiwayaResume(this.getPosition());
     } catch {
       // Swallow: persistence must never break playback.
+    }
+  }
+
+  // Same contract as ListenEngine.applyRate: re-applied at every
+  // play site so no rate leaks across modes (hadr passes 1, so a
+  // leftover 1.5x from Hafs listening can never speed up Juhani).
+  private applyRate(): void {
+    try {
+      this.audio.playbackRate = this.playbackRate;
+    } catch {
+      // Swallow.
     }
   }
 
@@ -438,8 +500,13 @@ export class RiwayaEngine {
   }
 
   private async startCurrentPlayback(): Promise<void> {
-    const riwaya = RIWAYAT.find((r) => r.id === this.riwayaId) ?? RIWAYAT[0];
-    const url = riwaya.audioUrl(this.surah);
+    // Edition override (hadr) uses the same verified surah-file
+    // pattern with its own edition id; otherwise the RIWAYAT
+    // entry's audioUrl (the original behaviour, unchanged).
+    const url =
+      this.editionOverride !== null
+        ? `https://cdn.islamic.network/quran/audio-surah/128/${this.editionOverride}/${this.surah}.mp3`
+        : (RIWAYAT.find((r) => r.id === this.riwayaId) ?? RIWAYAT[0]).audioUrl(this.surah);
     this.currentSrc = url;
     this.loadedSurah = this.surah;
     try {
@@ -448,6 +515,7 @@ export class RiwayaEngine {
       // Swallow: a later 'error' event surfaces real media failures.
     }
     this.applyPendingStartTime();
+    this.applyRate();
     await this.audio.play();
     this.playingFlag = true;
     this.updateMediaSession();
@@ -469,7 +537,7 @@ export class RiwayaEngine {
       }
       if (!Number.isFinite(pos)) pos = 0;
       pos = Math.min(Math.max(0, pos), d);
-      ms.setPositionState({ duration: d, playbackRate: 1, position: pos });
+      ms.setPositionState({ duration: d, playbackRate: this.playbackRate, position: pos });
     } catch {
       // Swallow: Media Session is entirely best-effort.
     }
@@ -510,7 +578,9 @@ export class RiwayaEngine {
       if (typeof MediaMetadataCtor === 'undefined') return;
       const surahName = SURAHS[this.surah - 1]?.name ?? String(this.surah);
       const riwayaName =
-        RIWAYAT.find((r) => r.id === this.riwayaId)?.name ?? this.riwayaId;
+        this.labelOverride ??
+        RIWAYAT.find((r) => r.id === this.riwayaId)?.name ??
+        this.riwayaId;
       ms.metadata = new MediaMetadataCtor({
         title: `سورة ${surahName}`,
         artist: riwayaName,

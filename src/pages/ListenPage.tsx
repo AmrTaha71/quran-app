@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  Check,
   Download,
   Headphones,
   Moon,
@@ -16,8 +17,30 @@ import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
 import type { RiwayaPosition } from '../lib/riwayat';
+import {
+  HADR_EDITION,
+  HADR_FULL_LABEL,
+  HADR_NAME,
+  clearHadrResume,
+  readHadrResume,
+  readHadrSelected,
+  setHadrSelected,
+  writeHadrResume,
+} from '../lib/hadr';
+import type { HadrPosition } from '../lib/hadr';
 import { RiwayaEngine as RiwayaEngineClass } from '../lib/riwayatPlayback';
 import type { RiwayaEngine } from '../lib/riwayatPlayback';
+import {
+  THREE_MODES,
+  TAFSIR_ATTRIBUTION,
+  clearThreeModeResume,
+  readAllThreeModeResumes,
+  tafsirConfigured,
+  threeModeName,
+} from '../lib/threeModeListen';
+import type { ThreeMode, ThreeModePosition } from '../lib/threeModeListen';
+import { JourneyEngine as JourneyEngineClass } from '../lib/threeModePlayback';
+import type { JourneyEngine, JourneyPlayable } from '../lib/threeModePlayback';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import type { CachedTextRow } from '../lib/quranTextCache';
 import {
@@ -59,12 +82,33 @@ function readPersistedReciter(): string {
 // Riwaya mode (v1, listening-only): null = Hafs (the existing
 // behaviour, unchanged). A persisted riwaya id that is not one of
 // the five verified editions is ignored, never trusted blindly.
+// A set hadr flag wins over a persisted riwaya (hadr is its own
+// pace mode; the persisted riwaya id itself is left alone).
 function readPersistedRiwaya(): string | null {
   try {
+    if (readHadrSelected()) return null;
     const saved = localStorage.getItem('quran-riwaya') || '';
     if (RIWAYAT.some((r) => r.id === saved)) return saved;
   } catch {}
   return null;
+}
+
+// Electronic speed (audio.playbackRate), persisted under
+// 'quran-playback-rate'. Only the three offered rates are valid;
+// anything else falls back to 1. Labels use Arabic-Indic digits
+// (the app's numbers rule): ١x، ١٫٢٥x، ١٫٥x.
+const PLAYBACK_RATES = [1, 1.25, 1.5] as const;
+const PLAYBACK_RATE_LABELS: Record<number, string> = {
+  1: '١x',
+  1.25: '١٫٢٥x',
+  1.5: '١٫٥x',
+};
+function readPersistedRate(): number {
+  try {
+    const n = Number(localStorage.getItem('quran-playback-rate'));
+    if (PLAYBACK_RATES.includes(n as (typeof PLAYBACK_RATES)[number])) return n;
+  } catch {}
+  return 1;
 }
 
 function surahName(no: number): string {
@@ -95,7 +139,47 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     }
   });
   const [showRiwayatResume, setShowRiwayatResume] = useState(true);
+  // Hadr (Juhani natural fast pace, surah-file mode): selected
+  // from the pace area, persisted under 'quran-hadr'. It shares
+  // the riwaya engine ref (same surah-file engine, different
+  // edition) — see startHadrPlayback.
+  const [hadrOn, setHadrOn] = useState(readHadrSelected);
+  const [savedHadrResume, setSavedHadrResume] = useState<HadrPosition | null>(() => {
+    try {
+      return readHadrResume();
+    } catch {
+      return null;
+    }
+  });
+  const [showHadrResume, setShowHadrResume] = useState(true);
+  // Electronic speed, persisted (see readPersistedRate). Applied
+  // to the Hafs, riwaya, and journey engines on construction;
+  // hadr always plays at rate 1 (its pace is natural, not
+  // electronic) and disables these chips while selected.
+  const [playbackRate, setPlaybackRate] = useState(readPersistedRate);
+  // Home khatma card preselection (one-time sessionStorage flag
+  // 'quran-listen-preselect', same pattern as
+  // 'quran-open-fullscreen'): consumed by the mount effect below,
+  // which switches to Hafs, highlights this mode's button, and
+  // scrolls the journey section into view. Never auto-plays:
+  // iOS audio still needs the user's tap on the mode button.
+  const [preselectedMode, setPreselectedMode] = useState<ThreeMode | null>(null);
   const [mode, setMode] = useState<ListenMode>('free');
+  // Three-mode journeys (additive section, Hafs only): the active
+  // journey's mode, its current item for display, and one saved
+  // resume per mode (hidden per mode after resume/dismiss).
+  const [journeyMode, setJourneyMode] = useState<ThreeMode | null>(null);
+  const [journeyItem, setJourneyItem] = useState<JourneyPlayable | null>(null);
+  const [savedJourneys, setSavedJourneys] = useState<
+    Partial<Record<ThreeMode, ThreeModePosition>>
+  >(() => {
+    try {
+      return readAllThreeModeResumes();
+    } catch {
+      return {};
+    }
+  });
+  const [hiddenJourneyResumes, setHiddenJourneyResumes] = useState<ThreeMode[]>([]);
   const [savedWird, setSavedWird] = useState<ListenPosition | null>(() => {
     try {
       return readListeningWird();
@@ -132,10 +216,15 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
 
   const engineRef = useRef<ListenEngine | null>(null);
   const riwayaEngineRef = useRef<RiwayaEngine | null>(null);
+  const journeyEngineRef = useRef<JourneyEngine | null>(null);
   const currentAyahRef = useRef(1);
   const activeSurahRef = useRef(1);
   const activeReciterRef = useRef(reciterId);
   const activeRiwayaRef = useRef<string | null>(riwayaId);
+  // True while the active surah-file engine is a hadr engine
+  // (not a riwaya engine): the stop path needs this to refresh
+  // the hadr resume card instead of the riwaya one.
+  const activeHadrRef = useRef(false);
   const activeModeRef = useRef<ListenMode>('free');
 
   const setCurrent = (ayah: number) => {
@@ -176,10 +265,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const destroyEngine = () => {
-    // Both engines share the single audio element, but only one
-    // ever exists at a time (mode switch destroys first) — so
-    // destroying both here is safe and keeps the stop path one
-    // call for both modes.
+    // All three engines share the single audio element, but only
+    // one ever exists at a time (mode switch destroys first) — so
+    // destroying all here is safe and keeps the stop path one call
+    // for every mode.
     try {
       engineRef.current?.destroy();
     } catch {}
@@ -188,6 +277,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
       riwayaEngineRef.current?.destroy();
     } catch {}
     riwayaEngineRef.current = null;
+    try {
+      journeyEngineRef.current?.destroy();
+    } catch {}
+    journeyEngineRef.current = null;
   };
 
   // Start (or restart) playback. Takes explicit values so the resume
@@ -206,6 +299,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     destroyEngine();
     activeSurahRef.current = surahNo;
     activeReciterRef.current = reciter;
+    activeHadrRef.current = false;
     activeModeRef.current = listenMode;
     setSurah(surahNo);
     setReciterId(reciter);
@@ -216,6 +310,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
       surah: surahNo,
       startAyah,
       startTime,
+      playbackRate,
       mode: listenMode,
       resolveUrl: resolveListenUrl,
       onAyahChange: (s, a) => {
@@ -252,6 +347,30 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const stopPlayback = () => {
+    // Three-mode journey: stopping saves the live position
+    // (per-mode resume) via the engine's destroy path, so the
+    // next visit returns to exactly here. The Hafs and riwaya
+    // paths below are untouched.
+    if (journeyEngineRef.current) {
+      stopJourney();
+      return;
+    }
+    // Hadr mode: stopping saves the surah AND time-in-surah
+    // (hadr resume) via the engine's destroy path (its persist
+    // override writes the hadr key, not the riwaya map), so the
+    // next visit returns to exactly here.
+    if (riwayaEngineRef.current && activeHadrRef.current) {
+      destroyEngine();
+      try {
+        setSavedHadrResume(readHadrResume());
+      } catch {}
+      activeHadrRef.current = false;
+      setActive(false);
+      setPlaying(false);
+      setInterrupted(false);
+      setShowHadrResume(true);
+      return;
+    }
     // Riwaya mode: stopping saves the surah AND time-in-surah
     // (per-riwaya resume), so the next visit returns to exactly
     // here. The Hafs wird path below is untouched.
@@ -319,12 +438,14 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     destroyEngine();
     activeSurahRef.current = surahNo;
     activeRiwayaRef.current = riwaya;
+    activeHadrRef.current = false;
     setSurah(surahNo);
     setRiwayaId(riwaya);
     const engine = new RiwayaEngineClass({
       riwayaId: riwaya,
       surah: surahNo,
       startTime,
+      playbackRate,
       onEnded: () => {
         setPlaying(false);
       },
@@ -349,9 +470,193 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     }
   };
 
+  // Hadr mode: Juhani natural fast pace, surah-file playback
+  // through the SAME RiwayaEngine (edition/label/persist
+  // overrides — see hadr.ts), so it inherits the riwaya
+  // engine's Media Session + interruption behaviour exactly.
+  // playbackRate is forced to 1 here: hadr's pace is natural,
+  // and an electronic rate left over from Hafs listening must
+  // never stack on top of it. No ayah chaining, no read-along:
+  // one file plays to its end and stops. Resume is supported
+  // (hadr resume card), like the riwaya modes.
+  const startHadrPlayback = async (
+    surahNo: number,
+    startTime = 0,
+  ) => {
+    setEngineError(null);
+    setInterrupted(false);
+    destroyEngine();
+    activeSurahRef.current = surahNo;
+    activeRiwayaRef.current = null;
+    activeHadrRef.current = true;
+    setSurah(surahNo);
+    setHadrOn(true);
+    const engine = new RiwayaEngineClass({
+      riwayaId: 'hadr',
+      edition: HADR_EDITION,
+      label: HADR_NAME,
+      surah: surahNo,
+      startTime,
+      playbackRate: 1,
+      onPersistPosition: (pos) => {
+        try {
+          writeHadrResume({ surah: pos.surah, time: pos.time });
+        } catch {}
+      },
+      onEnded: () => {
+        setPlaying(false);
+      },
+      onError: (message) => {
+        setEngineError(message);
+        setPlaying(false);
+      },
+      onInterrupted: () => {
+        // Same rule as every other engine: show the resume
+        // button; do NOT auto-play.
+        setInterrupted(true);
+        setPlaying(false);
+      },
+    });
+    riwayaEngineRef.current = engine;
+    setActive(true);
+    try {
+      await engine.play();
+      setPlaying(true);
+    } catch {
+      setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      setPlaying(false);
+    }
+  };
+
+  // Three-mode journey: continuous listening from the selected
+  // surah (and selected reciter as the rotation's start) to the
+  // end of surah 114. Takes explicit values so a resume card can
+  // start at the saved position. Always called from a tap (user
+  // gesture), which iOS requires before audio may play. In
+  // tadabbur mode the journey's interstitials come from the
+  // Complex's الميسر recording (see threeModeListen); the mode
+  // button is disabled while the clips are unconfigured, so this
+  // never starts an interstitial-less tadabbur journey by mistake.
+  const startJourney = async (
+    journey: ThreeMode,
+    fromSaved?: ThreeModePosition,
+  ) => {
+    setEngineError(null);
+    setInterrupted(false);
+    destroyEngine();
+    activeHadrRef.current = false;
+    const startSurah = fromSaved ? fromSaved.startSurah : surah;
+    const startReciter = fromSaved ? fromSaved.startReciterId : reciterId;
+    setJourneyMode(journey);
+    setJourneyItem(null);
+    setPreselectedMode(null);
+    setSurah(startSurah);
+    setReciterId(startReciter);
+    const engine = new JourneyEngineClass({
+      mode: journey,
+      startSurah,
+      startReciterId: startReciter,
+      startAyah: 1,
+      playbackRate,
+      startItem: fromSaved
+        ? { kind: fromSaved.kind, surah: fromSaved.surah, ayah: fromSaved.ayah }
+        : undefined,
+      startInterstitial: fromSaved?.interstitial,
+      startTime: fromSaved?.time ?? 0,
+      onItemChange: (item) => {
+        setJourneyItem(item);
+        if (item.kind === 'ayah') {
+          // Read-along follows ayah items (Hafs text matches the
+          // Hafs reciters); the surah text effect loads the new
+          // surah, and the playing ayah highlights as usual.
+          setSurah(item.surah);
+          setCurrent(item.ayah);
+          scrollToAyah(item.ayah);
+        } else {
+          // Interstitial: no ayah highlight (nothing matches -1).
+          setCurrent(-1);
+        }
+      },
+      onEnded: () => {
+        // A journey's onEnded means TRUE completion (surah 114
+        // + its quarter's interstitial): a finished journey has
+        // no resume to offer, so its saved position is cleared.
+        try {
+          clearThreeModeResume(journey);
+        } catch {}
+        try {
+          setSavedJourneys(readAllThreeModeResumes());
+        } catch {}
+        setPlaying(false);
+      },
+      onError: (message) => {
+        setEngineError(message);
+        setPlaying(false);
+      },
+      onInterrupted: () => {
+        // Same rule as every other engine: show the resume
+        // button; do NOT auto-play.
+        setInterrupted(true);
+        setPlaying(false);
+      },
+    });
+    journeyEngineRef.current = engine;
+    setActive(true);
+    try {
+      await engine.play();
+      setPlaying(true);
+    } catch {
+      setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      setPlaying(false);
+    }
+  };
+
+  const stopJourney = () => {
+    // JourneyEngine.destroy() persists the live position (with
+    // time), so the next visit resumes from precisely here.
+    destroyEngine();
+    try {
+      setSavedJourneys(readAllThreeModeResumes());
+    } catch {}
+    setJourneyMode(null);
+    setJourneyItem(null);
+    setActive(false);
+    setPlaying(false);
+    setInterrupted(false);
+  };
+
+  const resumeJourneySaved = (journey: ThreeMode) => {
+    const saved = savedJourneys[journey];
+    if (!saved) return;
+    setHiddenJourneyResumes((prev) => (prev.includes(journey) ? prev : [...prev, journey]));
+    void startJourney(journey, saved);
+  };
+
+  const dismissJourneyResume = (journey: ThreeMode) => {
+    try {
+      clearThreeModeResume(journey);
+    } catch {}
+    try {
+      setSavedJourneys(readAllThreeModeResumes());
+    } catch {}
+    setHiddenJourneyResumes((prev) => (prev.includes(journey) ? prev : [...prev, journey]));
+  };
+
   // Redirect B: the interruption resume button. A tap only — the
   // page never calls this on its own after an interruption.
   const resumeAfterInterruption = async () => {
+    const jEngine = journeyEngineRef.current;
+    if (jEngine) {
+      setEngineError(null);
+      try {
+        await jEngine.play();
+        setInterrupted(false);
+        setPlaying(true);
+      } catch {
+        setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      }
+      return;
+    }
     const rEngine = riwayaEngineRef.current;
     if (rEngine) {
       setEngineError(null);
@@ -377,6 +682,23 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const togglePlayPause = async () => {
+    const jEngine = journeyEngineRef.current;
+    if (jEngine) {
+      setEngineError(null);
+      try {
+        if (playing) {
+          jEngine.pause();
+          setPlaying(false);
+        } else {
+          await jEngine.play();
+          setInterrupted(false);
+          setPlaying(true);
+        }
+      } catch {
+        setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+      }
+      return;
+    }
     const rEngine = riwayaEngineRef.current;
     if (rEngine) {
       setEngineError(null);
@@ -431,6 +753,92 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     } catch {}
     setShowRiwayatResume(true);
   };
+
+  // The three pace-mode selectors. Exactly one of Hafs / riwaya /
+  // hadr is selected at a time; selecting one clears the others'
+  // selection flags (the persisted riwaya id itself is left
+  // alone when hadr is picked, so reselecting it later still
+  // finds its own resume — only the hadr flag outranks it).
+  const selectHafs = () => {
+    setHadrOn(false);
+    setHadrSelected(false);
+    changeRiwaya(null);
+  };
+
+  const selectRiwaya = (id: string) => {
+    setHadrOn(false);
+    setHadrSelected(false);
+    changeRiwaya(id);
+  };
+
+  const selectHadr = () => {
+    setHadrOn(true);
+    setHadrSelected(true);
+    // State only (not changeRiwaya(null), which would erase the
+    // persisted riwaya id): the riwaya resume card hides because
+    // riwayaId is null, and the hadr flag outranks the stored id
+    // on the next load.
+    setRiwayaId(null);
+    try {
+      setSavedHadrResume(readHadrResume());
+    } catch {}
+    setShowHadrResume(true);
+  };
+
+  const changeRate = (rate: number) => {
+    if (!PLAYBACK_RATES.includes(rate as (typeof PLAYBACK_RATES)[number])) return;
+    setPlaybackRate(rate);
+    try {
+      localStorage.setItem('quran-playback-rate', String(rate));
+    } catch {}
+  };
+
+  const resumeHadrSaved = () => {
+    if (!savedHadrResume) return;
+    setShowHadrResume(false);
+    void startHadrPlayback(savedHadrResume.surah, savedHadrResume.time ?? 0);
+  };
+
+  const dismissHadrResume = () => {
+    try {
+      clearHadrResume();
+    } catch {}
+    setSavedHadrResume(null);
+    setShowHadrResume(false);
+  };
+
+  // Home khatma card preselection (one-time flag, same pattern
+  // as 'quran-open-fullscreen'): a home card sets
+  // 'quran-listen-preselect' to 'varied' | 'tadabbur' and
+  // navigates here. Consume it once: land in Hafs mode (a khatma
+  // is a Hafs journey), highlight that mode's button, and scroll
+  // the journey section into view. Never auto-plays — the user
+  // still taps the mode button (or its resume card) to start.
+  // A persisted riwaya/hadr first render may flash before this
+  // effect switches to Hafs; that single frame is accepted
+  // rather than reading sessionStorage in a state initializer
+  // (which would run on every render path, not just mount).
+  useEffect(() => {
+    let flag: string | null = null;
+    try {
+      flag = sessionStorage.getItem('quran-listen-preselect');
+    } catch {}
+    if (flag !== 'varied' && flag !== 'tadabbur') return;
+    try {
+      sessionStorage.removeItem('quran-listen-preselect');
+    } catch {}
+    setHadrOn(false);
+    setHadrSelected(false);
+    changeRiwaya(null);
+    setPreselectedMode(flag);
+    const timer = setTimeout(() => {
+      try {
+        document.getElementById('three-mode-section')?.scrollIntoView({ block: 'start' });
+      } catch {}
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resumeRiwayatSaved = () => {
     if (!savedRiwayatResume) return;
@@ -513,7 +921,9 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     const loadText = async () => {
       // Riwaya mode is listening-only: no Hafs text is shown
       // under a non-Hafs voice (the words differ between readings).
-      if (riwayaId !== null) {
+      // Hadr is Hafs-voiced but surah-file: no ayah steps, so no
+      // read-along either (the text block hides, same as riwaya).
+      if (riwayaId !== null || hadrOn) {
         setAyahs(null);
         setTextLoading(false);
         setTextError(null);
@@ -556,7 +966,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     return () => {
       cancelled = true;
     };
-  }, [surah, riwayaId]);
+  }, [surah, riwayaId, hadrOn]);
 
   // Offline status for the selected surah + reciter.
   useEffect(() => {
@@ -664,6 +1074,32 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           </div>
         )}
 
+        {/* Hadr resume card, when a hadr position is saved.
+            Mirrors the riwaya card; shown only while hadr is the
+            selected pace mode. */}
+        {hadrOn && savedHadrResume && showHadrResume && (
+          <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-5 mb-4">
+            <p className="font-bold text-accent-800">
+              استئناف — {HADR_NAME}: سورة {surahName(savedHadrResume.surah)}
+            </p>
+            <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بوضع الحدر.</p>
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={resumeHadrSaved}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+              >
+                استئناف
+              </button>
+              <button
+                onClick={dismissHadrResume}
+                className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+              >
+                ابدأ من الأول
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Pickers BEFORE start; locked while an engine is active */}
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <label className="block font-bold text-accent-800 mb-2" htmlFor="listen-surah">
@@ -689,47 +1125,32 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             ))}
           </select>
 
-          {/* Riwaya picker (v1, listening-only). Hafs is the first
-              choice and the default; the five riwayat play a whole
-              surah file each, with no ayah-by-ayah chaining and no
-              read-along text. Locked while any engine is active. */}
-          <p className="font-bold text-accent-800 mt-5 mb-2">الرواية</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              disabled={locked}
-              onClick={() => changeRiwaya(null)}
-              className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
-                riwayaId === null
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white border border-emerald-200 text-accent-800'
-              }`}
-            >
-              حفص (القراء الثمانية)
-            </button>
-            {RIWAYAT.map((r) => (
-              <button
-                key={r.id}
-                disabled={locked}
-                onClick={() => changeRiwaya(r.id)}
-                className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
-                  riwayaId === r.id
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-emerald-200 text-accent-800'
-                }`}
-              >
-                {r.name}
-              </button>
-            ))}
-          </div>
-          {riwayaId !== null && (
-            <p className="text-sm text-accent-600 mt-3">
-              وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة.
-            </p>
-          )}
+          {/* Picker order (restructured): surah, then Group 1 —
+              حفص FIRST, then Group 2 — الروايات, then the pace
+              area (electronic speed + hadr), then نوع الاستماع,
+              then ابدأ الاستماع. Locked while any engine is
+              active. Selecting a riwaya or hadr hides the
+              reciter group; the speed picker stays visible for
+              riwaya (and is disabled, not hidden, for hadr). */}
+          <p className="font-bold text-accent-800 mt-5 mb-2">حفص</p>
+          <button
+            disabled={locked}
+            onClick={selectHafs}
+            className={`w-full p-4 rounded-xl font-bold text-right disabled:opacity-50 ${
+              riwayaId === null && !hadrOn
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white border border-emerald-200 text-accent-800'
+            }`}
+          >
+            حفص — القراء الثمانية
+            <span className={`block text-sm font-normal mt-1 ${riwayaId === null && !hadrOn ? 'text-emerald-100' : 'text-accent-600'}`}>
+              تلاوة بالآيات مع تتبع النص.
+            </span>
+          </button>
 
-          {riwayaId === null && (
+          {riwayaId === null && !hadrOn && (
             <>
-          <p className="font-bold text-accent-800 mt-5 mb-2">اختر القارئ</p>
+          <p className="font-bold text-accent-800 mt-5 mb-2">القراء للاختيار بينهم</p>
           <div className="flex flex-wrap gap-2">
             {RECITERS.map((r) => (
               <button
@@ -749,7 +1170,85 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             </>
           )}
 
-          {riwayaId === null && (
+          {/* Group 2 — الروايات, as clear rows (not wrapping
+              chips): each row shows riwaya + narrator, and the
+              selected row is unmistakable (emerald + check). */}
+          <p className="font-bold text-accent-800 mt-5 mb-2">الروايات</p>
+          <div className="grid gap-2">
+            {RIWAYAT.map((r) => (
+              <button
+                key={r.id}
+                disabled={locked}
+                onClick={() => selectRiwaya(r.id)}
+                className={`w-full p-3.5 rounded-xl font-bold text-right disabled:opacity-50 flex items-center justify-between gap-2 ${
+                  riwayaId === r.id
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-white border border-emerald-200 text-accent-800'
+                }`}
+              >
+                {r.name}
+                {riwayaId === r.id && <Check className="w-5 h-5 shrink-0" />}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-accent-600 mt-3">
+            وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة.
+          </p>
+
+          {/* Pace area: electronic speed chips (persisted) +
+              the hadr card. The chips apply to the Hafs, riwaya,
+              and journey engines; hadr disables them (its pace is
+              natural, never electronic) and always plays at 1x.
+              Read-along highlight stays on at every speed: it
+              follows ayah files via 'ended' events, not a clock,
+              so speed cannot desync it (no timers in the ayah
+              advance path — verified by grep, see EVIDENCE.md). */}
+          <p className="font-bold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
+          <div className="flex flex-wrap gap-2">
+            {PLAYBACK_RATES.map((rate) => (
+              <button
+                key={rate}
+                disabled={locked || hadrOn}
+                onClick={() => changeRate(rate)}
+                className={`px-4 py-2.5 rounded-xl font-bold disabled:opacity-50 ${
+                  playbackRate === rate
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-white border border-emerald-200 text-accent-800'
+                }`}
+              >
+                {PLAYBACK_RATE_LABELS[rate]}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-accent-600 mt-2">
+            سرعة إلكترونية — اختيارك يُحفظ لمراتك القادمة.
+          </p>
+          {hadrOn && (
+            <p className="text-sm text-accent-600 mt-1">
+              السرعة الإلكترونية لا تنطبق على وضع الحدر — سرعته طبيعية من التسجيل نفسه.
+            </p>
+          )}
+
+          {/* Hadr: natural fast pace, surah-file playback (no
+              read-along, resume supported). DISTINCT from the
+              electronic chips above — never label a playbackRate
+              as hadr. */}
+          <button
+            disabled={locked}
+            onClick={selectHadr}
+            className={`w-full p-4 rounded-xl font-bold text-right mt-5 disabled:opacity-50 ${
+              hadrOn
+                ? 'bg-emerald-600 text-white'
+                : 'bg-white border border-emerald-200 text-accent-800'
+            }`}
+          >
+            {HADR_FULL_LABEL}
+            <span className={`block text-sm font-normal mt-1 ${hadrOn ? 'text-emerald-100' : 'text-accent-600'}`}>
+              تلاوة سريعة طبيعية بصوت عبد الله عواد الجهني — ملف السورة كاملًا، دون تتبع للآيات، مع استئناف من حيث توقفت.
+            </span>
+          </button>
+
+          {riwayaId === null && !hadrOn && (
             <>
           <p className="font-bold text-accent-800 mt-5 mb-2">نوع الاستماع</p>
           <div className="grid grid-cols-2 gap-3">
@@ -786,18 +1285,22 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           )}
           {locked && (
             <p className="text-sm text-accent-600 mt-3">
-              {riwayaId !== null
-                ? 'السورة والرواية مقفلتان أثناء التشغيل — أوقف التشغيل أولا لتغييرهما.'
-                : 'السورة والقارئ ونوع الاستماع مقفلة أثناء التشغيل — أوقف التشغيل أولا لتغييرها.'}
+              {hadrOn
+                ? 'السورة ووضع الحدر مقفلان أثناء التشغيل — أوقف التشغيل أولا لتغييرهما.'
+                : riwayaId !== null
+                  ? 'السورة والرواية مقفلتان أثناء التشغيل — أوقف التشغيل أولا لتغييرهما.'
+                  : 'السورة والقارئ والسرعة ونوع الاستماع مقفلة أثناء التشغيل — أوقف التشغيل أولا لتغييرها.'}
             </p>
           )}
 
           {!active && (
             <button
               onClick={() =>
-                riwayaId !== null
-                  ? void startRiwayaPlayback(surah, riwayaId, 0)
-                  : void startPlayback(surah, reciterId, mode, 1)
+                hadrOn
+                  ? void startHadrPlayback(surah, 0)
+                  : riwayaId !== null
+                    ? void startRiwayaPlayback(surah, riwayaId, 0)
+                    : void startPlayback(surah, reciterId, mode, 1)
               }
               className="mt-5 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
             >
@@ -807,14 +1310,113 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           )}
         </div>
 
+        {/* أنماط الاستماع: additive journey section, Hafs only.
+            The single-surah player above is untouched; these three
+            buttons start continuous journeys from the selected
+            surah (and selected reciter as the rotation's start)
+            to the end of surah 114, each with its own resume.
+            Riwaya AND hadr modes hide this section: journeys are
+            Hafs reciter journeys, and the pickers above already
+            cover non-Hafs listening. id="three-mode-section" is
+            the home khatma cards' scroll target (preselect). */}
+        {riwayaId === null && !hadrOn && (
+        <div id="three-mode-section" className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
+          <p className="font-bold text-accent-800">أنماط الاستماع</p>
+          <p className="text-sm text-accent-600 mt-1">
+            رحلة متواصلة من سورة {surahName(surah)} بصوت{' '}
+            {RECITERS.find((r) => r.id === reciterId)?.name || ''} حتى نهاية المصحف — التوقف
+            يحفظ موضعك في كل نمط على حدة.
+          </p>
+          <div className="grid gap-3 mt-4">
+            {THREE_MODES.map((m) => {
+              const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
+              return (
+                <div key={m.id}>
+                  <button
+                    disabled={disabled}
+                    onClick={() => void startJourney(m.id)}
+                    className={`w-full p-4 rounded-xl font-bold text-right disabled:opacity-50 ${
+                      journeyMode === m.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white border border-emerald-200 text-accent-800'
+                    }${preselectedMode === m.id && journeyMode !== m.id ? ' ring-2 ring-emerald-500' : ''}`}
+                  >
+                    {m.name}
+                    <span className={`block text-sm font-normal mt-1 ${journeyMode === m.id ? 'text-emerald-100' : 'text-accent-600'}`}>
+                      {m.description}
+                    </span>
+                  </button>
+                  {preselectedMode === m.id && !locked && (
+                    <p className="text-xs text-emerald-700 font-bold mt-2">
+                      مختارة من الرئيسية — اضغط للبدء أو استأنف من البطاقة المحفوظة.
+                    </p>
+                  )}
+                  {m.id === 'tadabbur' && (
+                    <p className="text-xs text-accent-600 mt-2">
+                      {tafsirConfigured()
+                        ? TAFSIR_ATTRIBUTION
+                        : 'مقاطع التفسير لم تُرفع بعد — سيُتاح هذا النمط بعد رفع المقاطع.'}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Per-mode resume cards (tap-only, like every resume here). */}
+          {THREE_MODES.map((m) => {
+            const saved = savedJourneys[m.id];
+            if (!saved || hiddenJourneyResumes.includes(m.id)) return null;
+            return (
+              <div key={`resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-4 mt-4">
+                <p className="font-bold text-accent-800">
+                  استئناف — {m.name}:{' '}
+                  {saved.kind === 'tafsir'
+                    ? `تدبّر، تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
+                    : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
+                </p>
+                <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بهذا النمط.</p>
+                <div className="flex gap-3 mt-3">
+                  <button
+                    onClick={() => resumeJourneySaved(m.id)}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                  >
+                    استئناف
+                  </button>
+                  <button
+                    onClick={() => dismissJourneyResume(m.id)}
+                    className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                  >
+                    ابدأ من الأول
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        )}
+
         {/* Playback view */}
         {active && (
           <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
             <p className="font-bold text-accent-800">
-              {riwayaId !== null
-                ? `سورة ${surahName(surah)} — ${RIWAYAT.find((r) => r.id === riwayaId)?.name || ''}`
-                : `سورة ${surahName(surah)} — آية ${currentAyah} من ${count}`}
+              {journeyMode !== null
+                ? journeyItem !== null
+                  ? journeyItem.kind === 'tafsir'
+                    ? `تدبّر — تفسير سورة ${surahName(journeyItem.surah)} آية ${journeyItem.ayah} — ${threeModeName(journeyMode)}`
+                    : `${threeModeName(journeyMode)} — سورة ${surahName(journeyItem.surah)} — آية ${journeyItem.ayah} من ${surahCount(journeyItem.surah)}`
+                  : `${threeModeName(journeyMode)} — سورة ${surahName(surah)}`
+                : hadrOn
+                  ? `سورة ${surahName(surah)} — ${HADR_NAME}`
+                  : riwayaId !== null
+                    ? `سورة ${surahName(surah)} — ${RIWAYAT.find((r) => r.id === riwayaId)?.name || ''}`
+                    : `سورة ${surahName(surah)} — آية ${currentAyah} من ${count}`}
             </p>
+            {/* Grant attribution, visible WHILE a tafsir clip plays
+                (the section line alone would vanish once playback
+                starts). */}
+            {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
+              <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
+            )}
             {engineError && <p className="text-sm text-red-600 font-bold mt-2">{engineError}</p>}
             {/* Redirect B: interruption resume — prominent, tap-only */}
             {interrupted && (
@@ -837,9 +1439,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
                 {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                 {playing ? 'إيقاف مؤقت' : 'تشغيل'}
               </button>
-            {/* Ayah-step buttons exist only in Hafs mode: a riwaya
-                surah file has no ayah steps to move between. */}
-            {riwayaId === null && (
+            {/* Ayah-step buttons exist only in Hafs single-surah
+                mode: a riwaya or hadr surah file has no ayah steps,
+                and a journey advances automatically (no seeking in v1). */}
+            {riwayaId === null && !hadrOn && journeyMode === null && (
               <>
               <button
                 onClick={() => void engineRef.current?.prev()}
@@ -856,14 +1459,29 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               </>
             )}
               <button
-                onClick={() =>
-                  riwayaId !== null
-                    ? void riwayaEngineRef.current?.restart()
-                    : void engineRef.current?.restart()
-                }
+                onClick={() => {
+                  if (journeyEngineRef.current) {
+                    // Journey restart: refresh the page's playing
+                    // state from the engine (restart while paused
+                    // stays paused).
+                    void (async () => {
+                      try {
+                        await journeyEngineRef.current?.restart();
+                        setPlaying(journeyEngineRef.current?.playing ?? false);
+                      } catch {
+                        setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+                      }
+                    })();
+                  } else if (riwayaEngineRef.current) {
+                    // Covers riwaya AND hadr (both use this ref).
+                    void riwayaEngineRef.current?.restart();
+                  } else {
+                    void engineRef.current?.restart();
+                  }
+                }}
                 className="px-4 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center gap-2"
               >
-                <RotateCcw className="w-5 h-5" /> من أول السورة
+                <RotateCcw className="w-5 h-5" /> {journeyMode !== null ? 'من أول الرحلة' : 'من أول السورة'}
               </button>
               <button
                 onClick={stopPlayback}
@@ -886,8 +1504,9 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
 
         {/* Read-along text — Hafs only: riwaya mode is
             listening-only (the Hafs text does not match a non-Hafs
-            voice), so this block hides under a riwaya. */}
-        {riwayaId === null && (
+            voice), and hadr is surah-file (no ayah steps), so this
+            block hides under either. */}
+        {riwayaId === null && !hadrOn && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 mb-3">سورة {surahName(surah)}</p>
           {textLoading && <p className="text-accent-600">جارٍ تحميل نص السورة…</p>}
@@ -899,7 +1518,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
                   key={row.id}
                   id={`listen-ayah-${row.ayah_no}`}
                   onClick={() => {
-                    if (active) void engineRef.current?.seekTo(row.ayah_no);
+                    // Hafs single-surah only: journeys advance
+                    // automatically (no intra-journey seeking in
+                    // v1), and riwaya files have no ayah steps.
+                    if (active && engineRef.current) void engineRef.current.seekTo(row.ayah_no);
                   }}
                   className={`w-full text-right p-3 rounded-xl border leading-loose ${
                     active && row.ayah_no === currentAyah
@@ -920,8 +1542,8 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             highlight and resume above never wait on any download
             state; deleting this block leaves the page fully working) */}
         {/* Offline section: this surah + reciter only, never whole-Quran.
-            Hafs only in v1 — riwaya mode has no offline downloads. */}
-        {riwayaId === null && (
+            Hafs only in v1 — riwaya and hadr modes have no offline downloads. */}
+        {riwayaId === null && !hadrOn && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800">الاستماع دون اتصال</p>
           <p className="text-sm text-accent-600 mt-1">
