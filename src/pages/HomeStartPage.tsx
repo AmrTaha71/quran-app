@@ -135,7 +135,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           <img src="/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
           <p className="text-sm text-accent-600 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
@@ -211,8 +211,9 @@ export default function HomeStartPage({ session, onNavigate }: {
               } catch {}
               onNavigate('listen');
             }}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
           >
+            <Headphones className="w-5 h-5" />
             افتح صفحة الاستماع
           </button>
         </div>
@@ -232,8 +233,9 @@ export default function HomeStartPage({ session, onNavigate }: {
               } catch {}
               onNavigate('listen');
             }}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
           >
+            <Headphones className="w-5 h-5" />
             افتح صفحة الاستماع
           </button>
         </div>
@@ -256,8 +258,9 @@ export default function HomeStartPage({ session, onNavigate }: {
                 try { localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: linkOfDay.surah, ayah: linkOfDay.ayah })); } catch { /* ignore */ }
                 onNavigate('mushaf');
               }}
-              className="mt-3 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl"
+              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
             >
+              <BookOpen className="w-5 h-5" />
               افتح الآية وسمّعها
             </button>
           </div>
@@ -268,7 +271,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             (Amr 17:48); لوحتي + الإعدادات stay a small 2-col row. */}
         <button
           onClick={() => onNavigate('follow')}
-          className="w-full py-4 mb-3 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30"
+          className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Mic className="w-6 h-6 text-white" />
@@ -277,14 +280,14 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
         <button
           onClick={() => onNavigate('test')}
-          className="w-full py-4 mb-3 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30"
+          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Headphones className="w-6 h-6 text-white" />
           </span>
           سمّع لنفسك
         </button>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <button
             onClick={() => onNavigate('app')}
             className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
