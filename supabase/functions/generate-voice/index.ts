@@ -70,12 +70,54 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
+    // 1. AUTH FIRST (lockdown 2026-10-29): only a real logged-in user
+    // session may generate. The project's public anon key is NOT
+    // enough: auth.getUser() with the anon key returns no user, so
+    // it is rejected here. Never accept a token that is not a real
+    // user session.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "تسجيل الدخول مطلوب لتوليد الصوت" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const authToken = authHeader.slice("Bearer ".length).trim();
+    const authUrl = Deno.env.get("SUPABASE_URL");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!authToken || !authUrl || !anonKey) {
+      // Fail closed: without a token or the env to verify it, nobody
+      // generates.
+      return new Response(
+        JSON.stringify({ error: "تسجيل الدخول مطلوب لتوليد الصوت" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const authClient = createClient(authUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${authToken}` } },
+    });
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "تسجيل الدخول مطلوب لتوليد الصوت" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const userId = user.id;
+
     const { text, voice, speed: reqSpeed } = await req.json();
 
     if (!text || typeof text !== "string") {
       return new Response(
         JSON.stringify({ error: "النص مطلوب" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // 2. TEXT CAP: one call may not carry more than 2000 characters.
+    if (text.length > 2000) {
+      return new Response(
+        JSON.stringify({ error: "النص أطول من الحد المسموح (2000 حرف)" }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     // Optional caller speed (0.25-4.0, OpenAI's range). Invalid or
@@ -100,6 +142,51 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // Service-role client (storage upload + usage log + rate-limit
+    // counts). Created here, before generation, so the rate-limit
+    // checks below can use it; reused for the upload afterwards.
+    const supabaseClient = createClient(supabaseUrl!, serviceRoleKey!);
+
+    // 3. PER-USER RATE LIMITS, checked before any generation spend:
+    // 30 calls/minute and 500 calls/day per authenticated user.
+    // NOTE (check-then-log race): rows are logged only after a
+    // generation completes, so concurrent bursts may slightly
+    // overshoot the caps before their rows land. The day cap bounds
+    // total exposure. Accepted: no reservation system.
+    const nowMs = Date.now();
+    const minuteAgo = new Date(nowMs - 60_000).toISOString();
+    const dayAgo = new Date(nowMs - 24 * 60 * 60_000).toISOString();
+    const { count: minuteCount, error: minuteError } = await supabaseClient
+      .from("ai_usage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("function_name", "generate-voice")
+      .eq("user_id", userId)
+      .gt("created_at", minuteAgo);
+    if (minuteError) {
+      throw new Error("تعذر التحقق من حد الاستخدام");
+    }
+    if ((minuteCount ?? 0) >= 30) {
+      return new Response(
+        JSON.stringify({ error: "تم تجاوز حد توليد الصوت المسموح في الدقيقة — حاول بعد قليل" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { count: dayCount, error: dayError } = await supabaseClient
+      .from("ai_usage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("function_name", "generate-voice")
+      .eq("user_id", userId)
+      .gt("created_at", dayAgo);
+    if (dayError) {
+      throw new Error("تعذر التحقق من حد الاستخدام");
+    }
+    if ((dayCount ?? 0) >= 500) {
+      return new Response(
+        JSON.stringify({ error: "تم تجاوز حد توليد الصوت المسموح لليوم" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     let audioBuffer: ArrayBuffer;
     let ttsModel = "azure";
 
@@ -114,8 +201,6 @@ Deno.serve(async (req: Request) => {
     const audioBlob = new Blob([audioBuffer], { type: "audio/mp3" });
     const fileName = `synthetic-${Date.now()}.mp3`;
 
-    const supabaseClient = createClient(supabaseUrl!, serviceRoleKey!);
-
     const { error: uploadError } = await supabaseClient.storage
       .from("rana-audio")
       .upload(fileName, audioBlob, { contentType: "audio/mp3" });
@@ -128,19 +213,26 @@ Deno.serve(async (req: Request) => {
       .from("rana-audio")
       .getPublicUrl(fileName);
 
-    // Best-effort usage log for the Admin balance monitor (OpenAI path
-    // only; Azure billing is separate and not tracked here).
+    // 4. Best-effort usage log for the Admin balance monitor, BOTH
+    // paths (previously OpenAI only; Azure billing is separate, so
+    // its cost is logged as null). Wrapped so logging can never
+    // break the response.
     // gpt-4o-mini-tts ≈ $0.015/min at ~1000 chars/min; tts-1-hd $0.030/1k chars.
-    if (!azureKey) {
-      try {
-        const cost = ttsModel === "gpt-4o-mini-tts"
+    try {
+      const cost = azureKey
+        ? null
+        : ttsModel === "gpt-4o-mini-tts"
           ? (text.length / 1000) * 0.015
           : (text.length / 1000) * 0.030;
-        await supabaseClient.from("ai_usage_events").insert({
-          function_name: "generate-voice", model: ttsModel, cost_usd: cost,
-        });
-      } catch { /* ignore logging errors */ }
-    }
+      await supabaseClient.from("ai_usage_events").insert({
+        function_name: "generate-voice",
+        model: ttsModel,
+        cost_usd: cost,
+        user_id: userId,
+        provider: azureKey ? "azure" : "openai",
+        chars: text.length,
+      });
+    } catch { /* ignore logging errors */ }
 
     return new Response(
       JSON.stringify({ audioUrl: urlData.publicUrl, voice }),

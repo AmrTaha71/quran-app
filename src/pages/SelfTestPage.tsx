@@ -1237,9 +1237,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const requestCorrectionAudio = async (words: string[]): Promise<string | null> => {
     if (words.length === 0) return null;
     try {
+      // LOCKDOWN 2026-10-29: generate-voice requires a logged-in user
+      // JWT (the public anon key is rejected by the function). A
+      // missing session degrades to the existing browser-TTS race
+      // via the null return below, same as any other fetch failure.
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
         body: JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
       });
       const data = await res.json().catch(() => ({}));

@@ -88,7 +88,7 @@ function resolveReciter(): Reciter {
   return RECITERS.find((r) => r.id === DEFAULT_RECITER_ID) ?? RECITERS[0];
 }
 
-// Segments one repetition of a dhikr plays, for the male voice.
+// Segments one repetition of a dhikr plays.
 // Quranic items play REAL recitation via the shared reciters.ts
 // builders: Kursi is one ayah file (2:255 = global 262, verified
 // against the ayah text); the three surahs chain 15 ayah files per
@@ -96,11 +96,15 @@ function resolveReciter(): Reciter {
 // cdn.islamic.network audio-surah returns 403 for ar.minshawi
 // (verified 2026-10-29), the default reciter — ayah chaining works
 // for all 8 reciters through the one verified builder.
-// The female voice has no reciter in the app's set, so Quranic items
-// keep their synthetic clips there. Non-Quranic items are single
-// synthetic clips in both voices.
+// RECITATION FOR BOTH VOICES (2026-10-29 review decision): Quranic
+// items play the real recitation in BOTH voices — a synthetic TTS
+// voice cannot guarantee tajwid, and a recitation recording does
+// not depend on the listener's gender. The reciter is the user's
+// listen preference, so the male/female toggle affects only the
+// supplications. Non-Quranic items are single synthetic clips in
+// both voices.
 function segmentsFor(clip: AdhkarClip, voice: AdhkarVoice, reciter: Reciter): string[] {
-  if (voice !== 'male' || !clip.quranic) return [adhkarClipUrl(clip, voice)];
+  if (!clip.quranic) return [adhkarClipUrl(clip, voice)];
   if (clip.id === 'kursi') return [reciter.audioUrl(2, 255)];
   const segs: string[] = [];
   const surahs: Array<[number, number]> = [[112, 4], [113, 5], [114, 6]];
@@ -111,7 +115,7 @@ function segmentsFor(clip: AdhkarClip, voice: AdhkarVoice, reciter: Reciter): st
 }
 
 function isRecitation(clip: AdhkarClip, voice: AdhkarVoice): boolean {
-  return voice === 'male' && !!clip.quranic;
+  return !!clip.quranic;
 }
 
 export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => void }) {

@@ -414,9 +414,12 @@ export default function LinkModal({
     setPhase('generating_voice');
     setError('');
     try {
+      // LOCKDOWN 2026-10-29: generate-voice requires a logged-in user
+      // JWT (the public anon key is rejected by the function).
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
         body: JSON.stringify({ text: voiceText, voice: voiceType }),
       });
       const data = await res.json();
