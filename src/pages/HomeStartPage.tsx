@@ -202,7 +202,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Headphones className="w-5 h-5 text-emerald-600" />{khatmaVaried?.name ?? 'ختمة منوّعة'}
           </p>
           <p className="text-sm text-accent-600 mt-1">
-            {khatmaVaried?.description ?? 'المصحف كاملًا، كل سورة بقارئ مختلف من القراء الثمانية.'}
+            {khatmaVaried?.description ?? 'المصحف كاملًا، كل ربع بقارئ مختلف من القراء الثمانية.'}
           </p>
           <button
             onClick={() => {

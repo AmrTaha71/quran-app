@@ -4,8 +4,9 @@
 // titles until Amr picks/adjusts them):
 //   (1) بصوت واحد — one voice: the chosen reciter for every surah.
 //   (2) ختمة منوّعة — varied khatma: the full Quran from the start
-//       point, each surah by a different one of the existing 8
-//       reciters, in the fixed rotation below.
+//       point, each QUARTER by a different one of the existing 8
+//       reciters, in the fixed rotation below (owner rule 22:01
+//       EEST 2026-10-29: quarters, not surahs).
 //   (3) ختمة وتدبّر — varied khatma + one الميسر interstitial PER
 //       QUARTER (after each completed quarter, including the last).
 //
@@ -22,13 +23,21 @@
 //
 // ROTATION RULE (deterministic, documented — no hidden state):
 // the fixed reciter order is RECITERS order (المنشاوي first). For
-// a journey starting at (startSurah, startReciterIndex r0), surah
-// S (S >= startSurah) is voiced by RECITERS[(r0 + (S - startSurah))
-// % 8]. So a journey starting at surah 1 with المنشاوي voices
-// surah n with RECITERS[(n - 1) % 8]; starting at surah 2 with
-// المنشاوي voices surah 2 with المنشاوي, surah 3 with محمد أيوب,
-// and so on. Mode (1) ignores the rotation: every surah uses
-// RECITERS[r0].
+// a journey starting at (startSurah, startReciterIndex r0), quarter
+// Q is voiced by RECITERS[(r0 + (Q - startQuarter)) % 8], where
+// startQuarter is the quarter containing the journey's first ayah
+// (journeys always start at ayah 1 of the start surah, and resume
+// re-plans from that same origin, so the mapping never shifts on
+// resume). So a journey starting at surah 1 with المنشاوي voices
+// quarter n with RECITERS[(n - 1) % 8] — 240 quarters / 8 reciters
+// = exactly 30 quarters each. A journey starting mid-Quran gives
+// its (possibly partial) first quarter to r0, the next quarter to
+// r0+1, and so on. Mode (1) ignores the rotation: every quarter
+// uses RECITERS[r0]. Mode (3) shares mode (2)'s rotation and adds
+// the interstitials. Playback is hands-free throughout: the engine
+// chains ayah items across quarter and surah boundaries on 'ended'
+// events — a reciter change is just the next ayah's reciterId, and
+// never asks the user for a tap.
 //
 // INTERSTITIAL SIZING (adaptive, never a fixed ayah count): the
 // interstitial after a quarter targets 1/4–1/3 of that quarter's
@@ -75,7 +84,7 @@ export const THREE_MODES: { id: ThreeMode; name: string; description: string }[]
   {
     id: 'varied',
     name: 'ختمة منوّعة',
-    description: 'ختمة كاملة، كل سورة بقارئ مختلف من القراء الثمانية، بالتناوب الثابت.',
+    description: 'ختمة كاملة، كل ربع بقارئ مختلف من القراء الثمانية، بالتناوب الثابت.',
   },
   {
     id: 'tadabbur',
@@ -92,27 +101,27 @@ export function threeModeName(mode: ThreeMode): string {
 // Rotation
 // ------------------------------------------------------------------
 
-export function reciterIndexForSurah(
+export function reciterIndexForQuarter(
   mode: ThreeMode,
-  startSurah: number,
+  startQuarter: number,
   startReciterIndex: number,
-  surah: number,
+  quarter: number,
 ): number {
   const r0 = ((startReciterIndex % RECITERS.length) + RECITERS.length) % RECITERS.length;
   if (mode === 'single') return r0;
-  const steps = surah - startSurah;
+  const steps = quarter - startQuarter;
   return ((r0 + steps) % RECITERS.length + RECITERS.length) % RECITERS.length;
 }
 
-export function reciterIdForSurah(
+export function reciterIdForQuarter(
   mode: ThreeMode,
-  startSurah: number,
+  startQuarter: number,
   startReciterId: string,
-  surah: number,
+  quarter: number,
 ): string {
   const idx = RECITERS.findIndex((r) => r.id === startReciterId);
   const r0 = idx >= 0 ? idx : 0;
-  return RECITERS[reciterIndexForSurah(mode, startSurah, r0, surah)].id;
+  return RECITERS[reciterIndexForQuarter(mode, startQuarter, r0, quarter)].id;
 }
 
 // ------------------------------------------------------------------
@@ -178,6 +187,11 @@ export function* planJourney(
   const firstCount = SURAH_AYAH_COUNTS[s0 - 1];
   const a0 =
     Number.isInteger(startAyah) && startAyah >= 1 && startAyah <= firstCount ? startAyah : 1;
+  // Rotation origin: the quarter of the journey's first ayah.
+  // Journeys start at ayah 1 and resume re-plans from this same
+  // origin, so this value — and therefore every quarter's reciter
+  // — is identical on first play and on every resume.
+  const startQuarter = quarterContaining(s0, a0)?.q ?? 1;
   let prevQuarter: Quarter | null = null;
   for (let surah = s0; surah <= 114; surah += 1) {
     const count = SURAH_AYAH_COUNTS[surah - 1];
@@ -192,7 +206,7 @@ export function* planJourney(
         kind: 'ayah',
         surah,
         ayah,
-        reciterId: reciterIdForSurah(mode, s0, startReciterId, surah),
+        reciterId: reciterIdForQuarter(mode, startQuarter, startReciterId, qu?.q ?? startQuarter),
       };
       if (qu !== null) prevQuarter = qu;
     }
