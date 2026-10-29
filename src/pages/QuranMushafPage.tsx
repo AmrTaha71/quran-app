@@ -714,7 +714,8 @@ export default function QuranMushafPage({
   // Published QUL phrase data (bundled JSON, fetched once per session).
   type QulPhrase = { surahs: number; ayahs: number; count: number; source: { key: string; from: number; to: number }; ayah: Record<string, number[][]> };
   type QulData = { phrases: Record<string, QulPhrase>; phraseVerses: Record<string, number[]> };
-  type QulPhraseEntry = { id: number; text: string; ayahs: number; surahs: number; others: { key: string; surah_no: number; ayah_no: number; surah_name: string }[] };
+  type QulOtherAyah = { key: string; surah_no: number; ayah_no: number; surah_name: string; row: QuranTextRow; ranges: number[][] };
+  type QulPhraseEntry = { id: number; text: string; ayahs: number; surahs: number; others: QulOtherAyah[] };
   const [qulPhrases, setQulPhrases] = useState<QulPhraseEntry[] | null>(null);
   const [mutashabihatSource, setMutashabihatSource] = useState<'qul' | 'computed' | null>(null);
   const qulDataCache = useRef<QulData | null>(null);
@@ -792,13 +793,22 @@ export default function QuranMushafPage({
     const qulKey = `${verse.surah_no}:${verse.ayah_no}`;
     const qulIds = qul?.phraseVerses[qulKey];
     if (qul && qulIds && qulIds.length > 0) {
-      let labelRows: { surah_no: number; ayah_no: number; ayah_text: string }[] | null = null;
+      let labelRows: { id: number; surah_no: number; ayah_no: number; ayah_text: string; ayah_text_clean: string | null }[] | null = null;
       try {
-        const srcSurahs = [...new Set(qulIds.map((id) => qul.phrases[String(id)]?.source.key.split(':')[0]).filter(Boolean).map(Number))];
+        // Labels must cover the OTHER ayahs too, not just the sources:
+        // the cards below render each other ayah's full text and hop
+        // from its stored row, so a fresh session never needs the
+        // full table (the old chip hop read quranTextCache, which
+        // the QUL path never loads, and silently did nothing).
+        const allSurahs = [...new Set(qulIds.flatMap((id) => {
+          const ph = qul.phrases[String(id)];
+          if (!ph) return [] as number[];
+          return [ph.source.key, ...Object.keys(ph.ayah)].map((k) => k.split(':')[0]).filter(Boolean).map(Number);
+        }))];
         const { data, error } = await supabase.from('quran_verses')
-          .select('surah_no,ayah_no,ayah_text').in('surah_no', srcSurahs);
+          .select('id,surah_no,ayah_no,ayah_text,ayah_text_clean').in('surah_no', allSurahs);
         if (error || !data) throw new Error('label fetch failed');
-        labelRows = data as { surah_no: number; ayah_no: number; ayah_text: string }[];
+        labelRows = data as { id: number; surah_no: number; ayah_no: number; ayah_text: string; ayah_text_clean: string | null }[];
       } catch {
         // Label fetch failed: use the full table for labels instead.
         labelRows = await loadQuranText();
@@ -813,10 +823,20 @@ export default function QuranMushafPage({
           const srcWords = srcRow ? srcRow.ayah_text.split(/\s+/).filter((w) => w.length > 0) : [];
           const text = srcWords.slice(ph.source.from, ph.source.to + 1).join(' ');
           if (!text) continue;
-          const others = Object.keys(ph.ayah).filter((k) => k !== qulKey).map((k) => {
+          const others: QulOtherAyah[] = [];
+          for (const k of Object.keys(ph.ayah)) {
+            if (k === qulKey) continue;
             const [os, oa] = k.split(':').map(Number);
-            return { key: k, surah_no: os, ayah_no: oa, surah_name: SURAHS.find((s) => s.no === os)?.name || `سورة ${os}` };
-          }).sort((x, y) => x.surah_no - y.surah_no || x.ayah_no - y.ayah_no);
+            const oRow = labelRows.find((r) => r.surah_no === os && r.ayah_no === oa);
+            if (!oRow || !oRow.ayah_text) continue;
+            const oName = SURAHS.find((s) => s.no === os)?.name || `سورة ${os}`;
+            others.push({
+              key: k, surah_no: os, ayah_no: oa, surah_name: oName,
+              row: { id: oRow.id, surah_no: os, surah_name: oName, ayah_no: oa, ayah_text: oRow.ayah_text, ayah_text_clean: oRow.ayah_text_clean ?? null },
+              ranges: ph.ayah[k] ?? [],
+            });
+          }
+          others.sort((x, y) => x.surah_no - y.surah_no || x.ayah_no - y.ayah_no);
           entries.push({ id, text, ayahs: ph.ayahs, surahs: ph.surahs, others });
         }
         if (entries.length > 0) {
@@ -896,10 +916,26 @@ export default function QuranMushafPage({
     fetchVerseLinks(row.id);
   };
 
-  // Hop from a published QUL phrase to one of its occurrence ayahs.
-  const hopToQulAyah = (surahNo: number, ayahNo: number) => {
-    const row = quranTextCache.current?.find((r) => r.surah_no === surahNo && r.ayah_no === ayahNo);
-    if (row) handleSimilarClick(row);
+  // Render an other ayah's text with its QUL occurrence ranges
+  // highlighted. QUL ranges index the raw Hafs token split while the
+  // seeded text is IndoPak, so a range can misalign: every range is
+  // clamped to the displayed split, and a range that lands nowhere
+  // simply highlights nothing — the text itself is always shown.
+  const renderWithRanges = (displayText: string, ranges: number[][]) => {
+    const dispWords = displayText.split(/\s+/).filter((w) => w.length > 0);
+    const hi = new Set<number>();
+    for (const r of ranges || []) {
+      if (!Array.isArray(r) || r.length < 2) continue;
+      const rawFrom = Number(r[0]);
+      const rawTo = Number(r[1]);
+      if (!Number.isFinite(rawFrom) || !Number.isFinite(rawTo)) continue;
+      const from = Math.max(0, Math.floor(rawFrom));
+      const to = Math.min(dispWords.length - 1, Math.floor(rawTo));
+      for (let i = from; i <= to; i++) hi.add(i);
+    }
+    return dispWords.map((w, i) => (hi.has(i)
+      ? <mark key={i} className="bg-amber-200 rounded px-0.5">{w} </mark>
+      : <span key={i}>{w} </span>));
   };
 
   // Render a similar ayah's display text with the shared phrase
@@ -4129,11 +4165,12 @@ export default function QuranMushafPage({
                             <div key={e.id} className="bg-gray-50 rounded-lg p-3 border border-emerald-100">
                               <p className="font-arabic text-lg font-bold text-accent-800 leading-loose"><mark className="bg-amber-200 rounded px-0.5">{e.text}</mark></p>
                               <p className="text-sm text-accent-600 mb-2">تتكرر في {e.ayahs} آية في {e.surahs} سورة</p>
-                              <div className="flex flex-wrap gap-1.5">
+                              <div className="space-y-2">
                                 {e.others.slice(0, 12).map((o) => (
-                                  <button key={o.key} onClick={() => hopToQulAyah(o.surah_no, o.ayah_no)}
-                                    className="px-2.5 py-1 bg-white border border-emerald-200 hover:bg-emerald-50 rounded-full text-sm font-semibold text-emerald-700">
-                                    {o.surah_name} — {o.ayah_no}
+                                  <button key={o.key} onClick={() => handleSimilarClick(o.row)}
+                                    className="block w-full text-right bg-white hover:bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+                                    <p className="text-sm font-bold text-accent-700 mb-1">{o.surah_name} — آية {o.ayah_no}</p>
+                                    <p className="font-arabic text-lg text-accent-800 leading-loose">{renderWithRanges(o.row.ayah_text, o.ranges)}</p>
                                   </button>
                                 ))}
                                 {e.others.length > 12 && <span className="text-sm text-accent-600 self-center">و{e.others.length - 12} آية أخرى</span>}

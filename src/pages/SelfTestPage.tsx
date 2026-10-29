@@ -4,6 +4,9 @@ import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
 import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
+import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
+import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
+import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import { formatAr } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
@@ -58,6 +61,16 @@ const CORR_RATE_LABEL: Record<CorrRate, string> = { slow: 'بطيء', normal: '�
 const CORR_DELAY_MIN = 2;
 const CORR_DELAY_MAX = 10;
 const CORR_DELAY_DEFAULT = 3;
+// Iteration 2 continuous-prompt audio cache: PERSISTENT (IndexedDB
+// blobs) with a synchronous in-memory mirror for the prompt path.
+// 200 entries, oldest-first eviction — short corrections are tens
+// of KB, so worst-case storage is ~10MB. The version lives in the
+// key (see CORR_AUDIO_CACHE_VERSION): bump it when the voice engine
+// or model changes and old entries miss + refill gradually.
+// The iOS TTS onstart watchdog (3s) is long enough for a working
+// engine to fire onstart, far below the 18s prompt watchdog.
+const CONT_AUDIO_CACHE_CAP = 200;
+const CONT_TTS_ONSTART_WATCHDOG_MS = 3000;
 // Recitation mode: 'ayah' grades one ayah at a time (the original
 // flow); 'continuous' lets the user recite the whole range without
 // stopping at each ayah, and reports missed words per ayah at the end.
@@ -748,7 +761,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `rel` is ms since the current test started (performance.now);
   // `t` is the wall-clock epoch ms. Timestamps come from the same
   // clock the watchdog uses, so log order matches engine order.
-  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean };
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string };
   const DIAG_EVENT_CAP = 2000;
   const DIAG_DISPLAY_CAP = 500;
   const diagEventsRef = useRef<DiagEvent[]>([]);
@@ -863,7 +876,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
           close.onclick = () => { manual.remove(); close.remove(); };
           document.body.appendChild(close);
-          setDiagCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق — اضغط مطوّلًا ثم «تحديد الكل»');
+          setDiagCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق. اضغط مطوّلًا ثم «تحديد الكل»');
           return;
         }
       }
@@ -937,7 +950,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const contStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contPromptingRef = useRef(false);
   const contPromptAudioRef = useRef<HTMLAudioElement | null>(null);
-  const contPrefetchRef = useRef<{ key: string; url: string | null } | null>(null);
+  // Iteration 2: the single-slot prefetch is replaced by a
+  // PERSISTENT content-addressed cache (see corrAudioStore):
+  // IndexedDB blobs + this synchronous mirror for the prompt path.
+  // The old slot keyed stall audio by WORDS but looked it up by
+  // INDICES, so the prefetch never hit — and a race-cached
+  // context-word audio could play for a bare-word stall prompt with
+  // the same indices. The cache key is (version, voice, rate,
+  // spoken words, indices), so neither cross-play can happen.
+  // A pending stall fetch is tracked separately so it is not
+  // fetched twice. The persistent cache SURVIVES test resets by
+  // design (a repeat error in a later round must still hit).
+  const contAudioCacheRef = useRef(new AudioUrlCache(CONT_AUDIO_CACHE_CAP));
+  const contPrefetchPendingRef = useRef<string | null>(null);
+  const corrAudioBackendRef = useRef<CorrAudioBackend | null>(null);
+  const corrAudioHydratedRef = useRef(false);
+  // Iteration 2 diag counters (session-scoped): prompt-lookup hits
+  // vs misses, so the hit ratio can later justify — or kill —
+  // surah pre-generation. Storage bytes refresh on hydrate/persist
+  // via navigator.storage.estimate() where available.
+  const corrCacheHitsRef = useRef(0);
+  const corrCacheMissesRef = useRef(0);
+  const corrStorageBytesRef = useRef<number | null>(null);
+  // Iteration 2 generation token + settled flag (Claude): gen bumps
+  // on every prompt entry and on every cancel path, so a stale race
+  // branch can never play into a newer prompt or after a cancel.
+  const speakGenRef = useRef(0);
+  const promptSettledRef = useRef(false);
   const contPromptedKeyRef = useRef('');
   // D2 interrupt-silence machinery (see the continuous section):
   // the no-match watchdog timer, the prompt-completion watchdog
@@ -1015,6 +1054,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const [contPrompting, setContPrompting] = useState(false);
   const [contLastPrompt, setContLastPrompt] = useState<string[]>([]);
+  // Iteration 2: whether the displayed prompt words carry a prepended
+  // context word (miss prompts only) — the banner dims it so the
+  // user cannot mistake it for the wrong word. Set only by fix
+  // prompts (length check vs fixIdx); replay leaves it alone.
+  const [contPromptHasContext, setContPromptHasContext] = useState(false);
   // D2: honest no-match state (grading paused, transcript kept,
   // resume offered) and visible audio-failure notes. The notes are
   // the guarantee: the correct words are always on screen even when
@@ -1048,6 +1092,77 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (!res.ok || !data.audioUrl) return null;
       return data.audioUrl;
     } catch { return null; }
+  };
+  // Iteration 2 persistent-cache plumbing (see corrAudioStore).
+  // Backend selection: IndexedDB when available, memory fallback
+  // otherwise (still correct, just not durable across visits).
+  // Every backend call is swallowed on failure — persistence must
+  // never break correction.
+  const getCorrAudioBackend = (): CorrAudioBackend => {
+    if (!corrAudioBackendRef.current) {
+      try {
+        corrAudioBackendRef.current = createIndexedDBBackend();
+      } catch {
+        corrAudioBackendRef.current = new MemoryCorrAudioBackend(CONT_AUDIO_CACHE_CAP);
+      }
+    }
+    return corrAudioBackendRef.current;
+  };
+  const refreshCorrStorageEstimate = () => {
+    try {
+      const nav = navigator as Navigator & { storage?: { estimate?: () => Promise<{ usage?: number }> } };
+      nav.storage?.estimate?.().then((e) => { corrStorageBytesRef.current = typeof e.usage === 'number' ? e.usage : null; }).catch(() => {});
+    } catch {}
+  };
+  // Hydrate the mirror from IndexedDB once (called on continuous
+  // start; no-op afterwards). Old-version rows are deleted
+  // opportunistically (they miss by key anyway); empty blobs are
+  // skipped. A failure here just means this session starts cold —
+  // the race + TTS path still works.
+  const hydrateCorrAudioCache = () => {
+    if (corrAudioHydratedRef.current) return;
+    corrAudioHydratedRef.current = true;
+    void (async () => {
+      try {
+        const entries = await getCorrAudioBackend().loadAll();
+        let skipped = 0;
+        for (const e of entries) {
+          if (!e.blob || e.blob.size === 0 || e.version !== CORR_AUDIO_CACHE_VERSION) {
+            skipped++;
+            if (e.version !== CORR_AUDIO_CACHE_VERSION) {
+              void getCorrAudioBackend().remove(e.key).catch(() => {});
+            }
+            continue;
+          }
+          try {
+            contAudioCacheRef.current.set(e.key, URL.createObjectURL(e.blob));
+          } catch { skipped++; }
+        }
+        refreshCorrStorageEstimate();
+        diagPush('cont-prompt-cache-hydrated', { label: 'cont-prompt-audio', entries: entries.length, skipped });
+      } catch {
+        diagPush('cont-prompt-cache-hydrated', { label: 'cont-prompt-audio', entries: 0, skipped: 0 });
+      }
+    })();
+  };
+  // Persist a winning (or late) human voice: fetch the remote audio
+  // as a blob, store it durably, and swap the mirror entry to an
+  // object URL so the next repeat plays instantly, even offline.
+  // Fire-and-forget: any failure leaves the session mirror intact.
+  const persistCorrAudio = (cacheKey: string, remoteUrl: string, voice: string, words: string[], indices: number[], rate: number) => {
+    void (async () => {
+      try {
+        const res = await fetch(remoteUrl);
+        if (!res.ok) return;
+        const blob = await res.blob();
+        if (blob.size === 0) return;
+        await getCorrAudioBackend().save({ key: cacheKey, voice, words: words.join(' '), indices, rate, version: CORR_AUDIO_CACHE_VERSION, blob, savedAt: Date.now() });
+        try {
+          contAudioCacheRef.current.set(cacheKey, URL.createObjectURL(blob));
+        } catch {}
+        refreshCorrStorageEstimate();
+      } catch {}
+    })();
   };
   // Play a correction: prefetched gendered audio when ready, browser
   // TTS otherwise (instant, so the 3s promise always holds). If the
@@ -1165,6 +1280,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // If the user leaves the test mid-correction, silence everything
   // (refs only here — all declared above, so no TDZ risk).
   useEffect(() => () => {
+    // Iteration 2: leaving mid-prompt must stale any in-flight race
+    // branch, or its late resolution would play into the next screen.
+    speakGenRef.current++;
+    promptSettledRef.current = true;
     cancelCorrectionSpeech();
     try { corrAudioRef.current?.pause(); } catch {}
     try { contPromptAudioRef.current?.pause(); } catch {}
@@ -1290,7 +1409,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         contAwaitingRef.current = null;
         contDisplacedRef.current = [];
         contPromptedKeyRef.current = '';
-        contPrefetchRef.current = null;
+        // NOTE: the persistent audio cache is deliberately NOT
+        // cleared here — it survives resets by design (repeat
+        // errors in later rounds must still hit). Only the
+        // in-flight prefetch marker resets.
+        contPrefetchPendingRef.current = null;
         // D2: a new range starts with a clean interrupt-silence
         // slate — no carried-over no-match state, audio-failure
         // note, retry marker, or match baseline.
@@ -1306,6 +1429,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (contNoMatchTimerRef.current) { clearTimeout(contNoMatchTimerRef.current); contNoMatchTimerRef.current = null; }
         if (contPromptTimerRef.current) { clearTimeout(contPromptTimerRef.current); contPromptTimerRef.current = null; }
         setContLastPrompt([]);
+        setContPromptHasContext(false);
         setTranscript('');
         setInterim('');
         setMicError('');
@@ -1666,6 +1790,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // same transcript (see resumeMic). A result re-arms the timer, so
   // a slow-but-alive recitation is never interrupted.
   const NO_RESULT_WATCHDOG_MS = 18000;
+  // Continuous-prompt audio budget: a mid-flow interrupt cannot be
+  // prefetched, so its generate-voice fetch races this timeout —
+  // on a slow connection the browser-TTS fallback starts at 2s
+  // instead of leaving the user in silence, well inside the 5s
+  // spoken-correction promise. The late fetch result is ignored
+  // (the race settles once), never played over the TTS.
+  const CORR_AUDIO_TIMEOUT_MS = 2000;
   // (b) Transient safety timer: ~3s. The patched code restarts from
   // onend after a transient error; if the engine omits onend, the
   // session used to hang on "retrying" forever. The timer restarts
@@ -2395,6 +2526,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     });
   };
   const cancelContPrompt = () => {
+    // Iteration 2: cancel is a generation bump — in-flight race
+    // branches (fetch-win and timeout-win) check the gen and stay
+    // silent, and the settled flag locks the finish path.
+    speakGenRef.current++;
+    promptSettledRef.current = true;
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
     // D2: the prompt-completion watchdog MUST die with the prompt —
     // otherwise a late fire would cancel a NEW prompt's speech (its
@@ -2424,6 +2560,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const speakContPrompt = (words: string[], fixIdx?: number[], fixNorms?: string[]) => {
     if (words.length === 0 || contPromptingRef.current) return;
+    // Iteration 2: generation token + settled flag + prompt-entry
+    // timestamp (detection proxy for the diag voice-start timing).
+    const gen = ++speakGenRef.current;
+    promptSettledRef.current = false;
+    const promptStartedAt = Date.now();
     // N1 (Claude reply 6, item 6): the dedupe key is built from
     // INDICES, not words — repeated words at different positions
     // (e.g. ذلك twice) used to share one key and wrongly suppress
@@ -2438,6 +2579,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const key = fixIdx && fixIdx.length > 0 ? fixIdx.join('|') : (contAwaitingRef.current && contAwaitingRef.current.indices.length > 0 ? contAwaitingRef.current.indices.join('|') : words.join('|'));
     contPromptedKeyRef.current = key;
     setContLastPrompt(words);
+    // Iteration 2: the context word is dimmed in the banner. Only
+    // fix prompts set this: a miss prompt with a prepended context
+    // word has exactly one more displayed word than fix indices;
+    // stall prompts (equal lengths) clear it; replay (no fixIdx)
+    // leaves the last prompt's value alone.
+    if (fixIdx && fixIdx.length > 0) setContPromptHasContext(words.length === fixIdx.length + 1);
     // D2: the words are on screen from the first instant of the
     // prompt (see the prompting banner) — the VISIBLE correction
     // never waits on the network, and a fresh prompt clears any
@@ -2480,12 +2627,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Resume always creates a FRESH recognizer (never the discarded
     // instance), which is also the 321436 recovery.
     let promptAudioStarted = false;
+    // Iteration 2: the iOS TTS onstart watchdog timer (cleared by
+    // resume, so a late fire can never note-fail a finished prompt).
+    let ttsOnstartTimer: ReturnType<typeof setTimeout> | null = null;
+    // Iteration 2: the SINGLE finish path, locked by the settled
+    // flag so onend/onerror/watchdog/TTS-watchdog can never resume
+    // twice. The guard comes FIRST: a stale finish must not even
+    // pause audio or cancel speech belonging to a newer prompt.
     const resumeAfterPrompt = () => {
+      if (promptSettledRef.current || !contPromptingRef.current) return;
+      promptSettledRef.current = true;
       clearContPromptTimer();
+      if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; }
       try { contPromptAudioRef.current?.pause(); } catch {}
       contPromptAudioRef.current = null;
       cancelCorrectionSpeech();
-      if (!contPromptingRef.current) return;
       contPromptingRef.current = false;
       setContPrompting(false);
       startContinuousMic();
@@ -2504,49 +2660,122 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             const v = pickArabicTtsVoice();
             if (v) u.voice = v;
             u.rate = CORR_RATE_VALUE[liveRef.current.corrRate];
-            u.onstart = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-tts' }); };
-            u.onend = () => { diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
-            u.onerror = () => { diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
+            // Iteration 2: iOS TTS onstart watchdog. speak() outside
+            // a gesture may delay or block on iOS, firing neither
+            // onstart nor onerror — without this, a blocked TTS
+            // would strand the prompt until the 18s watchdog. A
+            // dedicated flag (not promptAudioStarted, which playUrl
+            // may already have set) proves THIS utterance started.
+            let ttsStarted = false;
+            const clearTtsWatchdog = () => { if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; } };
+            u.onstart = () => { ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
+            u.onend = () => { clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
+            u.onerror = () => { clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
             window.speechSynthesis.speak(u);
+            ttsOnstartTimer = setTimeout(() => {
+              ttsOnstartTimer = null;
+              if (!ttsStarted) { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
+            }, CONT_TTS_ONSTART_WATCHDOG_MS);
           } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
         } catch { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
       };
     })();
-    const playUrl = (url: string) => {
+    const playUrl = (url: string, cacheKey?: string) => {
       const a = new Audio(url);
       contPromptAudioRef.current = a;
-      a.onplaying = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio' }); };
+      a.onplaying = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt }); };
       a.onended = () => { diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
       // D2: an audio-file error used to resume WITHOUT trying TTS,
       // unlike a refused play() — now both fall back to TTS, and
       // only a TTS failure as well produces the visible note.
-      a.onerror = () => { diagPush('tts-error', { label: 'cont-prompt-audio' }); playTtsFallback(); };
+      // Iteration 2: a file error on a CACHED url evicts it (missing
+      // or corrupt stored file) so the next prompt refetches; the
+      // fallback stays silent to the user (diag only). A refused
+      // play() does NOT evict — gesture-gating is not corruption.
+      a.onerror = () => {
+        diagPush('tts-error', { label: 'cont-prompt-audio' });
+        if (cacheKey) {
+          contAudioCacheRef.current.delete(cacheKey);
+          void getCorrAudioBackend().remove(cacheKey).catch(() => {});
+          diagPush('cont-prompt-cache-evict', { label: 'cont-prompt-audio', reason: 'audio-error' });
+        }
+        playTtsFallback();
+      };
       a.play().catch(playTtsFallback);
     };
-    const url = contPrefetchRef.current?.key === key ? contPrefetchRef.current.url : null;
+    // Iteration 2: audio lookup by (version, voice, rate, SPOKEN
+    // WORDS, indices) — not the N1 dedupe key above, which stays
+    // indices-only: the same indices with different spoken words
+    // (bare vs context) must never share audio. Replay (no fixIdx)
+    // falls back to the live awaiting indices, exactly like the
+    // dedupe key. The voice here is the same corrGender the fetch
+    // sends, so key and audio always agree.
+    const audioIndices = fixIdx && fixIdx.length > 0 ? fixIdx : (contAwaitingRef.current && contAwaitingRef.current.indices.length > 0 ? contAwaitingRef.current.indices : []);
+    const audioRate = CORR_RATE_VALUE[liveRef.current.corrRate];
+    const audioKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, audioRate, words, audioIndices);
+    const url = contAudioCacheRef.current.get(audioKey);
+    // Iteration 2 diag: every prompt lookup counts toward the
+    // session hit ratio (hits / all lookups) that will later
+    // justify — or kill — surah pre-generation.
+    if (url) corrCacheHitsRef.current++;
+    else corrCacheMissesRef.current++;
+    {
+      const hits = corrCacheHitsRef.current;
+      const misses = corrCacheMissesRef.current;
+      diagPush('cont-prompt-cache-lookup', { label: 'cont-prompt-audio', hit: url !== null, hits, misses, hitRatio: hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) / 100 : 0, entries: contAudioCacheRef.current.size, storageBytes: corrStorageBytesRef.current });
+    }
     cancelCorrectionSpeech();
     clearContPromptTimer();
+    // Iteration 2 verified: this watchdog arms at PROMPT START
+    // (before either playback branch below) and is never cleared on
+    // a TTS win — only finish (resumeAfterPrompt) or cancel clears
+    // it. The settled guard keeps a stale fire from note-failing a
+    // prompt that already finished.
     contPromptTimerRef.current = setTimeout(() => {
       contPromptTimerRef.current = null;
-      if (!contPromptingRef.current) return;
+      if (promptSettledRef.current || !contPromptingRef.current) return;
       if (!promptAudioStarted) noteContPromptAudioFailed(key);
       resumeAfterPrompt();
     }, NO_RESULT_WATCHDOG_MS);
     if (url) {
-      playUrl(url);
+      playUrl(url, audioKey);
     } else {
       // No prefetched audio (a mid-flow interrupt cannot be
       // prefetched — the miss is only known when it happens):
       // generate the human-sounding voice now (~1-2s for a few
       // words) while the "correcting" indicator shows. Browser TTS
-      // is only the failure fallback, never the default, because
-      // the user asked for a human-sounding voice, not a robotic one.
-      void requestCorrectionAudio(words).then((genUrl) => {
-        if (!contPromptingRef.current) return;
-        if (genUrl) {
-          contPrefetchRef.current = { key, url: genUrl };
-          playUrl(genUrl);
+      // stays the failure fallback, never the default — but slowness
+      // is no longer silent: the fetch races a 2s timeout, and on
+      // timeout the TTS fallback starts at once, so speech begins
+      // well inside 5s of the error. The race settles exactly once,
+      // so a late fetch result is ignored and never plays over (or
+      // after) the TTS.
+      // Iteration 2: the fetch promise is kept separately so a LATE
+      // resolution (after a TTS win) still lands in the short-lived
+      // cache — a repeat of the same prompt then plays the human
+      // voice instantly. No Audio element is ever built for a late
+      // URL: only playUrl builds one, and only after the gen +
+      // settled checks below pass. requestCorrectionAudio never
+      // rejects (it catches internally and resolves null), so the
+      // race below cannot reject either.
+      const fetchStart = Date.now();
+      const fetchP = requestCorrectionAudio(words);
+      void withTimeout(fetchP, CORR_AUDIO_TIMEOUT_MS).then((result) => {
+        if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current) return;
+        if (result.kind === 'value' && result.value) {
+          contAudioCacheRef.current.set(audioKey, result.value);
+          diagPush('cont-prompt-audio-ready', { label: 'cont-prompt-audio', fetchMs: Date.now() - fetchStart, msFromPrompt: Date.now() - promptStartedAt });
+          playUrl(result.value, audioKey);
+        } else if (result.kind === 'timeout') {
+          diagPush('cont-prompt-tts-timeout', { label: 'cont-prompt-audio', timeoutMs: CORR_AUDIO_TIMEOUT_MS });
+          playTtsFallback();
         } else playTtsFallback();
+      });
+      void fetchP.then((lateUrl) => {
+        if (lateUrl) {
+          contAudioCacheRef.current.set(audioKey, lateUrl);
+          persistCorrAudio(audioKey, lateUrl, corrGender, words, audioIndices, audioRate);
+        }
       });
     }
   };
@@ -2561,14 +2790,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
     const owed = contOwedWords();
     if (owed.words.length === 0) return;
-    const key = owed.words.join('|');
-    if (key !== contPrefetchRef.current?.key) {
+    // Iteration 2: prefetch into the same content-addressed cache
+    // the prompt lookup uses (version, voice, rate, spoken words,
+    // indices). The old single slot keyed prefetch by WORDS but
+    // looked it up by INDICES, so stall prefetch never hit;
+    // unifying the key also fixes that (stall prompts now actually
+    // play prefetched audio). A prefetch win persists too, so the
+    // next identical stall is instant even across visits.
+    const prefetchKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, CORR_RATE_VALUE[liveRef.current.corrRate], owed.words, owed.indices);
+    if (!contAudioCacheRef.current.get(prefetchKey) && contPrefetchPendingRef.current !== prefetchKey) {
       const token = ++corrFetchTokenRef.current;
-      contPrefetchRef.current = { key, url: null };
+      contPrefetchPendingRef.current = prefetchKey;
       void fetchCorrectionAudio(owed.words, token).then((url) => {
-        if (url && token === corrFetchTokenRef.current && contPrefetchRef.current?.key === key) {
-          contPrefetchRef.current.url = url;
+        if (url && token === corrFetchTokenRef.current && contPrefetchPendingRef.current === prefetchKey) {
+          contAudioCacheRef.current.set(prefetchKey, url);
+          persistCorrAudio(prefetchKey, url, corrGender, owed.words, owed.indices, CORR_RATE_VALUE[liveRef.current.corrRate]);
         }
+        if (contPrefetchPendingRef.current === prefetchKey) contPrefetchPendingRef.current = null;
       });
     }
     contStallTimerRef.current = setTimeout(() => {
@@ -2674,7 +2912,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const key = target.indices.join('|');
       if (key === contPromptedKeyRef.current) continue;
       if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
-      speakContPrompt(target.words, target.indices, target.norms);
+      // Miss interrupts (confirmed + overshoot only — stall prompts
+      // never come through here) speak one preceding expected word
+      // for context: "هدى للمتقين", not a bare "للمتقين". The fix
+      // indices/norms go in unchanged, so grading and fix-credit
+      // see exactly the missed words; only the displayed + spoken
+      // correction carries the context word.
+      speakContPrompt(withPrecedingContextWord(target.words, target.indices, liveRef.current.contExpected), target.indices, target.norms);
       return;
     }
   };
@@ -2772,6 +3016,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // its own 'restart' event first).
     diagPush('tap', { label: liveRef.current.contFinals ? 'resume-cont' : 'start-cont' });
     getAudioCtx();
+    // Iteration 2: hydrate the persistent correction-audio cache
+    // (no-op after the first call) so repeat prompts can hit it.
+    hydrateCorrAudioCache();
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
@@ -3399,9 +3646,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   {contPrompting && (
                     <>
-                      <p className="text-sm font-bold text-blue-700 mb-2">بصحح لك… اسمع الكلمة الصح، وبعدها كمّل</p>
+                      <p className="text-sm font-bold text-blue-700 mb-2">بصحح لك… اسمع الكلمة الصح، وبعدها كمّل — للتصحيح فقط</p>
                       {contLastPrompt.length > 0 && (
-                        <p className="text-2xl font-bold text-blue-800 mb-4" dir="rtl">الصح: {contLastPrompt.join(' ')}</p>
+                        <p className="text-2xl font-bold text-blue-800 mb-4" dir="rtl">الصح: {contPromptHasContext && contLastPrompt.length > 0 ? (<><span className="opacity-50">{contLastPrompt[0]}</span>{' '}{contLastPrompt.slice(1).join(' ')}</>) : contLastPrompt.join(' ')}</p>
                       )}
                     </>
                   )}
@@ -3413,7 +3660,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {contLastPrompt.length > 0 && !contPrompting && (
                     <button onClick={() => speakContPrompt(contLastPrompt)}
                       className="mb-4 px-5 py-2.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-sm font-bold rounded-xl">
-                      🔊 أعد سماع التصحيح: {contLastPrompt.join(' ')}
+                      🔊 أعد سماع التصحيح: {contPromptHasContext && contLastPrompt.length > 0 ? (<><span className="opacity-50">{contLastPrompt[0]}</span>{' '}{contLastPrompt.slice(1).join(' ')}</>) : contLastPrompt.join(' ')}
                     </button>
                   )}
                   {(transcript || interim) && (
