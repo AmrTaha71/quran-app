@@ -1,4 +1,15 @@
-// generate-voice — v10 (2026-10-29, TTS migration, ordered by Amr 2026-10-29)
+// generate-voice — v11 (2026-10-30, global cap, ordered by Amr 2026-10-30)
+// v11 ADDS: global daily caps (all users) — 1000 calls/day +
+// $1.00/day logged OpenAI spend (≈$30/month, Amr's budget for up
+// to 2 years). Per-user caps (30/min + 500/day) unchanged. The
+// spend cap is the budget guard; the calls cap is a loose backstop
+// that also bounds Azure volume (Azure dollars log as null, so they
+// never count toward the spend sum).
+// Atomicity: same check-then-log race as the per-user caps —
+// concurrent in-flight requests can overshoot by a few calls
+// (≈cents of spend/day). Accepted; a reservation-row fix remains
+// available as hardening if Amr asks for it.
+// (v10 below: TTS migration, ordered by Amr 2026-10-29)
 // ORDER OF GENERATION:
 //   1. Azure TTS first (unchanged; Azure is NOT affected by OpenAI's
 //      2027-01-06 shutdown, and its -10% prosody survives here).
@@ -38,6 +49,10 @@ const AZURE_VOICES: Record<string, { name: string; locale: string }> = {
 };
 
 const REALTIME_MODEL = "gpt-realtime-2.1-mini";
+
+// GLOBAL CAPS (v11): all users combined, rolling 24h.
+const GLOBAL_CALLS_PER_DAY = 1000;
+const GLOBAL_SPEND_PER_DAY_USD = 1.0;
 // Provisional pilot mapping (see header): OpenAI's recommended pair.
 const REALTIME_VOICES: Record<string, string> = {
   male: "cedar",
@@ -441,6 +456,44 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // 4. GLOBAL CAPS (v11), checked before any generation spend:
+    // 1000 calls/day + $1.00/day logged OpenAI spend, all users.
+    // SUM ignores nulls, so Azure rows (cost_usd null) never count
+    // toward the spend sum — the calls cap bounds Azure volume.
+    const { count: globalCount, error: globalError } = await supabaseClient
+      .from("ai_usage_events")
+      .select("id", { count: "exact", head: true })
+      .eq("function_name", "generate-voice")
+      .gt("created_at", dayAgo);
+    if (globalError) {
+      throw new Error("تعذر التحقق من حد الاستخدام");
+    }
+    if ((globalCount ?? 0) >= GLOBAL_CALLS_PER_DAY) {
+      return new Response(
+        JSON.stringify({ error: "تم الوصول للحد اليومي العام لتوليد الصوت — حاول غدًا" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const { data: spendRows, error: spendError } = await supabaseClient
+      .from("ai_usage_events")
+      .select("cost_usd")
+      .eq("function_name", "generate-voice")
+      .gt("created_at", dayAgo)
+      .limit(10000);
+    if (spendError) {
+      throw new Error("تعذر التحقق من حد الاستخدام");
+    }
+    const globalSpend = (spendRows ?? []).reduce(
+      (sum: number, r: any) => sum + (typeof r.cost_usd === "number" ? r.cost_usd : 0),
+      0,
+    );
+    if (globalSpend >= GLOBAL_SPEND_PER_DAY_USD) {
+      return new Response(
+        JSON.stringify({ error: "تم الوصول لحد الإنفاق اليومي العام لتوليد الصوت — حاول غدًا" }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     let audioBuffer: ArrayBuffer;
     let ttsModel = "azure";
     let ttsProvider = "azure";
@@ -488,7 +541,7 @@ Deno.serve(async (req: Request) => {
       .from("rana-audio")
       .getPublicUrl(fileName);
 
-    // 4. Best-effort usage log for the Admin balance monitor, ALL
+    // 5. Best-effort usage log for the Admin balance monitor, ALL
     // paths (previously OpenAI only; Azure billing is separate, so
     // its cost is logged as null; Realtime cost comes from the
     // response usage when the API reports it, else null). Wrapped
