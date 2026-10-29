@@ -216,25 +216,27 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* Quick buttons only */}
+        {/* Quick buttons: the two feature actions are full-width
+            large buttons like the big buttons in the cards above
+            (Amr 17:48); لوحتي + الإعدادات stay a small 2-col row. */}
+        <button
+          onClick={() => onNavigate('follow')}
+          className="w-full py-4 mb-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 text-lg"
+        >
+          <Mic className="w-6 h-6 text-emerald-600" /> الحق الإمام
+        </button>
+        <button
+          onClick={() => onNavigate('test')}
+          className="w-full py-4 mb-3 bg-white border border-amber-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 text-lg"
+        >
+          <Headphones className="w-6 h-6 text-amber-600" /> سمّع لنفسك
+        </button>
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={() => onNavigate('app')}
             className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
           >
             <LayoutDashboard className="w-5 h-5 text-emerald-600" /> لوحتي
-          </button>
-          <button
-            onClick={() => onNavigate('follow')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Mic className="w-5 h-5 text-emerald-600" /> الحق الإمام
-          </button>
-          <button
-            onClick={() => onNavigate('test')}
-            className="py-3.5 bg-white border border-amber-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Headphones className="w-5 h-5 text-amber-600" /> سمّع لنفسك
           </button>
           <button
             onClick={() => onNavigate('settings')}
