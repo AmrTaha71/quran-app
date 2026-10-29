@@ -27,11 +27,16 @@ type Route =
 // future only — this patch builds no adhkar audio and hotlinks no
 // third-party files beyond the two verified live streams below.
 //
-// SHIP-GATE (second redirect): the #/radio route stays for
-// testing, but NO home card ships in this patch — permission from
-// the rights holder (National Media Authority, Maspero) is still
-// pending parent-side. Adding the card later is one card on
-// HomeStartPage (route already exists).
+// SHIP-GATE (second redirect + Claude review 2026-10-29): the
+// #/radio route is CLOSED by default in production — opening
+// #/radio without the dev flag shows only a "soon" notice and
+// loads no stream, so no third-party broadcast plays before
+// permission. Testing: set localStorage 'quran-radio-dev' to
+// '1'. When Maspero permission arrives, remove this gate and
+// move the radio + adhkar cards up near listen in the same
+// activating push. NO home card ships in this patch —
+// permission from the rights holder (National Media Authority,
+// Maspero) is still pending parent-side.
 //
 // STREAM RESOLUTION (tier order; every tier guarded, failure
 // falls through silently and never breaks the player):
@@ -84,6 +89,9 @@ const FALLBACK_STREAM = 'https://stream.zeno.fm/tv0x28xvyc9uv';
 const REMOTE_SETTINGS_KEY = 'radio_streams';
 const LOCAL_STORAGE_KEY = 'quran-radio-streams';
 const RETRY_DELAY_MS = 1500;
+// Dev flag for the testing route: production default CLOSED.
+// Set localStorage 'quran-radio-dev' to '1' to test playback.
+const DEV_FLAG_KEY = 'quran-radio-dev';
 
 function isHttpsUrl(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('https://');
@@ -122,6 +130,13 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
   const [playing, setPlaying] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Production gate (Claude review 2026-10-29): the route must
+  // not play third-party streams before Maspero permission.
+  // Default closed; testing only with the dev flag set.
+  let radioDevEnabled = false;
+  try {
+    radioDevEnabled = localStorage.getItem(DEV_FLAG_KEY) === '1';
+  } catch {}
 
   const clearRetryTimer = () => {
     if (retryTimerRef.current !== null) {
@@ -283,6 +298,7 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
   // Session. Every handler references only functions declared
   // earlier and stable setters/refs, so empty deps are TDZ-safe.
   useEffect(() => {
+    if (!radioDevEnabled) return;
     const audio = getSharedAudio();
     audioRef.current = audio;
     const onPlaying = () => {
@@ -330,6 +346,31 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Closed by default: no player, no Media Session, no stream
+  // fetch — only the gate notice and a way home.
+  if (!radioDevEnabled) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
+        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
+          <div className="max-w-5xl mx-auto px-4 py-3">
+            <button
+              onClick={() => onNavigate('home')}
+              className="px-4 py-2 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+            >
+              الرئيسية
+            </button>
+          </div>
+        </header>
+        <main className="max-w-5xl mx-auto px-4 py-5">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 text-center opacity-60">
+            <p className="font-bold text-accent-800">إذاعة القرآن الكريم — قريبًا</p>
+            <p className="text-sm text-accent-600 mt-2">بانتظار إذن البث من الهيئة الوطنية للإعلام</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">

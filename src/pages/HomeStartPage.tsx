@@ -153,10 +153,10 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* استمع للقرآن: directly after the resume card, before the wird button. */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن مع غلق الشاشة
+            <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
           <p className="text-sm text-accent-600 mt-1">
-            تلاوة متواصلة مع القراءة — تعمل والشاشة مطفية، ويمكن تحميل السورة للاستماع دون اتصال
+            تلاوة متواصلة مع القراءة — صُمّمت للاستماع مع غلق الشاشة، ويمكن تحميل السورة للاستماع دون اتصال
           </p>
           {/* أوفلاين — headline feature of this entry (Amr's explicit
               "أوفلاين"): streaming (play) and per-surah download are

@@ -400,7 +400,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               <Headphones className="w-5 h-5 text-emerald-600" />
               استمع للقرآن
             </h1>
-            <p className="text-sm text-accent-600">تلاوة متواصلة مع القراءة — تعمل والشاشة مطفية</p>
+            <p className="text-sm text-accent-600">تلاوة متواصلة مع القراءة — صُمّمت للاستماع مع غلق الشاشة</p>
           </div>
         </div>
       </header>
