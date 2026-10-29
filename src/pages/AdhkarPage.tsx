@@ -26,6 +26,7 @@ import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } f
 import { acquireAudio, currentAudioOwner, releaseAudio } from '../lib/sharedAudio';
 import { adhkarClipUrl, adhkarList, type AdhkarClip, type AdhkarVoice, type AdhkarWird } from '../lib/adhkarClips';
 import { DEFAULT_RECITER_ID, RECITERS, type Reciter } from '../lib/reciters';
+import { hadrAudioUrl, HADR_NAME } from '../lib/hadr';
 
 type Route = 'home' | 'adhkar';
 
@@ -74,9 +75,11 @@ function preview(text: string, max = 64): string {
   return text.length > max ? text.slice(0, max).trimEnd() + '…' : text;
 }
 
-// The reciter for Quranic items: the user's listen preference
-// ('quran-reciter'), default المنشاوي. Read once at mount; a change
-// in Settings takes effect on the next adhkar open.
+// The reciter for KURSI (the only adhkar item still using per-ayah
+// files): the user's listen preference ('quran-reciter'), default
+// المنشاوي. Read once at mount; a change in Settings takes effect
+// on the next adhkar open. Surahs3 uses Juhani hadr surah files
+// (see segmentsFor) and does not use this reciter.
 function resolveReciter(): Reciter {
   try {
     const id = localStorage.getItem('quran-reciter');
@@ -88,30 +91,33 @@ function resolveReciter(): Reciter {
   return RECITERS.find((r) => r.id === DEFAULT_RECITER_ID) ?? RECITERS[0];
 }
 
+// The reciter label shown for a Quranic item. Surahs3 plays Juhani
+// hadr surah files (below), so its label is the hadr name; Kursi
+// uses the listen-preference reciter's name. The badges stay honest
+// about this split — never a single reciter name for both.
+function adhkarReciterLabel(clip: AdhkarClip, reciter: Reciter): string {
+  return clip.id === 'surahs3' ? HADR_NAME : reciter.name;
+}
+
 // Segments one repetition of a dhikr plays.
-// Quranic items play REAL recitation via the shared reciters.ts
-// builders: Kursi is one ayah file (2:255 = global 262, verified
-// against the ayah text); the three surahs chain 15 ayah files per
-// rep (Ikhlas 4 + Falaq 5 + Nas 6). Surah files were NOT used:
-// cdn.islamic.network audio-surah returns 403 for ar.minshawi
-// (verified 2026-10-29), the default reciter — ayah chaining works
-// for all 8 reciters through the one verified builder.
-// RECITATION FOR BOTH VOICES (2026-10-29 review decision): Quranic
-// items play the real recitation in BOTH voices — a synthetic TTS
-// voice cannot guarantee tajwid, and a recitation recording does
-// not depend on the listener's gender. The reciter is the user's
-// listen preference, so the male/female toggle affects only the
+// Quranic items play REAL recitation in BOTH voices (2026-10-29
+// review decision): a synthetic TTS voice cannot guarantee tajwid,
+// and a recitation recording does not depend on the listener's
+// gender — so the male/female toggle affects only the
 // supplications. Non-Quranic items are single synthetic clips in
 // both voices.
+// Kursi is one ayah file (2:255 = global 262) from the
+// listen-preference reciter (reciters.ts builder). The three surahs
+// (2026-10-29, Amr's order) play Juhani hadr SURAH files instead —
+// one file per surah per rep, chained exactly as the 15 ayah files
+// were before (verified 2026-10-29: 112/113/114 all return 206
+// audio/mpeg). Kursi cannot come from Juhani: AlQuranCloud lists
+// ar.abdullahawadaljuhani as surahbysurah only, and no
+// everyayah/Quran.com per-ayah Juhani was found.
 function segmentsFor(clip: AdhkarClip, voice: AdhkarVoice, reciter: Reciter): string[] {
   if (!clip.quranic) return [adhkarClipUrl(clip, voice)];
   if (clip.id === 'kursi') return [reciter.audioUrl(2, 255)];
-  const segs: string[] = [];
-  const surahs: Array<[number, number]> = [[112, 4], [113, 5], [114, 6]];
-  for (const [surah, n] of surahs) {
-    for (let a = 1; a <= n; a++) segs.push(reciter.audioUrl(surah, a));
-  }
-  return segs;
+  return [112, 113, 114].map((surah) => hadrAudioUrl(surah));
 }
 
 function isRecitation(clip: AdhkarClip, voice: AdhkarVoice): boolean {
@@ -148,7 +154,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
       if (nav.mediaSession && MM) {
         nav.mediaSession.metadata = new MM({
           title: `أذكار ${w === 'morning' ? 'الصباح' : 'المساء'} — ${preview(c.display, 40)}`,
-          artist: isRecitation(c, stateRef.current.voice) ? `تلاوة — ${reciter.name}` : 'صوت مولّد بالذكاء الاصطناعي',
+          artist: isRecitation(c, stateRef.current.voice) ? `تلاوة — ${adhkarReciterLabel(c, reciter)}` : 'صوت مولّد بالذكاء الاصطناعي',
         });
       }
       if (nav.mediaSession) nav.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -408,7 +414,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
               </p>
               <p className="mt-1">
                 {isRecitation(clip, voice) ? (
-                  <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة — {reciter.name}</span>
+                  <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة — {adhkarReciterLabel(clip, reciter)}</span>
                 ) : (
                   <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
                 )}

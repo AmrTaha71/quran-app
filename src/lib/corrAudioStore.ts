@@ -22,7 +22,10 @@
 // miss by key and refill gradually. No purge is ever needed, and
 // hydrate opportunistically deletes old-version rows.
 
-export const CORR_AUDIO_CACHE_VERSION = 'v1';
+// v2 (2026-10-29): generate-voice v10 moved the OpenAI path to
+// Realtime cedar/marin — v1 entries (old voices) miss by key and
+// refill gradually; hydrate deletes old-version rows.
+export const CORR_AUDIO_CACHE_VERSION = 'v2';
 
 export interface CorrAudioEntry {
   key: string;
