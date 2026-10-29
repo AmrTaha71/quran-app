@@ -42,7 +42,9 @@ export type AppRoute =
   | 'mushaf'
   | 'settings'
   | 'follow'
-  | 'test';
+  | 'test'
+  | 'listen'
+  | 'radio';
 
 export interface ParsedHash {
   route: AppRoute;
@@ -68,6 +70,8 @@ const KNOWN_ROUTES: AppRoute[] = [
   'follow',
   'test',
   'settings',
+  'listen',
+  'radio',
 ];
 
 function parsePositiveInt(value: string | null): number | undefined {

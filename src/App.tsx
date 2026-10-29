@@ -18,16 +18,18 @@ import AuthPage from './pages/AuthPage';
 import QuranMushafPage from './pages/QuranMushafPage';
 import SettingsPage from './pages/SettingsPage';
 import SelfTestPage from './pages/SelfTestPage';
+import ListenPage from './pages/ListenPage';
+import RadioPage from './pages/RadioPage';
 import SplashScreen from './components/SplashScreen';
 import OfflineBanner from './components/OfflineBanner';
 import { parseHash } from './lib/shareLinks';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'radio';
 
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are
 // excluded: a SIGNED_OUT there is normal, not an expiry.
-const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test'];
+const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'radio'];
 
 function getRouteFromHash(): Route {
   const rawHash = window.location.hash;
@@ -274,6 +276,12 @@ function AppContent() {
   }
   if (route === 'test') {
     return <SelfTestPage onNavigate={navigate} />;
+  }
+  if (route === 'listen') {
+    return <ListenPage onNavigate={navigate} />;
+  }
+  if (route === 'radio') {
+    return <RadioPage onNavigate={navigate} />;
   }
   // Logged-in users never see the landing page — admins included
   // (2026-10-27: admins are users too, same account, same start

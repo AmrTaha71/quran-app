@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link } from 'lucide-react';
+import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link, Radio, SunMoon } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
+import { readListeningWird } from '../lib/listenPlayback';
 import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getJuzFromPage } from '../lib/quranIndex';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen';
 
 // Light start page (الرئيسية) for logged-in users: NOT a second
 // dashboard. One resume card (last Mushaf page, from the same
@@ -57,6 +58,12 @@ export default function HomeStartPage({ session, onNavigate }: {
   };
   useEscapeClose(showIntro, dismissIntro);
   const [lastPage] = useState(readLastPage);
+  // Saved listening wird (display only here — the resume action
+  // lives on ListenPage). Read once on mount; a missing/stub module
+  // value simply hides the line.
+  const [listeningWird] = useState(() => {
+    try { return readListeningWird(); } catch { return null; }
+  });
   const [wird] = useState(loadWird);
   const today = new Date().toLocaleDateString('en-CA');
   const doneToday = wird.doneDays.includes(today);
@@ -140,6 +147,72 @@ export default function HomeStartPage({ session, onNavigate }: {
           >
             <BookOpen className="w-5 h-5" />
             {lastPage.visited ? `أكمل الحفظ — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف للحفظ'}
+          </button>
+        </div>
+
+        {/* استمع للقرآن: directly after the resume card, before the wird button. */}
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
+          </p>
+          <p className="text-sm text-accent-600 mt-1">
+            تلاوة متواصلة مع القراءة — تعمل والشاشة مطفية، ويمكن تحميل السورة للاستماع دون اتصال
+          </p>
+          {/* أوفلاين — headline feature of this entry (Amr's explicit
+              "أوفلاين"): streaming (play) and per-surah download are
+              both reachable from the listen page this card opens. */}
+          <p className="text-sm text-amber-700 font-bold mt-1">
+            أوفلاين: حمّل أي سورة واستمع دون اتصال
+          </p>
+          {listeningWird && (
+            <p className="text-sm text-amber-700 font-bold mt-2">
+              لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
+            </p>
+          )}
+          <button
+            onClick={() => onNavigate('listen')}
+            className="mt-4 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+          >
+            <Headphones className="w-5 h-5" />
+            استمع للقرآن
+          </button>
+        </div>
+
+        {/* إذاعة القرآن الكريم: SHIP-GATED — disabled "قريبًا" card only.
+            No navigation, no playback: the button must not go live on
+            an unverified or unpermitted stream (Maspero permission
+            pending). The #/radio route stays for testing only; adding
+            the live card later is one card + onNavigate('radio'). */}
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <Radio className="w-5 h-5 text-stone-500" /> استمع لإذاعة القرآن الكريم
+            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
+          </p>
+          <p className="text-sm text-accent-600 mt-1">
+            بث مباشر لإذاعة القرآن الكريم من القاهرة — بانتظار إذن البث من الهيئة الوطنية للإعلام.
+          </p>
+          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
+            قريبًا
+          </button>
+        </div>
+
+        {/* أذكار الصباح والمساء: CARD ONLY — audio out of scope (no
+            licensed source yet: Duraihem confirmation / Alafasy
+            permission pending). Disabled "قريبًا" card; nothing built,
+            nothing hotlinked. Future wiring shape (types only, see
+            src/lib/adhkarFuture.ts): one audio file per wird +
+            timing table [{text, count, startMs, endMs}] for
+            per-dhikr skip. */}
+        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <SunMoon className="w-5 h-5 text-stone-500" /> استمع لأذكار الصباح والمساء
+            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
+          </p>
+          <p className="text-sm text-accent-600 mt-1">
+            أذكار الصباح والمساء صوتًا — بانتظار مصدر صوتي مرخّص.
+          </p>
+          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
+            قريبًا
           </button>
         </div>
 
