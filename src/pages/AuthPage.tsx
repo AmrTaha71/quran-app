@@ -53,6 +53,11 @@ export default function AuthPage({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetDone, setResetDone] = useState(false);
   const [resetLinkExpired, setResetLinkExpired] = useState(false);
+  // Email-verification state (2026-10-30): the address awaiting its
+  // confirmation click. Set after a signup with no session (dashboard
+  // "Confirm email" ON) or after an "Email not confirmed" login, and
+  // shown as a card above the forms until the user confirms.
+  const [checkEmail, setCheckEmail] = useState<string | null>(null);
 
   // If the App shell flags a recovery after this page already mounted
   // (supabase's PASSWORD_RECOVERY event), switch to the reset form.
@@ -94,15 +99,29 @@ export default function AuthPage({
     // for accounts created before normalization existed.
     const candidates = loginEmailCandidates(username);
     let signedIn = false;
+    let lastLoginError = '';
     for (const loginEmail of candidates) {
       const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
       if (!error) {
         signedIn = true;
         break;
       }
+      lastLoginError = error.message || '';
     }
     if (!signedIn) {
-      setError(t('invalidCredentials'));
+      // Unconfirmed account (post-verification signups): show the
+      // check-email card instead of a generic wrong-password error.
+      // Resend only works when we know the real email (input contains
+      // '@'); a bare username cannot receive a link.
+      if (lastLoginError.toLowerCase().includes('confirm')) {
+        if (username.includes('@')) {
+          setCheckEmail(username.trim());
+        } else {
+          setError('حسابك لسه متأكدش — افتح إيميل التأكيد واضغط الرابط، أو سجل دخول بالإيميل نفسه عشان نعيد إرسال الرابط.');
+        }
+      } else {
+        setError(t('invalidCredentials'));
+      }
       // A stored pending profile (signup insert failed earlier) is
       // retried now that a session exists; if it still fails, لوحتي
       // shows the retry state — the login itself is not blocked.
@@ -131,6 +150,10 @@ export default function AuthPage({
       setError(t('enterUsername'));
       return;
     }
+    if (!email.trim() || !email.includes('@')) {
+      setError('الإيميل مطلوب وصحيح — هنبعت لك رابط تأكيد عليه، ولازم تضغطه قبل ما تقدر تدخل.');
+      return;
+    }
     setLoading(true);
     // The real email field, when filled, is the account email: the old
     // username-derived address (username@quran-app.user) is not a real
@@ -147,15 +170,23 @@ export default function AuthPage({
     if (error) {
       if (error.message.includes('already') || error.message.includes('registered')) {
         let signedIn = false;
+        let lastSignInError = '';
         for (const candidate of candidates) {
           const { error: signInError } = await supabase.auth.signInWithPassword({ email: candidate, password });
           if (!signInError) {
             signedIn = true;
             break;
           }
+          lastSignInError = signInError.message || '';
         }
         if (!signedIn) {
-          setError(t('invalidCredentials'));
+          // Already registered but unconfirmed: show the check-email
+          // card (with resend) instead of a wrong-password error.
+          if (lastSignInError.toLowerCase().includes('confirm')) {
+            setCheckEmail(signupEmail);
+          } else {
+            setError(t('invalidCredentials'));
+          }
           setLoading(false);
         }
       } else if (error.message.includes('rate') || error.message.includes('limit')) {
@@ -172,10 +203,12 @@ export default function AuthPage({
     }
 
     if (data.user) {
-      // Username-first signup (2026-10-27): email is optional and is
-      // used ONLY for password recovery when given. No verification
-      // email is required — Supabase mailer_autoconfirm is on, so a
-      // username-only account signs in immediately.
+      // Email verification (2026-10-30): email is REQUIRED, and once
+      // the dashboard "Confirm email" switch is ON, a new account
+      // cannot sign in until the link is clicked — so the no-session
+      // path below shows the check-email card instead of signing in.
+      // Until the switch is flipped (autoconfirm still ON), signup
+      // still signs in immediately via the session path below.
       // S1: the insert error is NO LONGER swallowed. On failure the
       // payload is kept for a retry after sign-in (below, plus the App
       // shell and لوحتي), and the user is told — in a non-blocking
@@ -192,6 +225,17 @@ export default function AuthPage({
         preferred_name: preferredName.trim() || null,
       };
       const { error: insertError } = await supabase.from('user_profiles').insert(profilePayload);
+
+      if (!data.session) {
+        // Confirmation required (dashboard "Confirm email" ON): do NOT
+        // attempt sign-in — it would fail with "Email not confirmed".
+        // The profile row retries automatically after sign-in (App
+        // shell + لوحتي), so save it silently here.
+        if (insertError) savePendingProfile(profilePayload);
+        setCheckEmail(signupEmail);
+        setLoading(false);
+        return;
+      }
 
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: signupEmail, password });
       if (signInError) {
@@ -211,6 +255,30 @@ export default function AuthPage({
           savePendingProfile(profilePayload);
         }
       }
+    } else {
+      // No user and no error (should not happen): never leave the
+      // spinner stuck — the confirmation flow varies the shape.
+      setError('حدث خطأ غير متوقع — حاول مرة أخرى.');
+      setLoading(false);
+    }
+  };
+
+  // Resend the signup confirmation link for the check-email card.
+  const handleResendConfirmation = async () => {
+    if (!checkEmail) return;
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    const { error } = await supabase.auth.resend({ type: 'signup', email: checkEmail });
+    setLoading(false);
+    if (error) {
+      if (error.message.includes('rate') || error.message.includes('limit')) {
+        setError('تم تجاوز عدد المحاولات. انتظر دقيقة ثم حاول مرة أخرى.');
+      } else {
+        setError(error.message);
+      }
+    } else {
+      setSuccess('تم إعادة إرسال رابط التأكيد — افتح إيميلك (وتأكد من مجلد السبام).');
     }
   };
 
@@ -340,7 +408,7 @@ export default function AuthPage({
           {mode !== 'recover' && mode !== 'reset' && (
             <div className="flex bg-gray-50 rounded-xl p-1 mb-5 border border-gray-100">
               <button
-                onClick={() => setMode('login')}
+                onClick={() => { setMode('login'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
                   mode === 'login' ? 'bg-emerald-600 text-white shadow-md' : 'text-accent-500 hover:text-accent-700'
                 }`}
@@ -348,7 +416,7 @@ export default function AuthPage({
                 {t('login')}
               </button>
               <button
-                onClick={() => setMode('signup')}
+                onClick={() => { setMode('signup'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
                   mode === 'signup' ? 'bg-emerald-600 text-white shadow-md' : 'text-accent-500 hover:text-accent-700'
                 }`}
@@ -358,7 +426,23 @@ export default function AuthPage({
             </div>
           )}
 
-          {mode === 'reset' ? (
+          {checkEmail ? (
+            <div className="space-y-3">
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800 text-center leading-relaxed">
+                تم إنشاء الحساب — افتح إيميلك <span className="font-bold" dir="ltr">{checkEmail}</span> واضغط رابط التأكيد، وبعدين سجل دخول. لو مش لاقي الرسالة، تأكد من مجلد السبام.
+              </div>
+              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              <button type="button" onClick={handleResendConfirmation} disabled={loading}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
+                {loading ? '...' : 'إعادة إرسال رابط التأكيد'}
+              </button>
+              <button type="button" onClick={() => { setCheckEmail(null); setSuccess(''); setError(''); setMode('login'); }}
+                className="w-full text-sm text-accent-600 hover:text-accent-700 py-2">
+                العودة لتسجيل الدخول
+              </button>
+            </div>
+          ) : mode === 'reset' ? (
             <form onSubmit={handleResetPassword} className="space-y-3">
               <p className="text-sm text-accent-600 text-center mb-4">اختر كلمة سر جديدة لحسابك</p>
               {resetLinkExpired ? (
@@ -463,6 +547,7 @@ export default function AuthPage({
                   autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
+                <p className="text-xs text-accent-600 mt-1">لو حسابك جديد (بعد تفعيل التحقق بالإيميل)، سجل دخول بالإيميل مش باسم المستخدم — الحسابات الجديدة ملهاش عنوان مشتق.</p>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('password')}</label>
@@ -515,14 +600,14 @@ export default function AuthPage({
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-600">(اختياري)</span></label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-600">(مطلوب)</span></label>
                 <div className="relative">
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@example.com (اختياري)"
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                  placeholder="email@example.com"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
-                <p className="text-xs text-accent-600 mt-1">مش مطلوب للتسجيل، ومفيش تحقق بالإيميل. بس لو حطيت إيميل حقيقي، تقدر ترجع كلمة السر بيه بعد كده.</p>
+                <p className="text-xs text-accent-600 mt-1">هنبعت لك رابط تأكيد على الإيميل ده — لازم تفتحه وتضغطه قبل ما تقدر تدخل. والإيميل ده هو اللي هترجع بيه كلمة السر بعد كده.</p>
               </div>
 
               <div>
