@@ -89,7 +89,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
       if (nav.mediaSession && MM) {
         nav.mediaSession.metadata = new MM({
           title: `أذكار ${w === 'morning' ? 'الصباح' : 'المساء'} — ${preview(c.display, 40)}`,
-          artist: 'صوت مولّد',
+          artist: 'صوت مولّد بالذكاء الاصطناعي',
         });
       }
       if (nav.mediaSession) nav.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
@@ -281,7 +281,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
         <div className="flex items-center gap-2 mt-3">
           <SunMoon className="w-6 h-6 text-emerald-700" />
           <h1 className="text-xl font-bold text-accent-800">أذكار الصباح والمساء</h1>
-          <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد</span>
+          <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
         </div>
 
         {/* Wird tabs */}
@@ -392,7 +392,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
         </div>
 
         <p className="text-center text-xs text-stone-500 mt-4">
-          الصوت مولّد — وليس تسجيلًا بشريًا. التكرار يتم في المشغّل؛ كل مقطع مولّد مرة واحدة.
+          الصوت مولّد بالذكاء الاصطناعي — وليس تسجيلًا بشريًا. التكرار يتم في المشغّل؛ كل مقطع مولّد مرة واحدة.
         </p>
       </div>
     </main>
