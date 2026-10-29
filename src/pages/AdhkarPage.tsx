@@ -32,6 +32,11 @@ type Route = 'home' | 'adhkar';
 const VOICE_KEY = 'quran-adhkar-voice';
 const WIRD_KEY = 'quran-adhkar-wird';
 const POS_KEY = 'quran-adhkar-position';
+// Saved-position version. Bumped to 2 on 2026-10-29 when the wird lists
+// changed (5 additions, lailaha split, subhan-count moved): old saved
+// indices point at different adhkar now, so a stale position resets
+// to the top instead of resuming at the wrong dhikr.
+const POS_VERSION = 2;
 
 function readVoice(): AdhkarVoice {
   try {
@@ -55,7 +60,8 @@ function readPosition(wird: AdhkarWird): { index: number; rep: number } {
   try {
     const raw = localStorage.getItem(POS_KEY);
     if (raw) {
-      const p = JSON.parse(raw) as SavedPos;
+      const p = JSON.parse(raw) as SavedPos & { v?: number };
+      if (p.v !== POS_VERSION) return { index: 0, rep: 1 };
       if (p.wird === wird && Number.isInteger(p.index) && p.index >= 0 && Number.isInteger(p.rep) && p.rep >= 1) {
         return { index: p.index, rep: p.rep };
       }
@@ -147,7 +153,7 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
 
   const savePosition = useCallback((w: AdhkarWird, i: number, r: number) => {
     try {
-      localStorage.setItem(POS_KEY, JSON.stringify({ wird: w, index: i, rep: r }));
+      localStorage.setItem(POS_KEY, JSON.stringify({ v: POS_VERSION, wird: w, index: i, rep: r }));
     } catch { /* ignore */ }
   }, []);
 
