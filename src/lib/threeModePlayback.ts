@@ -222,6 +222,13 @@ export class JourneyEngine {
   // Quarter tracking for the quarter currently being PLAYED
   // (not sought): its number, the ayahs actually played in order,
   // and their summed played seconds.
+  // DEFINITION (pinned per Claude 2026-10-29): D = trackedSeconds is
+  // CONTENT time — each ayah clip's audio.duration when known, else
+  // its currentTime at end — never wall-clock time, so pauses never
+  // inflate it. The 3–4:1 ratio is defined on these content durations,
+  // and it holds in experienced (wall) time too, because the tafsir
+  // clips play through this same engine at the SAME electronic rate
+  // (applyRate on every item start): both sides scale together.
   private trackedQuarter: number | null = null;
   private trackedAyahs: { surah: number; ayah: number }[] = [];
   private trackedSeconds = 0;
