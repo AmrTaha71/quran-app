@@ -11,7 +11,7 @@ import { THREE_MODES, TAFSIR_ATTRIBUTION } from '../lib/threeModeListen';
 import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getJuzFromPage } from '../lib/quranIndex';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar';
 
 // Light start page (الرئيسية) for logged-in users: NOT a second
 // dashboard. One resume card (last Mushaf page, from the same
@@ -195,7 +195,27 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
         </div>
 
-        {/* Khatma entries, directly after the listen card, in
+        {/* أذكار الصباح والمساء: LIVE — generated-voice clips
+            (46 clips, male/female toggle in the player). Placed
+            directly after the listen card: the audio hub. */}
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
+          <p className="font-bold text-accent-800 flex items-center gap-2">
+            <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
+            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد</span>
+          </p>
+          <p className="text-sm text-accent-600 mt-1">
+            أذكار الصباح والمساء صوتًا — بصوت رجالي أو نسائي، والتكرار يتم في المشغّل.
+          </p>
+          <button
+            onClick={() => onNavigate('adhkar')}
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+          >
+            <SunMoon className="w-5 h-5" />
+            استمع للأذكار
+          </button>
+        </div>
+
+        {/* Khatma entries, after the listen + adhkar cards, in
             mode order: ختمة منوّعة, then ختمة وتفسير. */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
@@ -322,28 +342,6 @@ export default function HomeStartPage({ session, onNavigate }: {
             className="mt-2 text-sm text-emerald-700 font-semibold underline"
           >
             اظبط وردك اليومي من الإعدادات
-          </button>
-        </div>
-
-        {/* أذكار الصباح والمساء: CARD ONLY — audio out of scope until the
-            generated-voice clips exist (path A reinstated 2026-10-29:
-            best synthetic voice, pilot compares 2+ voices and Amr's
-            ear picks; human path B cancelled as infeasible).
-            Disabled "قريبًا" card; nothing built, nothing hotlinked.
-            Future wiring shape (types only, see
-            src/lib/adhkarFuture.ts): one audio file per wird +
-            timing table [{text, count, startMs, endMs}] for
-            per-dhikr skip. */}
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 mb-4 opacity-60" aria-disabled="true">
-          <p className="font-bold text-accent-800 flex items-center gap-2">
-            <SunMoon className="w-5 h-5 text-stone-500" /> استمع لأذكار الصباح والمساء
-            <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            أذكار الصباح والمساء صوتًا — قيد التجهيز بصوت مولّد.
-          </p>
-          <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
-            قريبًا
           </button>
         </div>
 

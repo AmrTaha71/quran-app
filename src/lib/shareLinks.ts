@@ -43,7 +43,8 @@ export type AppRoute =
   | 'settings'
   | 'follow'
   | 'test'
-  | 'listen';
+  | 'listen'
+  | 'adhkar';
 
 export interface ParsedHash {
   route: AppRoute;
@@ -70,6 +71,7 @@ const KNOWN_ROUTES: AppRoute[] = [
   'test',
   'settings',
   'listen',
+  'adhkar',
 ];
 
 function parsePositiveInt(value: string | null): number | undefined {
