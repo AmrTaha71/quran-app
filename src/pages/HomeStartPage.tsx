@@ -196,7 +196,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         {/* Khatma entries, directly after the listen card, in
-            mode order: ختمة منوّعة, then ختمة وتدبّر. */}
+            mode order: ختمة منوّعة, then ختمة وتفسير. */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <Headphones className="w-5 h-5 text-emerald-600" />{khatmaVaried?.name ?? 'ختمة منوّعة'}
@@ -219,7 +219,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-emerald-600" />{khatmaTadabbur?.name ?? 'ختمة وتدبّر'}
+            <Headphones className="w-5 h-5 text-emerald-600" />{khatmaTadabbur?.name ?? 'ختمة وتفسير'}
           </p>
           <p className="text-sm text-accent-600 mt-1">
             {khatmaTadabbur?.description ?? 'ختمة منوّعة مع تفسير ميسّر بعد كل ربع.'}

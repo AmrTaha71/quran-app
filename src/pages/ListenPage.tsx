@@ -659,9 +659,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
         }
       },
       onEnded: () => {
-        // A journey's onEnded means TRUE completion (surah 114
-        // + its quarter's interstitial): a finished journey has
-        // no resume to offer, so its saved position is cleared.
+        // A journey's onEnded means TRUE completion (surah 114,
+        // ayah 6 — the final quarter has no interstitial by owner
+        // decision): a finished journey has no resume to offer,
+        // so its saved position is cleared.
         try {
           clearThreeModeResume(journey);
         } catch {}
@@ -1547,7 +1548,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
                 <p className="font-bold text-accent-800">
                   استئناف — {m.name}:{' '}
                   {saved.kind === 'tafsir'
-                    ? `تدبّر، تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
+                    ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
                     : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
                 </p>
                 <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بهذا النمط.</p>
@@ -1578,7 +1579,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               {journeyMode !== null
                 ? journeyItem !== null
                   ? journeyItem.kind === 'tafsir'
-                    ? `تدبّر — تفسير سورة ${surahName(journeyItem.surah)} آية ${journeyItem.ayah} — ${threeModeName(journeyMode)}`
+                    ? `تفسير سورة ${surahName(journeyItem.surah)} آية ${journeyItem.ayah} — ${threeModeName(journeyMode)}`
                     : `${threeModeName(journeyMode)} — سورة ${surahName(journeyItem.surah)} — آية ${journeyItem.ayah} من ${surahCount(journeyItem.surah)}`
                   : `${threeModeName(journeyMode)} — سورة ${surahName(surah)}`
                 : hadrOn

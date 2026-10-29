@@ -1062,7 +1062,7 @@ export class JourneyEngine {
         });
       } else {
         ms.metadata = new MediaMetadataCtor({
-          title: `تدبّر — تفسير سورة ${surahName} آية ${cur.ayah}`,
+          title: `تفسير سورة ${surahName} آية ${cur.ayah}`,
           artist: 'التفسير الميسر',
           album: 'روابط الذكر الحكيم',
         });

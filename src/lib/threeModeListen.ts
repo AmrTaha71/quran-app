@@ -2,13 +2,16 @@
 //
 // MODES (owner-confirmed 19:46 EEST 2026-10-29; names are working
 // titles until Amr picks/adjusts them):
-//   (1) بصوت واحد — one voice: the chosen reciter for every surah.
+//   (1) ختمة بقارئ واحد — one voice: the chosen reciter for every surah.
 //   (2) ختمة منوّعة — varied khatma: the full Quran from the start
 //       point, each QUARTER by a different one of the existing 8
 //       reciters, in the fixed rotation below (owner rule 22:01
 //       EEST 2026-10-29: quarters, not surahs).
-//   (3) ختمة وتدبّر — varied khatma + one الميسر interstitial PER
-//       QUARTER (after each completed quarter, including the last).
+//   (3) ختمة وتفسير — varied khatma + one الميسر interstitial PER
+//       QUARTER (after each completed quarter except the last —
+//       owner decision 22:13 EEST 2026-10-29: the khatma completes
+//       clearly at 114:6; the final quarter's tafsir is not played
+//       in-journey).
 //
 // Every mode is FREE-CHOICE (start surah + starting reciter are the
 // user's choice) + RESUME in all three modes (tap-only, never
@@ -78,7 +81,7 @@ export type ThreeMode = 'single' | 'varied' | 'tadabbur';
 export const THREE_MODES: { id: ThreeMode; name: string; description: string }[] = [
   {
     id: 'single',
-    name: 'بصوت واحد',
+    name: 'ختمة بقارئ واحد',
     description: 'ختمة كاملة بصوت القارئ الذي تختاره، من السورة التي تبدأ منها.',
   },
   {
@@ -88,8 +91,8 @@ export const THREE_MODES: { id: ThreeMode; name: string; description: string }[]
   },
   {
     id: 'tadabbur',
-    name: 'ختمة وتدبّر',
-    description: 'ختمة منوّعة، وبعد كل ربع وقفة تدبّر من التفسير الميسر بحجم يتناسب مع الربع.',
+    name: 'ختمة وتفسير',
+    description: 'ختمة منوّعة، وبعد كل ربع وقفة تفسير من التفسير الميسر بحجم يتناسب مع الربع.',
   },
 ];
 
@@ -211,8 +214,12 @@ export function* planJourney(
       if (qu !== null) prevQuarter = qu;
     }
   }
-  // The journey's last quarter completes at the end of surah 114.
-  if (prevQuarter !== null) {
+  // The journey's last quarter completes at the end of surah 114 —
+  // and gets NO interstitial: owner decision 22:13 EEST 2026-10-29
+  // (clear completion at 114:6 first; the final quarter's tafsir
+  // is not played in-journey). Earlier quarters still emit theirs
+  // on the crossing above.
+  if (prevQuarter !== null && prevQuarter.q !== 240) {
     yield { kind: 'quarterEnd', quarter: prevQuarter.q };
   }
 }
