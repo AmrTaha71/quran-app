@@ -863,7 +863,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
           close.onclick = () => { manual.remove(); close.remove(); };
           document.body.appendChild(close);
-          setDiagCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق');
+          setDiagCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق — اضغط مطوّلًا ثم «تحديد الكل»');
           return;
         }
       }

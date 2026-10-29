@@ -1287,6 +1287,12 @@ export default function QuranMushafPage({
   // tap) and stops on every wait clear via this same setter, plus
   // teardown belt-and-braces — it never leaks past the wait.
   // Diagnostic-only: no follow behavior reads these values.
+  // R3: the visible line renders each milestone as "event +Nms"
+  // (offset from the tap event) plus document.visibilityState,
+  // and the summary persists after the wait ends until the next
+  // tap (start() resets it) — the wait-clear event carries the
+  // final tick count. rAF stops in background, which resembles
+  // freezing; the visibility state disambiguates.
   const followHeartbeatTicksRef = useRef(0);
   const followHeartbeatRafRef = useRef<number | null>(null);
   const followHeartbeatEventsRef = useRef<{ event: string; ticks: number; at: number }[]>([]);
@@ -1314,12 +1320,19 @@ export default function QuranMushafPage({
     followHeartbeatPush('tap');
   };
   const setFollowMicWaitingState = useCallback((waiting: boolean, startedAt: number | null = null) => {
+    const wasWaiting = followMicWaitingRef.current;
     followMicWaitingRef.current = waiting;
     setFollowMicWaiting(waiting);
     setFollowMicWaitStartedAt(waiting ? startedAt : null);
     setFollowWaitRetryNote(null);
     if (waiting) followHeartbeatStart();
-    else followHeartbeatStop();
+    else {
+      // R3: record the clear as a milestone, but only when a wait
+      // was actually up — redundant setter(false) calls must not
+      // append spurious events to a previous summary.
+      if (wasWaiting) followHeartbeatPush('wait-clear');
+      followHeartbeatStop();
+    }
   }, []);
   // P0-2 (Claude): true once the live engine has begun capturing audio
   // in this session (onaudiostart, fallback onstart — both fire only
@@ -2161,11 +2174,12 @@ export default function QuranMushafPage({
           if (!followListeningRef.current || followAutoLockedRef.current) return;
           if (recognitionRef.current !== rec) return;
           // E3 refined by P0-2: NEVER restart while permission is
-          // undecided AND audio never started. This timer only arms
-          // on errors (which clear the wait), so this guard is
-          // belt-and-braces — but it is what guarantees "exactly one
-          // start attempt while pending" even if an error path
-          // changes. Once audio started, a missing onend IS a dead
+          // undecided AND audio never started. R3: while the wait
+          // is up the timer returns early here by design (the wait
+          // path relies on onend + إيقاف, not on this timer), so
+          // this guard is what guarantees "exactly one start
+          // attempt while pending" even if an error path changes.
+          // Once audio started, a missing onend IS a dead
           // engine (silence auto-end without the event), so the
           // restart below is the only recovery and must fire.
           if (followMicWaitingRef.current && !followAudioStartedRef.current) return;
@@ -2231,23 +2245,27 @@ export default function QuranMushafPage({
       };
       rec.onerror = (e: any) => {
         if (!followListeningRef.current || followAutoLockedRef.current) return;
-        // N2 (Claude reply 6, item 7): error taxonomy for the
-        // permission wait. The old code cleared the wait for ANY
-        // error, claiming every error is a permission decision —
-        // wrong for aborted, network, and service-not-allowed,
-        // which can fire BEFORE the decision while the prompt is
-        // still pending. The wait is now cleared only where the
-        // error itself proves a decision or a grant: not-allowed
-        // (denied, via the terminal stop below) and no-speech
-        // (the engine ran, so the mic was granted). Transient
-        // errors keep the wait: aborted and network keep the
-        // session (onend restarts it), and service-not-allowed
-        // keeps the wait while the session runs out its R3 retry
-        // budget — the honest stop on exhaustion clears the wait
-        // as terminal teardown, not as error classification.
+        // N2 (Claude reply 6, item 7; corrected by reply 8):
+        // error taxonomy for the permission wait. The old code
+        // cleared the wait for ANY error, claiming every error
+        // is a permission decision — wrong for aborted and
+        // network, which can fire BEFORE the decision while the
+        // prompt is still pending. The wait is now cleared only
+        // where the error itself proves a decision or a grant:
+        // not-allowed (denied, via the terminal stop below) and
+        // no-speech (the engine ran, so the mic was granted).
+        // Transient errors keep the wait: aborted and network
+        // keep the session (onend restarts it). service-not-
+        // allowed is TERMINAL, not pre-decision (reply 8: most
+        // likely a service refusal — dictation/Siri disabled, or
+        // speech permission refused) — it stops honestly with
+        // the specific message below, no wait exception; the
+        // honest stop returns to the ready branch, where the
+        // manual input the message points to IS visible.
         // Terminal branches (audio-capture, language-not-
-        // supported, unknown) still stop honestly, and that
-        // teardown clears the wait. No path leaves a waiting
+        // supported, service-not-allowed, unknown) still stop
+        // honestly, and that teardown clears the wait. No path
+        // leaves a waiting
         // display on a stopped engine: every stop goes through
         // stopLiveWithPrompt or stopFollowEngines, both of which
         // clear the wait, and the live wait's exit (إيقاف) is
@@ -2257,7 +2275,9 @@ export default function QuranMushafPage({
         // 'no-speech' (imam silent) and 'aborted' are transient: the
         // onend restart below retries them silently, and showing an
         // error for silence would be a false alarm — but the 3s
-        // safety timer now backstops a missing onend. Previously
+        // safety timer backstops a missing onend only once the wait
+        // is cleared (during waiting it returns early; the waiting
+        // path relies on onend + إيقاف). Previously
         // every other error was silently swallowed while the lobby
         // kept saying "listening" on a dead engine; unknown errors
         // now stop honestly with a re-tap prompt instead.
@@ -2274,21 +2294,22 @@ export default function QuranMushafPage({
         } else if (e.error === 'audio-capture') {
           stopLiveWithPrompt('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط «ابدأ الاستماع» من جديد');
         } else if (e.error === 'service-not-allowed') {
-          // N2: the wait stands here (see the taxonomy above) — no
-          // terminal stop yet. The session runs out its R3
-          // pre-audiostart retry budget via onend (each retry is
-          // visible in the waiting line), and the honest stop on
-          // exhaustion ends the wait as terminal teardown. If
-          // onend never comes, the listening branch still shows
-          // إيقاف (full stop) — never a stranded display.
-          setFollowError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب الإدخال اليدوي بالأسفل، أو متصفح تاني');
+          // R3 (Claude reply 8): terminal service refusal, not a
+          // pre-decision error — no wait exception, no retries.
+          // The honest stop returns to the ready branch, where
+          // the manual input this message points to IS visible.
+          stopLiveWithPrompt('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب الإدخال اليدوي بالأسفل، أو متصفح تاني');
         } else if (e.error === 'language-not-supported') {
           stopLiveWithPrompt('الاستماع المباشر مش بيدعم لغة الواجهة الحالية على الجهاز ده — جرّب الإدخال اليدوي بالأسفل');
         } else if (e.error === 'network') {
           // Transient: the engine auto-restarts from onend, so this
           // message must NOT tell the user to re-tap or to go back
           // to the start branch — it clears on the next good result.
-          // The safety timer covers a missing onend here too.
+          // R3: the safety timer does NOT cover a missing onend
+          // while the wait is up (it returns early on the waiting
+          // guard) — during waiting, a missing onend is covered
+          // only by onend arriving (it usually does) plus the
+          // always-visible إيقاف stop.
           // N2: the wait stands — a network error can fire before
           // the permission decision, and the session continues.
           setFollowError('الاستماع المباشر يحتاج اتصالاً بالإنترنت — بيحاول تاني لوحده');
@@ -2523,6 +2544,10 @@ export default function QuranMushafPage({
       }
       return;
     }
+    // R3: Whisper resolution milestone (the live path has
+    // rec.start-return) — owning path only: the stale branch
+    // above already returned.
+    followHeartbeatPush('gum-resolved');
     const uid = session?.user?.id;
     if (!uid) {
       stream.getTracks().forEach((t) => t.stop());
@@ -3561,15 +3586,19 @@ export default function QuranMushafPage({
                     </div>
                   </>
                 )}
-                {/* N4: heartbeat diagnostic, visible only while the
-                    permission wait is up. Ticks refresh every second
-                    via the existing ticker re-render; if the main
-                    thread blocks, this line freezes too — that frozen
-                    number IS the evidence (alive = advancing). */}
-                {followMicWaiting && (
+                {/* N4 heartbeat diagnostic (R3): while waiting it
+                    refreshes every second via the existing ticker
+                    re-render; after the wait ends the summary
+                    persists until the next tap (which resets it).
+                    If the main thread blocks, the tick count
+                    freezes — that frozen number IS the evidence
+                    (alive = advancing). rAF stops in background,
+                    so visibilityState disambiguates a background
+                    freeze from a blocked thread. */}
+                {(followMicWaiting || followHeartbeatEventsRef.current.length > 0) && (
                   <p className="text-xs text-emerald-200/70 mt-2">
-                    تشخيص النبض: {followHeartbeatTicksRef.current} إطار
-                    {followHeartbeatEventsRef.current.length > 0 ? ` — آخر حدث: ${followHeartbeatEventsRef.current[followHeartbeatEventsRef.current.length - 1].event}` : ''}
+                    تشخيص النبض: {followHeartbeatTicksRef.current} إطار · {document.visibilityState}
+                    {followHeartbeatEventsRef.current.length > 0 ? ` — ${followHeartbeatEventsRef.current.map((ev) => ev.event + ' +' + (ev.at - followHeartbeatEventsRef.current[0].at) + 'ms').join(' → ')}` : ''}
                   </p>
                 )}
                 {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
