@@ -326,8 +326,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         {/* أذكار الصباح والمساء: CARD ONLY — audio out of scope until the
-            human recording exists (path B decided 2026-10-29: human
-            performer, best-sounding option; TTS path A cancelled).
+            generated-voice clips exist (path A reinstated 2026-10-29:
+            best synthetic voice, pilot compares 2+ voices and Amr's
+            ear picks; human path B cancelled as infeasible).
             Disabled "قريبًا" card; nothing built, nothing hotlinked.
             Future wiring shape (types only, see
             src/lib/adhkarFuture.ts): one audio file per wird +
@@ -339,7 +340,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <span className="text-xs font-bold bg-stone-200 text-stone-700 px-2 py-1 rounded-full">قريبًا</span>
           </p>
           <p className="text-sm text-accent-600 mt-1">
-            أذكار الصباح والمساء صوتًا — قيد التجهيز بتسجيل بشري.
+            أذكار الصباح والمساء صوتًا — قيد التجهيز بصوت مولّد.
           </p>
           <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
             قريبًا
