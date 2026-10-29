@@ -430,6 +430,16 @@ export class RiwayaEngine {
   private applyRate(): void {
     try {
       this.audio.playbackRate = this.playbackRate;
+      // Pitch preservation, EXPLICIT (Claude 2026-10-29): the default
+      // is true, but a speed change must never rely on it — a shifted
+      // pitch would distort tajwid at 1.25x/1.5x. webkit prefix for
+      // older Safari. Set on every play path, like the rate itself.
+      const el = this.audio as HTMLAudioElement & {
+        preservesPitch?: boolean;
+        webkitPreservesPitch?: boolean;
+      };
+      el.preservesPitch = true;
+      el.webkitPreservesPitch = true;
     } catch {
       // Swallow.
     }
