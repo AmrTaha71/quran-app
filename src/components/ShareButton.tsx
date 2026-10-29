@@ -33,7 +33,7 @@ export default function ShareButton({
     ? APP_URL
     : buildShareUrl({ surah: surahNo, ayah: ayahNo, page: pageNo });
   const shareText = isGenericAppShare
-    ? `روابط الذكر الحكيم\n\nاحفظها بالتربيط:\n${shareUrl}`
+    ? `روابط الذكر الحكيم\n\nاحفظ القرآن بالتربيطات:\n${shareUrl}`
     : `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${shareUrl}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(shareUrl);

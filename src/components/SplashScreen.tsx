@@ -161,7 +161,7 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
           <img src="/icon-512.png" alt="روابط الذكر الحكيم" />
         </div>
         <div className="rq-splash-divider"><i /></div>
-        <p className="rq-splash-tagline">{message || 'احفظها بالتربيط'}</p>
+        <p className="rq-splash-tagline">{message || 'احفظ القرآن بالتربيطات'}</p>
       </div>
       <button type="button" className="rq-splash-skip" aria-label="تخطي شاشة البداية">تخطَّ ⏭</button>
     </div>
