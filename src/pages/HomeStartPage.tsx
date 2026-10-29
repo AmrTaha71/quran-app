@@ -216,6 +216,34 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
+        {/* Quick buttons only */}
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => onNavigate('app')}
+            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+          >
+            <LayoutDashboard className="w-5 h-5 text-emerald-600" /> لوحتي
+          </button>
+          <button
+            onClick={() => onNavigate('follow')}
+            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+          >
+            <Mic className="w-5 h-5 text-emerald-600" /> الحق الإمام
+          </button>
+          <button
+            onClick={() => onNavigate('test')}
+            className="py-3.5 bg-white border border-amber-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+          >
+            <Headphones className="w-5 h-5 text-amber-600" /> سمّع لنفسك
+          </button>
+          <button
+            onClick={() => onNavigate('settings')}
+            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+          >
+            <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
+          </button>
+        </div>
+
         {/* إذاعة القرآن الكريم: SHIP-GATED — disabled "قريبًا" card only.
             No navigation, no playback: the button must not go live on
             an unverified or unpermitted stream (Maspero permission
@@ -251,34 +279,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           </p>
           <button disabled className="mt-4 w-full py-3 bg-stone-300 text-stone-500 font-bold rounded-xl cursor-not-allowed">
             قريبًا
-          </button>
-        </div>
-
-        {/* Quick buttons only */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onNavigate('app')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <LayoutDashboard className="w-5 h-5 text-emerald-600" /> لوحتي
-          </button>
-          <button
-            onClick={() => onNavigate('follow')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Mic className="w-5 h-5 text-emerald-600" /> الحق الإمام
-          </button>
-          <button
-            onClick={() => onNavigate('test')}
-            className="py-3.5 bg-white border border-amber-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Headphones className="w-5 h-5 text-amber-600" /> سمّع لنفسك
-          </button>
-          <button
-            onClick={() => onNavigate('settings')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
           </button>
         </div>
 
