@@ -833,8 +833,29 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         ta.value = text;
         document.body.appendChild(ta);
         ta.select();
-        document.execCommand('copy');
+        ta.setSelectionRange(0, ta.value.length);
+        const ok = document.execCommand('copy');
         ta.remove();
+        if (!ok) {
+          // Next-patch: execCommand reports success, and the old code
+          // ignored it — a silent failure (possible on Safari) showed
+          // a false success toast. On failure, show the full JSON in
+          // a textarea for manual copying and do NOT claim success.
+          const manual = document.createElement('textarea');
+          manual.value = text;
+          manual.readOnly = true;
+          manual.style.cssText = 'position:fixed;inset:10px;z-index:9999;width:calc(100vw - 20px);height:calc(100dvh - 20px);';
+          document.body.appendChild(manual);
+          manual.select();
+          manual.setSelectionRange(0, manual.value.length);
+          const close = document.createElement('button');
+          close.textContent = 'إغلاق';
+          close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
+          close.onclick = () => { manual.remove(); close.remove(); };
+          document.body.appendChild(close);
+          setDiagCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق');
+          return;
+        }
       }
       setDiagCopied('تم نسخ سجل التشخيص — الصقه في أي مكان');
     } catch {

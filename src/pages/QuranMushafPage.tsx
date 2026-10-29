@@ -1466,8 +1466,9 @@ export default function QuranMushafPage({
   }, [setFollowMicWaitingState]);
 
   // B1 (Bolt CONDITION, required before any device test): a WORKING
-  // Cancel button while waiting for mic permission, live AND Whisper
-  // paths. Today the start buttons are disabled during the wait and
+  // Cancel button while waiting for mic permission, Whisper
+  // permission wait only (the live wait is exited via stopFollow).
+  // Today the start buttons are disabled during the wait and
   // the ready branch has no stop button at all, so if Safari never
   // shows the prompt the user is stuck with no exit except reload.
   // The button stays ENABLED during waiting (no disabled prop) and
@@ -1481,7 +1482,11 @@ export default function QuranMushafPage({
   // followReady are deliberately NOT touched — unlike stopFollow,
   // cancel must NOT exit follow mode: the lobby stays in its ready
   // branch with the start buttons enabled, so a fresh tap works
-  // immediately. User-initiated cancel does not violate the no-timer
+  // immediately. Not touching followReady is safe ONLY because this
+  // button renders in the ready branch; moving this handler to the
+  // listening branch would require resetting followReady and related
+  // state, or the UI would strand on a dead "listening" display.
+  // User-initiated cancel does not violate the no-timer
   // rule (no timer is involved — this is a tap). The wake lock and
   // followActiveRef are left alone for the same reason: the user is
   // still in the lobby, not leaving follow mode; the next tap
@@ -2398,10 +2403,16 @@ export default function QuranMushafPage({
       // existing honest denied wording below is the terminal state.
       // P0-2: generation-guarded — a stop + re-tap during the prompt
       // must not let this stale denial clear the new session's wait.
-      if (startGen === followStartGenRef.current) setFollowMicWaitingState(false);
-      followStartingRef.current = false;
-      setFollowError(micErrorMessage(err));
-      setFollowReady(true);
+      // Next-patch: the starting/error/ready assignments are the same
+      // clobber class as the wait clear, so they share its guard — a
+      // stale denial must not paint a false "denied" message on a
+      // fresh session or flip it back to ready.
+      if (startGen === followStartGenRef.current) {
+        setFollowMicWaitingState(false);
+        followStartingRef.current = false;
+        setFollowError(micErrorMessage(err));
+        setFollowReady(true);
+      }
       return;
     }
     followStreamRef.current = stream;
@@ -2417,8 +2428,13 @@ export default function QuranMushafPage({
       // false by construction on this branch (a newer session exists
       // or the session ended), and the newer session owns the wait
       // display now; clearing it would strand the new prompt unlabeled.
-      if (startGen === followStartGenRef.current) setFollowMicWaitingState(false);
-      followStartingRef.current = false;
+      // Next-patch: the starting guard shares that guard for the same
+      // reason — a stale grant must not clear a fresh session's
+      // starting guard.
+      if (startGen === followStartGenRef.current) {
+        setFollowMicWaitingState(false);
+        followStartingRef.current = false;
+      }
       return;
     }
     const uid = session?.user?.id;
@@ -2463,6 +2479,16 @@ export default function QuranMushafPage({
         followStreamRef.current = null;
         setFollowReady(true);
         setFollowError('تعذر تحميل فهرس الآيات — تأكد من الاتصال بالإنترنت');
+        setFollowIndexLoading(false);
+      } else {
+        // Next-patch: the loading line is shared UI state (same
+        // reasoning as the live branch's unguarded finally) — a
+        // stale failure must still clear it, or cancel + stale
+        // failure strands "جارٍ تحميل فهرس الآيات…" until the next
+        // tap. Session state above stays guarded; only the line
+        // clears here, so a new session's mid-load line may vanish
+        // early (transient, cosmetic — same accepted tradeoff as
+        // the live branch).
         setFollowIndexLoading(false);
       }
       // E3 (UI state only): terminal index failure — end the wait.
@@ -3392,17 +3418,23 @@ export default function QuranMushafPage({
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {/* B1: the cancel button lives here, in the ready
-                        branch, because BOTH permission waits render
-                        here (followReady stays true until the grant
-                        lands, live and Whisper alike) — the listening
-                        branch's إيقاف only appears after a grant. The
+                        branch, because the Whisper permission wait
+                        renders here (followReady stays true until
+                        getUserMedia returns). The live wait does NOT
+                        render here: startFollowListening sets
+                        followReady=false as soon as rec.start()
+                        succeeds, so the live wait shows in the
+                        listening branch, whose exit is the
+                        pre-existing إيقاف button (stopFollow, full
+                        cleanup). This button covers the Whisper wait
+                        only. The
                         button stays ENABLED during waiting (no
                         disabled prop): tapping it stops the engines,
                         clears the wait (ref + state) and returns the
                         lobby to idle, so a fresh tap works. The start
                         buttons above stay disabled meanwhile so a tap
                         cannot silently stack a second attempt. */}
-                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">بانتظار إذن الميكروفون من المتصفح… (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}</p>}
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">بانتظار إذن الميكروفون من المتصفح… (مرّ {followMicWaitElapsed} ثانية){followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إلغاء الانتظار وجرّب من جديد' : ''}</p>}
                     {followMicWaiting && (
                       <button onClick={cancelFollowMicWait}
                         className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
@@ -3425,7 +3457,7 @@ export default function QuranMushafPage({
                         NOT claim "listening" — that mislabel is what made
                         a queued Safari prompt look like a frozen app. */}
                     <p className="text-sm font-bold mt-4">{followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام...'}</p>
-                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">المتصفح لسه مطلعش نافذة الإذن — (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}{followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
+                    {followMicWaiting && <p className="text-xs text-amber-200 mt-2">لم يبدأ الالتقاط بعد — (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}{followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
