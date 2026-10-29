@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
-import { SURAHS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { getQuranTextCache } from '../lib/quranTextCache';
 import { formatAr } from '../lib/numerals';
 import { RECITERS, DEFAULT_RECITER_ID, type Reciter } from '../lib/reciters';
 import { useLang, currentSpeechLocale } from '../lib/LanguageContext';
@@ -628,8 +629,22 @@ export default function QuranMushafPage({
         }
         const rows: QuranVerse[] = [];
         for (const [os, ayahs] of bySurah) {
-          const { data } = await supabase.from('quran_verses').select('*').eq('surah_no', os).in('ayah_no', ayahs);
-          if (data) rows.push(...data);
+          // Phase 1 text cache: a surah hit (with link fields, so
+          // the strip dots stay correct) skips the network; a miss
+          // fetches as before and writes through.
+          const cachedSurah = await getQuranTextCache().getSurah(os, SURAH_AYAH_COUNTS[os - 1] || 0, { requireLinks: true });
+          if (cachedSurah) {
+            for (const r of cachedSurah) {
+              if (!ayahs.includes(r.ayah_no)) continue;
+              rows.push({ id: r.id, surah_no: r.surah_no, surah_name: r.surah_name, ayah_no: r.ayah_no, ayah_text: r.ayah_text, has_links: r.has_links as boolean, links_count: r.links_count as number, is_protected: r.is_protected as boolean, created_at: '', updated_at: '' });
+            }
+          } else {
+            const { data } = await supabase.from('quran_verses').select('*').eq('surah_no', os).in('ayah_no', ayahs);
+            if (data) {
+              rows.push(...data);
+              void getQuranTextCache().putRows(data);
+            }
+          }
         }
         setSpannedVerses(rows);
       } else {
@@ -745,18 +760,28 @@ export default function QuranMushafPage({
     if (!quranTextPromise.current) {
       quranTextPromise.current = (async () => {
         try {
-          const rows: QuranTextRow[] = [];
-          const PAGE = 1000;
-          for (let from = 0; ; from += PAGE) {
-            const { data, error } = await supabase.from('quran_verses')
-              .select('id,surah_no,surah_name,ayah_no,ayah_text,ayah_text_clean')
-              .order('surah_no', { ascending: true }).order('ayah_no', { ascending: true })
-              .range(from, from + PAGE - 1);
-            if (error || !data) throw new Error('fetch failed');
-            rows.push(...(data as QuranTextRow[]));
-            if (data.length < PAGE) break;
+          // Phase 1 text cache: a full-table hit skips all 7
+          // paginated queries (and works offline). The trigram
+          // index below rebuilds from the rows exactly as before,
+          // so computed results are identical; a miss falls through
+          // to the network path, whose rows are then written through.
+          let rows: QuranTextRow[] | null = await getQuranTextCache().getAll(6000);
+          if (!rows) {
+            const fetched: QuranTextRow[] = [];
+            const PAGE = 1000;
+            for (let from = 0; ; from += PAGE) {
+              const { data, error } = await supabase.from('quran_verses')
+                .select('id,surah_no,surah_name,ayah_no,ayah_text,ayah_text_clean')
+                .order('surah_no', { ascending: true }).order('ayah_no', { ascending: true })
+                .range(from, from + PAGE - 1);
+              if (error || !data) throw new Error('fetch failed');
+              fetched.push(...(data as QuranTextRow[]));
+              if (data.length < PAGE) break;
+            }
+            if (fetched.length < 6000) throw new Error('incomplete');
+            void getQuranTextCache().putRows(fetched);
+            rows = fetched;
           }
-          if (rows.length < 6000) throw new Error('incomplete');
           const idx = new Map<string, number[]>();
           rows.forEach((r, i) => {
             const words = wordsOf(r);
@@ -805,10 +830,27 @@ export default function QuranMushafPage({
           if (!ph) return [] as number[];
           return [ph.source.key, ...Object.keys(ph.ayah)].map((k) => k.split(':')[0]).filter(Boolean).map(Number);
         }))];
-        const { data, error } = await supabase.from('quran_verses')
-          .select('id,surah_no,ayah_no,ayah_text,ayah_text_clean').in('surah_no', allSurahs);
-        if (error || !data) throw new Error('label fetch failed');
-        labelRows = data as { id: number; surah_no: number; ayah_no: number; ayah_text: string; ayah_text_clean: string | null }[];
+        // Phase 1 text cache: surahs already cached (with clean
+        // text) skip the network; only the missing surahs are
+        // fetched, in the same single query shape as before. A
+        // fetch failure with every surah cached still proceeds;
+        // otherwise the full-table fallback below runs, unchanged.
+        const cachedLabelRows: { id: number; surah_no: number; ayah_no: number; ayah_text: string; ayah_text_clean: string | null }[] = [];
+        const missingSurahs: number[] = [];
+        for (const s of allSurahs) {
+          const hit = await getQuranTextCache().getSurah(s, SURAH_AYAH_COUNTS[s - 1] || 0, { requireClean: true });
+          if (hit) cachedLabelRows.push(...hit);
+          else missingSurahs.push(s);
+        }
+        if (missingSurahs.length > 0) {
+          const { data, error } = await supabase.from('quran_verses')
+            .select('id,surah_no,ayah_no,ayah_text,ayah_text_clean').in('surah_no', missingSurahs);
+          if (error || !data) throw new Error('label fetch failed');
+          void getQuranTextCache().putRows(data);
+          labelRows = [...cachedLabelRows, ...(data as { id: number; surah_no: number; ayah_no: number; ayah_text: string; ayah_text_clean: string | null }[])];
+        } else {
+          labelRows = cachedLabelRows;
+        }
       } catch {
         // Label fetch failed: use the full table for labels instead.
         labelRows = await loadQuranText();

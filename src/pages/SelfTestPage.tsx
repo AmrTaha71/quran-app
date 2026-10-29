@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
 import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
 import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
@@ -695,6 +696,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [grades, setGrades] = useState<boolean[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Phase 1 offline notice: true only when the test's texts were
+  // served from the IndexedDB text cache while the device reports
+  // offline (an online cache hit is just fast, silent).
+  const [textOfflineNotice, setTextOfflineNotice] = useState(false);
   const [history, setHistory] = useState<TestRecord[]>(loadHistory);
 
   // Mic flow state (per ayah; reset on every ayah change).
@@ -1361,20 +1366,38 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     diagRangeRef.current = { surah: startPt.surah, from: startPt.ayah, to: endPt.ayah, startGlobal: lo, endGlobal: hi, level: liveRef.current.level, mode: modeAtStart, corrDelay: liveRef.current.corrDelay, corrRate: liveRef.current.corrRate };
     setSurah(startPt.surah);
     setError('');
+    setTextOfflineNotice(false);
     setLoading(true);
     try {
-      const { data, error: qErr } = await supabase
-        .from('quran_verses')
-        .select('id, surah_no, ayah_no, ayah_text')
-        .gte('id', lo)
-        .lte('id', hi)
-        .order('id', { ascending: true });
-      if (qErr) throw qErr;
+      // Phase 1 text cache: a cached range serves with zero network
+      // calls (fast, and working offline). Rows are static, so a
+      // cache hit is identical to the network result; any cache
+      // failure degrades to the network path below, unchanged.
+      let data: TestAyah[] | null = null;
+      let servedFromCache = false;
+      const cachedRange = await getQuranTextCache().getRange(lo, hi);
+      if (cachedRange) {
+        data = cachedRange as TestAyah[];
+        servedFromCache = true;
+      } else {
+        const { data: netData, error: qErr } = await supabase
+          .from('quran_verses')
+          .select('id, surah_no, ayah_no, ayah_text')
+          .gte('id', lo)
+          .lte('id', hi)
+          .order('id', { ascending: true });
+        if (qErr) throw qErr;
+        if (netData) {
+          data = netData as TestAyah[];
+          void getQuranTextCache().putRows(netData);
+        }
+      }
       if (!data || data.length === 0) {
         setError('لم أجد آيات في هذا النطاق — جرّب نطاقًا آخر');
         setLoading(false);
         return;
       }
+      setTextOfflineNotice(shouldShowOfflineNotice(servedFromCache, typeof navigator !== 'undefined' ? navigator.onLine : undefined));
       setFrom(startPt.ayah);
       setTo(endPt.ayah);
       setRangeStart(startPt);
@@ -1461,7 +1484,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setSavedProgress(prog);
       setPhase('testing');
     } catch {
-      setError('تعذر تحميل الآيات — تأكد من الاتصال بالإنترنت');
+      setTextOfflineNotice(false);
+      // Honest offline message: the range is not cached, so there is
+      // nothing to fall back to. An online failure keeps the old
+      // generic message.
+      setError(isOffline()
+        ? 'لا يوجد اتصال، وهذا النطاق غير محفوظ بعد — جرّب نطاقًا سبق أن فتحته، أو أعد المحاولة عند توفر الاتصال'
+        : 'تعذر تحميل الآيات — تأكد من الاتصال بالإنترنت');
     } finally {
       setLoading(false);
     }
@@ -3585,6 +3614,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </div>
             )}
           </div>
+        )}
+
+        {phase === 'testing' && textOfflineNotice && (
+          <p className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
         )}
 
         {phase === 'testing' && testMode === 'continuous' && (
