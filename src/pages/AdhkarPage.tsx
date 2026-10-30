@@ -166,6 +166,75 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   const [progress, setProgress] = useState({ t: 0, d: 0 });
   const [seg, setSeg] = useState(0);
 
+  // Black screen (same pattern as ListenPage): a black overlay that
+  // never touches audio, exited by long-press (>=1000ms) or swipe
+  // (>60px) only, so pocket touches cannot dismiss it. While it is
+  // open AND audio plays, a screen wake lock is held so auto-lock
+  // cannot stop the listening (2026-10-30 report: screen went off
+  // mid-listen). If wakeLock is unavailable, background audio is
+  // the fallback. Released on overlay close, pause, or unmount.
+  const [blackScreen, setBlackScreen] = useState(false);
+  const [showBlackHint, setShowBlackHint] = useState(false);
+  const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
+  const blackWakeLockRef = useRef<any>(null);
+  const blackWakeGenRef = useRef(0);
+  const acquireBlackWakeLock = async () => {
+    if (blackWakeLockRef.current) return;
+    const gen = ++blackWakeGenRef.current;
+    try {
+      const nav = navigator as unknown as { wakeLock?: { request: (t: string) => Promise<any> } };
+      if (!nav.wakeLock?.request) return;
+      const wl = await nav.wakeLock.request('screen');
+      if (gen !== blackWakeGenRef.current) { try { await wl.release(); } catch {} return; }
+      blackWakeLockRef.current = wl;
+      wl.addEventListener('release', () => { if (blackWakeLockRef.current === wl) blackWakeLockRef.current = null; });
+    } catch {}
+  };
+  const releaseBlackWakeLock = async () => {
+    blackWakeGenRef.current++;
+    const wl = blackWakeLockRef.current;
+    blackWakeLockRef.current = null;
+    if (wl) { try { await wl.release(); } catch {} }
+  };
+  const blackPressStart = (x: number, y: number) => {
+    blackPressRef.current = { t: Date.now(), x, y };
+  };
+  const blackPressMove = (x: number, y: number) => {
+    const p = blackPressRef.current;
+    if (!p) return;
+    if (Math.hypot(x - p.x, y - p.y) > 60) {
+      blackPressRef.current = null;
+      setBlackScreen(false);
+    }
+  };
+  const blackPressEnd = () => {
+    const p = blackPressRef.current;
+    blackPressRef.current = null;
+    if (p && Date.now() - p.t >= 1000) setBlackScreen(false);
+  };
+  useEffect(() => {
+    if (!blackScreen) return;
+    setShowBlackHint(true);
+    const timer = setTimeout(() => setShowBlackHint(false), 4000);
+    return () => clearTimeout(timer);
+  }, [blackScreen]);
+  useEffect(() => {
+    if (blackScreen && playing) void acquireBlackWakeLock();
+    else void releaseBlackWakeLock();
+    return () => { void releaseBlackWakeLock(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blackScreen, playing]);
+  useEffect(() => {
+    const onVis = () => {
+      try {
+        if (document.visibilityState === 'visible' && blackScreen && playing) void acquireBlackWakeLock();
+      } catch {}
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blackScreen, playing]);
+
   const list = useMemo(() => adhkarList(wird), [wird]);
   const index = Math.min(pos.index, list.length - 1);
   const clip: AdhkarClip = list[index];
@@ -648,6 +717,9 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
                 <button onClick={restart} className="p-3 bg-white border border-stone-200 rounded-full" aria-label="من الأول">
                   <RotateCcw className="w-5 h-5" />
                 </button>
+                <button onClick={() => setBlackScreen(true)} className="p-3 bg-white border border-stone-200 rounded-full" aria-label="شاشة سوداء">
+                  <SunMoon className="w-5 h-5" />
+                </button>
               </div>
             </>
           )}
@@ -677,6 +749,34 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           آيات القرآن تُتلى بصوت قارئ، والأدعية بصوت مولّد بالذكاء الاصطناعي. التكرار يتم في المشغّل.
         </p>
       </div>
+      {blackScreen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none touch-none"
+          style={{ WebkitTouchCallout: 'none' }}
+          onContextMenu={(e) => e.preventDefault()}
+          onTouchStart={(e) => {
+            const t = e.touches[0];
+            if (t) blackPressStart(t.clientX, t.clientY);
+          }}
+          onTouchMove={(e) => {
+            const t = e.touches[0];
+            if (t) blackPressMove(t.clientX, t.clientY);
+          }}
+          onTouchEnd={blackPressEnd}
+          onTouchCancel={() => {
+            blackPressRef.current = null;
+          }}
+          onMouseDown={(e) => blackPressStart(e.clientX, e.clientY)}
+          onMouseMove={(e) => {
+            if (blackPressRef.current) blackPressMove(e.clientX, e.clientY);
+          }}
+          onMouseUp={blackPressEnd}
+        >
+          {showBlackHint && (
+            <p className="text-white/20 text-sm font-bold">اضغط مطوّلًا للعودة</p>
+          )}
+        </div>
+      )}
     </main>
   );
 }

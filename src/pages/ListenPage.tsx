@@ -337,6 +337,51 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     if (p && Date.now() - p.t >= 1000) setBlackScreen(false);
   };
 
+  // Black-screen wake lock (2026-10-30 report: the screen went off
+  // mid-listen). While the black overlay is open AND audio plays,
+  // hold a screen wake lock so auto-lock cannot fire — the screen
+  // stays black, the audio never stops. The lock auto-releases on
+  // hide, so returning with the overlay still open re-acquires it.
+  // If wakeLock is unavailable, iOS background audio (engines never
+  // pause on hide) is the fallback. Released on overlay close,
+  // pause, end, or unmount — never held for a paused screen.
+  const blackWakeLockRef = useRef<any>(null);
+  const blackWakeGenRef = useRef(0);
+  const acquireBlackWakeLock = async () => {
+    if (blackWakeLockRef.current) return;
+    const gen = ++blackWakeGenRef.current;
+    try {
+      const nav = navigator as unknown as { wakeLock?: { request: (t: string) => Promise<any> } };
+      if (!nav.wakeLock?.request) return;
+      const wl = await nav.wakeLock.request('screen');
+      if (gen !== blackWakeGenRef.current) { try { await wl.release(); } catch {} return; }
+      blackWakeLockRef.current = wl;
+      wl.addEventListener('release', () => { if (blackWakeLockRef.current === wl) blackWakeLockRef.current = null; });
+    } catch {}
+  };
+  const releaseBlackWakeLock = async () => {
+    blackWakeGenRef.current++;
+    const wl = blackWakeLockRef.current;
+    blackWakeLockRef.current = null;
+    if (wl) { try { await wl.release(); } catch {} }
+  };
+  useEffect(() => {
+    if (blackScreen && playing) void acquireBlackWakeLock();
+    else void releaseBlackWakeLock();
+    return () => { void releaseBlackWakeLock(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blackScreen, playing]);
+  useEffect(() => {
+    const onVis = () => {
+      try {
+        if (document.visibilityState === 'visible' && blackScreen && playing) void acquireBlackWakeLock();
+      } catch {}
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blackScreen, playing]);
+
   const scrollToAyah = (ayah: number) => {
     try {
       const el = document.getElementById(`listen-ayah-${ayah}`);
