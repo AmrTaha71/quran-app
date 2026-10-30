@@ -149,7 +149,18 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
         </div>
 
-        {/* استمع للقرآن: directly after the resume card, before the wird button. */}
+        {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن. */}
+        <button
+          onClick={() => onNavigate('test')}
+          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30"
+        >
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <Headphones className="w-6 h-6 text-white" />
+          </span>
+          سمّع لنفسك
+        </button>
+
+        {/* استمع للقرآن: after سمّع لنفسك. */}
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
@@ -216,9 +227,10 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* Quick buttons: the two feature actions are full-width
-            large buttons like the big buttons in the cards above
-            (Amr 17:48); الإعدادات stays a small button below. */}
+        {/* Quick buttons: الحق الإمام stays a full-width large
+            button like the big buttons in the cards above
+            (Amr 17:48); سمّع لنفسك moved above استمع للقرآن;
+            الإعدادات stays a small button below. */}
         <button
           onClick={() => onNavigate('follow')}
           className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30"
@@ -227,15 +239,6 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Mic className="w-6 h-6 text-white" />
           </span>
           الحق الإمام
-        </button>
-        <button
-          onClick={() => onNavigate('test')}
-          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30"
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Headphones className="w-6 h-6 text-white" />
-          </span>
-          سمّع لنفسك
         </button>
         <button
           onClick={() => onNavigate('settings')}
