@@ -1804,6 +1804,24 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </select>
             </div>
           </div>
+          {/* Explicit start control: the mode card below also starts
+              playback on tap, but it reads as an info card (same
+              name as the hub card just tapped), so first-time
+              journey users see no play button. This button is
+              unmissable and calls the same startJourney. */}
+          {THREE_MODES.filter((m) => m.id === hubView).map((m) => {
+            const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
+            return (
+              <button
+                key={`start-${m.id}`}
+                disabled={disabled}
+                onClick={() => void startJourney(m.id)}
+                className="w-full mt-4 py-4 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-50"
+              >
+                ▶ ابدأ الاستماع
+              </button>
+            );
+          })}
           <div className="grid gap-3 mt-4">
             {THREE_MODES.filter((m) => m.id === hubView).map((m) => {
               const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
