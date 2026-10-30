@@ -8,6 +8,7 @@ import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdS
 import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, EDITION_DOWNLOADS, HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import { useLang } from '../lib/LanguageContext';
 import BottomNav from '../components/BottomNav';
+import AdhanSettingsSection from '../components/AdhanSettingsSection';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
@@ -535,6 +536,10 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </span>
           </button>
         </section>
+
+        {/* Adhan prayer times — location (GPS or country-then-city),
+            today's times, alert type and sound. */}
+        <AdhanSettingsSection />
 
         {/* Part 1 — install the app itself (PWA): no Safari, no link
             bar, no fullscreen banner. Part 2 (the pages download

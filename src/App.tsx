@@ -20,6 +20,7 @@ import SettingsPage from './pages/SettingsPage';
 import SelfTestPage from './pages/SelfTestPage';
 import ListenPage from './pages/ListenPage';
 import AdhkarPage from './pages/AdhkarPage';
+import AdhanScheduler from './components/AdhanScheduler';
 import SplashScreen from './components/SplashScreen';
 import OfflineBanner from './components/OfflineBanner';
 import { parseHash } from './lib/shareLinks';
@@ -308,6 +309,9 @@ function AppContent() {
         </>
       ) : null}
       {page}
+      {/* Foreground adhan alerts on every route, logged in or not —
+          settings live in localStorage, so this mounts unconditionally. */}
+      <AdhanScheduler />
     </>
   );
 }
