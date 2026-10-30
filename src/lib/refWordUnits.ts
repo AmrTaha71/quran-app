@@ -2,7 +2,7 @@
 //
 // IDEA (user brief, 2026-10-30): on a confirmed recitation error,
 // play a REAL reciter's 3-word unit containing the mistaken word
-// instead of (alongside, in v0) the synthetic correction voice.
+// alongside the synthetic correction voice.
 //
 // AUDIO SOURCE — VERIFIED LIVE 2026-10-30 (browser check, not a
 // guess): quran.com word-by-word files, 1-based indices:
@@ -14,10 +14,19 @@
 // loudly (onerror) and the caller falls back — never a silent wrong
 // word.
 //
-// SCOPE v0: Surah Al-Mulk (67) only, ayah-mode done-wrong card only.
-// The reference voice is quran.com's single word-by-word voice, NOT
-// the user's chosen reciter: verified per-word timings exist only
-// for Alafasy/Husary continuous audio, and wiring those is v1.
+// SCOPE v1 (2026-10-30): ALL surahs, ayah-mode done-wrong card.
+// URL pattern verified by HEAD requests 2026-10-30 for surahs 1,
+// 2, 18, 36, 67, 112, 114 incl. mid/deep ayah words — every probe
+// 200. The reference voice is quran.com's single word-by-word
+// voice, NOT the user's chosen reciter: official docs name NO
+// reciter for it (one fixed resource, no catalog) — never name
+// one. CAVEAT: a 200 proves a file exists at that index, not that
+// its word matches the app's space-split word at the same index
+// (segmentation/Basmalah can drift per surah), so the pilot
+// "(تجربة)" label stays until per-surah ear checks pass. A
+// missing file fails loudly (onerror) and the caller falls back
+// — never a silent wrong word — but a MISALIGNED file is not
+// detectable by the app, which is why the ear checks matter.
 // Units are computed from the app's OWN expectedWordList split, so
 // the unit always aligns with what SelfTest graded.
 //
@@ -27,8 +36,6 @@
 // context first, matching the app's correction philosophy
 // (withPrecedingContextWord). The final window truncates at the ayah
 // end (shorter final unit allowed).
-
-export const REF_UNIT_SURAH = 67;
 
 const WBW_BASE = 'https://audio.qurancdn.com/wbw';
 

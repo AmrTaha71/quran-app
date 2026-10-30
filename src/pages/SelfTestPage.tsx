@@ -8,7 +8,9 @@ import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
 import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
-import { wbwWordUrl, refUnitForWord, REF_UNIT_SURAH } from '../lib/refWordUnits';
+import { wbwWordUrl, refUnitForWord } from '../lib/refWordUnits';
+import { checkMic } from '../lib/micCheck';
+import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import { formatAr } from '../lib/numerals';
@@ -1136,6 +1138,25 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const refUnitAudioRef = useRef<HTMLAudioElement | null>(null);
   const [refUnitPlaying, setRefUnitPlaying] = useState(false);
   const [refUnitFailedIdx, setRefUnitFailedIdx] = useState<number | null>(null);
+  // Batch 2: lobby mic check (lib/micCheck.ts). Plain state + plain
+  // handler (no useCallback deps, so no TDZ risk): the check runs
+  // from a tap, samples ~2.5s of room audio, then releases the mic
+  // (the lib stops every track and closes the context) — the
+  // session's own recognizer starts fresh afterwards, so no stream
+  // is ever shared with a session.
+  const [micCheckState, setMicCheckState] = useState<'idle' | 'checking' | 'done'>('idle');
+  const [micCheckResult, setMicCheckResult] = useState<MicCheckResult | null>(null);
+  const [micCheckLevel, setMicCheckLevel] = useState(0);
+  const runMicCheck = () => {
+    if (micCheckState === 'checking') return;
+    setMicCheckState('checking');
+    setMicCheckResult(null);
+    setMicCheckLevel(0);
+    void checkMic({ onLevel: (lv) => setMicCheckLevel(lv) }).then((r) => {
+      setMicCheckResult(r);
+      setMicCheckState('done');
+    });
+  };
   const stopRefUnit = () => {
     try { refUnitAudioRef.current?.pause(); } catch {}
     refUnitAudioRef.current = null;
@@ -1143,7 +1164,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const playRefUnit = () => {
     const ayah = ayahs[index];
-    if (!ayah || ayah.surah_no !== REF_UNIT_SURAH || wrongIndices.length === 0) return;
+    if (!ayah || wrongIndices.length === 0) return;
     const words = expectedWordList(ayah.ayah_text);
     if (words.length === 0) return;
     stopCorrAudio();
@@ -1152,7 +1173,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setRefUnitFailedIdx(null);
     const unit = refUnitForWord(words.length, wrongIndices[0]);
     const urls: string[] = [];
-    for (let i = unit.start; i <= unit.end; i++) urls.push(wbwWordUrl(REF_UNIT_SURAH, ayah.ayah_no, i));
+    for (let i = unit.start; i <= unit.end; i++) urls.push(wbwWordUrl(ayah.surah_no, ayah.ayah_no, i));
     let k = 0;
     setRefUnitPlaying(true);
     const playNext = () => {
@@ -1300,6 +1321,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (token !== corrFetchTokenRef.current) return null;
     return url;
   };
+  // Batch 2 (S4): the correction token is cached for 5 minutes
+  // (far inside the ~1h token life) instead of awaiting
+  // getSession() before every prompt — getSession is usually ms
+  // but occasionally costs a refresh round trip on the hot path.
+  // A 401 clears the cache and retries once with a fresh token,
+  // so a rotation inside the window costs one retry, never a
+  // silent browser-TTS fallback. Any other failure still degrades
+  // to browser TTS via the null return, exactly as before.
+  const corrTokenRef = useRef<{ token: string; at: number } | null>(null);
+  const getCorrToken = async (): Promise<string> => {
+    const cached = corrTokenRef.current;
+    if (cached && Date.now() - cached.at < 5 * 60 * 1000) return cached.token;
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? '';
+    corrTokenRef.current = { token, at: Date.now() };
+    return token;
+  };
   // Raw gendered-voice generation (no token): used by the prefetch
   // path above and by mid-flow interrupts, where the correction
   // cannot be prefetched (the miss is only known when it happens).
@@ -1324,14 +1362,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // (pitch-preserved) — so one file serves all rates and a
       // rate change never regenerates. Callers WITHOUT the flag
       // (old cached tabs) keep baked-speed behavior server-side.
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
+      const body = pos
+        ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, rateMode: 'playback' })
+        : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, rateMode: 'playback' });
+      const doFetch = (token: string) => fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
-        body: pos
-          ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, rateMode: 'playback' })
-          : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, rateMode: 'playback' }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body,
       });
+      let res = await doFetch(await getCorrToken());
+      if (res.status === 401) {
+        corrTokenRef.current = null;
+        res = await doFetch(await getCorrToken());
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.audioUrl) return null;
       return data.audioUrl;
@@ -2097,11 +2140,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const NO_RESULT_WATCHDOG_MS = 18000;
   // Continuous-prompt audio budget: a mid-flow interrupt cannot be
   // prefetched, so its generate-voice fetch races this timeout —
-  // on a slow connection the browser-TTS fallback starts at 2s
-  // instead of leaving the user in silence, well inside the 5s
-  // spoken-correction promise. The late fetch result is ignored
-  // (the race settles once), never played over the TTS.
-  const CORR_AUDIO_TIMEOUT_MS = 2000;
+  // Batch 2 (S2): the timeout no longer gates first sound (TTS
+  // starts at once, S1) — it only bounds the window in which a
+  // fetch win may pre-empt not-yet-sounded TTS, so 900ms is
+  // enough; a slower fetch still lands in the cache for repeats.
+  const CORR_AUDIO_TIMEOUT_MS = 900;
   // (b) Transient safety timer: ~3s. The patched code restarts from
   // onend after a transient error; if the engine omits onend, the
   // session used to hang on "retrying" forever. The timer restarts
@@ -3084,6 +3127,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Resume always creates a FRESH recognizer (never the discarded
     // instance), which is also the 321436 recovery.
     let promptAudioStarted = false;
+    // Batch 2 (S1, fixed): the TTS utterance that pre-emption
+    // cancelled, by identity — its late onerror/onend/watchdog
+    // must stay silent, or they would settle (and kill) the human
+    // audio that replaced it. A NEW utterance after pre-emption
+    // (human-audio play failure) is a different object, so it
+    // passes these checks and resumes normally.
+    let ttsCurrentUtterance: SpeechSynthesisUtterance | null = null;
+    let ttsCancelledUtterance: SpeechSynthesisUtterance | null = null;
+    // The TTS fallback is once-per-prompt EXCEPT that pre-emption
+    // re-arms it: after pre-emption, a human-audio play failure
+    // must be able to speak TTS again (the old code's fallback
+    // was still live in that corner; a consumed once-guard would
+    // strand the prompt until the 18s watchdog).
+    let ttsFallbackUsed = false;
     // Iteration 2: the iOS TTS onstart watchdog timer (cleared by
     // resume, so a late fire can never note-fail a finished prompt).
     let ttsOnstartTimer: ReturnType<typeof setTimeout> | null = null;
@@ -3103,14 +3160,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setContPrompting(false);
       startContinuousMic();
     };
-    const playTtsFallback = (() => {
-      let fallbackStarted = false;
-      return () => {
-        if (fallbackStarted) return;
-        fallbackStarted = true;
+    const playTtsFallback = () => {
         try {
           if ('speechSynthesis' in window) {
+            if (ttsFallbackUsed) return;
+            ttsFallbackUsed = true;
             const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
+            ttsCurrentUtterance = u;
             u.lang = 'ar-SA';
             // S4: same Arabic voice pick as ayah corrections — the
             // prompt must not be device luck either.
@@ -3126,17 +3182,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             let ttsStarted = false;
             const clearTtsWatchdog = () => { if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; } };
             u.onstart = () => { ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
-            u.onend = () => { clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
-            u.onerror = () => { clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
+            u.onend = () => { if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
+            u.onerror = () => { if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
             window.speechSynthesis.speak(u);
             ttsOnstartTimer = setTimeout(() => {
               ttsOnstartTimer = null;
-              if (!ttsStarted) { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
+              if (!ttsStarted && ttsCancelledUtterance !== u) { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
             }, CONT_TTS_ONSTART_WATCHDOG_MS);
           } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
         } catch { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
       };
-    })();
     const playUrl = (url: string, cacheKey?: string) => {
       const a = new Audio(url);
       // v13: the file is neutral-speed; the user's corrRate applies
@@ -3212,13 +3267,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // No prefetched audio (a mid-flow interrupt cannot be
       // prefetched — the miss is only known when it happens):
       // generate the human-sounding voice now (~1-2s for a few
-      // words) while the "correcting" indicator shows. Browser TTS
-      // stays the failure fallback, never the default — but slowness
-      // is no longer silent: the fetch races a 2s timeout, and on
-      // timeout the TTS fallback starts at once, so speech begins
-      // well inside 5s of the error. The race settles exactly once,
-      // so a late fetch result is ignored and never plays over (or
-      // after) the TTS.
+      // words) while the "correcting" indicator shows. Batch 2
+      // (S1): browser TTS starts AT ONCE and the fetch runs in
+      // parallel — first sound is now TTS startup (~0.2-0.5s),
+      // not min(fetch, 2s). The race only decides whether human
+      // audio may pre-empt TTS that has not sounded yet; a late
+      // fetch result is still cached for repeats, never played
+      // over (or after) sounded TTS.
       // Iteration 2: the fetch promise is kept separately so a LATE
       // resolution (after a TTS win) still lands in the short-lived
       // cache — a repeat of the same prompt then plays the human
@@ -3237,12 +3292,29 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const corrPos = corrPositionsForRange(audioIndices, liveRef.current.contExpected, ayahsRef.current);
       const corrShape: 'context' | 'bare' = words.length > audioIndices.length ? 'context' : 'bare';
       const fetchP = requestCorrectionAudio(words, corrPos ? { shape: corrShape, positions: corrPos } : undefined);
+      // Batch 2 (S1): TTS starts at once (its once-guard makes the
+      // later playTtsFallback calls below no-ops once it has
+      // started). The race below now only pre-empts TTS that has
+      // NOT sounded: promptAudioStarted is set by TTS onstart and
+      // by playUrl onplaying, and in this branch only TTS could
+      // have set it. Pre-emption marks the cancelled utterance by
+      // identity, clears its onstart watchdog, and re-arms the
+      // fallback before cancelling, so the cancelled utterance's
+      // late events cannot settle the prompt — while a later
+      // human-audio play failure can still speak TTS again.
+      playTtsFallback();
       void withTimeout(fetchP, CORR_AUDIO_TIMEOUT_MS).then((result) => {
         if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current) return;
         if (result.kind === 'value' && result.value) {
           contAudioCacheRef.current.set(audioKey, result.value);
           diagPush('cont-prompt-audio-ready', { label: 'cont-prompt-audio', fetchMs: Date.now() - fetchStart, msFromPrompt: Date.now() - promptStartedAt });
-          playUrl(result.value, audioKey);
+          if (!promptAudioStarted) {
+            ttsCancelledUtterance = ttsCurrentUtterance;
+            ttsFallbackUsed = false;
+            if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; }
+            cancelCorrectionSpeech();
+            playUrl(result.value, audioKey);
+          }
         } else if (result.kind === 'timeout') {
           diagPush('cont-prompt-tts-timeout', { label: 'cont-prompt-audio', timeoutMs: CORR_AUDIO_TIMEOUT_MS });
           playTtsFallback();
@@ -4195,6 +4267,39 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
             </div>
 
+            {/* Batch 2: lobby mic check — a real mic opens, samples,
+            and closes BEFORE the session, so a dead mic or a denied
+            permission is caught in the lobby instead of mid-test. */}
+            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-3">
+              <h2 className="font-bold text-accent-800">جرّب الميكروفون قبل ما تبدأ</h2>
+              <p className="text-sm text-accent-600 leading-relaxed">
+                اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال.
+              </p>
+              <button onClick={runMicCheck} disabled={micCheckState === 'checking'}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                {micCheckState === 'checking' ? 'جارٍ فحص الميكروفون…' : '🎤 جرّب الميكروفون'}
+              </button>
+              {micCheckState === 'checking' && (
+                <div>
+                  <p className="text-sm text-accent-600 mb-2">اتكلم بصوت عادي…</p>
+                  <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round(micCheckLevel * 400))}%` }} />
+                  </div>
+                </div>
+              )}
+              {micCheckState === 'done' && micCheckResult && (
+                micCheckResult.permission === 'granted' && micCheckResult.heardSomething ? (
+                  <p className="text-sm font-bold text-emerald-700">تمام — الميكروفون شغال وسمعك. ابدأ التسميع وانت مطمن.</p>
+                ) : micCheckResult.permission === 'granted' ? (
+                  <p className="text-sm font-bold text-amber-700">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
+                ) : micCheckResult.permission === 'denied' ? (
+                  <p className="text-sm font-bold text-red-600">الميكروفون مقفول — اسمح بيه من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.</p>
+                ) : (
+                  <p className="text-sm font-bold text-red-600">ما قدرتش أفتح الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.</p>
+                )
+              )}
+            </div>
+
             {history.length > 0 && (
               <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5">
                 <h2 className="font-bold text-accent-800 mb-3">نتائجك السابقة</h2>
@@ -4415,7 +4520,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       reference 3-word unit containing the first wrong
                       word, alongside — never instead of — the current
                       correction above. */}
-                  {ayahs[index]?.surah_no === REF_UNIT_SURAH && wrongIndices.length > 0 && (
+                  {wrongIndices.length > 0 && (
                     <button onClick={() => playRefUnit()}
                       className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
                       {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
