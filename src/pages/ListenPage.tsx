@@ -231,6 +231,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   // scrolls the journey section into view. Never auto-plays:
   // iOS audio still needs the user's tap on the mode button.
   const [preselectedMode, setPreselectedMode] = useState<ThreeMode | null>(null);
+  // Listening hub (Amr 2026-10-30): 'hub' shows four big cards; a card
+  // opens its detail view below. Resume cards above stay first, and
+  // the playback view stays visible whenever an engine plays.
+  const [hubView, setHubView] = useState<'hub' | 'free' | ThreeMode>('hub');
   const [mode, setMode] = useState<ListenMode>('free');
   // Three-mode journeys (additive section, Hafs only): the active
   // journey's mode, its current item for display, and one saved
@@ -875,6 +879,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const resumeHadrSaved = () => {
+    setHubView('free');
     if (!savedHadrResume) return;
     setShowHadrResume(false);
     void startHadrPlayback(savedHadrResume.surah, savedHadrResume.time ?? 0);
@@ -910,10 +915,10 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     clearAutoResumeIntent();
     void (async () => {
       try {
-        if (intent.kind === 'hadr') await startHadrPlayback(intent.surah, intent.time);
-        else if (intent.kind === 'riwaya') await startRiwayaPlayback(intent.surah, intent.riwaya, intent.time);
-        else if (intent.kind === 'hafs') await startPlayback(intent.surah, intent.reciter, intent.mode, intent.ayah, intent.time);
-        else await startJourney(intent.position.mode, intent.position);
+        if (intent.kind === 'hadr') { await startHadrPlayback(intent.surah, intent.time); setHubView('free'); }
+        else if (intent.kind === 'riwaya') { await startRiwayaPlayback(intent.surah, intent.riwaya, intent.time); setHubView('free'); }
+        else if (intent.kind === 'hafs') { await startPlayback(intent.surah, intent.reciter, intent.mode, intent.ayah, intent.time); setHubView('free'); }
+        else { await startJourney(intent.position.mode, intent.position); setHubView(intent.position.mode); }
       } catch {}
       // The start functions swallow a blocked play into an
       // error line instead of throwing, so check reality: if
@@ -979,6 +984,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     setHadrSelected(false);
     changeRiwaya(null);
     setPreselectedMode(flag);
+    setHubView(flag);
     const timer = setTimeout(() => {
       try {
         document.getElementById('three-mode-section')?.scrollIntoView({ block: 'start' });
@@ -989,6 +995,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   }, []);
 
   const resumeRiwayatSaved = () => {
+    setHubView('free');
     if (!savedRiwayatResume) return;
     setShowRiwayatResume(false);
     void startRiwayaPlayback(
@@ -1007,6 +1014,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   };
 
   const resumeSaved = () => {
+    setHubView('free');
     if (!savedWird) return;
     setShowResume(false);
     // Redirect A: resume passes the stored time-in-ayah as startTime.
@@ -1277,8 +1285,90 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
           </div>
         )}
 
-        {/* Pickers BEFORE start; locked while an engine is active */}
+        {/* Listening hub (Amr 2026-10-30): four big cards; entering a
+            card shows its details below. Cards are disabled while an
+            engine plays (locked), like every other mode switch here. */}
+        {hubView === 'hub' && (
+        <div className="mb-4">
+          <p className="font-bold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
+          <p className="text-sm text-accent-600 mb-4">اضغط على كارت لاختيار التفاصيل والبدء.</p>
+          {/* Saved journey resumes first, so a returning journey
+              user continues in one tap without entering a card. */}
+          {THREE_MODES.map((m) => {
+            const saved = savedJourneys[m.id];
+            if (!saved || hiddenJourneyResumes.includes(m.id)) return null;
+            return (
+              <div key={`hub-resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-4 mb-3">
+                <p className="font-bold text-accent-800">
+                  استئناف — {m.name}:{' '}
+                  {saved.kind === 'tafsir'
+                    ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
+                    : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
+                </p>
+                <div className="flex gap-3 mt-3">
+                  <button
+                    onClick={() => { resumeJourneySaved(m.id); setHubView(m.id); }}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                  >
+                    استئناف
+                  </button>
+                  <button
+                    onClick={() => dismissJourneyResume(m.id)}
+                    className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                  >
+                    ابدأ من الأول
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          <div className="grid gap-3">
+            {THREE_MODES.map((m) => {
+              const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
+              return (
+                <button
+                  key={m.id}
+                  disabled={disabled}
+                  onClick={() => {
+                    setHadrOn(false);
+                    setHadrSelected(false);
+                    changeRiwaya(null);
+                    setHubView(m.id);
+                  }}
+                  className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm"
+                >
+                  <span className="block text-lg">{m.name}</span>
+                  <span className="block text-sm font-normal text-accent-600 mt-1">{m.description}</span>
+                  {m.id === 'tadabbur' && !tafsirConfigured() && (
+                    <span className="block text-xs font-normal text-accent-600 mt-2">مقاطع التفسير لم تُرفع بعد — سيُتاح هذا النمط بعد رفع المقاطع.</span>
+                  )}
+                </button>
+              );
+            })}
+            <button
+              disabled={locked}
+              onClick={() => setHubView('free')}
+              className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm"
+            >
+              <span className="block text-lg">سماع حر</span>
+              <span className="block text-sm font-normal text-accent-600 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
+            </button>
+          </div>
+        </div>
+        )}
+
+        {/* Pickers BEFORE start; locked while an engine is active.
+            Free-listening detail: shown only when the سماع حر hub
+            card is entered (hubView 'free'). */}
+        {hubView === 'free' && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
+          <button
+            disabled={locked}
+            onClick={() => setHubView('hub')}
+            className="mb-4 py-2 px-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl disabled:opacity-50"
+          >
+            ← عودة إلى الكروت
+          </button>
           <label className="block font-bold text-accent-800 mb-2" htmlFor="listen-surah">
             اختر السورة
           </label>
@@ -1486,6 +1576,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             </button>
           )}
         </div>
+        )}
 
         {/* أنماط الاستماع: additive journey section, Hafs only.
             The single-surah player above is untouched; these three
@@ -1496,16 +1587,71 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             Hafs reciter journeys, and the pickers above already
             cover non-Hafs listening. id="three-mode-section" is
             the home khatma cards' scroll target (preselect). */}
-        {riwayaId === null && !hadrOn && (
+        {/* Journey detail: shown only when a journey hub card is
+            entered (hubView is that mode). The surah + start-reciter
+            pickers live here now — the player pickers above are
+            hidden in detail views. */}
+        {riwayaId === null && !hadrOn && hubView !== 'hub' && hubView !== 'free' && (
         <div id="three-mode-section" className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800">أنماط الاستماع</p>
+          <button
+            disabled={locked}
+            onClick={() => setHubView('hub')}
+            className="mb-4 py-2 px-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl disabled:opacity-50"
+          >
+            ← عودة إلى الكروت
+          </button>
+          <p className="font-bold text-accent-800 text-lg">{threeModeName(hubView as ThreeMode)}</p>
           <p className="text-sm text-accent-600 mt-1">
             رحلة متواصلة من سورة {surahName(surah)} بصوت{' '}
             {RECITERS.find((r) => r.id === reciterId)?.name || ''} حتى نهاية المصحف — التوقف
             يحفظ موضعك في كل نمط على حدة.
           </p>
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div>
+              <label className="block font-bold text-accent-800 mb-2" htmlFor="journey-surah">
+                ابدأ من سورة
+              </label>
+              <select
+                id="journey-surah"
+                value={surah}
+                disabled={locked}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n) && n >= 1 && n <= 114) {
+                    setSurah(n);
+                    setCurrent(1);
+                  }
+                }}
+                className="w-full py-3 px-3 bg-white border border-emerald-200 rounded-xl font-bold text-accent-800 disabled:opacity-50"
+              >
+                {SURAHS.map((s) => (
+                  <option key={s.no} value={s.no}>
+                    {s.no} — {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-accent-800 mb-2" htmlFor="journey-reciter">
+                قارئ البداية
+              </label>
+              <select
+                id="journey-reciter"
+                value={reciterId}
+                disabled={locked}
+                onChange={(e) => changeReciter(e.target.value)}
+                className="w-full py-3 px-3 bg-white border border-emerald-200 rounded-xl font-bold text-accent-800 disabled:opacity-50"
+              >
+                {RECITERS.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div className="grid gap-3 mt-4">
-            {THREE_MODES.map((m) => {
+            {THREE_MODES.filter((m) => m.id === hubView).map((m) => {
               const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
               return (
                 <div key={m.id}>
@@ -1540,7 +1686,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             })}
           </div>
           {/* Per-mode resume cards (tap-only, like every resume here). */}
-          {THREE_MODES.map((m) => {
+          {THREE_MODES.filter((m) => m.id === hubView).map((m) => {
             const saved = savedJourneys[m.id];
             if (!saved || hiddenJourneyResumes.includes(m.id)) return null;
             return (
@@ -1683,7 +1829,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             listening-only (the Hafs text does not match a non-Hafs
             voice), and hadr is surah-file (no ayah steps), so this
             block hides under either. */}
-        {riwayaId === null && !hadrOn && (
+        {riwayaId === null && !hadrOn && hubView !== 'hub' && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 mb-3">سورة {surahName(surah)}</p>
           {textLoading && <p className="text-accent-600">جارٍ تحميل نص السورة…</p>}
@@ -1720,7 +1866,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
             state; deleting this block leaves the page fully working) */}
         {/* Offline section: this surah + reciter only, never whole-Quran.
             Hafs only in v1 — riwaya and hadr modes have no offline downloads. */}
-        {riwayaId === null && !hadrOn && (
+        {riwayaId === null && !hadrOn && hubView === 'free' && (
         <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800">الاستماع دون اتصال</p>
           <p className="text-sm text-accent-600 mt-1">
