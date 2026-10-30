@@ -431,6 +431,10 @@ export default function AuthPage({
               <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800 text-center leading-relaxed">
                 تم إنشاء الحساب — افتح إيميلك <span className="font-bold" dir="ltr">{checkEmail}</span> واضغط رابط التأكيد، وبعدين سجل دخول. لو مش لاقي الرسالة، تأكد من مجلد السبام.
               </div>
+              <button type="button" onClick={() => { setCheckEmail(null); setSuccess(''); setError(''); setMode('login'); }}
+                className="w-full text-sm text-emerald-700 hover:text-emerald-800 font-semibold py-1">
+                عندك حساب؟ ادخل بدل ما تسجل
+              </button>
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
               {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
               <button type="button" onClick={handleResendConfirmation} disabled={loading}
