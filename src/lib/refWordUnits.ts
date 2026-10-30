@@ -14,19 +14,23 @@
 // loudly (onerror) and the caller falls back — never a silent wrong
 // word.
 //
-// SCOPE v1 (2026-10-30): ALL surahs, ayah-mode done-wrong card.
+// SCOPE v1 (2026-10-30), GATED batch 3 on reviewer verdicts:
 // URL pattern verified by HEAD requests 2026-10-30 for surahs 1,
 // 2, 18, 36, 67, 112, 114 incl. mid/deep ayah words — every probe
 // 200. The reference voice is quran.com's single word-by-word
 // voice, NOT the user's chosen reciter: official docs name NO
 // reciter for it (one fixed resource, no catalog) — never name
-// one. CAVEAT: a 200 proves a file exists at that index, not that
-// its word matches the app's space-split word at the same index
-// (segmentation/Basmalah can drift per surah), so the pilot
-// "(تجربة)" label stays until per-surah ear checks pass. A
-// missing file fails loudly (onerror) and the caller falls back
-// — never a silent wrong word — but a MISALIGNED file is not
-// detectable by the app, which is why the ear checks matter.
+// one. CAVEAT (both reviewers, blocking): a 200 proves a file
+// exists at that index, NOT that its word matches the app's
+// space-split word at the same index (segmentation/Basmalah can
+// drift per surah) — and a MISALIGNED file plays cleanly, so
+// neither the "(تجربة)" label nor the onerror fallback catches
+// it. Until the offline manifest check lands (app words vs
+// Quran.com word list per ayah, wbw_ok[ayah]), ONLY Surah 67 —
+// the ear-checked pilot — is verified and may serve units.
+// All-surah URL support stays in wbwWordUrl; the gate below is
+// what restricts presentation. Unverified surahs fall back to
+// the synthetic correction voice, never to a possibly-wrong clip.
 // Units are computed from the app's OWN expectedWordList split, so
 // the unit always aligns with what SelfTest graded.
 //
@@ -36,6 +40,10 @@
 // context first, matching the app's correction philosophy
 // (withPrecedingContextWord). The final window truncates at the ayah
 // end (shorter final unit allowed).
+
+// Verified reference-unit surahs (see SCOPE note above).
+// Extend ONLY from the wbw_ok manifest, never from HEAD 200s.
+export const REF_VERIFIED_SURAHS = new Set([67]);
 
 const WBW_BASE = 'https://audio.qurancdn.com/wbw';
 

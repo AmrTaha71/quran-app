@@ -8,7 +8,7 @@ import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
 import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
-import { wbwWordUrl, refUnitForWord } from '../lib/refWordUnits';
+import { wbwWordUrl, refUnitForWord, REF_VERIFIED_SURAHS } from '../lib/refWordUnits';
 import { checkMic } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
@@ -1158,13 +1158,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     });
   };
   const stopRefUnit = () => {
+    // Batch 3 (Claude hole 4): disarm before pausing, same rule
+    // as the continuous prompt elements.
+    try {
+      const a = refUnitAudioRef.current;
+      if (a) { a.onended = null; a.onerror = null; }
+    } catch {}
     try { refUnitAudioRef.current?.pause(); } catch {}
     refUnitAudioRef.current = null;
     setRefUnitPlaying(false);
   };
   const playRefUnit = () => {
     const ayah = ayahs[index];
-    if (!ayah || wrongIndices.length === 0) return;
+    if (!ayah || !REF_VERIFIED_SURAHS.has(ayah.surah_no) || wrongIndices.length === 0) return;
     const words = expectedWordList(ayah.ayah_text);
     if (words.length === 0) return;
     stopCorrAudio();
@@ -1530,7 +1536,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // kept it. A fluent substitution keeps the same miss while the
   // user moves on; a revising interim (ريب→ريبة) changes it and
   // resets the count, so a revision can never trigger the window.
-  const interimMissRef = useRef<{ key: string; count: number }>({ key: '', count: 0 });
+  const interimMissRef = useRef<{ key: string; count: number; firstSeenAt: number }>({ key: '', count: 0, firstSeenAt: 0 });
+  // Batch 3 (reviewer verdicts): which path opened the current
+  // correction window — 'finals' (evaluateNow mismatch) or
+  // 'interim' (early window). The heal diag records it, because
+  // an interim-origin window is the new behavior and deserves
+  // its own heal-rate watch.
+  const corrWindowSourceRef = useRef<'finals' | 'interim' | ''>('');
   const quietTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // S4 voice safety timers (see helpers below): the no-result
@@ -1964,12 +1976,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const windowSpoken = spoken.slice(liveRef.current.windowStartLen);
       if (liveRef.current.level !== 'beginner') {
         const { allMatched, extras } = alignWordsStrict(expected.map((w) => w.norm), windowSpoken);
-        if (allMatched && extras.length === 0) gradeMic(true);
+        if (allMatched && extras.length === 0) { diagPush('corr-window-self-corrected', { label: corrWindowSourceRef.current || 'unknown' }); gradeMic(true); }
       } else {
         const targets = liveRef.current.correctingTargets;
         if (targets.length > 0) {
           const { allMatched } = alignWords(targets, windowSpoken);
-          if (allMatched) gradeMic(true);
+          if (allMatched) { diagPush('corr-window-self-corrected', { label: corrWindowSourceRef.current || 'unknown' }); gradeMic(true); }
         }
       }
       return;
@@ -2006,6 +2018,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         }
       });
       liveRef.current.windowStartLen = spoken.length;
+      corrWindowSourceRef.current = 'finals';
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
       const windowS = liveRef.current.corrDelay;
@@ -2292,26 +2305,39 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     evaluateNow();
     if (liveRef.current.micState !== 'correcting') return;
-    // FALSE-ALARM HEAL (2026-10-30, batch 1): a window opened on a
-    // misheard interim (or a misheard final) must not fail an ayah
-    // the user actually recited correctly. If the FULL finals now
-    // align cleanly, the window was a false alarm — grade true.
-    // A true error can never pass this check (its wrong word is
-    // still in the finals), and a mid-window correction still
-    // passes through evaluateNow above, so this only heals.
+    // FALSE-ALARM HEAL (batch 1, TIGHTENED batch 3 on reviewer
+    // verdicts — ChatGPT found the hole, Claude concurred): the
+    // old code healed at beginner level with the FORGIVING
+    // aligner (extras discarded), so a real error followed by
+    // its correction (e.g. ملك then مالك) healed to a pass —
+    // the wrong word was silently skipped. Healing now ALWAYS
+    // uses the strict aligner (allMatched AND zero extras),
+    // regardless of user level: every expected word must match
+    // and every spoken word must be accounted for (the only
+    // carve-out is the strict aligner's own opaque-numeral rule
+    // for Safari ASR artifacts). This is deliberately stricter
+    // than beginner grading: a false alarm (clean full
+    // recitation) still heals, but a true error can never heal.
+    // Conservative corner, stated honestly: a recitation that
+    // contained a real error AND its correction, with no
+    // in-window correction, now grades false where forgiving
+    // beginner grading would have passed — the price of never
+    // passing a true error. The user re-recites via the done
+    // card. Finals here are this ayah's attempt only (startMic
+    // resets them), so previous ayahs cannot leak in as extras.
     const healAyah = liveRef.current.ayah;
     if (healAyah) {
       const healExpected = expectedWordList(healAyah.ayah_text);
       const healSpoken = spokenTokens(liveRef.current.finals);
-      const healStrict = liveRef.current.level !== 'beginner';
-      const healResult = healStrict
-        ? alignWordsStrict(healExpected.map((w) => w.norm), healSpoken)
-        : { ...alignWords(healExpected.map((w) => w.norm), healSpoken), extras: [] as string[] };
-      if (healResult.allMatched && (healStrict ? healResult.extras.length === 0 : true)) {
+      const healResult = alignWordsStrict(healExpected.map((w) => w.norm), healSpoken);
+      if (healResult.allMatched && healResult.extras.length === 0) {
+        diagPush('correction-heal', { label: `${corrWindowSourceRef.current || 'unknown'}-healed` });
         gradeMic(true);
         return;
       }
+      diagPush('correction-heal', { label: `${corrWindowSourceRef.current || 'unknown'}-missed` });
     }
+    diagPush('corr-window-expired', { label: corrWindowSourceRef.current || 'unknown' });
     gradeMic(false);
   };
   // INTERIM EARLY WINDOW (2026-10-30, batch 1): twin of the
@@ -2324,7 +2350,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const openCorrectionWindowFromInterim = (expected: { norm: string; orig: string }[], result: { matched: boolean[] }) => {
     const ayah = liveRef.current.ayah;
     if (!ayah || liveRef.current.micState !== 'listening') return;
-    interimMissRef.current = { key: '', count: 0 };
+    interimMissRef.current = { key: '', count: 0, firstSeenAt: 0 };
     liveRef.current.correctingTargets = expected.filter((_, i) => !result.matched[i]).map((w) => w.norm);
     const wrongOrig = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
     const token = ++corrFetchTokenRef.current;
@@ -2339,6 +2365,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
     });
     liveRef.current.windowStartLen = spokenTokens(liveRef.current.finals).length;
+    corrWindowSourceRef.current = 'interim';
     liveRef.current.micState = 'correcting';
     setMicState('correcting');
     const windowS = liveRef.current.corrDelay;
@@ -2355,16 +2382,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }, 1000);
     recPushPrompt('interim-miss', wrongOrig, wrongIdx, index);
   };
-  // INTERIM TRIGGER (2026-10-30, batch 1): ayah mode only, while
-  // listening. Fires only when ALL of these hold: (a) the interim
-  // alignment has a first unmatched expected word m, (b) a LATER
-  // expected word already matches (the user moved past the error —
-  // a fluent substitution, not a pause), (c) something was actually
-  // spoken at/after m (not just "not yet spoken"), (d) the same m
-  // survived 2 consecutive interim events (a revising interim
-  // changes m and resets the count). Full-length recitations are
-  // left to the finals path. The window itself still judges finals
-  // at expiry, and the false-alarm heal above protects the grade.
+  // INTERIM TRIGGER (batch 1, TIGHTENED batch 3 on reviewer
+  // verdicts): ayah mode only, while listening. Fires only when
+  // ALL hold: (a) first unmatched expected word m; (b) STRONG
+  // downstream evidence — the next TWO expected words both
+  // matched, or one later matched word of 4+ letters (a single
+  // short common word — من، في، لا — is too weak to prove the
+  // user moved past); (c) something spoken at/after m;
+  // (d) the same m AND the same normalized spoken candidate at
+  // position m across 2 consecutive interim events (an
+  // index-only match let a revising recognizer — ملك→مالك —
+  // fire a window for an error that vanished); (e) at least
+  // 600ms since the first sighting of this miss (event rates
+  // differ by platform; Safari interim is sparse, so this
+  // mainly slows over-eager Chrome triggers); (f) interim-
+  // inclusive spoken length below expected length. The window
+  // still judges finals at expiry, and the strict heal above
+  // protects the grade.
   const maybeInterimCorrectionWindow = (interimText: string) => {
     try {
       const ayah = liveRef.current.ayah;
@@ -2376,16 +2410,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const result = strict
         ? alignWordsStrict(expected.map((w) => w.norm), spokenAll)
         : { ...alignWords(expected.map((w) => w.norm), spokenAll), extras: [] as string[] };
-      if (result.allMatched) { interimMissRef.current = { key: '', count: 0 }; return; }
+      const resetMiss = () => { interimMissRef.current = { key: '', count: 0, firstSeenAt: 0 }; };
+      if (result.allMatched) { resetMiss(); return; }
       const m = result.matched.findIndex((v) => !v);
-      if (m < 0 || spokenAll.length <= m) { interimMissRef.current = { key: '', count: 0 }; return; }
-      const movedPast = result.matched.slice(m + 1).some(Boolean);
-      if (!movedPast) { interimMissRef.current = { key: '', count: 0 }; return; }
-      const key = `${index}:${m}`;
+      if (m < 0 || spokenAll.length <= m) { resetMiss(); return; }
+      // Strong downstream evidence (see comment above).
+      const later = result.matched.slice(m + 1);
+      const laterNorms = expected.slice(m + 1).map((w) => w.norm);
+      const twoAnchored = later.length >= 2 && later[0] && later[1];
+      const longLater = later.some((v, i) => v && laterNorms[i].length >= 4);
+      if (!twoAnchored && !longLater) { resetMiss(); return; }
+      // Candidate stability: the spoken token at position m must
+      // be the same normalized word across events, not just the
+      // same unmatched index.
+      const candidate = spokenAll[m];
+      const key = `${index}:${m}:${candidate}`;
       const prev = interimMissRef.current;
+      const now = Date.now();
       const count = prev.key === key ? prev.count + 1 : 1;
-      interimMissRef.current = { key, count };
-      if (count >= 2) {
+      const firstSeenAt = prev.key === key && prev.firstSeenAt > 0 ? prev.firstSeenAt : now;
+      interimMissRef.current = { key, count, firstSeenAt };
+      if (count >= 2 && now - firstSeenAt >= 600) {
         openCorrectionWindowFromInterim(expected, result);
       }
     } catch {
@@ -2423,7 +2468,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Batch 1: a new listening session resets interim-miss
     // stability — a stale count from a previous attempt on the
     // same ayah must never fire on the first interim event.
-    interimMissRef.current = { key: '', count: 0 };
+    interimMissRef.current = { key: '', count: 0, firstSeenAt: 0 };
     // DIAG: startMic is only reached from mic/كمّل taps (silent
     // restarts route through trySilentRestart, which logs its own
     // 'restart' event first — so a 'resume-mic' here after a
@@ -3032,6 +3077,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // otherwise a late fire would cancel a NEW prompt's speech (its
     // resume path cancels speech before checking the flag).
     clearContPromptTimer();
+    // Batch 3 (Claude hole 4): same disarm as resumeAfterPrompt.
+    try {
+      const a = contPromptAudioRef.current;
+      if (a) { a.onended = null; a.onerror = null; a.onplaying = null; a.onstalled = null; }
+    } catch {}
     try { contPromptAudioRef.current?.pause(); } catch {}
     contPromptAudioRef.current = null;
     cancelCorrectionSpeech();
@@ -3149,10 +3199,22 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // twice. The guard comes FIRST: a stale finish must not even
     // pause audio or cancel speech belonging to a newer prompt.
     const resumeAfterPrompt = () => {
+      // Batch 3 (Claude hole 5): the prompt-generation epoch.
+      // A stale prompt's late handler must never settle a newer
+      // prompt — cancelContPrompt bumps the gen, so this check
+      // is what makes that bump effective here.
+      if (speakGenRef.current !== gen) return;
       if (promptSettledRef.current || !contPromptingRef.current) return;
       promptSettledRef.current = true;
       clearContPromptTimer();
       if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; }
+      // Batch 3 (Claude hole 4): disarm the playing element's
+      // handlers before pausing, so a late event from it can
+      // never settle a newer prompt.
+      try {
+        const a = contPromptAudioRef.current;
+        if (a) { a.onended = null; a.onerror = null; a.onplaying = null; a.onstalled = null; }
+      } catch {}
       try { contPromptAudioRef.current?.pause(); } catch {}
       contPromptAudioRef.current = null;
       cancelCorrectionSpeech();
@@ -3160,7 +3222,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setContPrompting(false);
       startContinuousMic();
     };
-    const playTtsFallback = () => {
+    // Batch 3 (Claude holes 1+2+5): watchdogMs lets the
+    // pre-emption re-arm use a short 1.5s onstart watchdog
+    // (first-use TTS keeps the 3s default). Callers must pass
+    // NO other argument: play().catch used to pass its
+    // rejection here, which would corrupt the delay.
+    const playTtsFallback = (watchdogMs?: number) => {
         try {
           if ('speechSynthesis' in window) {
             if (ttsFallbackUsed) return;
@@ -3181,14 +3248,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             // may already have set) proves THIS utterance started.
             let ttsStarted = false;
             const clearTtsWatchdog = () => { if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; } };
-            u.onstart = () => { ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
-            u.onend = () => { if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
-            u.onerror = () => { if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
-            window.speechSynthesis.speak(u);
-            ttsOnstartTimer = setTimeout(() => {
-              ttsOnstartTimer = null;
-              if (!ttsStarted && ttsCancelledUtterance !== u) { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
-            }, CONT_TTS_ONSTART_WATCHDOG_MS);
+            // Batch 3 (Claude hole 1): a cancelled utterance can
+            // still fire onstart in the same tick it was
+            // cancelled — cancel AGAIN so no blip overlaps the
+            // human audio, and never set the started flags.
+            u.onstart = () => { if (ttsCancelledUtterance === u) { try { window.speechSynthesis.cancel(); } catch {} return; } if (speakGenRef.current !== gen) return; ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
+            u.onend = () => { if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
+            u.onerror = () => { if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
+            // Batch 3 (Claude hole 2): on WebKit, speak() right
+            // after cancel() can be silently dropped — defer
+            // 50ms, and never speak into a settled or superseded
+            // prompt (a settle inside the 50ms window must win).
+            const wd = watchdogMs ?? CONT_TTS_ONSTART_WATCHDOG_MS;
+            setTimeout(() => {
+              if (promptSettledRef.current || speakGenRef.current !== gen || !contPromptingRef.current) return;
+              window.speechSynthesis.speak(u);
+              ttsOnstartTimer = setTimeout(() => {
+                ttsOnstartTimer = null;
+                if (speakGenRef.current !== gen) return;
+                if (!ttsStarted && ttsCancelledUtterance !== u) { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
+              }, wd);
+            }, 50);
           } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
         } catch { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
       };
@@ -3206,8 +3286,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       applyContRate();
       a.onloadedmetadata = applyContRate;
       contPromptAudioRef.current = a;
-      a.onplaying = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt }); };
-      a.onended = () => { diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
+      // Batch 3 (Claude hole 3): whether this element actually
+      // started playing decides the failure path — started-then-
+      // failed settles (no re-speak over a partial play),
+      // never-started falls back to TTS.
+      let audioStarted = false;
+      a.onplaying = () => { if (speakGenRef.current !== gen) return; audioStarted = true; promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt }); };
+      a.onended = () => { if (speakGenRef.current !== gen) return; diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
+      a.onstalled = () => {
+        if (speakGenRef.current !== gen) return;
+        diagPush('tts-error', { label: 'cont-prompt-audio-stalled' });
+        if (audioStarted) { try { a.pause(); } catch {} contPromptAudioRef.current = null; resumeAfterPrompt(); }
+        else playTtsFallback(ttsCancelledUtterance ? 1500 : undefined);
+      };
       // D2: an audio-file error used to resume WITHOUT trying TTS,
       // unlike a refused play() — now both fall back to TTS, and
       // only a TTS failure as well produces the visible note.
@@ -3216,15 +3307,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // fallback stays silent to the user (diag only). A refused
       // play() does NOT evict — gesture-gating is not corruption.
       a.onerror = () => {
+        if (speakGenRef.current !== gen) return;
         diagPush('tts-error', { label: 'cont-prompt-audio' });
+        if (audioStarted) { try { a.pause(); } catch {} contPromptAudioRef.current = null; resumeAfterPrompt(); return; }
         if (cacheKey) {
           contAudioCacheRef.current.delete(cacheKey);
           void getCorrAudioBackend().remove(cacheKey).catch(() => {});
           diagPush('cont-prompt-cache-evict', { label: 'cont-prompt-audio', reason: 'audio-error' });
         }
-        playTtsFallback();
+        playTtsFallback(ttsCancelledUtterance ? 1500 : undefined);
       };
-      a.play().catch(playTtsFallback);
+      a.play().catch(() => playTtsFallback(ttsCancelledUtterance ? 1500 : undefined));
     };
     // Iteration 2: audio lookup by (version, voice, SPOKEN WORDS,
     // indices) — rate is deliberately absent (v3): one
@@ -3257,6 +3350,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // prompt that already finished.
     contPromptTimerRef.current = setTimeout(() => {
       contPromptTimerRef.current = null;
+      // Batch 3 (Claude hole 5): the 18s watchdog is scoped to
+      // its own generation — it must never settle a newer prompt.
+      // (Settling a long-playing prompt on timeout stays
+      // intentional: a play past 18s is stalled or its end event
+      // was lost, and the user already heard it or never will.)
+      if (speakGenRef.current !== gen) return;
       if (promptSettledRef.current || !contPromptingRef.current) return;
       if (!promptAudioStarted) noteContPromptAudioFailed(key);
       resumeAfterPrompt();
@@ -3574,6 +3673,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // its own 'restart' event first).
     diagPush('tap', { label: liveRef.current.contFinals ? 'resume-cont' : 'start-cont' });
     getAudioCtx();
+    // Batch 3 (S3, voices-only per ChatGPT's caution): warm the
+    // TTS voice list at session start like startMic does — no
+    // spoken warm-up utterance (an audible fragment on iOS is
+    // worse than the cold-start it would save).
+    try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch {}
     // Iteration 2: hydrate the persistent correction-audio cache
     // (no-op after the first call) so repeat prompts can hit it.
     hydrateCorrAudioCache();
@@ -4273,7 +4377,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-3">
               <h2 className="font-bold text-accent-800">جرّب الميكروفون قبل ما تبدأ</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
-                اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال.
+                اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال، ومفيش أي تسجيل بيتحفظ أو بيترفع.
               </p>
               <button onClick={runMicCheck} disabled={micCheckState === 'checking'}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
@@ -4289,7 +4393,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
               {micCheckState === 'done' && micCheckResult && (
                 micCheckResult.permission === 'granted' && micCheckResult.heardSomething ? (
-                  <p className="text-sm font-bold text-emerald-700">تمام — الميكروفون شغال وسمعك. ابدأ التسميع وانت مطمن.</p>
+                  <p className="text-sm font-bold text-emerald-700">تمام — الميكروفون شغال وسمعك (ده فحص الميكروفون بس، مش اختبار التعرف على الكلام). ابدأ التسميع وانت مطمن.</p>
                 ) : micCheckResult.permission === 'granted' ? (
                   <p className="text-sm font-bold text-amber-700">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
                 ) : micCheckResult.permission === 'denied' ? (
@@ -4520,7 +4624,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       reference 3-word unit containing the first wrong
                       word, alongside — never instead of — the current
                       correction above. */}
-                  {wrongIndices.length > 0 && (
+                  {ayahs[index] && REF_VERIFIED_SURAHS.has(ayahs[index].surah_no) && wrongIndices.length > 0 && (
                     <button onClick={() => playRefUnit()}
                       className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
                       {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
