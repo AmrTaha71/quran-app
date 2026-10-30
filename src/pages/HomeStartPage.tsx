@@ -178,6 +178,9 @@ export default function HomeStartPage({ session, onNavigate }: {
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
           </p>
+          <p className="text-xs text-accent-500 mt-1">
+            واقفل الشاشة لو عاوز
+          </p>
           <button
             onClick={() => onNavigate('adhkar')}
             className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
