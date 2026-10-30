@@ -2335,7 +2335,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         gradeMic(true);
         return;
       }
-      diagPush('correction-heal', { label: `${corrWindowSourceRef.current || 'unknown'}-missed` });
+      // Batch 3 follow-up (reviewer diagnostics): failure
+      // category, not a user-facing message — so a heal-miss
+      // caused purely by an extra word is never presented as
+      // proof the user mispronounced a Quranic word.
+      // allMatched + extras = failed_extra_word (includes the
+      // "repair pattern": wrong word spoken, then the correct
+      // word — logged separately below as a shadow metric only,
+      // never a grade; it also includes benign extras like
+      // isti'adha, so it bounds repair frequency from above).
+      // !allMatched + no extras = failed_missing_word (omission).
+      // !allMatched + extras = failed_substitution.
+      // failed_alignment has no producer in current code paths:
+      // every strict-aligner failure maps to one of the three
+      // above, so it is reserved, not fabricated.
+      const healCategory = healResult.allMatched
+        ? 'failed_extra_word'
+        : (healResult.extras.length === 0 ? 'failed_missing_word' : 'failed_substitution');
+      if (healResult.allMatched && healResult.extras.length > 0) {
+        diagPush('heal-repair-shadow', { label: corrWindowSourceRef.current || 'unknown', reason: 'extra-with-full-match' });
+      }
+      diagPush('correction-heal', { label: `${corrWindowSourceRef.current || 'unknown'}-missed`, reason: healCategory });
     }
     diagPush('corr-window-expired', { label: corrWindowSourceRef.current || 'unknown' });
     gradeMic(false);
@@ -2464,6 +2484,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     else gradeMic(false);
   };
 
+  // Batch 3 follow-up (reviewer note): iOS getVoices() often
+  // returns [] on first call — warm the list AND listen once
+  // for voiceschanged, so the warm-up is not a no-op. No
+  // spoken utterance (see Batch 3: audible-fragment caution).
+  // Plain function (no useCallback deps): call-time resolution
+  // makes declaration order irrelevant to its callers.
+  const warmTtsVoices = () => {
+    try {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.getVoices();
+      const once = () => { try { window.speechSynthesis.getVoices(); } catch {} };
+      try { window.speechSynthesis.addEventListener('voiceschanged', once, { once: true }); } catch {}
+    } catch {}
+  };
   const startMic = (preserveArg?: boolean) => {
     // Batch 1: a new listening session resets interim-miss
     // stability — a stale count from a previous attempt on the
@@ -2484,7 +2518,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // TTS voice list so a later timer-triggered correction can pick
     // a real Arabic voice instead of device luck.
     getAudioCtx();
-    try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch {}
+    warmTtsVoices();
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
@@ -3673,11 +3707,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // its own 'restart' event first).
     diagPush('tap', { label: liveRef.current.contFinals ? 'resume-cont' : 'start-cont' });
     getAudioCtx();
-    // Batch 3 (S3, voices-only per ChatGPT's caution): warm the
-    // TTS voice list at session start like startMic does — no
-    // spoken warm-up utterance (an audible fragment on iOS is
-    // worse than the cold-start it would save).
-    try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch {}
+    // Batch 3 follow-up: voiceschanged-aware warm-up (see
+    // warmTtsVoices) — iOS often returns [] on first getVoices.
+    warmTtsVoices();
     // Iteration 2: hydrate the persistent correction-audio cache
     // (no-op after the first call) so repeat prompts can hit it.
     hydrateCorrAudioCache();
