@@ -178,30 +178,31 @@ body {
   --hairline-amber: rgba(180, 83, 9, 0.2);
   --hairline-input: #8d877b;
 }
-/* Press: buttons sink 1px + scale 0.96. Down is fast (100ms), release
-   is controlled (180ms). No shadow animation in the base class. */
-.polish-press { transition: transform 180ms var(--polish-ease-physical); }
-.polish-press:active { transform: translateY(1px) scale(0.96); transition-duration: 100ms; }
+/* Press (stronger pass 2026-10-31, user: all transitions need to feel
+   bigger): buttons sink 2px + scale 0.94. Down is fast (90ms),
+   release is controlled (220ms). No shadow animation in base class. */
+.polish-press { transition: transform 220ms var(--polish-ease-physical); }
+.polish-press:active { transform: translateY(2px) scale(0.94); transition-duration: 90ms; }
 /* Shadow cue for primary buttons only: a ::after shadow that fades as
    the button sinks (opacity only — the shadow itself never animates). */
 .polish-press-depth { position: relative; }
-.polish-press-depth::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 5px 12px rgba(9, 39, 29, 0.16); opacity: 1; pointer-events: none; transition: opacity 100ms var(--polish-ease-physical); }
-.polish-press-depth:active::after { opacity: 0.35; }
+.polish-press-depth::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 18px rgba(9, 39, 29, 0.20); opacity: 1; pointer-events: none; transition: opacity 90ms var(--polish-ease-physical); }
+.polish-press-depth:active::after { opacity: 0.25; }
 /* Cards: static elevation-1 shadow; hover lift is transform-only. */
 .polish-card { box-shadow: var(--polish-sh1); transition: transform 250ms var(--polish-ease-out); }
 @media (hover: hover) {
-  .polish-card:hover { transform: translateY(-2px); }
+  .polish-card:hover { transform: translateY(-3px); }
 }
-/* Entrance (replaces slice-1 fade-up): 12px rise, 400ms, ends at
+/* Entrance (stronger pass): 18px rise, 450ms, ends at
    transform:none with backwards fill. */
 @keyframes polish-fade-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(18px); }
   to { opacity: 1; transform: none; }
 }
-.polish-fade-up { animation: polish-fade-up 400ms var(--polish-ease-out) backwards; }
+.polish-fade-up { animation: polish-fade-up 450ms var(--polish-ease-out) backwards; }
 /* Listen hub stagger: each hub button animates; nth-child sets the
    50ms steps (4 hub children max, so delays run 0/50/100/150ms). */
-.polish-hub-item { animation: polish-fade-up 400ms var(--polish-ease-out) backwards; }
+.polish-hub-item { animation: polish-fade-up 450ms var(--polish-ease-out) backwards; }
 .polish-hub > .polish-hub-item:nth-child(2) { animation-delay: 50ms; }
 .polish-hub > .polish-hub-item:nth-child(3) { animation-delay: 100ms; }
 .polish-hub > .polish-hub-item:nth-child(4) { animation-delay: 150ms; }
@@ -212,22 +213,23 @@ body {
 .polish-listen-row { position: relative; }
 .polish-listen-row::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.35); opacity: 0; pointer-events: none; transition: opacity 200ms var(--polish-ease-out); }
 .polish-listen-row.is-playing::after { opacity: 1; }
-/* Centered modals: rise 12px + scale 0.965, 280ms. Mount-only. */
+/* Centered modals (stronger pass): rise 20px + scale 0.94, 340ms. Mount-only. */
 @keyframes polish-modal-in {
-  from { opacity: 0; transform: translateY(12px) scale(0.965); }
+  from { opacity: 0; transform: translateY(20px) scale(0.94); }
   to { opacity: 1; transform: none; }
 }
-.polish-modal-enter { animation: polish-modal-in 280ms var(--polish-ease-out) backwards; }
+.polish-modal-enter { animation: polish-modal-in 340ms var(--polish-ease-out) backwards; }
 /* Backdrop fade: opacity only, mount-only. */
 @keyframes polish-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .polish-scrim-enter { animation: polish-fade-in 220ms var(--polish-ease-out) backwards; }
-/* Route entrance (non-Mushaf pages only): 6px rise, 220ms. No exit
-   animation: the old route disappears immediately, speed first. */
+/* Route entrance (non-Mushaf pages only, stronger pass): 10px rise,
+   280ms. No exit animation: the old route disappears immediately,
+   speed first — routes stay the fastest entrance. */
 @keyframes polish-route-in {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
-.polish-route-in { animation: polish-route-in 220ms var(--polish-ease-out) backwards; }
+.polish-route-in { animation: polish-route-in 280ms var(--polish-ease-out) backwards; }
 /* BottomNav: hairline + upward ambient shadow. */
 .polish-tabbar { border-top: 1px solid rgba(82, 67, 43, 0.10); box-shadow: var(--polish-sh3); }
 /* Tab indicator: leaving is quick (160ms ease-in); arriving reads as
@@ -237,24 +239,24 @@ body {
 .nav-indicator-on { transform: scaleX(1); transition: transform 320ms var(--polish-ease-sheet) 40ms; }
 .nav-icon { transition: transform 280ms var(--polish-ease-out); display: inline-flex; }
 .nav-icon-on { transform: scale(1.10); }
-/* SelfTest: calm feedback. Correction window: quiet 8px entrance. */
+/* SelfTest: calm feedback. Correction window: 12px entrance, 240ms. */
 @keyframes polish-st-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: none; }
 }
-.polish-correction-window { animation: polish-st-in 200ms var(--polish-ease-out) backwards; }
+.polish-correction-window { animation: polish-st-in 240ms var(--polish-ease-out) backwards; }
 /* Progress dots: transform/opacity only; the current dot scales up.
    No pulsing loops anywhere in SelfTest. */
-.polish-progress-dot { transition: transform 160ms var(--polish-ease-out), opacity 160ms var(--polish-ease-out); }
-.polish-progress-dot.is-current { transform: scale(1.18); }
-/* Hero medallion entrance: one quiet fade + 6px rise, 400ms. The
-   artwork itself carries the depth (no painted halo: the image is a
-   square, a halo would ring the square, not the medallion). */
+.polish-progress-dot { transition: transform 180ms var(--polish-ease-out), opacity 180ms var(--polish-ease-out); }
+.polish-progress-dot.is-current { transform: scale(1.25); }
+/* Hero medallion entrance (stronger pass): one fade + 10px rise,
+   450ms. The artwork itself carries the depth (no painted halo: the
+   image is a square, a halo would ring the square, not the medallion). */
 @keyframes polish-hero-in {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: none; }
 }
-.polish-hero-medal { animation: polish-hero-in 400ms var(--polish-ease-out) backwards; }
+.polish-hero-medal { animation: polish-hero-in 450ms var(--polish-ease-out) backwards; }
 /* Focus: visible keyboard focus (emerald, not gold) on opted-in controls. */
 .polish-focus:focus-visible { outline: 2px solid #047857; outline-offset: 3px; }
 /* Reduced motion: stop ALL polish movement (static elevation and
