@@ -1377,12 +1377,8 @@ export default function QuranMushafPage({
   // permissions.query) before startFollowListening would leave the
   // tap gesture and Safari would reject getUserMedia with
   // NotAllowedError and NO prompt at all.
-  const [followMicGate, setFollowMicGate] = useState<null | 'live' | 'whisper'>(null);
   const [followMicDenied, setFollowMicDenied] = useState(false);
   const FOLLOW_MIC_GRANTED_KEY = 'quran-follow-mic-granted';
-  const micGrantedBefore = (): boolean => {
-    try { return localStorage.getItem(FOLLOW_MIC_GRANTED_KEY) === '1'; } catch { return false; }
-  };
   const markMicGranted = () => {
     try { localStorage.setItem(FOLLOW_MIC_GRANTED_KEY, '1'); } catch {}
   };
@@ -2826,21 +2822,22 @@ export default function QuranMushafPage({
     void startFollowListening();
   }, [enterFollowMode, startFollowListening]);
 
-  // Foreground permission gate (2026-10-29): the lobby buttons call
-  // this instead of starting directly. Granted-before users start at
-  // once (same synchronous gesture as before); everyone else gets
-  // the explainer window first, and its own button tap (also a
-  // gesture) launches the start — so the iOS system prompt still
-  // appears in front of the app, now with the user expecting it.
+  // Mic-permission start (2026-10-30, supersedes the 2026-10-29
+  // foreground permission gate): the lobby buttons start DIRECTLY.
+  // The old gate showed an explainer modal first, and its button tap
+  // dismissed the full-screen overlay in the same frame as the engine
+  // start — on iOS Safari that stuck the native mic dialog behind the
+  // page (device test 2026-10-30: the dialog only surfaced ~35s later
+  // over another route, after the user navigated away). Starting from
+  // the lobby tap itself keeps the gesture AND leaves no overlay to
+  // dismiss in the trigger frame, so the system dialog paints on top.
+  // The lobby already carries the explanation text, and the denied
+  // recovery modal (followMicDenied) still covers the denied case.
   // Plain function, not a callback: it must never enter a deps array.
-  const openMicGate = (kind: 'live' | 'whisper') => {
-    if (micGrantedBefore()) {
-      enterFollowMode();
-      startFollowListening(kind === 'whisper');
-      return;
-    }
+  const startFollowFromLobby = (kind: 'live' | 'whisper') => {
     setFollowMicDenied(false);
-    setFollowMicGate(kind);
+    enterFollowMode();
+    startFollowListening(kind === 'whisper');
   };
 
   // MERGED deletions (exit + auto-stop roles): resyncFollow (the old
@@ -3689,12 +3686,12 @@ export default function QuranMushafPage({
                         alone would track without showing any highlight
                         or status bar. Entering first is harmless on a
                         fresh entry (it only resets an empty state). */}
-                    <button onClick={() => openMicGate('live')}
+                    <button onClick={() => startFollowFromLobby('live')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
-                    <button onClick={() => openMicGate('whisper')}
+                    <button onClick={() => startFollowFromLobby('whisper')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
                       <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
@@ -3718,6 +3715,12 @@ export default function QuranMushafPage({
                         buttons above stay disabled meanwhile so a tap
                         cannot silently stack a second attempt. */}
                     {followMicWaiting && <p className="text-xs text-amber-200 mt-2">بانتظار إذن الميكروفون من المتصفح… (مرّ {followMicWaitElapsed} ثانية){followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إلغاء الانتظار وجرّب من جديد' : ''}</p>}
+                    {followMicWaiting && followMicWaitElapsed >= 8 && (
+                      <div className="mt-2 w-full rounded-xl bg-amber-500/20 border border-amber-300/40 p-3 text-right">
+                        <p className="text-sm font-bold text-amber-100">نافذة الإذن مش ظاهرة؟ من غير ما تقفل الصفحة:</p>
+                        <p className="text-xs text-amber-100/90 leading-relaxed mt-1">اضغط زرار الهوم وارجع لسفاري — النافذة المتعلقة هتظهر، واختار Allow. لو الالتقاط ما بدأش بعدها، اضغط «إلغاء الانتظار» وابدأ من جديد.</p>
+                      </div>
+                    )}
                     {followMicWaiting && (
                       <button onClick={cancelFollowMicWait}
                         className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
@@ -3741,6 +3744,12 @@ export default function QuranMushafPage({
                         a queued Safari prompt look like a frozen app. */}
                     <p className="text-sm font-bold mt-4">{followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام...'}</p>
                     {followMicWaiting && <p className="text-xs text-amber-200 mt-2">لسه الالتقاط ما بدأش (مرّ {followMicWaitElapsed} ثانية){followWaitRetryNote ? ` • ${followWaitRetryNote}` : ''}{followMicWaitElapsed >= 8 ? ' — لو اتأخرت، اضغط إيقاف ثم ابدأ الاستماع من جديد' : ''}</p>}
+                    {followMicWaiting && followMicWaitElapsed >= 8 && (
+                      <div className="mt-2 w-full rounded-xl bg-amber-500/20 border border-amber-300/40 p-3 text-right">
+                        <p className="text-sm font-bold text-amber-100">نافذة الإذن مش ظاهرة؟ من غير ما تقفل الصفحة:</p>
+                        <p className="text-xs text-amber-100/90 leading-relaxed mt-1">اضغط زرار الهوم وارجع لسفاري — النافذة المتعلقة هتظهر، واختار Allow. لو الالتقاط ما بدأش بعدها، اضغط إيقاف ثم ابدأ الاستماع من جديد.</p>
+                      </div>
+                    )}
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
@@ -3787,26 +3796,6 @@ export default function QuranMushafPage({
               user always sees them in front of the app window.
               Backdrops stop propagation so a tap here never turns
               a page or exits fullscreen underneath. */}
-          {followMicGate && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"
-              onClick={(e) => { e.stopPropagation(); setFollowMicGate(null); }}>
-              <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white"
-                onClick={(e) => e.stopPropagation()}>
-                <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> إذن الميكروفون</p>
-                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
-                  عشان نتابع الإمام، التطبيق محتاج يسمع من الميكروفون. لما تدوس «موافق»، هتظهر نافذة النظام أمام التطبيق — اختار «Allow» للسماح.
-                </p>
-                <button onClick={() => { const kind = followMicGate; setFollowMicGate(null); enterFollowMode(); startFollowListening(kind === 'whisper'); }}
-                  className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
-                  <Mic className="w-5 h-5" /> موافق، افتح طلب الإذن
-                </button>
-                <button onClick={() => setFollowMicGate(null)}
-                  className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 text-white text-sm font-bold rounded-xl transition-smooth">
-                  مش دلوقتي
-                </button>
-              </div>
-            </div>
-          )}
           {followMicDenied && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-6"
               onClick={(e) => { e.stopPropagation(); setFollowMicDenied(false); }}>
