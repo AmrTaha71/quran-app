@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } from 'lucide-react';
-import { acquireAudio, currentAudioOwner, releaseAudio } from '../lib/sharedAudio';
+import { acquireAudio, currentAudioOwner, releaseAudio, registerResume, unregisterResume, clearResumeStack } from '../lib/sharedAudio';
 import { adhkarClipUrl, adhkarList, type AdhkarClip, type AdhkarVoice, type AdhkarWird } from '../lib/adhkarClips';
 import { DEFAULT_RECITER_ID, RECITERS, type Reciter } from '../lib/reciters';
 import { hadrAudioUrl, HADR_NAME } from '../lib/hadr';
@@ -69,6 +69,38 @@ function readPosition(wird: AdhkarWird): { index: number; rep: number } {
     }
   } catch { /* ignore */ }
   return { index: 0, rep: 1 };
+}
+
+// One-time auto-resume intent for route hide (mirrors listen's
+// 12h sessionStorage intent): segment + time-in-clip, so a hidden
+// page can resume exactly where it paused. Position (wird/index/
+// rep) already lives in POS_KEY; this only adds seg/time.
+const ADHKAR_RESUME_KEY = 'quran-adhkar-auto-resume';
+const ADHKAR_RESUME_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+interface AdhkarIntent { seg: number; time: number; at: number }
+function readAdhkarIntent(): AdhkarIntent | null {
+  try {
+    const raw = sessionStorage.getItem(ADHKAR_RESUME_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof p !== 'object' || p === null) return null;
+    if (typeof p.at !== 'number' || !Number.isFinite(p.at) || p.at > Date.now() + 60000 || Date.now() - p.at > ADHKAR_RESUME_MAX_AGE_MS) return null;
+    if (typeof p.seg !== 'number' || !Number.isInteger(p.seg) || p.seg < 0) return null;
+    if (typeof p.time !== 'number' || !Number.isFinite(p.time) || p.time < 0) return null;
+    return { seg: p.seg, time: p.time, at: p.at };
+  } catch {
+    return null;
+  }
+}
+function writeAdhkarIntent(i: AdhkarIntent): void {
+  try {
+    sessionStorage.setItem(ADHKAR_RESUME_KEY, JSON.stringify(i));
+  } catch {}
+}
+function clearAdhkarIntent(): void {
+  try {
+    sessionStorage.removeItem(ADHKAR_RESUME_KEY);
+  } catch {}
 }
 
 function preview(text: string, max = 64): string {
@@ -124,7 +156,7 @@ function isRecitation(clip: AdhkarClip, voice: AdhkarVoice): boolean {
   return !!clip.quranic;
 }
 
-export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
+export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate: (r: Route) => void; visible?: boolean }) {
   const [wird, setWird] = useState<AdhkarWird>(readWird);
   const [voice, setVoice] = useState<AdhkarVoice>(readVoice);
   const [pos, setPos] = useState(() => readPosition(readWird()));
@@ -146,6 +178,13 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
   stateRef.current = { wird, voice, index, rep, playing, list, seg, segments };
   const elRef = useRef<HTMLAudioElement | null>(null);
   const wiredRef = useRef(false);
+  // Route visibility (App keeps this page mounted while hidden).
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const prevVisibleRef = useRef(visible);
+  // Position captured at preemption time (only when actually
+  // playing). Read by the anywhere-resume dispatcher.
+  const preemptedRef = useRef<{ index: number; rep: number; seg: number; time: number } | null>(null);
 
   const setMediaSession = useCallback((c: AdhkarClip, w: AdhkarWird, isPlaying: boolean) => {
     try {
@@ -178,6 +217,19 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
   }, [reciter]);
 
   const handlePreempted = useCallback(() => {
+    // Capture the live preempt point (only when actually playing).
+    if (stateRef.current.playing) {
+      let time = 0;
+      try {
+        const t = elRef.current?.currentTime;
+        if (typeof t === 'number' && Number.isFinite(t) && t >= 0) time = t;
+      } catch {
+        // ignore: time stays 0
+      }
+      preemptedRef.current = { index: stateRef.current.index, rep: stateRef.current.rep, seg: stateRef.current.seg, time };
+    } else {
+      preemptedRef.current = null;
+    }
     setPlaying(false);
   }, []);
 
@@ -251,6 +303,10 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
   // Pause + release on unmount (return resumes via saved position).
   useEffect(() => {
     return () => {
+      // Teardown (logout): no resume may fire after this page is
+      // gone — clear the stack BEFORE any release below.
+      clearResumeStack();
+      unregisterResume('adhkar');
       try {
         elRef.current?.pause();
       } catch { /* ignore */ }
@@ -277,6 +333,138 @@ export default function AdhkarPage({ onNavigate }: { onNavigate: (r: Route) => v
     setPlaying(false);
     setMediaSession(clip, wird, false);
   }, [clip, wird, setMediaSession]);
+
+  // Resume from a captured position (preempted or hidden):
+  // reload the captured segment, seek to the captured time,
+  // play. Used by the show effect and the anywhere-resume
+  // dispatcher. On failure the caller keeps tap-resume (position
+  // stays persisted); nothing throws.
+  const resumeAdhkarFrom = useCallback((cap: { index: number; rep: number; seg: number; time: number }): void => {
+    try {
+      const s = stateRef.current;
+      const target = s.list[cap.index];
+      if (!target) return;
+      setCompleted(false);
+      setError(null);
+      setPos({ index: cap.index, rep: cap.rep });
+      setSeg(cap.seg);
+      savePosition(s.wird, cap.index, cap.rep);
+      const el = ensureElement();
+      const segs = segmentsFor(target, s.voice, reciter);
+      const url = segs[Math.min(cap.seg, segs.length - 1)];
+      if (!url) return;
+      if (el.src !== url) {
+        el.src = url;
+        el.load();
+      }
+      const seekAndPlay = (): void => {
+        try {
+          if (Number.isFinite(cap.time) && cap.time > 0) {
+            const d = el.duration;
+            el.currentTime = Number.isFinite(d) && d > 0 ? Math.min(cap.time, d) : cap.time;
+          }
+        } catch {
+          // ignore: play from 0
+        }
+        setMediaSession(target, s.wird, true);
+        void el.play().then(() => setPlaying(true)).catch(() => {
+          setPlaying(false);
+          setError('تعذر استئناف التشغيل — اضغط تشغيل مرة أخرى.');
+        });
+      };
+      try {
+        if (el.readyState >= 1) seekAndPlay();
+        else el.addEventListener('loadedmetadata', seekAndPlay, { once: true });
+      } catch {
+        seekAndPlay();
+      }
+    } catch {
+      // ignore
+    }
+  }, [ensureElement, reciter, savePosition, setMediaSession]);
+
+  // Anywhere-resume dispatcher target: one-shot capture, cleared
+  // after use. No capture means paused, not playing, at preempt.
+  const adhkarResume = useCallback((): void => {
+    const cap = preemptedRef.current;
+    if (!cap) return;
+    preemptedRef.current = null;
+    resumeAdhkarFrom(cap);
+  }, [resumeAdhkarFrom]);
+
+  useEffect(() => {
+    registerResume('adhkar', adhkarResume);
+    return () => {
+      unregisterResume('adhkar');
+    };
+  }, [adhkarResume]);
+
+  // Route show/hide (App keeps this page mounted while hidden).
+  // Hiding pauses (no release: the element must stay preemptable
+  // so closing the preemptor can stack-resume this page) and
+  // saves a one-time intent. Showing resumes from it: fast path
+  // when still holding the element (hide-pause preserved src
+  // and time), otherwise full reload from the intent.
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (wasVisible === visible) return;
+    if (!visible) {
+      try {
+        const s = stateRef.current;
+        if (s.playing) {
+          let time = 0;
+          try {
+            const t = elRef.current?.currentTime;
+            if (typeof t === 'number' && Number.isFinite(t) && t >= 0) time = t;
+          } catch {
+            // ignore: time stays 0
+          }
+          writeAdhkarIntent({ seg: s.seg, time, at: Date.now() });
+          pause();
+        } else {
+          clearAdhkarIntent();
+        }
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    // Showing.
+    const intent = readAdhkarIntent();
+    if (!intent) {
+      // No intent, but a stack-resume while hidden may already be
+      // playing — sync UI to reality.
+      try {
+        setPlaying(stateRef.current.playing);
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    clearAdhkarIntent();
+    try {
+      const s = stateRef.current;
+      if (currentAudioOwner() === 'adhkar' && elRef.current) {
+        // Still holding the element: exact instant resume.
+        const el = elRef.current;
+        const cur = s.list[s.index];
+        if (cur) setMediaSession(cur, s.wird, true);
+        void el.play().then(() => setPlaying(true)).catch(() => {
+          try {
+            writeAdhkarIntent(intent);
+          } catch {
+            // ignore
+          }
+          setPlaying(false);
+        });
+        return;
+      }
+      resumeAdhkarFrom({ index: s.index, rep: s.rep, seg: intent.seg, time: intent.time });
+    } catch {
+      // ignore
+    }
+  }, [visible]);
 
   const jumpTo = useCallback((i: number, autoplay: boolean) => {
     const target = Math.max(0, Math.min(i, list.length - 1));

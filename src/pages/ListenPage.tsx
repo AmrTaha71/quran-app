@@ -58,7 +58,7 @@ import {
   isSurahDownloaded,
   resolveListenUrl,
 } from '../lib/listenOffline';
-import { getSharedAudio } from '../lib/sharedAudio';
+import { getSharedAudio, registerResume, unregisterResume, clearResumeStack, currentAudioOwner } from '../lib/sharedAudio';
 
 type Route =
   | 'home'
@@ -193,7 +193,7 @@ function surahCount(no: number): number {
 // not something a headless render can prove). This page only owns
 // the UI: pickers, text, controls, and the offline section.
 // No whole-Quran download, no synthetic audio, no pre-generation.
-export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
+export default function ListenPage({ onNavigate, visible = true }: { onNavigate: (r: Route) => void; visible?: boolean }) {
   const [surah, setSurah] = useState(1);
   const [reciterId, setReciterId] = useState(readPersistedReciter);
   const [riwayaId, setRiwayaId] = useState<string | null>(readPersistedRiwaya);
@@ -297,6 +297,15 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   // the hadr resume card instead of the riwaya one.
   const activeHadrRef = useRef(false);
   const activeModeRef = useRef<ListenMode>('free');
+
+  // Route visibility: App keeps this page mounted while hidden so
+  // audio can resume across routes (anywhere-resume). Mirrored in
+  // a ref for the mount effect (which runs once).
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const prevVisibleRef = useRef(visible);
+  // Anywhere-resume dispatcher target: always the latest closure.
+  const listenResumeRef = useRef<(() => void) | null>(null);
 
   const setCurrent = (ayah: number) => {
     currentAyahRef.current = ayah;
@@ -893,6 +902,96 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
     setShowHadrResume(false);
   };
 
+  // Live intent, same priority as the unmount effect: journey,
+  // riwaya, hafs. Reads engine refs (stable objects), so it is
+  // safe to call from any effect cleanup or dispatcher.
+  const captureIntent = (): AutoResumeIntent | null => {
+    try {
+      const j = journeyEngineRef.current;
+      const r = riwayaEngineRef.current;
+      const e = engineRef.current;
+      if (j?.playing) {
+        return { kind: 'journey', position: j.getPosition(), at: Date.now() };
+      }
+      if (r?.playing) {
+        const pos = r.getPosition();
+        return activeHadrRef.current
+          ? { kind: 'hadr', surah: pos.surah, time: pos.time, at: Date.now() }
+          : { kind: 'riwaya', riwaya: r.current.riwaya, surah: pos.surah, time: pos.time, at: Date.now() };
+      }
+      if (e?.playing) {
+        const pos = e.getPosition();
+        return { kind: 'hafs', surah: pos.surah, reciter: pos.reciter, mode: activeModeRef.current, ayah: pos.ayah, time: pos.time ?? 0, at: Date.now() };
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  };
+
+  // The old mount effect's resume body, factored out so the mount
+  // effect, the show effect, and the anywhere-resume dispatcher
+  // all run the same proven path. Consumes the intent up front;
+  // if no engine ends up playing (blocked play), the intent is
+  // re-saved so the next show retries, and the stored resume
+  // cards stay as the tap fallback.
+  const resumeFromIntent = async (intent: AutoResumeIntent): Promise<void> => {
+    try {
+      if (sessionStorage.getItem('quran-listen-preselect')) {
+        clearAutoResumeIntent();
+        return;
+      }
+    } catch {}
+    clearAutoResumeIntent();
+    try {
+      if (intent.kind === 'hadr') { await startHadrPlayback(intent.surah, intent.time); setHubView('free'); }
+      else if (intent.kind === 'riwaya') { await startRiwayaPlayback(intent.surah, intent.riwaya, intent.time); setHubView('free'); }
+      else if (intent.kind === 'hafs') { await startPlayback(intent.surah, intent.reciter, intent.mode, intent.ayah, intent.time); setHubView('free'); }
+      else { await startJourney(intent.position.mode, intent.position); setHubView(intent.position.mode); }
+    } catch {
+      // The start functions swallow a blocked play into an error
+      // line instead of throwing; the check below catches it.
+    }
+    try {
+      const anyPlaying =
+        journeyEngineRef.current?.playing ||
+        riwayaEngineRef.current?.playing ||
+        engineRef.current?.playing;
+      if (!anyPlaying) writeAutoResumeIntent(intent);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Anywhere-resume: rebuild an intent from the positions the
+  // engines captured at preemption time (live getPosition would
+  // be stale — the element's src changed under it). One-shot:
+  // captures are cleared after use so a stale position can never
+  // replay. No capture means the engine was paused, not playing,
+  // when preempted — nothing resumes.
+  const buildListenResume = (): void => {
+    const j = journeyEngineRef.current;
+    const r = riwayaEngineRef.current;
+    const e = engineRef.current;
+    let intent: AutoResumeIntent | null = null;
+    if (j?.preemptedPosition) {
+      intent = { kind: 'journey', position: j.preemptedPosition, at: Date.now() };
+    } else if (r?.preemptedPosition) {
+      const p = r.preemptedPosition;
+      intent = p.editionOverride
+        ? { kind: 'hadr', surah: p.surah, time: p.time, at: Date.now() }
+        : { kind: 'riwaya', riwaya: p.riwaya, surah: p.surah, time: p.time, at: Date.now() };
+    } else if (e?.preemptedPosition) {
+      const p = e.preemptedPosition;
+      intent = { kind: 'hafs', surah: p.surah, reciter: p.reciter, mode: p.mode, ayah: p.ayah, time: p.time, at: Date.now() };
+    }
+    if (!intent) return;
+    if (j) j.preemptedPosition = null;
+    if (r) r.preemptedPosition = null;
+    if (e) e.preemptedPosition = null;
+    void resumeFromIntent(intent);
+  };
+
   // Continuity: auto-resume a playback that was paused by
   // LEAVING this page (see the unmount effect). One attempt
   // only: the intent is consumed up front. A home khatma
@@ -904,36 +1003,101 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   // on purpose: effects run in declaration order, so this one
   // still sees the preselect flag before that effect consumes it.
   useEffect(() => {
+    // Hidden at mount (App mounts audio pages early, hidden):
+    // the show effect owns the first resume when first shown.
+    if (!visibleRef.current) return;
     const intent = readAutoResumeIntent();
     if (!intent) return;
-    try {
-      if (sessionStorage.getItem('quran-listen-preselect')) {
-        clearAutoResumeIntent();
-        return;
-      }
-    } catch {}
-    clearAutoResumeIntent();
-    void (async () => {
-      try {
-        if (intent.kind === 'hadr') { await startHadrPlayback(intent.surah, intent.time); setHubView('free'); }
-        else if (intent.kind === 'riwaya') { await startRiwayaPlayback(intent.surah, intent.riwaya, intent.time); setHubView('free'); }
-        else if (intent.kind === 'hafs') { await startPlayback(intent.surah, intent.reciter, intent.mode, intent.ayah, intent.time); setHubView('free'); }
-        else { await startJourney(intent.position.mode, intent.position); setHubView(intent.position.mode); }
-      } catch {}
-      // The start functions swallow a blocked play into an
-      // error line instead of throwing, so check reality: if
-      // no engine is actually playing, keep the intent for the
-      // next visit instead of dropping the position.
-      try {
-        const anyPlaying =
-          journeyEngineRef.current?.playing ||
-          riwayaEngineRef.current?.playing ||
-          engineRef.current?.playing;
-        if (!anyPlaying) writeAutoResumeIntent(intent);
-      } catch {}
-    })();
+    void resumeFromIntent(intent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Anywhere-resume: register a stable dispatcher once; the ref
+  // always points at the latest resume closure (which reads live
+  // refs, so a stale engine can never be resumed).
+  useEffect(() => {
+    registerResume('listen', () => {
+      try {
+        listenResumeRef.current?.();
+      } catch {
+        // ignore: a failing resume must not break the releaser
+      }
+    });
+    return () => {
+      unregisterResume('listen');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refresh the dispatcher target after every render.
+  useEffect(() => {
+    listenResumeRef.current = buildListenResume;
+  });
+
+  // Route show/hide (App keeps this page mounted while hidden).
+  // Hiding pauses a live engine and saves the intent — the old
+  // unmount behavior, minus destroy, so the engine stays alive
+  // for stack-resume. Showing consumes the intent: fast path
+  // when this page still holds the element (hide-pause preserved
+  // src+time), otherwise the recreate-from-intent path. UI state
+  // is re-synced to engine reality at the end (a stack-resume
+  // while hidden must not leave a stale paused UI on return).
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = visible;
+    if (wasVisible === visible) return;
+    if (!visible) {
+      try {
+        const intent = captureIntent();
+        if (intent) {
+          writeAutoResumeIntent(intent);
+          const j = journeyEngineRef.current;
+          const r = riwayaEngineRef.current;
+          const e = engineRef.current;
+          if (j?.playing) j.pause();
+          else if (r?.playing) r.pause();
+          else if (e?.playing) e.pause();
+          setPlaying(false);
+        } else {
+          clearAutoResumeIntent();
+        }
+      } catch {
+        // ignore
+      }
+      return;
+    }
+    // Showing.
+    const intent = readAutoResumeIntent();
+    if (intent) {
+      clearAutoResumeIntent();
+      const eng = journeyEngineRef.current ?? riwayaEngineRef.current ?? engineRef.current;
+      if (eng && currentAudioOwner() === 'listen') {
+        // Still holding the element: exact instant resume.
+        void eng.play().catch(() => {
+          // Blocked (e.g. autoplay policy): keep the intent so
+          // the next show retries, and tap-resume stays available.
+          try {
+            writeAutoResumeIntent(intent);
+          } catch {
+            // ignore
+          }
+        });
+      } else {
+        void resumeFromIntent(intent);
+      }
+    }
+    try {
+      const anyPlaying =
+        journeyEngineRef.current?.playing ||
+        riwayaEngineRef.current?.playing ||
+        engineRef.current?.playing;
+      setPlaying(!!anyPlaying);
+      if (anyPlaying) setInterrupted(false);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   // Lock/background return sync: the engines never pause on
   // hide, so audio keeps playing through a lock — but their
@@ -1156,22 +1320,12 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
   // this cleanup closes over the first render's state.
   useEffect(() => {
     return () => {
+      // Teardown (logout): no resume may fire after this page is
+      // gone — clear the stack BEFORE any release/destroy below.
+      clearResumeStack();
+      unregisterResume('listen');
       try {
-        const j = journeyEngineRef.current;
-        const r = riwayaEngineRef.current;
-        const e = engineRef.current;
-        let intent: AutoResumeIntent | null = null;
-        if (j?.playing) {
-          intent = { kind: 'journey', position: j.getPosition(), at: Date.now() };
-        } else if (r?.playing) {
-          const pos = r.getPosition();
-          intent = activeHadrRef.current
-            ? { kind: 'hadr', surah: pos.surah, time: pos.time, at: Date.now() }
-            : { kind: 'riwaya', riwaya: r.current.riwaya, surah: pos.surah, time: pos.time, at: Date.now() };
-        } else if (e?.playing) {
-          const pos = e.getPosition();
-          intent = { kind: 'hafs', surah: pos.surah, reciter: pos.reciter, mode: activeModeRef.current, ayah: pos.ayah, time: pos.time ?? 0, at: Date.now() };
-        }
+        const intent = captureIntent();
         if (intent) writeAutoResumeIntent(intent);
         else clearAutoResumeIntent();
       } catch {}

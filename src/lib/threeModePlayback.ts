@@ -270,8 +270,16 @@ export class JourneyEngine {
     this.callError(ERROR_MESSAGE);
   };
 
+  // Position captured at preemption time, when the element is
+  // paused but still on this clip (getPosition reads the exact
+  // preempt point). Only when actually playing: a paused or
+  // completed engine must never auto-resume. Read by the
+  // page's anywhere-resume dispatcher; cleared after use.
+  preemptedPosition: ThreeModePosition | null = null;
+
   private readonly handlePreempted = (): void => {
     if (this.destroyed) return;
+    this.preemptedPosition = this.playingFlag ? this.getPosition() : null;
     this.playingFlag = false;
     this.holdsAudio = false;
     this.markInternalPause();

@@ -123,8 +123,27 @@ export class RiwayaEngine {
     this.callError(ERROR_MESSAGE);
   };
 
+  // Position captured at preemption time, when the element is
+  // paused but still on this clip (currentTime is the exact
+  // preempt point). Only when actually playing: a paused or
+  // completed engine must never auto-resume. Read by the
+  // page's anywhere-resume dispatcher; cleared after use.
+  preemptedPosition: { riwaya: string; surah: number; time: number; editionOverride: string | null } | null = null;
+
   private readonly handlePreempted = (): void => {
     if (this.destroyed) return;
+    if (this.playingFlag) {
+      let time = 0;
+      try {
+        const t = this.audio.currentTime;
+        if (Number.isFinite(t) && t >= 0) time = t;
+      } catch {
+        // ignore: time stays 0
+      }
+      this.preemptedPosition = { riwaya: this.riwayaId, surah: this.surah, time, editionOverride: this.editionOverride };
+    } else {
+      this.preemptedPosition = null;
+    }
     this.playingFlag = false;
     this.holdsAudio = false;
     // The acquire-pause event for this preemption may arrive after

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabase } from './lib/supabase';
 import {
   EXPLICIT_SIGNOUT_KEY,
@@ -262,35 +262,54 @@ function AppContent() {
   if (route === 'admin') {
     return <AdminPage session={session} onNavigate={navigate} />;
   }
-  if (route === 'app') {
-    return <UserAppPage session={session} onNavigate={navigate} />;
-  }
+  // Main app area: the two audio pages stay mounted (hidden when
+  // inactive) so long-form audio can pause on leaving and resume
+  // when the interrupting audio closes, on any route — even with
+  // the screen locked. Auth/admin/splash never mount them (audio
+  // stops there, as before). Wrappers render only while logged
+  // in; logout unmounts them and their cleanups stop audio.
+  // (The old early returns for listen/adhkar are gone: the
+  // wrapper IS the page when its route is active.)
+  let page: ReactNode;
   // One branch for mushaf|follow: the same instance serves both
   // routes, so a live follow session survives switching between them
   // without remounting and losing the lock.
   if (route === 'mushaf' || route === 'follow') {
-    return <QuranMushafPage session={session} onNavigate={navigate} startInFollow={route === 'follow'} />;
+    page = <QuranMushafPage session={session} onNavigate={navigate} startInFollow={route === 'follow'} />;
+  } else if (route === 'settings') {
+    page = <SettingsPage onNavigate={navigate} />;
+  } else if (route === 'test') {
+    page = <SelfTestPage onNavigate={navigate} />;
+  } else if (route === 'app') {
+    page = <UserAppPage session={session} onNavigate={navigate} />;
+  } else if (route === 'listen' || route === 'adhkar') {
+    // The wrapper above IS the page on these routes — nothing else
+    // renders beside it.
+    page = null;
+  } else if (route === 'home' && session) {
+    // Logged-in users never see the landing page — admins included
+    // (2026-10-27: admins are users too, same account, same start
+    // page; الإدارة is reached from Settings, not from the landing).
+    // The landing stays only as the logged-out entry point.
+    page = <HomeStartPage session={session} onNavigate={navigate} />;
+  } else {
+    page = <LandingPage session={session} onNavigate={navigate} />;
   }
-  if (route === 'settings') {
-    return <SettingsPage onNavigate={navigate} />;
-  }
-  if (route === 'test') {
-    return <SelfTestPage onNavigate={navigate} />;
-  }
-  if (route === 'listen') {
-    return <ListenPage onNavigate={navigate} />;
-  }
-  if (route === 'adhkar') {
-    return <AdhkarPage onNavigate={navigate} />;
-  }
-  // Logged-in users never see the landing page — admins included
-  // (2026-10-27: admins are users too, same account, same start
-  // page; الإدارة is reached from Settings, not from the landing).
-  // The landing stays only as the logged-out entry point.
-  if (route === 'home' && session) {
-    return <HomeStartPage session={session} onNavigate={navigate} />;
-  }
-  return <LandingPage session={session} onNavigate={navigate} />;
+  return (
+    <>
+      {session ? (
+        <>
+          <div style={{ display: route === 'listen' ? undefined : 'none' }}>
+            <ListenPage onNavigate={navigate} visible={route === 'listen'} />
+          </div>
+          <div style={{ display: route === 'adhkar' ? undefined : 'none' }}>
+            <AdhkarPage onNavigate={navigate} visible={route === 'adhkar'} />
+          </div>
+        </>
+      ) : null}
+      {page}
+    </>
+  );
 }
 
 export default function App() {

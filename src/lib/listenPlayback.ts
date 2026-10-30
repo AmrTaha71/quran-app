@@ -365,8 +365,27 @@ export class ListenEngine {
   // Blob hygiene: the current / preload blobs are revoked here
   // because the element is paused and the new source is about to
   // replace src; nothing still needs them.
+  // Position captured at preemption time, when the element is
+  // paused but still on this clip (currentTime is the exact
+  // preempt point). Only when actually playing: a paused or
+  // completed engine must never auto-resume. Read by the
+  // page's anywhere-resume dispatcher; cleared after use.
+  preemptedPosition: { surah: number; ayah: number; time: number; reciter: string; mode: ListenMode } | null = null;
+
   private readonly handlePreempted = (): void => {
     if (this.destroyed) return;
+    if (this.playingFlag) {
+      let time = 0;
+      try {
+        const t = this.audio.currentTime;
+        if (Number.isFinite(t) && t >= 0) time = t;
+      } catch {
+        // ignore: time stays 0
+      }
+      this.preemptedPosition = { surah: this.surah, ayah: this.ayah, time, reciter: this.reciterId, mode: this.mode };
+    } else {
+      this.preemptedPosition = null;
+    }
     this.playingFlag = false;
     this.holdsAudio = false;
     // The acquire-pause event for this preemption may arrive after
