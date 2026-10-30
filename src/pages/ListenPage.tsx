@@ -58,7 +58,7 @@ import {
   isSurahDownloaded,
   resolveListenUrl,
 } from '../lib/listenOffline';
-import { getSharedAudio, registerResume, unregisterResume, clearResumeStack, currentAudioOwner } from '../lib/sharedAudio';
+import { getSharedAudio, registerResume, unregisterResume, clearResumeStack, currentAudioOwner, hasWaitingResumes, releaseAudio } from '../lib/sharedAudio';
 
 type Route =
   | 'home'
@@ -1058,6 +1058,12 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           else if (r?.playing) r.pause();
           else if (e?.playing) e.pause();
           setPlaying(false);
+          // Anywhere-resume: leaving the page closes it for stack
+          // purposes — if another owner waits (this page preempted
+          // it earlier), release so it resumes now. When nobody
+          // waits, keep holding: the show path's instant resume
+          // needs the element untouched.
+          if (hasWaitingResumes()) releaseAudio('listen');
         } else {
           clearAutoResumeIntent();
         }

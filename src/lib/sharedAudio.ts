@@ -72,6 +72,14 @@ export function clearResumeStack(): void {
   resumeStack = [];
 }
 
+// True when a preempted owner waits for the current holder to
+// release. Hide paths consult this: leaving a page releases only
+// when someone waits, so the solo leave-and-return fast path
+// (element untouched) is preserved.
+export function hasWaitingResumes(): boolean {
+  return resumeStack.length > 0;
+}
+
 function popAndResume(): void {
   const entry = resumeStack.pop();
   if (!entry) return;

@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } from 'lucide-react';
-import { acquireAudio, currentAudioOwner, releaseAudio, registerResume, unregisterResume, clearResumeStack } from '../lib/sharedAudio';
+import { acquireAudio, currentAudioOwner, releaseAudio, registerResume, unregisterResume, clearResumeStack, hasWaitingResumes } from '../lib/sharedAudio';
 import { adhkarClipUrl, adhkarList, type AdhkarClip, type AdhkarVoice, type AdhkarWird } from '../lib/adhkarClips';
 import { DEFAULT_RECITER_ID, RECITERS, type Reciter } from '../lib/reciters';
 import { hadrAudioUrl, HADR_NAME } from '../lib/hadr';
@@ -422,6 +422,9 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           }
           writeAdhkarIntent({ seg: s.seg, time, at: Date.now() });
           pause();
+          // Anywhere-resume: same rule as Listen — leaving closes
+          // for stack purposes only when someone waits.
+          if (hasWaitingResumes()) releaseAudio('adhkar');
         } else {
           clearAdhkarIntent();
         }
