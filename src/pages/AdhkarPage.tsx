@@ -24,6 +24,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } from 'lucide-react';
 import { acquireAudio, currentAudioOwner, releaseAudio, registerResume, unregisterResume, clearResumeStack, hasWaitingResumes } from '../lib/sharedAudio';
+import {
+  clearInterruptionMarker,
+  handleInterruptionHidden,
+  recLog,
+} from '../lib/listenRecovery';
 import { adhkarClipUrl, adhkarList, type AdhkarClip, type AdhkarVoice, type AdhkarWird } from '../lib/adhkarClips';
 import { DEFAULT_RECITER_ID, RECITERS, type Reciter } from '../lib/reciters';
 import { hadrAudioUrl, HADR_NAME } from '../lib/hadr';
@@ -235,6 +240,42 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blackScreen, playing]);
 
+  // Interrupted-listening marker (Fix 2, 2026-10-30): same contract as
+  // ListenPage — record on document-hide/pagehide iff this page is
+  // shown and playing; otherwise clear any stale marker.
+  useEffect(() => {
+    const onHidden = (kind: 'visibilitychange' | 'pagehide') => {
+      try {
+        handleInterruptionHidden('adhkar', stateRef.current.playing, blackScreenRef.current, visibleRef.current, kind);
+      } catch {
+        // ignore
+      }
+    };
+    const onVis = () => {
+      try {
+        if (document.visibilityState === 'hidden') onHidden('visibilitychange');
+        else if (document.visibilityState === 'visible') {
+          recLog('VISIBILITY_VISIBLE', {
+            page: 'adhkar',
+            route: 'adhkar',
+            hash: window.location.hash,
+            playing: stateRef.current.playing,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const onPageHide = () => onHidden('pagehide');
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const list = useMemo(() => adhkarList(wird), [wird]);
   const index = Math.min(pos.index, list.length - 1);
   const clip: AdhkarClip = list[index];
@@ -250,6 +291,9 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   // Route visibility (App keeps this page mounted while hidden).
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
+  // [LISTEN_RECOVERY] diagnostics: live overlay state for the hide log.
+  const blackScreenRef = useRef(blackScreen);
+  blackScreenRef.current = blackScreen;
   const prevVisibleRef = useRef(visible);
   // Position captured at preemption time (only when actually
   // playing). Read by the anywhere-resume dispatcher.
@@ -479,6 +523,10 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
     prevVisibleRef.current = visible;
     if (wasVisible === visible) return;
     if (!visible) {
+      // Deliberate route-hide (not a document lock): leaving the page
+      // clears the interruption marker — the route-hide intent above
+      // already owns the return path for this case.
+      clearInterruptionMarker('route-hide');
       try {
         const s = stateRef.current;
         if (s.playing) {

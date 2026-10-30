@@ -13,6 +13,11 @@ import {
   Trash2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import {
+  clearInterruptionMarker,
+  handleInterruptionHidden,
+  recLog,
+} from '../lib/listenRecovery';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
@@ -303,6 +308,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // a ref for the mount effect (which runs once).
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
+  // [LISTEN_RECOVERY] diagnostics: live overlay state for the hide log
+  // (state in a listener closure would go stale; refs do not).
+  const blackScreenRef = useRef(blackScreen);
+  blackScreenRef.current = blackScreen;
   const prevVisibleRef = useRef(visible);
   // Anywhere-resume dispatcher target: always the latest closure.
   const listenResumeRef = useRef<(() => void) | null>(null);
@@ -1092,6 +1101,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     prevVisibleRef.current = visible;
     if (wasVisible === visible) return;
     if (!visible) {
+      // Deliberate route-hide (not a document lock): leaving the page
+      // clears the interruption marker — the route-hide intent above
+      // already owns the return path for this case.
+      clearInterruptionMarker('route-hide');
       try {
         const intent = captureIntent();
         if (intent) {
@@ -1172,6 +1185,52 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Interrupted-listening marker (Fix 2, 2026-10-30): on document-hide
+  // or pagehide, record the interruption iff this page is the shown
+  // route AND an engine is playing; otherwise clear any stale marker
+  // (a paused player must never manufacture a playing interruption).
+  // Separate listener from the return-sync above: this one owns the
+  // marker, that one owns the interrupted UI. pagehide is the more
+  // reliable event on iOS; both write idempotently.
+  useEffect(() => {
+    const anyPlaying = () =>
+      !!(
+        journeyEngineRef.current?.playing ||
+        riwayaEngineRef.current?.playing ||
+        engineRef.current?.playing
+      );
+    const onHidden = (kind: 'visibilitychange' | 'pagehide') => {
+      try {
+        handleInterruptionHidden('listen', anyPlaying(), blackScreenRef.current, visibleRef.current, kind);
+      } catch {
+        // ignore
+      }
+    };
+    const onVis = () => {
+      try {
+        if (document.visibilityState === 'hidden') onHidden('visibilitychange');
+        else if (document.visibilityState === 'visible') {
+          recLog('VISIBILITY_VISIBLE', {
+            page: 'listen',
+            route: 'listen',
+            hash: window.location.hash,
+            playing: anyPlaying(),
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    const onPageHide = () => onHidden('pagehide');
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onPageHide);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

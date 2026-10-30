@@ -8,6 +8,13 @@ import {
   urlIndicatesRecovery,
 } from './lib/sessionExpiry';
 import { retryPendingProfile } from './lib/profileRepair';
+import {
+  clearInterruptionMarker,
+  consumeMarker,
+  evaluateRestore,
+  getTabId,
+  recLog,
+} from './lib/listenRecovery';
 import { LanguageProvider, useLang } from './lib/LanguageContext';
 import type { Session } from '@supabase/supabase-js';
 import AdminPage from './pages/AdminPage';
@@ -75,6 +82,10 @@ function AppContent() {
   );
   const routeRef = useRef<Route>(route);
   const recoveryRef = useRef<boolean>(recoveryMode);
+  // Fix 1 (2026-10-30): identity of the last SIGNED_IN/INITIAL_SESSION
+  // user. A refocus SIGNED_IN with the SAME user must never route —
+  // only a real transition (first sign-in, or a different user) may.
+  const authUidRef = useRef<string | null>(null);
 
   const setRecovery = (value: boolean) => {
     recoveryRef.current = value;
@@ -87,6 +98,29 @@ function AppContent() {
     routeRef.current = route;
   }, [route]);
 
+  // Mirror the signed-in user id for the interruption marker (pages
+  // read it synchronously on document-hide, where an async getSession
+  // would be too late). Removed on sign-out.
+  useEffect(() => {
+    try {
+      if (session?.user.id) localStorage.setItem('quran-uid', session.user.id);
+      else localStorage.removeItem('quran-uid');
+    } catch {
+      // ignore
+    }
+  }, [session]);
+
+  // [LISTEN_RECOVERY] diagnostics: every route change, with the hash
+  // that produced it (state/hash divergence is the bug's signature).
+  const prevRouteRef = useRef<Route>(route);
+  useEffect(() => {
+    const prev = prevRouteRef.current;
+    prevRouteRef.current = route;
+    if (prev !== route) {
+      recLog('ROUTE_CHANGE', { from: prev, to: route, hash: window.location.hash });
+    }
+  }, [route]);
+
   const exitRecovery = () => {
     setRecovery(false);
     dropRecoveryMarker();
@@ -94,6 +128,24 @@ function AppContent() {
 
   useEffect(() => {
     let cancelled = false;
+
+    // [LISTEN_RECOVERY] diagnostics: boot identity (tab id is
+    // sessionStorage-scoped, so a fresh tab gets a NEW id and can
+    // never match another tab's interruption marker).
+    try {
+      const tab = getTabId();
+      let navType = 'unknown';
+      try {
+        const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+        if (nav?.type) navType = nav.type;
+      } catch {
+        // ignore
+      }
+      recLog('TAB_ID', { existing: tab.existing });
+      recLog('APP_BOOT', { navType, hash: window.location.hash, route: getRouteFromHash() });
+    } catch {
+      // diagnostics must never break boot
+    }
 
     const boot = async () => {
       // Legacy double-hash recovery links (`#/auth#access_token=...`)
@@ -133,14 +185,44 @@ function AppContent() {
       // A hash of any kind (including a Mushaf deep link) counts as an
       // explicit destination and is left alone. Recovery sessions never
       // take this branch either: the reset form owns them.
+      // EXCEPTION (Fix 2, 2026-10-30): a fresh same-tab interruption
+      // marker restores the interrupted listening page instead — hash
+      // AND route, via replaceState so no competing hashchange fires.
+      // No autoplay: the page's existing resume card is the gesture.
       if (data.session && !window.location.hash && !recoveryRef.current) {
-        setRoute('home');
+        const evald = evaluateRestore(data.session.user.id);
+        recLog('RESTORE_CHECK', {
+          ageMs: evald.ageMs,
+          tabMatch: evald.tabMatch,
+          uidMatch: evald.uidMatch,
+          page: evald.page,
+          reason: evald.reason,
+        });
+        if (evald.restore) {
+          consumeMarker();
+          try {
+            window.history.replaceState(null, '', `#/${evald.restore}`);
+          } catch {
+            // ignore: route state still carries the restore
+          }
+          setRoute(evald.restore);
+          recLog('RESTORE_SUCCESS', { page: evald.restore, hash: `#/${evald.restore}` });
+        } else {
+          recLog('RESTORE_REJECTED', { reason: evald.reason });
+          setRoute('home');
+        }
       }
     };
     void boot();
 
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
+      recLog('AUTH_EVENT', { event, route: routeRef.current, hash: window.location.hash });
+      if (event === 'INITIAL_SESSION') {
+        // Startup only: record identity, never route.
+        authUidRef.current = session?.user.id ?? null;
+        return;
+      }
       if (event === 'PASSWORD_RECOVERY' && session) {
         // Supabase's own recovery signal (fires when it consumed a
         // single-hash link). Belts-and-braces beside the URL detection
@@ -153,22 +235,46 @@ function AppContent() {
         // A recovery sign-in must NOT be bounced to لوحتي — the user
         // still has to choose a new password first.
         if (recoveryRef.current) return;
+        // Fix 1 (2026-10-30): auth-js 2.71.1 emits SIGNED_IN on EVERY
+        // return-to-visible with a valid session (_onVisibilityChanged
+        // -> _recoverAndRefresh -> SIGNED_IN), not only on login. The
+        // old handler unconditionally setRoute('home') here, which is
+        // what yanked #/listen to Home on every screen lock / tab
+        // switch. Only a REAL transition (first sign-in, or a
+        // different user) may route at all — and hash-first: a valid
+        // explicit route in the hash is preserved, never overridden.
+        const prevUid = authUidRef.current;
+        authUidRef.current = session.user.id;
         setAuthNotice(null);
-        void retryPendingProfile(supabase, session.user.id).catch(() => {});
+        // Deferred, never awaited inside the callback (deadlock
+        // warning): the profile repair runs on the next tick.
+        setTimeout(() => {
+          void retryPendingProfile(supabase, session.user.id).catch(() => {});
+        }, 0);
         setAuthJustSucceeded(true);
-        // The app opens on الرئيسية after login (not the Mushaf page):
-        // it is lighter to load, and the Mushaf opens from there.
-        // EXCEPTION: a share deep link in the hash survives login —
-        // a recipient who logs in from a shared ayah link must still
-        // land on that ayah, not be diverted to الرئيسية.
-        const parsed = parseHash(window.location.hash);
-        if (!(parsed.route === 'mushaf' && (parsed.page || parsed.surah))) {
-          setRoute('home');
-        }
         setTimeout(() => setAuthJustSucceeded(false), 2500);
+        if (prevUid !== null && prevUid === session.user.id) return;
+        // Real transition: the app opens on الرئيسية after login
+        // (not the Mushaf page): it is lighter to load, and the
+        // Mushaf opens from there. EXCEPTION: a share deep link in
+        // the hash survives login — a recipient who logs in from a
+        // shared ayah link must still land on that ayah, not be
+        // diverted to الرئيسية. GENERALIZED: any valid explicit
+        // route in the hash is healed into state, never replaced
+        // by home (this also heals a stale state/hash divergence).
+        const parsed = parseHash(window.location.hash);
+        if (parsed.route === 'mushaf' && (parsed.page || parsed.surah)) return;
+        if (parsed.route === 'auth' || parsed.route === 'home') {
+          setRoute('home');
+        } else {
+          setRoute(parsed.route);
+        }
         return;
       }
       if (event === 'SIGNED_OUT') {
+        authUidRef.current = null;
+        // A signed-out user has no interrupted session to restore.
+        clearInterruptionMarker('sign-out');
         // A chosen logout (lib/auth signOut sets the flag) goes where
         // the page already navigated (home) — no expiry message. A
         // refresh failure or server-side invalidation on a protected
@@ -223,6 +329,19 @@ function AppContent() {
       setRecovery(false);
       dropRecoveryMarker();
       setAuthNotice(null);
+    }
+    // Fix 2 (2026-10-30): deliberate navigation AWAY from a listening
+    // page clears the interruption marker — a user who chose to leave
+    // must never be hijacked back on the next fresh launch. Existing
+    // listening progress is untouched (the marker is not a store).
+    if (
+      (routeRef.current === 'listen' || routeRef.current === 'adhkar') &&
+      r !== routeRef.current
+    ) {
+      clearInterruptionMarker(r === 'home' ? 'explicit-home' : 'explicit-nav');
+      if (r === 'home') {
+        recLog('EXPLICIT_HOME', { from: routeRef.current, to: r });
+      }
     }
     window.location.hash = r === 'home' ? '' : `/${r}`;
     setRoute(r);

@@ -7,6 +7,7 @@ import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
 import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, EDITION_DOWNLOADS, HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import { useLang } from '../lib/LanguageContext';
+import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
 
@@ -74,6 +75,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // pattern): state + handlers live here, the work in pageDownload.
   const [dlSupported] = useState(pageDownloadSupported);
   const [dlCached, setDlCached] = useState<number | null>(null);
+  // [LISTEN_RECOVERY] temporary diagnostics (2026-10-30): last 30
+  // recovery events, so the user can screenshot them after a lock.
+  const [recoveryLog, setRecoveryLog] = useState<RecoveryLogEntry[]>(() => readRecoveryLog());
   const [dlRunning, setDlRunning] = useState(false);
   const [dlDone, setDlDone] = useState(0);
   const [dlFailed, setDlFailed] = useState<number[]>([]);
@@ -866,6 +870,28 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           يعيد: شكل الصفحة، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
         </p>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
+
+        <details className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <summary className="text-base font-bold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
+          <p className="text-xs text-accent-400 leading-relaxed mt-2 mb-3">
+            آخر ٣٠ حدثًا لتشخيص مشكلة الرجوع للرئيسية بعد قفل الشاشة — بعد ما تحصل المشكلة، افتح القسم ده وخد لقطة شاشة وأرسلها. لا يحتوي على أي رموز أو بيانات حساب.
+          </p>
+          <button onClick={() => setRecoveryLog(readRecoveryLog())}
+            className="mb-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+            تحديث السجل
+          </button>
+          {recoveryLog.length === 0 ? (
+            <p className="text-sm text-accent-500">لا توجد أحداث بعد — اسمع شيئًا ثم اقفل الشاشة وارجع، وستظهر الأحداث هنا.</p>
+          ) : (
+            <pre dir="ltr" className="text-left text-[11px] leading-relaxed text-accent-700 bg-gray-50 rounded-xl p-3 overflow-auto max-h-96 whitespace-pre-wrap break-words">
+              {[...recoveryLog].reverse().map((e) => {
+                const { t, event, ...rest } = e;
+                const time = new Date(t).toLocaleTimeString('en-GB');
+                return `${time} ${event} ${JSON.stringify(rest)}`;
+              }).join('\n')}
+            </pre>
+          )}
+        </details>
       </div>
 
       <BottomNav current="settings" onNavigate={onNavigate} />
