@@ -126,7 +126,7 @@ export default function AdhanSettingsSection() {
     : undefined;
 
   return (
-    <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+    <section id="sec-adhan" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
       <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
         <Bell className="w-5 h-5 text-emerald-600" /> مواعيد الأذان
       </h2>

@@ -439,6 +439,16 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <Check className="w-4 h-4" /> تم الحفظ
             </span>
           )}
+<div className="w-full flex gap-2 overflow-x-auto pb-1">
+          {[['sec-wird', 'الورد'], ['sec-look', 'شكل الصفحة'], ['sec-adhan', 'الأذان'], ['sec-pwa', 'التثبيت'], ['sec-download', 'تحميل المصحف'], ['sec-voice', 'التلاوة والصوت'], ['sec-lang', 'اللغة'], ['sec-pass', 'كلمة المرور']].map(([id, label]) => (
+            <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-bold text-accent-700">{label}</button>
+          ))}
+          {isAdmin && (
+            <button onClick={() => document.getElementById('sec-admin')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-bold text-accent-700">الإدارة</button>
+          )}
+        </div>
         </div>
       </header>
 
@@ -448,7 +458,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             that part today), presses حفظ once, and the saved wird
             shows in a line right under the button. The لوحتي card
             reads the saved value, so it only changes on save. */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-wird" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
           </h2>
@@ -488,7 +498,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </section>
 
         {/* Page look — the section the user asked for by name */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-look" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Sparkles className="w-5 h-5 text-amber-500" /> اختر شكل الصفحة بنفسك
           </h2>
@@ -547,7 +557,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {/* Part 1 — install the app itself (PWA): no Safari, no link
             bar, no fullscreen banner. Part 2 (the pages download
             below) is separate, so the app itself stays light. */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-pwa" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Smartphone className="w-5 h-5 text-emerald-600" /> ثبّت التطبيق على جهازك
           </h2>
@@ -598,7 +608,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {/* Mushaf pages on the device — one-tap full download (Hafidz
             pattern): after this, every flip is a local read, instant
             on any connection, even offline. Madinah edition only. */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-download" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
           </h2>
@@ -764,7 +774,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </section>
 
         {/* Recitation + voice defaults */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-voice" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Volume2 className="w-5 h-5 text-emerald-600" /> التلاوة والصوت
           </h2>
@@ -794,7 +804,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </section>
 
         {/* Language */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-lang" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-emerald-600" /> لغة التطبيق
           </h2>
@@ -809,7 +819,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </section>
 
         {/* Password — logged-in change, no email link needed */}
-        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+        <section id="sec-pass" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
             <Lock className="w-5 h-5 text-emerald-600" /> كلمة السر
           </h2>
@@ -831,7 +841,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </section>
 
         {adminGateError && (
-          <section className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+          <section id="sec-admin" className="bg-white rounded-2xl border border-amber-200 shadow-sm scroll-mt-36 p-5">
             <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-amber-600" /> لوحة الإدارة
             </h2>
@@ -844,7 +854,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
 
         {isAdmin && (
-          <section className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5">
+          <section id="sec-admin" className="bg-white rounded-2xl border border-emerald-200 shadow-sm scroll-mt-36 p-5">
             <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
             </h2>

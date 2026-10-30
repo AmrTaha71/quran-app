@@ -706,7 +706,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         </div>
 
         {/* Now playing */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mt-4 polish-listen-card">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mt-4 polish-listen-card sticky top-0 z-30">
           {completed ? (
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">تم وردك ✓</p>
