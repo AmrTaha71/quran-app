@@ -4504,9 +4504,15 @@ export default function QuranMushafPage({
                         </div>
                       )}
                     </div>
-                      {/* التلاوة تحت: recitation controls live at the bottom of the popup,
-                          below the tab content, so الروابط and the tabs stay on top. */}
-                      <div className="flex items-center gap-2 mt-2 mb-3">
+                    <div className="p-3 border-t border-gray-100">
+                      <button onClick={() => setSelectedVerse(null)}
+                        className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-lg transition-smooth">
+                        إغلاق
+                      </button>
+                    </div>
+                      {/* في نهاية القائمة (طلب المستخدم 2026-10-30): استمع + تكرار
+                          تحت إغلاق، آخر عنصر في البوب أب. */}
+                      <div className="flex items-center gap-2 mt-2 mb-3 px-3">
                         <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
                           className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciting ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
                           {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
@@ -4523,7 +4529,7 @@ export default function QuranMushafPage({
                         </button>
                       </div>
                       {showReciters && (
-                        <div className="mb-4">
+                        <div className="mb-4 px-3">
                           <p className="text-xs text-accent-600 text-center mb-2">اختر القارئ</p>
                           <div className="flex flex-wrap gap-1.5">
                             {RECITERS.map((r) => (
@@ -4535,13 +4541,7 @@ export default function QuranMushafPage({
                           </div>
                         </div>
                       )}
-                      {reciteError && <p className="text-xs text-red-500 text-center mb-3">{reciteError}</p>}
-                    <div className="p-3 border-t border-gray-100">
-                      <button onClick={() => setSelectedVerse(null)}
-                        className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-lg transition-smooth">
-                        إغلاق
-                      </button>
-                    </div>
+                      {reciteError && <p className="text-xs text-red-500 text-center mb-3 px-3">{reciteError}</p>}
                   </div>
                 </div>
               )}
