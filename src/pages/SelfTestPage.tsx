@@ -8,6 +8,7 @@ import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
 import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
+import { wbwWordUrl, refUnitForWord, REF_UNIT_SURAH } from '../lib/refWordUnits';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import { formatAr } from '../lib/numerals';
@@ -1128,6 +1129,42 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // (so it is ready the moment the window expires), keyed by ayah
   // position + words. A newer fetch invalidates older results.
   const corrAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Segmentation pilot (v0, Al-Mulk only): sequential word-file
+  // player for the reference 3-word unit. Separate from corrAudio
+  // so the current correction path is untouched; stopped whenever
+  // the user moves on or taps the synthetic replay.
+  const refUnitAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [refUnitPlaying, setRefUnitPlaying] = useState(false);
+  const [refUnitFailedIdx, setRefUnitFailedIdx] = useState<number | null>(null);
+  const stopRefUnit = () => {
+    try { refUnitAudioRef.current?.pause(); } catch {}
+    refUnitAudioRef.current = null;
+    setRefUnitPlaying(false);
+  };
+  const playRefUnit = () => {
+    const ayah = ayahs[index];
+    if (!ayah || ayah.surah_no !== REF_UNIT_SURAH || wrongIndices.length === 0) return;
+    const words = expectedWordList(ayah.ayah_text);
+    if (words.length === 0) return;
+    stopCorrAudio();
+    cancelCorrectionSpeech();
+    stopRefUnit();
+    setRefUnitFailedIdx(null);
+    const unit = refUnitForWord(words.length, wrongIndices[0]);
+    const urls: string[] = [];
+    for (let i = unit.start; i <= unit.end; i++) urls.push(wbwWordUrl(REF_UNIT_SURAH, ayah.ayah_no, i));
+    let k = 0;
+    setRefUnitPlaying(true);
+    const playNext = () => {
+      if (k >= urls.length) { refUnitAudioRef.current = null; setRefUnitPlaying(false); return; }
+      const a = new Audio(urls[k]);
+      refUnitAudioRef.current = a;
+      a.onended = () => { k++; playNext(); };
+      a.onerror = () => { stopRefUnit(); setRefUnitFailedIdx(index); };
+      a.play().catch(() => { stopRefUnit(); setRefUnitFailedIdx(index); });
+    };
+    playNext();
+  };
   const corrFetchTokenRef = useRef(0);
   const corrPendingRef = useRef<{ index: number; wordsKey: string; url: string | null } | null>(null);
   const [correctionAudioByAyah, setCorrectionAudioByAyah] = useState<Record<number, string>>({});
@@ -1412,6 +1449,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // tappable "hear the correction" control, and the failure note
   // names the red words already on screen.
   const replayAyahCorrection = () => {
+    stopRefUnit();
     ayahCorrFailedForRef.current = index;
     setAyahAudioFailed(false);
     playCorrection(wrongByAyah[index] ?? [], correctionAudioByAyah[index] ?? null, () => {
@@ -3577,6 +3615,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Advance after a mic grade (the user reads the green ayah / red
   // wrong part first, then moves on deliberately — no auto-advance).
   const nextAfterMic = () => {
+    stopRefUnit();
     if (index + 1 < ayahs.length) {
       const nextAyah = ayahs[index + 1];
       liveRef.current.ayah = nextAyah;
@@ -4240,6 +4279,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       className="mt-3 px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-sm font-bold rounded-xl">
                       🔊 أعد سماع التصحيح
                     </button>
+                  )}
+                  {/* Segmentation pilot (v0, Al-Mulk only): play the
+                      reference 3-word unit containing the first wrong
+                      word, alongside — never instead of — the current
+                      correction above. */}
+                  {ayahs[index]?.surah_no === REF_UNIT_SURAH && wrongIndices.length > 0 && (
+                    <button onClick={() => playRefUnit()}
+                      className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
+                      {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
+                    </button>
+                  )}
+                  {refUnitFailedIdx === index && (
+                    <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">
+                      تعذر تشغيل الوحدة المرجعية — استخدم «أعد سماع التصحيح»
+                    </p>
                   )}
                   {ayahAudioFailed && (wrongByAyah[index]?.length ?? 0) > 0 && (
                     <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">
