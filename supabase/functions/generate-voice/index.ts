@@ -1,6 +1,14 @@
-// generate-voice — v13 (2026-10-30, shared server correction cache
-// + playback-rate contract, ordered by Amr 2026-10-30 as part of
-// the cost-reduction plan)
+// generate-voice — v14 (2026-10-30, Claude-review fixes on the v13 cache)
+// v14 ADDS, corr mode only (free-text mode is UNCHANGED):
+// (a) prompt fingerprint in the cache key: v3_<fp>_<voice>_<shape>_<positions>,
+// where fp hashes the voice-defining prompt strings for the request's
+// engine+voice — a prompt tweak changes the key automatically, so it can
+// never serve a year of stale immutable audio under an old key. The cache
+// is empty (0 rows), so the format change costs nothing.
+// (b) lock TTL 5 min -> 90s + release on ANY failure path (catch-release):
+// a failed generation no longer squats its key for 5 minutes.
+// (c) shared-cache upload guard: reject generated audio under 1000 bytes
+// (empty/truncated) instead of caching a broken clip.
 // v13 ADDS, corr mode only (free-text mode is UNCHANGED):
 // (a) a shared server cache in the public rana-audio bucket: the
 // first generation for a logical key v3_<voice>_<shape>_<positions>
@@ -10,7 +18,7 @@
 // key (playbackRate applies at play time); no user_id and no free
 // text appear in lock/file names; content is Quran words only.
 // (b) an atomic storage-object lock (corr/locks/<key>.json,
-// upsert:false, 5-min TTL): a waiter gets HTTP 202 with no
+// upsert:false, 90s TTL since v14): a waiter gets HTTP 202 with no
 // audioUrl, which the client already treats as null (browser
 // voice, no dialog); the next occurrence hits the cache.
 // (c) telemetry rows with function_name='generate-voice-cache-hit'
@@ -98,8 +106,9 @@ const REALTIME_VOICES: Record<string, string> = {
   female: "marin",
 };
 
-// ---- Shared server correction cache (v13, corr mode only) ----
-// Logical key: v3_<voice>_<shape>_<positions>, positions encoded as
+// ---- Shared server correction cache (v14, corr mode only) ----
+// Logical key: v3_<fp>_<voice>_<shape>_<positions> (fp = prompt
+// fingerprint, see below), positions encoded as
 // id-w pairs joined by '_' (no special chars in object names).
 // Rate is excluded by design. The cached file carries the PRIMARY
 // engine suffix, and lookup selects the CURRENT primary engine's
@@ -109,16 +118,41 @@ const REALTIME_VOICES: Record<string, string> = {
 // (old Speech chain: onyx/nova) audio is NEVER written here — it
 // must never poison a cedar/marin key.
 const CORR_CACHE_PREFIX = "corr";
-const CORR_LOCK_TTL_MS = 5 * 60 * 1000;
+const CORR_LOCK_TTL_MS = 90 * 1000;
+// Minimum generated-audio size for a shared-cache write: a real 1-2 word
+// clip is many KB (mp3) or tens of KB (wav); anything under 1 KB is an
+// empty/truncated response that must never become an immutable entry.
+const CORR_MIN_AUDIO_BYTES = 1000;
+
+// Prompt fingerprint: a short deterministic hash of the voice-defining
+// prompt strings for the request's engine+voice. Realtime's voice is
+// defined by REALTIME_VERBATIM + realtimePersona(voice); Azure's by its
+// voice name/locale + prosody. Hashing (not a manual version constant)
+// means a prompt tweak changes the key by itself — the failure mode
+// Claude flagged (stale voice served for a year under an old key)
+// cannot happen by forgetting a bump.
+function corrPromptFingerprint(engine: string, voice: "male" | "female"): string {
+  const material = engine === "azure"
+    ? `azure|${AZURE_VOICES[voice]?.name ?? voice}|${AZURE_VOICES[voice]?.locale ?? ""}|prosody:-10%`
+    : `realtime|${REALTIME_VERBATIM}|${realtimePersona(voice)}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < material.length; i++) {
+    h ^= material.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
 
 function corrLogicalKey(
   voice: string | undefined,
   shape: "context" | "bare",
   positions: { id: number; w: number }[],
+  engine: string,
 ): string {
   const v = voice === "female" ? "female" : "male";
   const pos = positions.map((p) => `${p.id}-${p.w}`).join("_");
-  return `v3_${v}_${shape}_${pos}`;
+  const fp = corrPromptFingerprint(engine, v);
+  return `v3_${fp}_${v}_${shape}_${pos}`;
 }
 
 function corrCacheFileName(key: string, engine: string): string {
@@ -456,6 +490,12 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // Corr lock state lives OUTSIDE the try so the catch below can release
+  // a held lock on any failure path (v14 catch-release).
+  let corrKey: string | null = null;
+  let corrLockHeld = false;
+  let supabaseClient: any = null;
+
   try {
     // 1. AUTH FIRST (lockdown 2026-10-29): only a real logged-in user
     // session may generate. The project's public anon key is NOT
@@ -585,7 +625,9 @@ Deno.serve(async (req: Request) => {
     // Service-role client (storage upload + usage log + rate-limit
     // counts). Created here, before generation, so the rate-limit
     // checks below can use it; reused for the upload afterwards.
-    const supabaseClient = createClient(supabaseUrl!, serviceRoleKey!);
+    // Assigned (not declared) here so the outer catch can use it for
+    // the v14 lock release.
+    supabaseClient = createClient(supabaseUrl!, serviceRoleKey!);
 
     // Position-mode verification (v12): rebuild the spoken text
     // from the seeded quran_verses rows and reject ANY mismatch.
@@ -630,11 +672,9 @@ Deno.serve(async (req: Request) => {
     // construction; user_id is NULL (no user linkage) and the
     // logical key rides in the model field for the Phase 3 gate
     // query. Lengths only — no text is ever logged.
-    let corrKey: string | null = null;
-    let corrLockHeld = false;
     if (isCorrMode) {
-      corrKey = corrLogicalKey(voice, corrShape!, corrPositions!);
       const primaryEngine = azureKey ? "azure" : "realtime";
+      corrKey = corrLogicalKey(voice, corrShape!, corrPositions!, primaryEngine);
       const cachedUrl = await findCorrCachedUrl(supabaseClient, corrKey, primaryEngine);
       if (cachedUrl) {
         try {
@@ -737,7 +777,8 @@ Deno.serve(async (req: Request) => {
     // one generation per key. A waiter gets HTTP 202 with no
     // audioUrl; the client treats that as null (browser voice, no
     // dialog) and the next occurrence hits the cache. A leaked lock
-    // (crashed winner) expires via the 5-min TTL in tryClaimCorrLock.
+    // (crashed winner) expires via the 90s TTL in tryClaimCorrLock
+    // (and is released in the catch below on any failure).
     if (isCorrMode && corrKey) {
       const claim = await tryClaimCorrLock(supabaseClient, corrKey);
       if (claim === "locked") {
@@ -802,6 +843,12 @@ Deno.serve(async (req: Request) => {
       ? corrCacheFileName(corrKey!, corrEngine)
       : `synthetic-${Date.now()}.${audioExt}`;
 
+    // v14 upload guard: never cache an empty/truncated clip as immutable.
+    // A failed guard throws to the outer catch (lock released there).
+    if (isSharedCacheWrite && audioBuffer.byteLength < CORR_MIN_AUDIO_BYTES) {
+      throw new Error("الصوت المولّد أصغر من الحد الأدنى — لم يُحفظ في الذاكرة المشتركة");
+    }
+
     const { error: uploadError } = await supabaseClient.storage
       .from("rana-audio")
       .upload(fileName, audioBlob, {
@@ -860,8 +907,8 @@ Deno.serve(async (req: Request) => {
     } catch { /* ignore logging errors */ }
 
     // Release the reservation on the success path. On a generation
-    // failure the outer catch returns 500 and the lock leaks until
-    // its 5-min TTL — a bounded delay, never a permanent block.
+    // failure the outer catch returns 500 and releases the lock there
+    // (v14); the 90s TTL is only the crashed-process backstop.
     if (corrLockHeld) await releaseCorrLock(supabaseClient, corrKey!);
 
     return new Response(
@@ -869,6 +916,12 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    // v14 catch-release: a lock held at failure time (generation or upload
+    // threw after claim) is released here. Previously it leaked until the
+    // TTL. Best-effort; never masks the original error.
+    if (corrLockHeld && corrKey && supabaseClient) {
+      try { await releaseCorrLock(supabaseClient, corrKey); } catch { /* ignore */ }
+    }
     return new Response(
       JSON.stringify({ error: err.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

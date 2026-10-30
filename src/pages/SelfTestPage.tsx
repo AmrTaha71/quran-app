@@ -1391,8 +1391,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const a = new Audio(audioUrl);
       // v13: the file is neutral-speed; the user's corrRate applies
       // here, pitch-preserved (browser TTS below keeps u.rate).
-      a.playbackRate = rate;
-      a.preservesPitch = true;
+      // v14 (Claude review): Safari resets playbackRate when the src
+      // loads and ignores the unprefixed pitch flag, so set both pitch
+      // flags and re-apply the rate after metadata loads.
+      const applyCorrRate = () => {
+        a.playbackRate = rate;
+        a.preservesPitch = true;
+        (a as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true;
+      };
+      applyCorrRate();
+      a.onloadedmetadata = applyCorrRate;
       corrAudioRef.current = a;
       a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction' }); };
       a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); };
@@ -2953,8 +2961,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const a = new Audio(url);
       // v13: the file is neutral-speed; the user's corrRate applies
       // here, pitch-preserved.
-      a.playbackRate = CORR_RATE_VALUE[liveRef.current.corrRate];
-      a.preservesPitch = true;
+      // v14 (Claude review): Safari resets playbackRate when the src
+      // loads and ignores the unprefixed pitch flag — see playCorrection.
+      const applyContRate = () => {
+        a.playbackRate = CORR_RATE_VALUE[liveRef.current.corrRate];
+        a.preservesPitch = true;
+        (a as HTMLAudioElement & { webkitPreservesPitch?: boolean }).webkitPreservesPitch = true;
+      };
+      applyContRate();
+      a.onloadedmetadata = applyContRate;
       contPromptAudioRef.current = a;
       a.onplaying = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt }); };
       a.onended = () => { diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
