@@ -56,12 +56,13 @@ export default function BottomNav({
               onClick={() => {
                 onNavigate(item.id);
               }}
-              className={`icon-action flex-1 flex-col py-2 text-sm font-bold transition-smooth ${
+              className={`icon-action relative polish-press flex-1 flex-col py-2 text-sm font-bold ${
                 active ? 'text-emerald-700 bg-emerald-50' : 'text-accent-500 hover:bg-gray-50'
               }`}
               aria-current={active ? 'page' : undefined}
             >
-              {item.icon}
+              <span className={`nav-indicator ${active ? 'nav-indicator-on' : ''}`} aria-hidden="true" />
+              <span className={`nav-icon ${active ? 'nav-icon-on' : ''}`}>{item.icon}</span>
               <span>{item.label}</span>
             </button>
           );

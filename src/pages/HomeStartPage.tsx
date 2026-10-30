@@ -117,7 +117,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           <img src="/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4">
           <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
           <p className="text-sm text-accent-600 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
@@ -128,7 +128,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         {/* Resume where the user left off */}
-        <div className="bg-emerald-600 rounded-2xl shadow-sm p-5 mb-4 text-white">
+        <div className="bg-emerald-600 rounded-2xl shadow-sm polish-card polish-fade-up p-5 mb-4 text-white" style={{ animationDelay: '60ms' }}>
           <p className="font-bold text-lg">
             {lastPage.visited ? 'أكمل من حيث توقفت' : 'ابدأ من أول المصحف'}
           </p>
@@ -142,7 +142,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               } catch {}
               onNavigate('mushaf');
             }}
-            className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2"
+            className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
           >
             <BookOpen className="w-5 h-5" />
             {lastPage.visited ? `أكمل الحفظ — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف للحفظ'}
@@ -152,7 +152,8 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن. */}
         <button
           onClick={() => onNavigate('test')}
-          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30"
+          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30 polish-press polish-fade-up"
+          style={{ animationDelay: '120ms' }}
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Headphones className="w-6 h-6 text-white" />
@@ -161,7 +162,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
 
         {/* استمع للقرآن: after سمّع لنفسك. */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '180ms' }}>
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
@@ -175,7 +176,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           )}
           <button
             onClick={() => onNavigate('listen')}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
           >
             <Headphones className="w-5 h-5" />
             استمع للقرآن
@@ -185,7 +186,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* أذكار الصباح والمساء: LIVE — generated-voice clips
             (46 clips, male/female toggle in the player). Placed
             directly after the listen card: the audio hub. */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
           </p>
@@ -194,7 +195,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           </p>
           <button
             onClick={() => onNavigate('adhkar')}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
           >
             <SunMoon className="w-5 h-5" />
             استمع للأذكار
@@ -203,7 +204,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* تربيط اليوم: real approved link only; hidden on any failure */}
         {linkOfDay && (
-          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-4 mb-4">
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm polish-card p-4 mb-4">
             <p className="font-bold text-accent-800 flex items-center gap-2">
               <Link className="w-5 h-5 text-amber-600" /> تربيط اليوم
             </p>
@@ -219,7 +220,7 @@ export default function HomeStartPage({ session, onNavigate }: {
                 try { localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: linkOfDay.surah, ayah: linkOfDay.ayah })); } catch { /* ignore */ }
                 onNavigate('mushaf');
               }}
-              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
             >
               <BookOpen className="w-5 h-5" />
               افتح الآية وسمّعها
@@ -233,7 +234,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             الإعدادات stays a small button below. */}
         <button
           onClick={() => onNavigate('follow')}
-          className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30"
+          className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30 polish-press"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Mic className="w-6 h-6 text-white" />
@@ -242,7 +243,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
         <button
           onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 mb-4 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+          className="w-full py-3.5 mb-4 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
         >
           <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
         </button>
@@ -264,7 +265,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               <li><span className="font-bold text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
             </ol>
             <button onClick={dismissIntro}
-              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl">
+              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl polish-press">
               ابدأ
             </button>
           </div>

@@ -125,3 +125,53 @@ body {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
 }
+
+/* Polish system, slice 1 (2026-10-30): calm, quiet motion to match the
+   app's warm-paper character — nothing flashy, nothing bouncy. Every
+   class here is OPT-IN (applied per element, never a global element
+   rule), so Mushaf word taps and fullscreen geometry are untouched.
+   Durations 150–350ms, ease-out, transforms tiny (2px / 3% / 15%).
+   No new dependencies: CSS only. */
+.polish-press {
+  transition: transform 0.15s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out, filter 0.2s ease-out;
+}
+.polish-press:active { transform: scale(0.97); }
+/* Soft layered shadow for cards (replaces flat shadow-sm where applied).
+   Hover lift only on devices that actually hover, so touch taps never
+   get a stuck hover state. */
+.polish-card {
+  box-shadow: 0 1px 2px rgba(28, 43, 38, 0.05), 0 10px 28px rgba(28, 43, 38, 0.06);
+  transition: box-shadow 0.25s ease-out, transform 0.25s ease-out;
+}
+@media (hover: hover) {
+  .polish-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(28, 43, 38, 0.05), 0 16px 36px rgba(28, 43, 38, 0.09);
+  }
+}
+@keyframes polish-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.polish-fade-up { animation: polish-fade-up 0.35s ease-out both; }
+/* BottomNav active-tab indicator: a short emerald bar that scales in
+   from the center, plus a slightly larger active icon. */
+.nav-indicator {
+  position: absolute;
+  top: 0;
+  right: 1.25rem;
+  left: 1.25rem;
+  height: 3px;
+  border-radius: 9999px;
+  background: #047857;
+  transform: scaleX(0);
+  transition: transform 0.25s ease-out;
+}
+.nav-indicator-on { transform: scaleX(1); }
+.nav-icon { transition: transform 0.2s ease-out; display: inline-flex; }
+.nav-icon-on { transform: scale(1.15); }
+@media (prefers-reduced-motion: reduce) {
+  .polish-fade-up { animation: none; }
+  .polish-press, .polish-card, .nav-indicator, .nav-icon { transition: none; }
+  .polish-press:active { transform: none; }
+}
