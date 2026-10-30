@@ -26,12 +26,13 @@ export const MUSHAF_EDITIONS: MushafEdition[] = [
     description: 'قراءة ورش عن نافع — مجمع الملك فهد',
     imageUrl: (page: number) => `${QURANHUB_CDN}/kfgqpc/warsh/${page}.jpg`,
   },
-  {
-    id: 'hafs',
-    name: 'مصحف حفص (الخط الواسط)',
-    description: 'رواية حفص عن عاصم — مجمع الملك فهد',
-    imageUrl: (page: number) => `${QURANHUB_CDN}/kfgqpc/hafs-wasat/${page}.jpg`,
-  },
+  // NOTE (user decision 2026-10-31): مصحف حفص (الخط الواسط) is
+  // DELIBERATELY NOT listed: its page 604 is refused by the server
+  // (jsdelivr 403) with no mirror, so the edition is incomplete — and
+  // an incomplete Mushaf is not displayed at all. Do NOT re-add it
+  // without a verified page-604 source. Hafs is last in the old
+  // order, so removing it keeps stored edition indices 0-2 valid;
+  // a stored index 3 falls back to Madinah via the existing guards.
 ];
 
 export const TOTAL_MUSHAF_PAGES = 604;

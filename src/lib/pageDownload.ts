@@ -36,13 +36,14 @@
 //
 // Sizes measured 2026-10-28 (jsdelivr Content-Length samples):
 // madinah ~395KB/page x 604 = ~240MB; tajweed ~122KB x 604 = ~75MB;
-// warsh ~360KB x 604 = ~220MB; hafs ~311KB x 603 = ~190MB.
-// Hafs has 603 downloadable pages: page 604 exists in the repo but
-// jsdelivr answers 403 for it (and the app has no mirror for the
-// QuranHub editions), so the app itself cannot show hafs 604 today.
-// The 603 total is HONEST (all downloadable pages) and must not be
-// changed; the Settings hafs card carries a footnote saying so, and
-// the Mushaf image-error block names hafs 604 explicitly.
+// warsh ~360KB x 604 = ~220MB.
+// Hafs (was ~311KB x 603 = ~190MB) is NOT listed: page 604 exists
+// in the repo but jsdelivr answers 403 for it (and the app has no
+// mirror for the QuranHub editions), so the edition is incomplete —
+// and per the user's decision (2026-10-31) an incomplete Mushaf is
+// not displayed at all. Do NOT re-add it without a verified
+// page-604 source. The Mushaf image-error block still names hafs
+// 604 defensively.
 import { MUSHAF_EDITIONS } from './mushafEditions';
 
 export interface EditionDownload {
@@ -56,12 +57,12 @@ export const EDITION_DOWNLOADS: EditionDownload[] = [
   { id: 'madinah', name: 'مصحف المدينة المنورة', pages: 604, approxMB: 240 },
   { id: 'tajweed', name: 'مصحف التجويد الملون', pages: 604, approxMB: 75 },
   { id: 'warsh', name: 'مصحف ورش', pages: 604, approxMB: 220 },
-  { id: 'hafs', name: 'مصحف حفص (الخط الواسط)', pages: 603, approxMB: 190 },
+  // No hafs entry: hidden per the 2026-10-31 decision (see header).
 ];
 
 // Hafs page 604: confirmed jsdelivr 403, no mirror (SYNTHESIS V8
 // still open on 403-vs-missing, but either way the app cannot serve
-// it today). Referenced by the Settings footnote + Mushaf error copy.
+// it today). Referenced defensively by the Mushaf error copy only.
 export const HAFS_UNAVAILABLE_PAGE = 604;
 
 export function editionDownload(id: string): EditionDownload {

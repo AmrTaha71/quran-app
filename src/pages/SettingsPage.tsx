@@ -5,7 +5,7 @@ import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
-import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, EDITION_DOWNLOADS, HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
+import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, EDITION_DOWNLOADS } from '../lib/pageDownload';
 import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
@@ -17,7 +17,6 @@ const EDITION_NOTES: Record<string, string> = {
   madinah: 'الصفحات المصورة الكاملة بالخط العثماني والإطار المزخرف',
   tajweed: 'نفس الصفحات ملوّنة بأحكام التجويد',
   warsh: 'برواية ورش عن نافع',
-  hafs: 'برواية حفص بالخط الواسط',
 };
 
 function readStored<T>(key: string, fallback: T, parse: (raw: string) => T | null): T {
@@ -696,11 +695,6 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                           حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت • {ed.pages.toLocaleString('ar-EG')} صفحة
                           {st.cached === null ? '' : full ? ' • كل الصفحات محملة ✓' : ` • محمل منها ${st.cached.toLocaleString('ar-EG')} من ${ed.pages.toLocaleString('ar-EG')}`}
                         </p>
-                        {ed.id === 'hafs' && (
-                          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 mt-2 leading-relaxed">
-                            ملحوظة: صفحة {HAFS_UNAVAILABLE_PAGE} من مصحف حفص غير متاحة للتحميل (الخادم يرفضها، ولا بديل لها حاليًا) — الـ {ed.pages.toLocaleString('ar-EG')} صفحة هي كل الصفحات المتاحة، و«محمل بالكامل» تعني اكتمال المتاح فقط، مش الصفحة الناقصة.
-                          </p>
-                        )}
                         {st.running && (
                           <div className="mt-3">
                             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
