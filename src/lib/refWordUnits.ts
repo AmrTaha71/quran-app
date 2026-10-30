@@ -45,6 +45,22 @@
 // Extend ONLY from the wbw_ok manifest, never from HEAD 200s.
 export const REF_VERIFIED_SURAHS = new Set([67]);
 
+// Juz-30 extension (2026-10-30): manifest v1 (strict per-index
+// normalized match) + Amr's human ear QA of the 15-clip
+// stratified Juz-30 sample (all good) authorize the 548
+// manifest_ok Juz-30 ayahs, with the "(تجربة)" label kept and
+// monitored rollout. The 16 Juz-30 ayahs outside the set stay
+// synthetic-only. Imported lazily through the helper below so
+// this module keeps its single-gate shape for callers.
+import { isWbwManifestJuz30Ok } from './wbwManifestJuz30';
+
+/** True when a ref unit may be offered for this ayah: the Surah 67
+ *  pilot, or a Juz-30 ayah in the manifest_ok set. Everything else
+ *  stays synthetic-only. */
+export function isRefUnitEnabled(surah: number, ayah: number): boolean {
+  return REF_VERIFIED_SURAHS.has(surah) || isWbwManifestJuz30Ok(surah, ayah);
+}
+
 const WBW_BASE = 'https://audio.qurancdn.com/wbw';
 
 const pad3 = (n: number): string => String(n).padStart(3, '0');

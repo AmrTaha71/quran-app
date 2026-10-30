@@ -8,7 +8,7 @@ import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
 import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
-import { wbwWordUrl, refUnitForWord, REF_VERIFIED_SURAHS } from '../lib/refWordUnits';
+import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnits';
 import { checkMic } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
@@ -1170,7 +1170,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const playRefUnit = () => {
     const ayah = ayahs[index];
-    if (!ayah || !REF_VERIFIED_SURAHS.has(ayah.surah_no) || wrongIndices.length === 0) return;
+    if (!ayah || !isRefUnitEnabled(ayah.surah_no, ayah.ayah_no) || wrongIndices.length === 0) return;
     const words = expectedWordList(ayah.ayah_text);
     if (words.length === 0) return;
     stopCorrAudio();
@@ -4652,11 +4652,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       🔊 أعد سماع التصحيح
                     </button>
                   )}
-                  {/* Segmentation pilot (v0, Al-Mulk only): play the
-                      reference 3-word unit containing the first wrong
-                      word, alongside — never instead of — the current
+                  {/* Reference unit (Surah 67 pilot + Juz-30 manifest_ok
+                      ayahs, "(تجربة)" label kept): play the reference
+                      3-word unit containing the first wrong word,
+                      alongside — never instead of — the current
                       correction above. */}
-                  {ayahs[index] && REF_VERIFIED_SURAHS.has(ayahs[index].surah_no) && wrongIndices.length > 0 && (
+                  {ayahs[index] && isRefUnitEnabled(ayahs[index].surah_no, ayahs[index].ayah_no) && wrongIndices.length > 0 && (
                     <button onClick={() => playRefUnit()}
                       className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
                       {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
