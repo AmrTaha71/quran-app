@@ -102,7 +102,7 @@ export default function HomeStartPage({ session, onNavigate }: {
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <img src="/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
+          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
           <div>
             <h1 className="text-lg font-bold text-accent-800" style={{ fontFamily: "'Noto Naskh Arabic', serif" }}>روابط الذكر الحكيم</h1>
             <p className="text-sm text-accent-600">للحفظ بالتربيطات</p>
@@ -114,7 +114,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* App mark: the artwork itself, sized so the greeting and
             the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">
-          <img src="/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md" />
+          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md" />
         </div>
 
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4">

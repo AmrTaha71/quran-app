@@ -68,8 +68,8 @@ const MAX_IMG_ENTRIES = 150;
 // re-discovered at activate time for trimming (see trimShellCache).
 const PRECACHE_STATIC = [
   '/', '/index.html', '/manifest.webmanifest',
-  '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png',
-  '/apple-touch-icon.png', '/quran-icon.svg',
+  'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png', 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png', 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-maskable-512.png',
+  'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/apple-touch-icon.png', '/quran-icon.svg',
 ];
 
 function assetPathsFromHtml(html) {
