@@ -7,7 +7,6 @@ import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
 import { readListeningWird } from '../lib/listenPlayback';
-import { THREE_MODES, TAFSIR_ATTRIBUTION } from '../lib/threeModeListen';
 import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getJuzFromPage } from '../lib/quranIndex';
 
@@ -66,17 +65,6 @@ export default function HomeStartPage({ session, onNavigate }: {
     try { return readListeningWird(); } catch { return null; }
   });
   const [wird] = useState(loadWird);
-  // Khatma entries (listen journeys): the two khatma modes in
-  // mode order — varied, then tadabbur. The single-voice mode
-  // gets NO card (the listen card above covers it). Each card
-  // sets the one-time 'quran-listen-preselect' flag (same
-  // pattern as 'quran-open-fullscreen') and opens Listen, where
-  // the mount effect consumes it: Hafs mode + highlighted button
-  // + scroll, with the mode's normal resume behaviour. The
-  // tadabbur card navigates even before the clips are uploaded:
-  // Listen shows the mode honestly disabled with its note.
-  const khatmaVaried = THREE_MODES.find((m) => m.id === 'varied');
-  const khatmaTadabbur = THREE_MODES.find((m) => m.id === 'tadabbur');
   const today = new Date().toLocaleDateString('en-CA');
   const doneToday = wird.doneDays.includes(today);
   const pagesText =
@@ -212,51 +200,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           >
             <SunMoon className="w-5 h-5" />
             استمع للأذكار
-          </button>
-        </div>
-
-        {/* Khatma entries, after the listen + adhkar cards, in
-            mode order: ختمة منوّعة, then ختمة وتفسير. */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-emerald-600" />{khatmaVaried?.name ?? 'ختمة منوّعة'}
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            {khatmaVaried?.description ?? 'المصحف كاملًا، كل ربع بقارئ مختلف من القراء الثمانية.'}
-          </p>
-          <button
-            onClick={() => {
-              try {
-                sessionStorage.setItem('quran-listen-preselect', 'varied');
-              } catch {}
-              onNavigate('listen');
-            }}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Headphones className="w-5 h-5" />
-            افتح صفحة الاستماع
-          </button>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-emerald-600" />{khatmaTadabbur?.name ?? 'ختمة وتفسير'}
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            {khatmaTadabbur?.description ?? 'ختمة منوّعة مع تفسير ميسّر بعد كل ربع.'}
-          </p>
-          <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
-          <button
-            onClick={() => {
-              try {
-                sessionStorage.setItem('quran-listen-preselect', 'tadabbur');
-              } catch {}
-              onNavigate('listen');
-            }}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Headphones className="w-5 h-5" />
-            افتح صفحة الاستماع
           </button>
         </div>
 
