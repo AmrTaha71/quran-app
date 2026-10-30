@@ -347,6 +347,15 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     memorized: lists.memorized.size,
   };
 
+  // مركز الحفظ gate (Amr 2026-10-30): people memorize from ANY point,
+  // so a global "X of 6236" % is only meaningful for a run that starts
+  // at the very beginning of the Mushaf. quran_verses ids run 1..6236
+  // in Mushaf order (verified against the seeded table), so the
+  // from-start run is the count of consecutive memorized ids starting
+  // at 1. The card below shows ONLY this run, and hides when it is 0.
+  let memorizedFromStart = 0;
+  while (lists.memorized.has(memorizedFromStart + 1)) memorizedFromStart++;
+
   const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter ? 1 : 0) + (debouncedSearch ? 1 : 0);
 
   return (
@@ -471,22 +480,24 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           </p>
         </div>
 
-        {/* مركز الحفظ: memorization % from the user's own memorized
-            list (distinct verse ids / 6236 — no invented numbers), plus
-            a one-tap filter to the memorized ayahs and their links. */}
-        {session && (
+        {/* مركز الحفظ — GATED (Amr 2026-10-30): people memorize from any
+            point, so a global "X of 6236" % is meaningless for scattered
+            memorization. The card shows ONLY the contiguous run that
+            starts at the very beginning of the Mushaf (verse ids run
+            1..6236 in Mushaf order), and hides entirely when that run
+            is 0. The full memorized list stays reachable via the
+            "تم الحفظ" tab below, whose count is the true total. */}
+        {session && memorizedFromStart > 0 && (
           <div className="mb-5 bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
               <BadgeCheck className="w-5 h-5 text-amber-600" />
               <h2 className="font-bold text-accent-800">مركز الحفظ</h2>
             </div>
             <p className="text-2xl font-bold text-accent-800">
-              حفظت {formatAr(listCounts.memorized)} آية من {formatAr(TOTAL_VERSES)} — {formatAr(Math.round((listCounts.memorized / TOTAL_VERSES) * 100))}٪
+              حفظت {formatAr(memorizedFromStart)} آية من أول المصحف من {formatAr(TOTAL_VERSES)} — {formatAr(Math.round((memorizedFromStart / TOTAL_VERSES) * 100))}٪
             </p>
             <p className="text-sm text-accent-600 leading-relaxed mt-1">
-              {listCounts.memorized > 0
-                ? 'آياتك المحفوظة تحت، ومع كل آية روابطها.'
-                : 'لسه ما علّمتش آيات كمحفوظة — اضغط مطولًا على أي آية واختر «تم الحفظ»، وهنا هتتابع نسبتك.'}
+              تقدّمك من أول المصحف — وآياتك المحفوظة كلها تحت، ومع كل آية روابطها.
             </p>
           </div>
         )}
