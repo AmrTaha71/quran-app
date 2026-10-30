@@ -2549,6 +2549,34 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
     return { matched, lastMatchedIdx, positions: raw.positions, consumed: raw.consumed };
   };
+  // Live (interim-aware) alignment for the continuous pointer and
+  // watchdog ONLY. Safari delivers interim without finals during
+  // fluent recitation (finals starvation, proven by the 2026-10-30
+  // diag: 17 interim results, finals []), which used to freeze
+  // the pointer at ayah 1 and trip the no-match watchdog even
+  // though the recognizer heard everything. Interim revises, so
+  // live matches NEVER enter contCreditedRef and NEVER touch
+  // grading or correction triggers — those stay finals-based.
+  const contLiveProgress = (): { count: number; ayahIdx: number; tokens: number } => {
+    const expected = liveRef.current.contExpected;
+    const finals = liveRef.current.contFinals;
+    const interim = lastInterimRef.current.trim();
+    const spokenText = interim ? `${finals} ${interim}`.trim() : finals;
+    const spoken = spokenTokens(spokenText);
+    let normsEntry = contExpectedNormsRef.current;
+    if (!normsEntry || normsEntry.expected !== expected) {
+      normsEntry = { expected, norms: expected.map((w) => w.norm) };
+      contExpectedNormsRef.current = normsEntry;
+    }
+    const result = liveRef.current.contStrict
+      ? alignWordsStrict(normsEntry.norms, spoken)
+      : alignWords(normsEntry.norms, spoken);
+    let count = 0;
+    let lastIdx = -1;
+    result.matched.forEach((m, i) => { if (m) { count++; lastIdx = i; } });
+    const ayahIdx = lastIdx >= 0 ? expected[lastIdx].ayahIdx : 0;
+    return { count, ayahIdx, tokens: spoken.length };
+  };
   const updateContProgress = () => {
     const expected = liveRef.current.contExpected;
     const { matched, lastMatchedIdx } = contEffectiveMatched();
@@ -3422,6 +3450,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         lastInterimRef.current = interimText.trim();
         setInterim(interimText.trim());
         diagPush('result', { final: false, text: interimText.trim() });
+        // Live progress from interim (see contLiveProgress): the
+        // pointer and watchdog must follow what the recognizer
+        // hears NOW, not only confirmed finals. Mirrors
+        // noteContMatchProgress, but on live values; never touches
+        // contFinals, contCreditedRef, grading, or correction.
+        if (liveRef.current.contListening && !contNoMatchRef.current) {
+          const live = contLiveProgress();
+          if (live.count > contLastMatchedCountRef.current) {
+            contLastMatchedCountRef.current = live.count;
+            contLastMatchAtRef.current = Date.now();
+            contTokensAtLastMatchRef.current = live.tokens;
+            setContProgress({ matched: live.count, total: liveRef.current.contExpected.length, ayahIdx: live.ayahIdx });
+            armContNoMatchTimer();
+          } else if (live.tokens - contTokensAtLastMatchRef.current >= CONT_NO_MATCH_TOKENS) {
+            enterContNoMatch();
+          }
+        }
       } else if (sawFinal) {
         lastInterimRef.current = '';
         setInterim('');
