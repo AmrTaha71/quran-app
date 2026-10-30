@@ -154,14 +154,8 @@ export default function HomeStartPage({ session, onNavigate }: {
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
-          <p className="text-sm text-accent-600 mt-1">
-            تلاوة متواصلة مع القراءة — واقفل الشاشة لو عاوز.
-          </p>
-          {/* أوفلاين — headline feature of this entry (Amr's explicit
-              "أوفلاين"): streaming (play) and per-surah download are
-              both reachable from the listen page this card opens. */}
-          <p className="text-sm text-amber-700 font-bold mt-1">
-            أوفلاين: حمّل أي سورة.
+          <p className="text-xs text-accent-500 mt-1">
+            واقفل الشاشة لو عاوز
           </p>
           {listeningWird && (
             <p className="text-sm text-amber-700 font-bold mt-2">
@@ -183,10 +177,6 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mb-4">
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
-            <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">تلاوة وصوت مولّد</span>
-          </p>
-          <p className="text-sm text-accent-600 mt-1">
-            أذكار الصباح والمساء صوتًا — بصوت رجالي أو نسائي، والتكرار يتم في المشغّل.
           </p>
           <button
             onClick={() => onNavigate('adhkar')}
