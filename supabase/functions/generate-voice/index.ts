@@ -1,7 +1,16 @@
-// generate-voice — v11 (2026-10-30, global cap, ordered by Amr 2026-10-30)
-// v11 ADDS: global daily caps (all users) — 1000 calls/day +
-// $1.00/day logged OpenAI spend (≈$30/month, Amr's budget for up
-// to 2 years). Per-user caps (30/min + 500/day) unchanged. The
+// generate-voice — v12 (2026-10-30, position-keyed correction mode,
+// ordered by Amr 2026-10-30 as part of the cost-reduction plan)
+// v12 ADDS: a server-verified correction mode. The client sends a
+// Quran position (seeded quran_verses ids + word positions), a
+// prompt shape (context-word vs bare-word), and the spoken text it
+// built; the server rebuilds the text from the seeded rows
+// (corrVerify.ts, a verbatim port of the client's text logic) and
+// rejects ANY mismatch with 400. The user-facing correction path
+// therefore no longer sends free text, while the free-text mode
+// below is UNCHANGED for admin link generation (LinkModal /
+// AdminPage send {text, voice} exactly as before, and old cached
+// client tabs sending free text keep working).
+// v11 below: global daily caps (1000 calls + $1 spend).
 // spend cap is the budget guard; the calls cap is a loose backstop
 // that also bounds Azure volume (Azure dollars log as null, so they
 // never count toward the spend sum).
@@ -36,6 +45,7 @@
 // no text or audio content is ever logged.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildCorrSpokenText } from "./corrVerify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -373,26 +383,70 @@ Deno.serve(async (req: Request) => {
     }
     const userId = user.id;
 
-    const { text, voice, speed: reqSpeed } = await req.json();
-
-    if (!text || typeof text !== "string") {
-      return new Response(
-        JSON.stringify({ error: "النص مطلوب" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    // 2. TEXT CAP: one call may not carry more than 2000 characters.
-    if (text.length > 2000) {
-      return new Response(
-        JSON.stringify({ error: "النص أطول من الحد المسموح (2000 حرف)" }),
-        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const body = await req.json();
+    const voice = body.voice;
+    // Position-keyed correction mode (v12): the client sends a
+    // Quran position + prompt shape + the spoken text it built.
+    // Light validation happens here; the full rebuild-and-compare
+    // verification runs below, after the service client exists.
+    // Free-text mode (no mode field) is unchanged: admin link
+    // generation keeps sending {text, voice} exactly as before.
+    const isCorrMode = body.mode === "corr";
+    let corrPositions: { id: number; w: number }[] | null = null;
+    let corrShape: "context" | "bare" | null = null;
+    let corrSpoken: string | null = null;
+    let text: string | null = null;
+    if (isCorrMode) {
+      if (body.shape !== "context" && body.shape !== "bare") {
+        return new Response(
+          JSON.stringify({ error: "شكل التصحيح غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (typeof body.spoken !== "string" || !body.spoken || body.spoken.length > 2000) {
+        return new Response(
+          JSON.stringify({ error: "النص مطلوب" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!Array.isArray(body.positions) || body.positions.length === 0 || body.positions.length > 100) {
+        return new Response(
+          JSON.stringify({ error: "موضع التصحيح غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      for (const p of body.positions) {
+        if (!p || !Number.isInteger(p.id) || p.id <= 0 || !Number.isInteger(p.w) || p.w < 0) {
+          return new Response(
+            JSON.stringify({ error: "موضع التصحيح غير صالح" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+      corrPositions = body.positions;
+      corrShape = body.shape;
+      corrSpoken = body.spoken;
+    } else {
+      if (!body.text || typeof body.text !== "string") {
+        return new Response(
+          JSON.stringify({ error: "النص مطلوب" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // 2. TEXT CAP: one call may not carry more than 2000 characters.
+      if (body.text.length > 2000) {
+        return new Response(
+          JSON.stringify({ error: "النص أطول من الحد المسموح (2000 حرف)" }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      text = body.text;
     }
     // Optional caller speed (0.25-4.0, OpenAI's range). Invalid or
     // absent values keep the per-voice defaults, so older callers
     // (admin/link generation) behave exactly as before. On the
     // Realtime path the speed is clamped to its 0.25-1.5 range.
-    const speedOverride = typeof reqSpeed === "number" && reqSpeed >= 0.25 && reqSpeed <= 4 ? reqSpeed : undefined;
+    const speedOverride = typeof body.speed === "number" && body.speed >= 0.25 && body.speed <= 4 ? body.speed : undefined;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -415,6 +469,40 @@ Deno.serve(async (req: Request) => {
     // counts). Created here, before generation, so the rate-limit
     // checks below can use it; reused for the upload afterwards.
     const supabaseClient = createClient(supabaseUrl!, serviceRoleKey!);
+
+    // Position-mode verification (v12): rebuild the spoken text
+    // from the seeded quran_verses rows and reject ANY mismatch.
+    // Lengths only in the log — never the texts. Runs BEFORE the
+    // cap checks, so a rejected forgery never consumes budget.
+    // A rejection degrades the client to browser voice (its
+    // requestCorrectionAudio treats non-ok as null) — never a
+    // user-visible error dialog.
+    if (isCorrMode) {
+      const ids = [...new Set(corrPositions!.map((p) => p.id))];
+      const { data: verseRows, error: verseError } = await supabaseClient
+        .from("quran_verses")
+        .select("id, ayah_text")
+        .in("id", ids);
+      if (verseError) {
+        throw new Error("تعذر التحقق من موضع التصحيح");
+      }
+      const ayahTexts = new Map<number, string>();
+      for (const r of verseRows ?? []) ayahTexts.set(r.id, r.ayah_text);
+      const built = buildCorrSpokenText(ayahTexts, corrPositions!, corrShape!);
+      if (built === null || built !== corrSpoken) {
+        console.warn(
+          `corr position mismatch: built ${built === null ? "null" : built.length + " chars"}, got ${corrSpoken!.length} chars`,
+        );
+        return new Response(
+          JSON.stringify({ error: "تعذر التحقق من موضع التصحيح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      text = built;
+    }
+    if (!text) {
+      throw new Error("النص مطلوب");
+    }
 
     // 3. PER-USER RATE LIMITS, checked before any generation spend:
     // 30 calls/minute and 500 calls/day per authenticated user.

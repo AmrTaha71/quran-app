@@ -163,6 +163,33 @@ function expectedWordList(ayahText: string): { orig: string; norm: string }[] {
     .filter((x) => x.norm.length > 0 && /[\u0621-\u064A]/.test(x.norm));
 }
 
+// Position payload for the server-verified correction mode (v12):
+// one (seeded quran_verses id, word position within the ayah) per
+// missed expected word, in order. The context predecessor is NEVER
+// sent — the server derives it from the first position (wordPos - 1
+// in the same ayah), exactly the withPrecedingContextWord rule.
+// Returns null on any invalid index (caller falls back to free
+// text) — never a crash, never a guessed position.
+interface CorrPosition { id: number; w: number; }
+function corrPositionsForRange(
+  indices: number[],
+  expected: { ayahIdx: number }[],
+  ayahs: TestAyah[],
+): CorrPosition[] | null {
+  if (indices.length === 0) return null;
+  const out: CorrPosition[] = [];
+  for (const i of indices) {
+    const e = expected[i];
+    if (!e) return null;
+    const ayah = ayahs[e.ayahIdx];
+    if (!ayah) return null;
+    let w = 0;
+    for (let j = 0; j < i; j++) if (expected[j].ayahIdx === e.ayahIdx) w++;
+    out.push({ id: ayah.id, w });
+  }
+  return out;
+}
+
 // Spoken tokens for comparison: the normalizer strips diacritics but
 // NOT punctuation, so a transcript "والله،" never equaled "والله".
 // Strip every non-Arabic letter from both sides before aligning.
@@ -692,6 +719,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const unitPreview = resolveRange(startKind, startNum, endKind, endNum);
   const unitPreviewValid = unitPreview.end.global >= unitPreview.start.global;
   const [ayahs, setAyahs] = useState<TestAyah[]>([]);
+  // Ref mirror of ayahs (v12): position-mode call sites run from
+  // timeouts and listeners that must see the current range, not a
+  // stale render closure. Set alongside setAyahs, never in a deps
+  // array (TDZ rule: refs are read at call time, not render time).
+  const ayahsRef = useRef<TestAyah[]>([]);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [grades, setGrades] = useState<boolean[]>([]);
@@ -1225,27 +1257,36 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { corrAudioRef.current?.pause(); } catch {}
     corrAudioRef.current = null;
   };
-  const fetchCorrectionAudio = async (words: string[], token: number): Promise<string | null> => {
+  const fetchCorrectionAudio = async (words: string[], token: number, pos?: { shape: 'context' | 'bare'; positions: CorrPosition[] }): Promise<string | null> => {
     if (words.length === 0) return null;
-    const url = await requestCorrectionAudio(words);
+    const url = await requestCorrectionAudio(words, pos);
     if (token !== corrFetchTokenRef.current) return null;
     return url;
   };
   // Raw gendered-voice generation (no token): used by the prefetch
   // path above and by mid-flow interrupts, where the correction
   // cannot be prefetched (the miss is only known when it happens).
-  const requestCorrectionAudio = async (words: string[]): Promise<string | null> => {
+  const requestCorrectionAudio = async (words: string[], pos?: { shape: 'context' | 'bare'; positions: CorrPosition[] }): Promise<string | null> => {
     if (words.length === 0) return null;
     try {
       // LOCKDOWN 2026-10-29: generate-voice requires a logged-in user
       // JWT (the public anon key is rejected by the function). A
       // missing session degrades to the existing browser-TTS race
       // via the null return below, same as any other fetch failure.
+      // POSITION MODE (v12): when positions are supplied, the
+      // server rebuilds the spoken text from seeded quran_verses
+      // rows and rejects any mismatch — the user-facing path no
+      // longer sends free text. Without positions (derivation
+      // failed somewhere upstream) the call falls back to the
+      // free-text mode, which the function still accepts — never a
+      // crash, never a guessed position.
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
-        body: JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
+        body: pos
+          ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, speed: CORR_RATE_VALUE[liveRef.current.corrRate] })
+          : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.audioUrl) return null;
@@ -1564,6 +1605,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setRangeStart(startPt);
       setRangeEnd(endPt);
       setAyahs(data as TestAyah[]);
+      ayahsRef.current = data as TestAyah[];
       // Continuous mode: one listening session over the whole range.
       // No per-ayah progress is saved (a continuous test resumes as
       // a fresh recitation, not mid-stream).
@@ -1844,7 +1886,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const wrongOrig = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
       const token = ++corrFetchTokenRef.current;
       corrPendingRef.current = { index, wordsKey: wrongOrig.join('|'), url: null };
-      void fetchCorrectionAudio(wrongOrig, token).then((url) => {
+      // Position mode (v12): wrong-word indices into this ayah's
+      // expected list + the ayah's seeded id. Bare shape: ayah-mode
+      // corrections never prepend a context word. Missing ayah ref
+      // falls back to free text (never a crash).
+      const wrongIdx = expected.map((_, i) => i).filter((i) => !result.matched[i]);
+      const ayahId = liveRef.current.ayah?.id;
+      const corrPos = ayahId ? { shape: 'bare' as const, positions: wrongIdx.map((w) => ({ id: ayahId, w })) } : undefined;
+      void fetchCorrectionAudio(wrongOrig, token, corrPos).then((url) => {
         if (url && token === corrFetchTokenRef.current && corrPendingRef.current?.index === index) {
           corrPendingRef.current.url = url;
           setCorrectionAudioByAyah((prev) => ({ ...prev, [index]: url }));
@@ -2968,7 +3017,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // rejects (it catches internally and resolves null), so the
       // race below cannot reject either.
       const fetchStart = Date.now();
-      const fetchP = requestCorrectionAudio(words);
+      // Position mode (v12): missed indices -> seeded (ayah id,
+      // word position) pairs. Shape is context iff the spoken words
+      // carry exactly one more word than the missed indices (the
+      // prepended predecessor); otherwise bare. Any derivation
+      // failure falls back to free text — never a crash, never a
+      // guessed position.
+      const corrPos = corrPositionsForRange(audioIndices, liveRef.current.contExpected, ayahsRef.current);
+      const corrShape: 'context' | 'bare' = words.length > audioIndices.length ? 'context' : 'bare';
+      const fetchP = requestCorrectionAudio(words, corrPos ? { shape: corrShape, positions: corrPos } : undefined);
       void withTimeout(fetchP, CORR_AUDIO_TIMEOUT_MS).then((result) => {
         if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current) return;
         if (result.kind === 'value' && result.value) {
@@ -3010,7 +3067,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!contAudioCacheRef.current.get(prefetchKey) && contPrefetchPendingRef.current !== prefetchKey) {
       const token = ++corrFetchTokenRef.current;
       contPrefetchPendingRef.current = prefetchKey;
-      void fetchCorrectionAudio(owed.words, token).then((url) => {
+      // Position mode (v12): stall prompts speak bare owed words
+      // (no context prepend on this path), so shape is always bare.
+      const stallPos = corrPositionsForRange(owed.indices, liveRef.current.contExpected, ayahsRef.current);
+      void fetchCorrectionAudio(owed.words, token, stallPos ? { shape: 'bare', positions: stallPos } : undefined).then((url) => {
         if (url && token === corrFetchTokenRef.current && contPrefetchPendingRef.current === prefetchKey) {
           contAudioCacheRef.current.set(prefetchKey, url);
           persistCorrAudio(prefetchKey, url, corrGender, owed.words, owed.indices, CORR_RATE_VALUE[liveRef.current.corrRate]);

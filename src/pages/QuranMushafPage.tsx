@@ -2086,7 +2086,12 @@ export default function QuranMushafPage({
         followTranscribeAbortRef.current = aborter;
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          // LOCKDOWN 2026-10-30: transcribe-audio now requires a
+          // logged-in user JWT (verify_jwt=true). The loop already
+          // requires a session (uid above), so the token exists
+          // whenever this runs; a missing token 401s into the
+          // existing failure path below, never a crash.
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
           body: JSON.stringify({ audioUrl: urlData.publicUrl }),
           signal: aborter.signal,
         });

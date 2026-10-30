@@ -260,7 +260,10 @@ export default function LinkModal({
 
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        // LOCKDOWN 2026-10-30: transcribe-audio requires a logged-in
+        // user JWT (verify_jwt=true). Session is already enforced
+        // above, so the token exists here.
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
         body: JSON.stringify({ audioUrl }),
       });
 
