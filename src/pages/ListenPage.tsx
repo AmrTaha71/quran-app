@@ -1194,6 +1194,7 @@ export default function ListenPage({ onNavigate }: { onNavigate: (r: Route) => v
               استمع للقرآن
             </h1>
             <p className="text-sm text-accent-600">تلاوة متواصلة مع القراءة — صُمّمت للاستماع مع غلق الشاشة</p>
+            <p className="text-xs text-accent-500 mt-0.5">(واقفل الشاشة لو تحب)</p>
           </div>
         </div>
       </header>
