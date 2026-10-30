@@ -107,7 +107,7 @@ export function tagsComplete(t: VoiceTags | null | undefined): boolean {
   );
 }
 
-export type PromptTrigger = 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode';
+export type PromptTrigger = 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode' | 'interim-miss';
 
 export interface RecorderEvent {
   k: 'prompt' | 'interrupt';

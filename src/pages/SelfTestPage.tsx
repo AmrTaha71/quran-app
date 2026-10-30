@@ -972,7 +972,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // deduped here: distinct stall episodes for the same words are
   // distinct prompts (speakContPrompt's own gating already
   // prevents overlaps), and replays pass no trigger at all.
-  const recPushPrompt = (trigger: 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode', words: string[], indices: number[], ayahPos?: number) => {
+  const recPushPrompt = (trigger: 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode' | 'interim-miss', words: string[], indices: number[], ayahPos?: number) => {
     if (!recordingRef.current) return;
     try {
       if (trigger === 'ayah-mode') {
@@ -983,10 +983,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const extra: Partial<DiagEvent> = { words, indices, trigger };
       if (ayahPos !== undefined) extra.ayah = ayahPos;
       diagPush('prompt', extra);
-      // Interrupts are the mid-flow subset: confirmed-miss and
-      // overshoot only. Stall and ayah-mode prompts never
-      // interrupt a live recitation.
-      if (trigger === 'confirmed-miss' || trigger === 'overshoot') diagPush('interrupt', extra);
+      // Interrupts are the mid-flow subset: confirmed-miss,
+      // overshoot, and interim-miss only. Stall and ayah-mode
+      // prompts never interrupt a live recitation.
+      if (trigger === 'confirmed-miss' || trigger === 'overshoot' || trigger === 'interim-miss') diagPush('interrupt', extra);
     } catch {}
   };
   // RECORDER: assemble the case preview/export from the finished
@@ -1014,7 +1014,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       skipped,
       finalsByAyah: range.mode === 'ayah' ? finalsByAyah : null,
       finalsJoined: range.mode === 'continuous' ? diagFinalsRef.current.join(' ') : null,
-      events: diagEventsRef.current.filter((e) => e.k === 'prompt' || e.k === 'interrupt').map((e) => ({ k: e.k as 'prompt' | 'interrupt', words: e.words ?? [], indices: e.indices ?? [], trigger: (e.trigger ?? 'stall') as 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode', rel: e.rel, ayah: e.ayah })),
+      events: diagEventsRef.current.filter((e) => e.k === 'prompt' || e.k === 'interrupt').map((e) => ({ k: e.k as 'prompt' | 'interrupt', words: e.words ?? [], indices: e.indices ?? [], trigger: (e.trigger ?? 'stall') as 'confirmed-miss' | 'overshoot' | 'stall' | 'ayah-mode' | 'interim-miss', rel: e.rel, ayah: e.ayah })),
       plan: sess.plan,
       actual: recActual,
       consent: recConsent,
@@ -1482,6 +1482,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // serves both ayah and continuous mode.
   const recRestartRef = useRef({ count: 0, windowStart: 0 });
   const lastInterimRef = useRef('');
+  // Interim early-window stability (2026-10-30, batch 1): the first
+  // unmatched expected index + how many consecutive interim events
+  // kept it. A fluent substitution keeps the same miss while the
+  // user moves on; a revising interim (ريب→ريبة) changes it and
+  // resets the count, so a revision can never trigger the window.
+  const interimMissRef = useRef<{ key: string; count: number }>({ key: '', count: 0 });
   const quietTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // S4 voice safety timers (see helpers below): the no-result
@@ -2242,7 +2248,106 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setTranscript(liveRef.current.finals);
     }
     evaluateNow();
-    if (liveRef.current.micState === 'correcting') gradeMic(false);
+    if (liveRef.current.micState !== 'correcting') return;
+    // FALSE-ALARM HEAL (2026-10-30, batch 1): a window opened on a
+    // misheard interim (or a misheard final) must not fail an ayah
+    // the user actually recited correctly. If the FULL finals now
+    // align cleanly, the window was a false alarm — grade true.
+    // A true error can never pass this check (its wrong word is
+    // still in the finals), and a mid-window correction still
+    // passes through evaluateNow above, so this only heals.
+    const healAyah = liveRef.current.ayah;
+    if (healAyah) {
+      const healExpected = expectedWordList(healAyah.ayah_text);
+      const healSpoken = spokenTokens(liveRef.current.finals);
+      const healStrict = liveRef.current.level !== 'beginner';
+      const healResult = healStrict
+        ? alignWordsStrict(healExpected.map((w) => w.norm), healSpoken)
+        : { ...alignWords(healExpected.map((w) => w.norm), healSpoken), extras: [] as string[] };
+      if (healResult.allMatched && (healStrict ? healResult.extras.length === 0 : true)) {
+        gradeMic(true);
+        return;
+      }
+    }
+    gradeMic(false);
+  };
+  // INTERIM EARLY WINDOW (2026-10-30, batch 1): twin of the
+  // window-open block in evaluateNow's mismatch branch — keep in
+  // sync. The ONLY difference: windowStartLen counts finals only,
+  // so interim words that finalize after the window opens count
+  // as window speech (exactly like expiry folding pendingInterim
+  // into finals before judging). Grading itself stays finals-based:
+  // this opens the window early, it never grades from interim.
+  const openCorrectionWindowFromInterim = (expected: { norm: string; orig: string }[], result: { matched: boolean[] }) => {
+    const ayah = liveRef.current.ayah;
+    if (!ayah || liveRef.current.micState !== 'listening') return;
+    interimMissRef.current = { key: '', count: 0 };
+    liveRef.current.correctingTargets = expected.filter((_, i) => !result.matched[i]).map((w) => w.norm);
+    const wrongOrig = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
+    const token = ++corrFetchTokenRef.current;
+    corrPendingRef.current = { index, wordsKey: wrongOrig.join('|'), url: null };
+    const wrongIdx = expected.map((_, i) => i).filter((i) => !result.matched[i]);
+    const ayahId = ayah.id;
+    const corrPos = ayahId ? { shape: 'bare' as const, positions: wrongIdx.map((w) => ({ id: ayahId, w })) } : undefined;
+    void fetchCorrectionAudio(wrongOrig, token, corrPos).then((url) => {
+      if (url && token === corrFetchTokenRef.current && corrPendingRef.current?.index === index) {
+        corrPendingRef.current.url = url;
+        setCorrectionAudioByAyah((prev) => ({ ...prev, [index]: url }));
+      }
+    });
+    liveRef.current.windowStartLen = spokenTokens(liveRef.current.finals).length;
+    liveRef.current.micState = 'correcting';
+    setMicState('correcting');
+    const windowS = liveRef.current.corrDelay;
+    setCountdown(windowS);
+    if (windowTimerRef.current) clearInterval(windowTimerRef.current);
+    let left = windowS;
+    windowTimerRef.current = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        expireCorrectionWindow();
+      } else {
+        setCountdown(left);
+      }
+    }, 1000);
+    recPushPrompt('interim-miss', wrongOrig, wrongIdx, index);
+  };
+  // INTERIM TRIGGER (2026-10-30, batch 1): ayah mode only, while
+  // listening. Fires only when ALL of these hold: (a) the interim
+  // alignment has a first unmatched expected word m, (b) a LATER
+  // expected word already matches (the user moved past the error —
+  // a fluent substitution, not a pause), (c) something was actually
+  // spoken at/after m (not just "not yet spoken"), (d) the same m
+  // survived 2 consecutive interim events (a revising interim
+  // changes m and resets the count). Full-length recitations are
+  // left to the finals path. The window itself still judges finals
+  // at expiry, and the false-alarm heal above protects the grade.
+  const maybeInterimCorrectionWindow = (interimText: string) => {
+    try {
+      const ayah = liveRef.current.ayah;
+      if (!ayah || liveRef.current.micState !== 'listening' || liveRef.current.mode !== 'ayah') return;
+      const expected = expectedWordList(ayah.ayah_text);
+      const spokenAll = spokenTokens(`${liveRef.current.finals} ${interimText}`.trim());
+      if (spokenAll.length >= expected.length) return;
+      const strict = liveRef.current.level !== 'beginner';
+      const result = strict
+        ? alignWordsStrict(expected.map((w) => w.norm), spokenAll)
+        : { ...alignWords(expected.map((w) => w.norm), spokenAll), extras: [] as string[] };
+      if (result.allMatched) { interimMissRef.current = { key: '', count: 0 }; return; }
+      const m = result.matched.findIndex((v) => !v);
+      if (m < 0 || spokenAll.length <= m) { interimMissRef.current = { key: '', count: 0 }; return; }
+      const movedPast = result.matched.slice(m + 1).some(Boolean);
+      if (!movedPast) { interimMissRef.current = { key: '', count: 0 }; return; }
+      const key = `${index}:${m}`;
+      const prev = interimMissRef.current;
+      const count = prev.key === key ? prev.count + 1 : 1;
+      interimMissRef.current = { key, count };
+      if (count >= 2) {
+        openCorrectionWindowFromInterim(expected, result);
+      }
+    } catch {
+      // never let an interim heuristic break listening
+    }
   };
   // "Show me the mistake" with the same fold: the user's last words
   // belong in the transcript even when he ends the window himself.
@@ -2272,6 +2377,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   const startMic = (preserveArg?: boolean) => {
+    // Batch 1: a new listening session resets interim-miss
+    // stability — a stale count from a previous attempt on the
+    // same ayah must never fire on the first interim event.
+    interimMissRef.current = { key: '', count: 0 };
     // DIAG: startMic is only reached from mic/كمّل taps (silent
     // restarts route through trySilentRestart, which logs its own
     // 'restart' event first — so a 'resume-mic' here after a
@@ -2392,6 +2501,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         lastInterimRef.current = interimText.trim();
         setInterim(interimText.trim());
         diagPush('result', { final: false, text: interimText.trim() });
+        // Batch 1: fluent-substitution fast path — a stable interim
+        // miss with downstream matches opens the correction window
+        // now instead of waiting for finals (grading stays
+        // finals-based; see maybeInterimCorrectionWindow).
+        maybeInterimCorrectionWindow(interimText.trim());
       } else if (sawFinal) {
         lastInterimRef.current = '';
         setInterim('');
@@ -3734,6 +3848,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         {phase === 'setup' && (
           <div className="space-y-5">
             <p className="text-xs text-accent-500 text-center">{stampLine}</p>
+            {/* Batch 1: the old unsupported note was a small line
+                buried in the settings card. A user on a voiceless
+                browser deserves this banner first, not last. */}
+            {!micSupported && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
+                <p className="font-bold text-amber-800 mb-1">متصفحك مش بيدعم التسميع المباشر</p>
+                <p className="text-sm text-accent-600 leading-relaxed">افتح التطبيق من Safari على iPhone/iPad عشان تسمّع بالميكروفون. هنا تقدر تقيّم نفسك يدوي بدل كده.</p>
+              </div>
+            )}
             {savedProgress && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
                 <p className="font-bold text-accent-800 mb-1">عندك اختبار غير مكتمل</p>
@@ -4126,6 +4249,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </p>
                     </div>
                   )}
+                  {/* Batch 1: after a watchdog pause the user could
+                      not see what was heard (the raw line only
+                      renders while listening). Show it here too. */}
+                  {(transcript || interim) && (
+                    <p className="text-sm text-accent-600 leading-relaxed mb-4" dir="rtl">
+                      ما سمعه الجهاز حرفيًا (نص خام، مختصر للعرض): {heardCapped}
+                    </p>
+                  )}
                   <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Mic className="w-10 h-10 text-emerald-700" />
                   </div>
@@ -4300,6 +4431,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       التصحيح الصوتي ما اشتغلش — الكلمات الصح بالأحمر قدامك، واضغط «أعد سماع التصحيح» عشان تحاول تاني
                     </p>
                   )}
+                  {/* Batch 1: re-recite the same ayah in place. goToAyah
+                      resets the mic state; a fresh pass overwrites
+                      the grade (and the wrong words) for this ayah. */}
+                  <button onClick={() => { stopRefUnit(); goToAyah(index); }}
+                    className="mt-5 ml-2 px-6 py-3 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-700 text-lg font-bold rounded-xl shadow">
+                    🔁 سمّع الآية دي تاني
+                  </button>
                   <button onClick={nextAfterMic}
                     className="mt-5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow">
                     {index + 1 < ayahs.length ? 'الآية اللي بعدها' : 'إنهاء التسميع'}
@@ -4362,6 +4500,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           {micState === 'listening' ? 'بسمعك… اقرأ الآية' : 'لسه بسمعك…'}
                         </p>
                       </div>
+                      {/* Batch 1 live progress dots: one dot per word
+                          of the current ayah — green when the live
+                          alignment matched it, amber pulsing on the
+                          first unmatched word, gray otherwise. Counts
+                          only: no word is ever shown, so the hidden
+                          text stays hidden. Indicative, not grading
+                          (grading still uses finals at evaluation). */}
+                      {ayahs[index] && (() => {
+                        const exp = expectedWordList(ayahs[index].ayah_text);
+                        const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
+                        const al = alignWords(exp.map((w) => w.norm), spokenLive);
+                        const firstOpen = al.matched.findIndex((v) => !v);
+                        return (
+                          <div className="flex gap-1.5 justify-center mb-4" dir="rtl" aria-hidden>
+                            {exp.map((_, i) => (
+                              <span key={i} className={`w-2.5 h-2.5 rounded-full ${al.matched[i] ? 'bg-emerald-500' : i === firstOpen ? 'bg-amber-400 animate-pulse' : 'bg-gray-300'}`} />
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <p className="text-xs text-accent-500 mb-3">الاستماع المباشر محتاج إنترنت</p>
                       {micState === 'correcting' && (
                         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
@@ -4465,10 +4623,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <li key={a.id} className="text-sm">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-accent-700">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
-                        <button onClick={() => openInMushaf(a.surah_no, a.ayah_no)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
-                          <BookOpen className="w-4 h-4" /> افتح في المصحف
-                        </button>
+                        <div className="flex gap-2">
+                          {/* Batch 1: fresh single-ayah session for
+                              this ayah. It does NOT rewrite the
+                              finished score above — it is practice
+                              for the weak ayah. */}
+                          <button onClick={() => { void startTest(a.surah_no, a.ayah_no, a.ayah_no, null, 'ayah'); }}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">
+                            🔁 سمّعها تاني
+                          </button>
+                          <button onClick={() => openInMushaf(a.surah_no, a.ayah_no)}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
+                            <BookOpen className="w-4 h-4" /> افتح في المصحف
+                          </button>
+                        </div>
                       </div>
                       {wrongByAyah[i]?.length ? <p className="text-red-600 text-lg mt-1 font-arabic leading-relaxed" dir="rtl">الكلمات الغلط: {wrongByAyah[i].map((w, wi) => (<span key={wi}>{w} </span>))}</p> : null}
                       {extraByAyah[i]?.length ? <p className="text-amber-700 text-xs mt-1" dir="rtl">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
