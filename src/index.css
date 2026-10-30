@@ -126,52 +126,130 @@ body {
   to { transform: translateX(0); }
 }
 
-/* Polish system, slice 1 (2026-10-30): calm, quiet motion to match the
-   app's warm-paper character — nothing flashy, nothing bouncy. Every
-   class here is OPT-IN (applied per element, never a global element
-   rule), so Mushaf word taps and fullscreen geometry are untouched.
-   Durations 150–350ms, ease-out, transforms tiny (2px / 3% / 15%).
-   No new dependencies: CSS only. */
-.polish-press {
-  transition: transform 0.15s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out, filter 0.2s ease-out;
+/* Polish system, world-class pass (2026-10-31): reconciled from two
+   external reviews + the app's own proposal. Calm, tactile 2.5D: one
+   light from above, one easing family, elevation made visible through
+   shadows — never through layout changes. Every class is OPT-IN (per
+   element, never a global element rule), so Mushaf word taps and
+   fullscreen geometry are untouched. Animated properties: transform
+   and opacity ONLY. box-shadow / filter / background-color are never
+   transitioned; shadows change via opacity on pseudo-elements.
+   Keyframes always end at transform:none with backwards fill, so no
+   retained transform can become a containing block for fixed
+   descendants. No new dependencies: CSS only.
+   Reconciliation notes: press 0.96 + 1px sink (between the reviews'
+   0.975 and 0.92); radii 12 buttons / 16 cards / 20 raised / 28
+   sheets / 24 centered modals (existing app rhythm, not a redesign);
+   single shadow ink 28,43,38 + gold-brown hero stack; no parallax, no
+   sheen, no breathing halo, no button recolor this push. */
+:root {
+  --polish-cream: #fbf8f0;
+  --polish-surface: #fffdf8;
+  --polish-emerald: #065f46;
+  --polish-emerald-mid: #047857;
+  --polish-emerald-deep: #064e3b;
+  --polish-gold: #c69a42;
+  --polish-gold-light: #e4c77f;
+  --polish-hairline: rgba(82, 67, 43, 0.11);
+  --polish-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --polish-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --polish-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --polish-ease-physical: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --polish-sh1: 0 1px 1px rgba(28, 43, 38, 0.04), 0 2px 6px rgba(28, 43, 38, 0.05), 0 8px 20px -8px rgba(28, 43, 38, 0.07);
+  --polish-sh2: 0 1px 2px rgba(28, 43, 38, 0.05), 0 4px 10px rgba(28, 43, 38, 0.06), 0 14px 28px -10px rgba(28, 43, 38, 0.11);
+  --polish-sh3: 0 -1px 0 rgba(28, 43, 38, 0.06), 0 -8px 24px -8px rgba(28, 43, 38, 0.08);
+  --polish-sh4: 0 2px 4px rgba(28, 43, 38, 0.06), 0 12px 24px -4px rgba(28, 43, 38, 0.12), 0 32px 64px -12px rgba(28, 43, 38, 0.22);
+  --polish-sh-hero: 0 3px 5px rgba(67, 46, 14, 0.12), 0 12px 28px rgba(67, 46, 14, 0.18), 0 28px 58px rgba(67, 46, 14, 0.12);
 }
-.polish-press:active { transform: scale(0.97); }
-/* Soft layered shadow for cards (replaces flat shadow-sm where applied).
-   Hover lift only on devices that actually hover, so touch taps never
-   get a stuck hover state. */
-.polish-card {
-  box-shadow: 0 1px 2px rgba(28, 43, 38, 0.05), 0 10px 28px rgba(28, 43, 38, 0.06);
-  transition: box-shadow 0.25s ease-out, transform 0.25s ease-out;
-}
+/* Press: buttons sink 1px + scale 0.96. Down is fast (100ms), release
+   is controlled (180ms). No shadow animation in the base class. */
+.polish-press { transition: transform 180ms var(--polish-ease-physical); }
+.polish-press:active { transform: translateY(1px) scale(0.96); transition-duration: 100ms; }
+/* Shadow cue for primary buttons only: a ::after shadow that fades as
+   the button sinks (opacity only — the shadow itself never animates). */
+.polish-press-depth { position: relative; }
+.polish-press-depth::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 5px 12px rgba(9, 39, 29, 0.16); opacity: 1; pointer-events: none; transition: opacity 100ms var(--polish-ease-physical); }
+.polish-press-depth:active::after { opacity: 0.35; }
+/* Cards: static elevation-1 shadow; hover lift is transform-only. */
+.polish-card { box-shadow: var(--polish-sh1); transition: transform 250ms var(--polish-ease-out); }
 @media (hover: hover) {
-  .polish-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 2px 4px rgba(28, 43, 38, 0.05), 0 16px 36px rgba(28, 43, 38, 0.09);
-  }
+  .polish-card:hover { transform: translateY(-2px); }
 }
+/* Entrance (replaces slice-1 fade-up): 12px rise, 400ms, ends at
+   transform:none with backwards fill. */
 @keyframes polish-fade-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
 }
-.polish-fade-up { animation: polish-fade-up 0.35s ease-out both; }
-/* BottomNav active-tab indicator: a short emerald bar that scales in
-   from the center, plus a slightly larger active icon. */
-.nav-indicator {
-  position: absolute;
-  top: 0;
-  right: 1.25rem;
-  left: 1.25rem;
-  height: 3px;
-  border-radius: 9999px;
-  background: #047857;
-  transform: scaleX(0);
-  transition: transform 0.25s ease-out;
+.polish-fade-up { animation: polish-fade-up 400ms var(--polish-ease-out) backwards; }
+/* Listen hub stagger: each hub button animates; nth-child sets the
+   50ms steps (4 hub children max, so delays run 0/50/100/150ms). */
+.polish-hub-item { animation: polish-fade-up 400ms var(--polish-ease-out) backwards; }
+.polish-hub > .polish-hub-item:nth-child(2) { animation-delay: 50ms; }
+.polish-hub > .polish-hub-item:nth-child(3) { animation-delay: 100ms; }
+.polish-hub > .polish-hub-item:nth-child(4) { animation-delay: 150ms; }
+/* Listen/Adhkar cards: elevation-1 + hairline + 20px radius. */
+.polish-listen-card { border: 1px solid var(--polish-hairline); border-radius: 20px; box-shadow: var(--polish-sh1); }
+/* Adhkar playing rim: the ::after ring always exists; .is-playing
+   only flips its opacity (no loop, no pulse). */
+.polish-listen-row { position: relative; }
+.polish-listen-row::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.35); opacity: 0; pointer-events: none; transition: opacity 200ms var(--polish-ease-out); }
+.polish-listen-row.is-playing::after { opacity: 1; }
+/* Centered modals: rise 12px + scale 0.965, 280ms. Mount-only. */
+@keyframes polish-modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.965); }
+  to { opacity: 1; transform: none; }
 }
-.nav-indicator-on { transform: scaleX(1); }
-.nav-icon { transition: transform 0.2s ease-out; display: inline-flex; }
-.nav-icon-on { transform: scale(1.15); }
+.polish-modal-enter { animation: polish-modal-in 280ms var(--polish-ease-out) backwards; }
+/* Backdrop fade: opacity only, mount-only. */
+@keyframes polish-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.polish-scrim-enter { animation: polish-fade-in 220ms var(--polish-ease-out) backwards; }
+/* Route entrance (non-Mushaf pages only): 6px rise, 220ms. No exit
+   animation: the old route disappears immediately, speed first. */
+@keyframes polish-route-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.polish-route-in { animation: polish-route-in 220ms var(--polish-ease-out) backwards; }
+/* BottomNav: hairline + upward ambient shadow. */
+.polish-tabbar { border-top: 1px solid rgba(82, 67, 43, 0.10); box-shadow: var(--polish-sh3); }
+/* Tab indicator: leaving is quick (160ms ease-in); arriving reads as
+   one bar moving (320ms sheet curve + 40ms lag). Icon: 1.10, not 1.15,
+   so the indicator stays the primary active cue. */
+.nav-indicator { position: absolute; top: 0; right: 1.25rem; left: 1.25rem; height: 3px; border-radius: 9999px; background: #047857; transform: scaleX(0); transition: transform 160ms var(--polish-ease-in); }
+.nav-indicator-on { transform: scaleX(1); transition: transform 320ms var(--polish-ease-sheet) 40ms; }
+.nav-icon { transition: transform 280ms var(--polish-ease-out); display: inline-flex; }
+.nav-icon-on { transform: scale(1.10); }
+/* SelfTest: calm feedback. Correction window: quiet 8px entrance. */
+@keyframes polish-st-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.polish-correction-window { animation: polish-st-in 200ms var(--polish-ease-out) backwards; }
+/* Progress dots: transform/opacity only; the current dot scales up.
+   No pulsing loops anywhere in SelfTest. */
+.polish-progress-dot { transition: transform 160ms var(--polish-ease-out), opacity 160ms var(--polish-ease-out); }
+.polish-progress-dot.is-current { transform: scale(1.18); }
+/* Hero medallion entrance: one quiet fade + 6px rise, 400ms. The
+   artwork itself carries the depth (no painted halo: the image is a
+   square, a halo would ring the square, not the medallion). */
+@keyframes polish-hero-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.polish-hero-medal { animation: polish-hero-in 400ms var(--polish-ease-out) backwards; }
+/* Focus: visible keyboard focus (emerald, not gold) on opted-in controls. */
+.polish-focus:focus-visible { outline: 2px solid #047857; outline-offset: 3px; }
+/* Reduced motion: stop ALL polish movement (static elevation and
+   colors stay). */
 @media (prefers-reduced-motion: reduce) {
-  .polish-fade-up { animation: none; }
-  .polish-press, .polish-card, .nav-indicator, .nav-icon { transition: none; }
-  .polish-press:active { transform: none; }
+  .polish-press, .polish-press-depth, .polish-press-depth::after,
+  .polish-card, .polish-fade-up, .polish-hub-item,
+  .polish-listen-row::after, .polish-modal-enter, .polish-scrim-enter,
+  .polish-route-in, .polish-correction-window, .polish-progress-dot,
+  .polish-hero-medal, .nav-indicator, .nav-icon {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

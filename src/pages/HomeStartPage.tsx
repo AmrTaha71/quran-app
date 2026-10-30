@@ -99,7 +99,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   }, [session]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24 route-in">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
@@ -114,7 +114,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* App mark: the artwork itself, sized so the greeting and
             the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">
-          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md" />
+          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md polish-hero-medal" />
         </div>
 
         <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4">
@@ -142,7 +142,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               } catch {}
               onNavigate('mushaf');
             }}
-            className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+            className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
           >
             <BookOpen className="w-5 h-5" />
             {lastPage.visited ? `أكمل الحفظ — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف للحفظ'}
@@ -152,7 +152,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن. */}
         <button
           onClick={() => onNavigate('test')}
-          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30 polish-press polish-fade-up"
+          className="w-full py-4 mb-4 bg-gradient-to-l from-amber-700 to-amber-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-amber-700/30 polish-press polish-press-depth polish-focus polish-fade-up"
           style={{ animationDelay: '120ms' }}
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
@@ -176,7 +176,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           )}
           <button
             onClick={() => onNavigate('listen')}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
           >
             <Headphones className="w-5 h-5" />
             استمع للقرآن
@@ -195,7 +195,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           </p>
           <button
             onClick={() => onNavigate('adhkar')}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
           >
             <SunMoon className="w-5 h-5" />
             استمع للأذكار
@@ -220,7 +220,7 @@ export default function HomeStartPage({ session, onNavigate }: {
                 try { localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: linkOfDay.surah, ayah: linkOfDay.ayah })); } catch { /* ignore */ }
                 onNavigate('mushaf');
               }}
-              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
             >
               <BookOpen className="w-5 h-5" />
               افتح الآية وسمّعها
@@ -234,7 +234,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             الإعدادات stays a small button below. */}
         <button
           onClick={() => onNavigate('follow')}
-          className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30 polish-press"
+          className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30 polish-press polish-press-depth polish-focus"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Mic className="w-6 h-6 text-white" />
@@ -243,7 +243,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
         <button
           onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 mb-4 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+          className="w-full py-3.5 mb-4 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
         >
           <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
         </button>
@@ -265,7 +265,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               <li><span className="font-bold text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
             </ol>
             <button onClick={dismissIntro}
-              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl polish-press">
+              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl polish-press polish-press-depth polish-focus">
               ابدأ
             </button>
           </div>

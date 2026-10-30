@@ -706,7 +706,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         </div>
 
         {/* Now playing */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mt-4">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mt-4 polish-listen-card">
           {completed ? (
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">تم وردك ✓</p>
@@ -779,7 +779,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
             <button
               key={item.id}
               onClick={() => jumpTo(i, playing)}
-              className={`w-full text-right flex items-center gap-3 px-3 py-2.5 rounded-xl ${i === index && !completed ? 'bg-amber-50 border border-amber-200' : ''}`}
+              className={`w-full text-right flex items-center gap-3 px-3 py-2.5 rounded-xl relative polish-listen-row ${i === index && !completed ? 'bg-amber-50 border border-amber-200' : ''}${playing && i === index && !completed ? ' is-playing' : ''}`}
             >
               <span className={`text-xs font-bold w-6 text-center ${i < index ? 'text-emerald-600' : i === index ? 'text-amber-700' : 'text-stone-400'}`}>
                 {i < index ? '✓' : i === index && !completed ? '▶' : i + 1}

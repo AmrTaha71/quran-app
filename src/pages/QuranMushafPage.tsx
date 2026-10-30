@@ -3541,9 +3541,9 @@ export default function QuranMushafPage({
 
       {/* Index modal — Surah / Juz / Hizb */}
       {showIndex && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto polish-scrim-enter"
           onClick={() => setShowIndex(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col animate-slide-up"
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col polish-modal-enter"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-lg font-bold text-accent-800">فهرس المصحف</h3>
@@ -3606,9 +3606,9 @@ export default function QuranMushafPage({
 
       {/* Edition picker modal */}
       {showEditionPicker && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto polish-scrim-enter"
           onClick={() => setShowEditionPicker(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up"
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md polish-modal-enter"
             onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
               <h3 className="text-lg font-bold text-accent-800">اختر طبعة المصحف</h3>
@@ -4285,9 +4285,9 @@ export default function QuranMushafPage({
 
               {/* Ayah popup: links, then irab, then tafsir — in that order */}
               {selectedVerse && (
-                <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/40"
+                <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/40 polish-scrim-enter"
                   onClick={(e) => { e.stopPropagation(); setSelectedVerse(null); }}>
-                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[75vh] flex flex-col animate-slide-up"
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[75vh] flex flex-col polish-modal-enter"
                     onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between p-4 border-b border-gray-100">
                       <div className="flex items-center gap-2">
@@ -4568,7 +4568,7 @@ export default function QuranMushafPage({
           {showEditionPickerInFullscreen && !showRatelIntro && (
             <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
               onClick={() => setShowEditionPickerInFullscreen(false)}>
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-slide-up"
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md polish-modal-enter"
                 onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b border-gray-100">
                   <h3 className="text-lg font-bold text-accent-800">اختر طبعة المصحف</h3>

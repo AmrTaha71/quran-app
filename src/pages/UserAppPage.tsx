@@ -359,7 +359,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter ? 1 : 0) + (debouncedSearch ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24 route-in">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">

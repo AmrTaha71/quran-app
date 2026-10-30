@@ -1586,7 +1586,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </div>
             );
           })}
-          <div className="grid gap-3">
+          <div className="grid gap-3 polish-hub">
             {THREE_MODES.map((m) => {
               const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
               return (
@@ -1599,7 +1599,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     changeRiwaya(null);
                     setHubView(m.id);
                   }}
-                  className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm"
+                  className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
                 >
                   <span className="block text-lg">{m.name}</span>
                   <span className="block text-sm font-normal text-accent-600 mt-1">{m.description}</span>
@@ -1612,7 +1612,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <button
               disabled={locked}
               onClick={() => setHubView('free')}
-              className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm"
+              className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
             >
               <span className="block text-lg">سماع حر</span>
               <span className="block text-sm font-normal text-accent-600 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
