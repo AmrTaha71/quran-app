@@ -65,13 +65,13 @@ const CORR_DELAY_MAX = 10;
 const CORR_DELAY_DEFAULT = 3;
 // Iteration 2 continuous-prompt audio cache: PERSISTENT (IndexedDB
 // blobs) with a synchronous in-memory mirror for the prompt path.
-// 200 entries, oldest-first eviction — short corrections are tens
-// of KB, so worst-case storage is ~10MB. The version lives in the
+// 500 entries, oldest-first eviction — short corrections are tens
+// of KB, so worst-case storage is ~15MB. The version lives in the
 // key (see CORR_AUDIO_CACHE_VERSION): bump it when the voice engine
 // or model changes and old entries miss + refill gradually.
 // The iOS TTS onstart watchdog (3s) is long enough for a working
 // engine to fire onstart, far below the 18s prompt watchdog.
-const CONT_AUDIO_CACHE_CAP = 200;
+const CONT_AUDIO_CACHE_CAP = 500;
 const CONT_TTS_ONSTART_WATCHDOG_MS = 3000;
 // Recitation mode: 'ayah' grades one ayah at a time (the original
 // flow); 'continuous' lets the user recite the whole range without
@@ -1280,13 +1280,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // failed somewhere upstream) the call falls back to the
       // free-text mode, which the function still accepts — never a
       // crash, never a guessed position.
+      // PLAYBACK-RATE CONTRACT (v13): both branches send
+      // rateMode:'playback' and NO speed. The server generates a
+      // neutral-speed file (1.0 on OpenAI paths) and the element
+      // applies the user's corrRate via playbackRate
+      // (pitch-preserved) — so one file serves all rates and a
+      // rate change never regenerates. Callers WITHOUT the flag
+      // (old cached tabs) keep baked-speed behavior server-side.
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
         body: pos
-          ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, speed: CORR_RATE_VALUE[liveRef.current.corrRate] })
-          : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, speed: CORR_RATE_VALUE[liveRef.current.corrRate] }),
+          ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, rateMode: 'playback' })
+          : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, rateMode: 'playback' }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.audioUrl) return null;
@@ -1301,7 +1308,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const getCorrAudioBackend = (): CorrAudioBackend => {
     if (!corrAudioBackendRef.current) {
       try {
-        corrAudioBackendRef.current = createIndexedDBBackend();
+        corrAudioBackendRef.current = createIndexedDBBackend(undefined, undefined, CONT_AUDIO_CACHE_CAP);
       } catch {
         corrAudioBackendRef.current = new MemoryCorrAudioBackend(CONT_AUDIO_CACHE_CAP);
       }
@@ -1382,6 +1389,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const rate = CORR_RATE_VALUE[liveRef.current.corrRate];
     if (audioUrl) {
       const a = new Audio(audioUrl);
+      // v13: the file is neutral-speed; the user's corrRate applies
+      // here, pitch-preserved (browser TTS below keeps u.rate).
+      a.playbackRate = rate;
+      a.preservesPitch = true;
       corrAudioRef.current = a;
       a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction' }); };
       a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); };
@@ -2940,6 +2951,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     })();
     const playUrl = (url: string, cacheKey?: string) => {
       const a = new Audio(url);
+      // v13: the file is neutral-speed; the user's corrRate applies
+      // here, pitch-preserved.
+      a.playbackRate = CORR_RATE_VALUE[liveRef.current.corrRate];
+      a.preservesPitch = true;
       contPromptAudioRef.current = a;
       a.onplaying = () => { promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt }); };
       a.onended = () => { diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
@@ -2961,16 +2976,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       };
       a.play().catch(playTtsFallback);
     };
-    // Iteration 2: audio lookup by (version, voice, rate, SPOKEN
-    // WORDS, indices) — not the N1 dedupe key above, which stays
-    // indices-only: the same indices with different spoken words
-    // (bare vs context) must never share audio. Replay (no fixIdx)
-    // falls back to the live awaiting indices, exactly like the
-    // dedupe key. The voice here is the same corrGender the fetch
-    // sends, so key and audio always agree.
+    // Iteration 2: audio lookup by (version, voice, SPOKEN WORDS,
+    // indices) — rate is deliberately absent (v3): one
+    // neutral-speed file serves all corrRates via playbackRate.
+    // Not the N1 dedupe key above, which stays indices-only: the
+    // same indices with different spoken words (bare vs context)
+    // must never share audio. Replay (no fixIdx) falls back to the
+    // live awaiting indices, exactly like the dedupe key. The voice
+    // here is the same corrGender the fetch sends, so key and
+    // audio always agree.
     const audioIndices = fixIdx && fixIdx.length > 0 ? fixIdx : (contAwaitingRef.current && contAwaitingRef.current.indices.length > 0 ? contAwaitingRef.current.indices : []);
-    const audioRate = CORR_RATE_VALUE[liveRef.current.corrRate];
-    const audioKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, audioRate, words, audioIndices);
+    const audioKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, words, audioIndices);
     const url = contAudioCacheRef.current.get(audioKey);
     // Iteration 2 diag: every prompt lookup counts toward the
     // session hit ratio (hits / all lookups) that will later
@@ -3040,7 +3056,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       void fetchP.then((lateUrl) => {
         if (lateUrl) {
           contAudioCacheRef.current.set(audioKey, lateUrl);
-          persistCorrAudio(audioKey, lateUrl, corrGender, words, audioIndices, audioRate);
+          // v3: the entry rate field is base-rate metadata (1.0) —
+          // the file is neutral-speed; playbackRate applies at play.
+          persistCorrAudio(audioKey, lateUrl, corrGender, words, audioIndices, 1.0);
         }
       });
     }
@@ -3057,13 +3075,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const owed = contOwedWords();
     if (owed.words.length === 0) return;
     // Iteration 2: prefetch into the same content-addressed cache
-    // the prompt lookup uses (version, voice, rate, spoken words,
-    // indices). The old single slot keyed prefetch by WORDS but
-    // looked it up by INDICES, so stall prefetch never hit;
-    // unifying the key also fixes that (stall prompts now actually
-    // play prefetched audio). A prefetch win persists too, so the
-    // next identical stall is instant even across visits.
-    const prefetchKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, CORR_RATE_VALUE[liveRef.current.corrRate], owed.words, owed.indices);
+    // the prompt lookup uses (version, voice, spoken words,
+    // indices — no rate, v3). The old single slot keyed prefetch
+    // by WORDS but looked it up by INDICES, so stall prefetch never
+    // hit; unifying the key also fixes that (stall prompts now
+    // actually play prefetched audio). A prefetch win persists too,
+    // so the next identical stall is instant even across visits.
+    const prefetchKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, owed.words, owed.indices);
     if (!contAudioCacheRef.current.get(prefetchKey) && contPrefetchPendingRef.current !== prefetchKey) {
       const token = ++corrFetchTokenRef.current;
       contPrefetchPendingRef.current = prefetchKey;
@@ -3073,7 +3091,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       void fetchCorrectionAudio(owed.words, token, stallPos ? { shape: 'bare', positions: stallPos } : undefined).then((url) => {
         if (url && token === corrFetchTokenRef.current && contPrefetchPendingRef.current === prefetchKey) {
           contAudioCacheRef.current.set(prefetchKey, url);
-          persistCorrAudio(prefetchKey, url, corrGender, owed.words, owed.indices, CORR_RATE_VALUE[liveRef.current.corrRate]);
+          // v3: base-rate metadata (1.0) — file is neutral-speed.
+          persistCorrAudio(prefetchKey, url, corrGender, owed.words, owed.indices, 1.0);
         }
         if (contPrefetchPendingRef.current === prefetchKey) contPrefetchPendingRef.current = null;
       });

@@ -25,7 +25,12 @@
 // v2 (2026-10-29): generate-voice v10 moved the OpenAI path to
 // Realtime cedar/marin — v1 entries (old voices) miss by key and
 // refill gradually; hydrate deletes old-version rows.
-export const CORR_AUDIO_CACHE_VERSION = 'v2';
+// v3 (2026-10-30): rate REMOVED from the key. Correction files are
+// generated once at neutral speed (generate-voice v13,
+// rateMode:'playback') and the user's corrRate applies at play time
+// via audio.playbackRate (pitch-preserved). v2 entries miss by
+// version and refill gradually; hydrate deletes old-version rows.
+export const CORR_AUDIO_CACHE_VERSION = 'v3';
 
 export interface CorrAudioEntry {
   key: string;
@@ -38,22 +43,23 @@ export interface CorrAudioEntry {
   savedAt: number;
 }
 
-// Full cache key: (version, voice, rate, spoken-words text,
-// indices). Deliberately separate from the N1 dedupe key (indices
-// only): a stall-prefetched bare-word audio ("للمتقين") must never
-// play for a context-word prompt ("هدى للمتقين") with the same
-// indices, and vice versa. Indices stay in the key for
+// Full cache key: (version, voice, spoken-words text, indices).
+// Rate is DELIBERATELY absent (v3): one neutral-speed file serves
+// all corrRates via playbackRate, so a rate change never
+// regenerates. Deliberately separate from the N1 dedupe key
+// (indices only): a stall-prefetched bare-word audio ("للمتقين")
+// must never play for a context-word prompt ("هدى للمتقين") with
+// the same indices, and vice versa. Indices stay in the key for
 // disambiguation even though identical spoken text yields identical
 // audio — a repeat of the same missed position (the common case)
 // still hits.
 export function corrAudioCacheKey(
   version: string,
   voice: string,
-  rate: number,
   words: string[],
   indices: number[],
 ): string {
-  return version + '|' + voice + '|' + String(rate) + '|' + words.join(' ') + '#' + indices.join(',');
+  return version + '|' + voice + '|' + words.join(' ') + '#' + indices.join(',');
 }
 
 // Synchronous in-memory mirror of playable URLs. The prompt path
@@ -153,7 +159,7 @@ const IDB_STORE = 'entries';
 export function createIndexedDBBackend(
   dbName: string = IDB_NAME,
   storeName: string = IDB_STORE,
-  cap: number = 200,
+  cap: number = 500,
 ): CorrAudioBackend {
   const idb = (globalThis as { indexedDB?: IDBFactory }).indexedDB;
   if (!idb) throw new Error('indexedDB unavailable');

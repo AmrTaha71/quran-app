@@ -1,5 +1,32 @@
-// generate-voice — v12 (2026-10-30, position-keyed correction mode,
-// ordered by Amr 2026-10-30 as part of the cost-reduction plan)
+// generate-voice — v13 (2026-10-30, shared server correction cache
+// + playback-rate contract, ordered by Amr 2026-10-30 as part of
+// the cost-reduction plan)
+// v13 ADDS, corr mode only (free-text mode is UNCHANGED):
+// (a) a shared server cache in the public rana-audio bucket: the
+// first generation for a logical key v3_<voice>_<shape>_<positions>
+// is stored under corr/<key>_<engine>.<ext> (immutable) and every
+// later request for the same key is served from it — one
+// generation serves ALL users/devices. Rate is EXCLUDED from the
+// key (playbackRate applies at play time); no user_id and no free
+// text appear in lock/file names; content is Quran words only.
+// (b) an atomic storage-object lock (corr/locks/<key>.json,
+// upsert:false, 5-min TTL): a waiter gets HTTP 202 with no
+// audioUrl, which the client already treats as null (browser
+// voice, no dialog); the next occurrence hits the cache.
+// (c) telemetry rows with function_name='generate-voice-cache-hit'
+// (user_id NULL, cost 0, provider 'cache',
+// model 'cache-hit:<logicalKey>'): cap queries filter
+// function_name='generate-voice' exactly, so hit rows are excluded
+// from per-user AND global caps by construction, while the model
+// field carries the key for the Phase 3 gate query (top
+// corrections over trailing 30d).
+// (d) the playback-rate contract: requests with rateMode:'playback'
+// generate at neutral 1.0 on OpenAI paths (the client applies the
+// user's rate via audio.playbackRate, pitch-preserved). Callers
+// WITHOUT the flag (old tabs, admin link generation) keep
+// baked-speed behavior exactly as before. Azure keeps its -10%
+// prosody in all modes (moot while Azure is absent).
+// v12 below: position-keyed correction mode.
 // v12 ADDS: a server-verified correction mode. The client sends a
 // Quran position (seeded quran_verses ids + word positions), a
 // prompt shape (context-word vs bare-word), and the spoken text it
@@ -14,10 +41,12 @@
 // spend cap is the budget guard; the calls cap is a loose backstop
 // that also bounds Azure volume (Azure dollars log as null, so they
 // never count toward the spend sum).
-// Atomicity: same check-then-log race as the per-user caps —
-// concurrent in-flight requests can overshoot by a few calls
-// (≈cents of spend/day). Accepted; a reservation-row fix remains
-// available as hardening if Amr asks for it.
+// Atomicity: the per-user/global cap checks keep their
+// check-then-log race (a few calls of overshoot, accepted), but
+// corr-mode GENERATION is now reserved by the storage-object lock
+// above, so concurrent requests for the same key generate at most
+// once. (DDL is unavailable — exec-ddl rejects table creation — so
+// the lock lives in storage, not in a reservations table.)
 // (v10 below: TTS migration, ordered by Amr 2026-10-29)
 // ORDER OF GENERATION:
 //   1. Azure TTS first (unchanged; Azure is NOT affected by OpenAI's
@@ -68,6 +97,86 @@ const REALTIME_VOICES: Record<string, string> = {
   male: "cedar",
   female: "marin",
 };
+
+// ---- Shared server correction cache (v13, corr mode only) ----
+// Logical key: v3_<voice>_<shape>_<positions>, positions encoded as
+// id-w pairs joined by '_' (no special chars in object names).
+// Rate is excluded by design. The cached file carries the PRIMARY
+// engine suffix, and lookup selects the CURRENT primary engine's
+// file only — so a later engine change (e.g. Azure configured)
+// never serves the wrong voice from an older file; orphaned files
+// from a retired engine simply stop being served. Fallback-engine
+// (old Speech chain: onyx/nova) audio is NEVER written here — it
+// must never poison a cedar/marin key.
+const CORR_CACHE_PREFIX = "corr";
+const CORR_LOCK_TTL_MS = 5 * 60 * 1000;
+
+function corrLogicalKey(
+  voice: string | undefined,
+  shape: "context" | "bare",
+  positions: { id: number; w: number }[],
+): string {
+  const v = voice === "female" ? "female" : "male";
+  const pos = positions.map((p) => `${p.id}-${p.w}`).join("_");
+  return `v3_${v}_${shape}_${pos}`;
+}
+
+function corrCacheFileName(key: string, engine: string): string {
+  return `${CORR_CACHE_PREFIX}/${key}_${engine}.${engine === "azure" ? "mp3" : "wav"}`;
+}
+
+function corrLockPath(key: string): string {
+  return `${CORR_CACHE_PREFIX}/locks/${key}.json`;
+}
+
+// Existence check via storage list with the EXACT file name as the
+// search string: list() prefix-matches names within the folder, and
+// no name we ever create extends another corr file name (the
+// engine suffix + extension anchor the end), so the exact-name
+// filter below can match at most the file itself. Metadata only —
+// no audio bytes are downloaded for a lookup.
+async function findCorrCachedUrl(
+  client: any,
+  key: string,
+  engine: string,
+): Promise<string | null> {
+  const fileName = corrCacheFileName(key, engine);
+  const base = fileName.slice(CORR_CACHE_PREFIX.length + 1);
+  const { data } = await client.storage.from("rana-audio").list(CORR_CACHE_PREFIX, { limit: 1, search: base });
+  const hit = (data ?? []).find((f: any) => f.name === base);
+  if (!hit) return null;
+  return client.storage.from("rana-audio").getPublicUrl(fileName).data.publicUrl;
+}
+
+// Atomic claim via create-if-absent (upsert:false). Returns
+// 'claimed' or 'locked'. A stale lock (older than the TTL, e.g. a
+// crashed winner) is deleted and the claim retried exactly once;
+// losing that retry means another worker claimed it first.
+async function tryClaimCorrLock(client: any, key: string): Promise<"claimed" | "locked"> {
+  const lockName = `${key}.json`;
+  const lockPath = corrLockPath(key);
+  const { data } = await client.storage.from("rana-audio").list(`${CORR_CACHE_PREFIX}/locks`, { limit: 1, search: lockName });
+  const existing = (data ?? []).find((f: any) => f.name === lockName);
+  if (existing) {
+    const created = Date.parse(existing.created_at ?? "");
+    const age = Number.isNaN(created) ? Infinity : Date.now() - created;
+    if (age < CORR_LOCK_TTL_MS) return "locked";
+    await client.storage.from("rana-audio").remove([lockPath]);
+  }
+  const { error } = await client.storage.from("rana-audio").upload(
+    lockPath,
+    new Blob([JSON.stringify({ status: "pending", key })], { type: "application/json" }),
+    { contentType: "application/json", upsert: false },
+  );
+  if (error) return "locked";
+  return "claimed";
+}
+
+async function releaseCorrLock(client: any, key: string): Promise<void> {
+  try {
+    await client.storage.from("rana-audio").remove([corrLockPath(key)]);
+  } catch { /* best-effort: the TTL expires a leaked lock */ }
+}
 
 async function generateAzureTTS(text: string, voice: "male" | "female", apiKey: string, region: string): Promise<ArrayBuffer> {
   const v = AZURE_VOICES[voice] || AZURE_VOICES.male;
@@ -447,6 +556,14 @@ Deno.serve(async (req: Request) => {
     // (admin/link generation) behave exactly as before. On the
     // Realtime path the speed is clamped to its 0.25-1.5 range.
     const speedOverride = typeof body.speed === "number" && body.speed >= 0.25 && body.speed <= 4 ? body.speed : undefined;
+    // v13 playback-rate contract: a caller that sends
+    // rateMode:'playback' gets a neutral-speed file (1.0 on OpenAI
+    // paths) and applies its own rate at play time via
+    // audio.playbackRate. Callers WITHOUT the flag keep baked-speed
+    // behavior exactly as before. Azure ignores speed entirely
+    // (fixed -10% prosody), so this only affects OpenAI paths.
+    const playbackMode = body.rateMode === "playback";
+    const effectiveSpeed = playbackMode ? 1.0 : speedOverride;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("VITE_SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -502,6 +619,39 @@ Deno.serve(async (req: Request) => {
     }
     if (!text) {
       throw new Error("النص مطلوب");
+    }
+
+    // v13 shared server cache (corr mode only; free-text mode is
+    // unchanged and never cached — admin link audio stays unique).
+    // A HIT returns BEFORE any cap check: cached audio costs
+    // nothing, so caps must not gate it. The hit row uses a
+    // DISTINCT function_name, so cap queries (which filter
+    // function_name='generate-voice' exactly) exclude it by
+    // construction; user_id is NULL (no user linkage) and the
+    // logical key rides in the model field for the Phase 3 gate
+    // query. Lengths only — no text is ever logged.
+    let corrKey: string | null = null;
+    let corrLockHeld = false;
+    if (isCorrMode) {
+      corrKey = corrLogicalKey(voice, corrShape!, corrPositions!);
+      const primaryEngine = azureKey ? "azure" : "realtime";
+      const cachedUrl = await findCorrCachedUrl(supabaseClient, corrKey, primaryEngine);
+      if (cachedUrl) {
+        try {
+          await supabaseClient.from("ai_usage_events").insert({
+            function_name: "generate-voice-cache-hit",
+            model: `cache-hit:${corrKey}`,
+            cost_usd: 0,
+            user_id: null,
+            provider: "cache",
+            chars: text.length,
+          });
+        } catch { /* telemetry must never break a hit */ }
+        return new Response(
+          JSON.stringify({ audioUrl: cachedUrl, voice }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
     }
 
     // 3. PER-USER RATE LIMITS, checked before any generation spend:
@@ -582,28 +732,55 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // v13 atomic reservation (corr mode only, claimed AFTER the cap
+    // checks so a capped caller can never squat a lock): at most
+    // one generation per key. A waiter gets HTTP 202 with no
+    // audioUrl; the client treats that as null (browser voice, no
+    // dialog) and the next occurrence hits the cache. A leaked lock
+    // (crashed winner) expires via the 5-min TTL in tryClaimCorrLock.
+    if (isCorrMode && corrKey) {
+      const claim = await tryClaimCorrLock(supabaseClient, corrKey);
+      if (claim === "locked") {
+        return new Response(
+          JSON.stringify({ pending: true }),
+          { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      corrLockHeld = true;
+    }
+
     let audioBuffer: ArrayBuffer;
     let ttsModel = "azure";
     let ttsProvider = "azure";
     let ttsCost: number | null = null;
     let audioMime = "audio/mp3";
     let audioExt = "mp3";
+    // v13: only PRIMARY-engine audio may enter the shared cache.
+    // Fallback-engine (old Speech chain) audio keeps a unique name
+    // and is never cached — onyx/nova must never poison a
+    // cedar/marin key.
+    let corrCacheable = false;
+    let corrEngine = "";
 
     if (azureKey) {
       audioBuffer = await generateAzureTTS(text, voice || "male", azureKey, azureRegion);
+      corrCacheable = true;
+      corrEngine = "azure";
     } else {
       // v10: Realtime first; the old Speech chain is the fallback.
       try {
-        const rt = await generateViaRealtime(text, voice || "male", openaiKey!, speedOverride);
+        const rt = await generateViaRealtime(text, voice || "male", openaiKey!, effectiveSpeed);
         audioBuffer = rt.wav;
         ttsModel = REALTIME_MODEL;
         ttsProvider = "realtime";
         ttsCost = rt.costUsd;
         audioMime = "audio/wav";
         audioExt = "wav";
+        corrCacheable = true;
+        corrEngine = "realtime";
       } catch (rtErr) {
         console.warn("realtime failed, falling back to speech api:", String((rtErr as Error)?.message || rtErr).slice(0, 200));
-        const result = await generateOpenAITTS(text, voice || "male", openaiKey!, speedOverride);
+        const result = await generateOpenAITTS(text, voice || "male", openaiKey!, effectiveSpeed);
         audioBuffer = result.buffer;
         ttsModel = result.model;
         ttsProvider = "openai";
@@ -615,13 +792,49 @@ Deno.serve(async (req: Request) => {
     }
 
     const audioBlob = new Blob([audioBuffer], { type: audioMime });
-    const fileName = `synthetic-${Date.now()}.${audioExt}`;
+    // v13: a corr-mode primary-engine win goes to its deterministic
+    // shared-cache name (upsert:false — the winner wins; a loser
+    // whose upload collides takes the winner's file as a hit
+    // below). Fallback-engine and free-text audio keep unique
+    // names and are never shared-cache entries.
+    const isSharedCacheWrite = isCorrMode && corrKey !== null && corrCacheable;
+    const fileName = isSharedCacheWrite
+      ? corrCacheFileName(corrKey!, corrEngine)
+      : `synthetic-${Date.now()}.${audioExt}`;
 
     const { error: uploadError } = await supabaseClient.storage
       .from("rana-audio")
-      .upload(fileName, audioBlob, { contentType: audioMime });
+      .upload(fileName, audioBlob, {
+        contentType: audioMime,
+        upsert: false,
+        ...(isSharedCacheWrite ? { cacheControl: "public, max-age=31536000, immutable" } : {}),
+      });
 
     if (uploadError) {
+      // Lost a race to another winner for the same key: the file is
+      // ready — serve it as a cache hit (not a generation row).
+      // The generation cost here is already spent and unavoidable
+      // in this rare race; the lock keeps it rare.
+      if (isSharedCacheWrite && uploadError.message && uploadError.message.includes("already exists")) {
+        const { data: urlData } = supabaseClient.storage
+          .from("rana-audio")
+          .getPublicUrl(fileName);
+        try {
+          await supabaseClient.from("ai_usage_events").insert({
+            function_name: "generate-voice-cache-hit",
+            model: `cache-hit:${corrKey}`,
+            cost_usd: 0,
+            user_id: null,
+            provider: "cache",
+            chars: text.length,
+          });
+        } catch { /* telemetry must never break a hit */ }
+        if (corrLockHeld) await releaseCorrLock(supabaseClient, corrKey!);
+        return new Response(
+          JSON.stringify({ audioUrl: urlData.publicUrl, voice }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       throw new Error("فشل رفع الصوت: " + uploadError.message);
     }
 
@@ -645,6 +858,11 @@ Deno.serve(async (req: Request) => {
         chars: text.length,
       });
     } catch { /* ignore logging errors */ }
+
+    // Release the reservation on the success path. On a generation
+    // failure the outer catch returns 500 and the lock leaks until
+    // its 5-min TTL — a bounded delay, never a permanent block.
+    if (corrLockHeld) await releaseCorrLock(supabaseClient, corrKey!);
 
     return new Response(
       JSON.stringify({ audioUrl: urlData.publicUrl, voice }),
