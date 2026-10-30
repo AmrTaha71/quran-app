@@ -4510,22 +4510,27 @@ export default function QuranMushafPage({
                         إغلاق
                       </button>
                     </div>
-                      {/* في نهاية القائمة (طلب المستخدم 2026-10-30): استمع + تكرار
-                          تحت إغلاق، آخر عنصر في البوب أب. */}
-                      <div className="flex items-center gap-2 mt-2 mb-3 px-3">
-                        <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
-                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciting ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
-                          {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                          {reciting ? `إيقاف التلاوة — ${reciter.name}` : 'استمع للآية'}
-                        </button>
+                      {/* استمع للآية كآخر اختيار في القائمة (طلب المستخدم
+                          2026-10-30): تكرار زر ثانوي فوقه، واستمع زر كامل
+                          العرض في الأسفل تمامًا، تحت إغلاق. شرائح القرّاء
+                          تتفتح تحت زر الاستماع مباشرة لأنها جزء منه،
+                          ورسالة الخطأ تحتها — لا اختيار بعدهما. */}
+                      <div className="mt-2 px-3">
                         <button onClick={() => {
                           const next = !reciteLoop;
                           setReciteLoop(next);
                           if (reciteRef.current) reciteRef.current.loop = next;
                         }}
                           title="تكرار الآية للحفظ"
-                          className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-bold transition-smooth ${reciteLoop ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciteLoop ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           <Repeat className="w-4 h-4" /> تكرار
+                        </button>
+                      </div>
+                      <div className="mt-2 mb-3 px-3">
+                        <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
+                          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciting ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
+                          {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          {reciting ? `إيقاف التلاوة — ${reciter.name}` : 'استمع للآية'}
                         </button>
                       </div>
                       {showReciters && (
