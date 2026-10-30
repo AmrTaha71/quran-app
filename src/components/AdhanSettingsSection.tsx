@@ -126,7 +126,7 @@ export default function AdhanSettingsSection() {
     : undefined;
 
   return (
-    <section className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+    <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
       <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
         <Bell className="w-5 h-5 text-emerald-600" /> مواعيد الأذان
       </h2>
@@ -137,7 +137,7 @@ export default function AdhanSettingsSection() {
       {/* Master switch */}
       <button
         onClick={() => update({ enabled: !settings.enabled })}
-        className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-gray-200 hover:border-emerald-200"
+        className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-emerald-200"
       >
         <span className="text-right">
           <span className="block font-bold text-accent-800">تفعيل تنبيهات الأذان</span>
@@ -229,7 +229,7 @@ export default function AdhanSettingsSection() {
                 {ADHAN_PRAYERS.map((p) => (
                   <div
                     key={p.key}
-                    className={`rounded-xl border p-2 ${nextPrayer?.key === p.key ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}
+                    className={`rounded-xl border p-2 ${nextPrayer?.key === p.key ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
                   >
                     <p className="text-xs text-accent-600">{p.label}</p>
                     <p className="font-bold text-accent-800 text-sm" dir="ltr">
@@ -259,14 +259,14 @@ export default function AdhanSettingsSection() {
         <div className="grid gap-2">
           <button
             onClick={() => update({ alertType: 'both' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.alertType === 'both' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}
+            className={`text-right p-3 rounded-xl border-2 ${settings.alertType === 'both' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-bold text-accent-800">صوتي + على الشاشة</span>
             <span className="block text-sm text-accent-600">الأذان يُسمَع وتظهر رسالة وقت الصلاة</span>
           </button>
           <button
             onClick={() => update({ alertType: 'audio' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.alertType === 'audio' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}
+            className={`text-right p-3 rounded-xl border-2 ${settings.alertType === 'audio' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-bold text-accent-800">صوتي فقط</span>
             <span className="block text-sm text-accent-600">الأذان يُسمَع من غير رسالة على الشاشة</span>
@@ -282,19 +282,19 @@ export default function AdhanSettingsSection() {
         <div className="grid gap-2">
           <button
             onClick={() => update({ sound: 'full' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}
+            className={`text-right p-3 rounded-xl border-2 ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-bold text-accent-800">أذان كامل — المسجد الحرام</span>
             <span className="block text-sm text-accent-600">المصدر الوحيد المفتوح الترخيص في القايمة</span>
           </button>
           <button
             onClick={() => update({ sound: 'beep' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.sound === 'beep' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}
+            className={`text-right p-3 rounded-xl border-2 ${settings.sound === 'beep' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-bold text-accent-800">تنبيه صوتي قصير</span>
             <span className="block text-sm text-accent-600">نغمة تنبيه مولّدة من الجهاز — من غير ملف صوتي</span>
           </button>
-          <div className="text-right p-3 rounded-xl border-2 border-gray-200 opacity-60">
+          <div className="text-right p-3 rounded-xl border-2 border-hairline opacity-60">
             <span className="block font-bold text-accent-800">
               «الله أكبر الله أكبر» فقط <span className="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">قريبًا</span>
             </span>

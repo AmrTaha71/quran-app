@@ -4017,11 +4017,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   );
   const fullHeardContent = showFullHeard ? (heardFullTokens.length > 0 ? (
     <div className="mt-3 space-y-2">
-      <p dir="rtl" className="text-sm leading-relaxed bg-white border border-gray-200 rounded-xl p-3 select-text break-words text-accent-700">{heardRawText}</p>
+      <p dir="rtl" className="text-sm leading-relaxed bg-white border border-hairline rounded-xl p-3 select-text break-words text-accent-700">{heardRawText}</p>
       <p className="text-xs text-accent-600">الكلمات الخام (قبل التطبيع، بالترتيب كما سمعها الجهاز): {heardFullTokens.length} — الرقم قبل كل كلمة هو ترتيبها، فلا يلتبس الترتيب باتجاه العرض.{heardFullTokens.length > HEARD_CHIP_CAP ? ` (عرض أول ${HEARD_CHIP_CAP} كلمة فقط — النص الكامل أعلاه)` : ''}</p>
       <div dir="ltr" className="flex flex-wrap gap-1">
         {heardFullTokens.slice(0, HEARD_CHIP_CAP).map((t, i) => (
-          <span key={i} className="inline-flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs text-accent-700"><span dir="ltr">{i + 1}</span><bdi>{t}</bdi></span>
+          <span key={i} className="inline-flex items-center gap-1 bg-white border border-hairline rounded-lg px-2 py-1 text-xs text-accent-700"><span dir="ltr">{i + 1}</span><bdi>{t}</bdi></span>
         ))}
       </div>
     </div>
@@ -4035,8 +4035,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24 route-in">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
+    <div className="min-h-screen page-bg pb-24 route-in">
+      <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
             <Mic className="w-7 h-7 text-white" />
@@ -4080,7 +4080,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     استكمال الاختبار
                   </button>
                   <button onClick={() => { try { localStorage.removeItem(PROGRESS_KEY); } catch {} setSavedProgress(null); }}
-                    className="px-5 py-2.5 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                    className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
                     تجاهل
                   </button>
                 </div>
@@ -4092,15 +4092,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm font-bold text-accent-700 mb-2">مستوى التدقيق</p>
                 <div className="grid grid-cols-3 gap-2">
                   <button onClick={() => applySettings('beginner', reciteMode)}
-                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'beginner' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'beginner' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     مبتدئ
                   </button>
                   <button onClick={() => applySettings('intermediate', reciteMode)}
-                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'intermediate' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'intermediate' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     متوسط
                   </button>
                   <button onClick={() => applySettings('advanced', reciteMode)}
-                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'advanced' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'advanced' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     متقدم
                   </button>
                 </div>
@@ -4117,16 +4117,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm text-accent-700">فترة التريث قبل النطق:</span>
                   <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay - 1, corrRate)} disabled={corrDelay <= CORR_DELAY_MIN}
-                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-bold disabled:opacity-40">-</button>
+                    className="px-3 py-1.5 bg-white border border-hairline rounded-lg font-bold disabled:opacity-40">-</button>
                   <span className="text-sm font-bold text-accent-800 min-w-[70px] text-center">{corrDelay.toLocaleString('ar-EG')} ثواني</span>
                   <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay + 1, corrRate)} disabled={corrDelay >= CORR_DELAY_MAX}
-                    className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-bold disabled:opacity-40">+</button>
+                    className="px-3 py-1.5 bg-white border border-hairline rounded-lg font-bold disabled:opacity-40">+</button>
                 </div>
                 <p className="text-sm font-bold text-accent-700 mb-2">سرعة نطق الكلمة الصحيحة:</p>
                 <div className="grid grid-cols-4 gap-2">
                   {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
                     <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelay, r)}
-                      className={`py-2.5 rounded-xl font-bold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                      className={`py-2.5 rounded-xl font-bold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                       {CORR_RATE_LABEL[r]}
                     </button>
                   ))}
@@ -4139,11 +4139,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm font-bold text-accent-700 mb-2">طريقة التسميع</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => applySettings(verifyLevel, 'ayah')}
-                    className={`py-2.5 rounded-xl font-bold ${reciteMode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-bold ${reciteMode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     آية آية
                   </button>
                   <button onClick={() => applySettings(verifyLevel, 'continuous')} disabled={!micSupported}
-                    className={`py-2.5 rounded-xl font-bold disabled:opacity-40 ${reciteMode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-gray-200 text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-bold disabled:opacity-40 ${reciteMode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     متصل
                   </button>
                 </div>
@@ -4182,7 +4182,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <label className="block">
                       <span className="text-sm font-bold text-accent-700">لهجة الصوت</span>
                       <select value={recTags.dialect} onChange={(e) => setRecTags((t) => ({ ...t, dialect: e.target.value }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="">اختر…</option>
                         <option value="مصري">مصري</option>
                         <option value="شامي">شامي</option>
@@ -4195,7 +4195,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <label className="block">
                       <span className="text-sm font-bold text-accent-700">جنس الصوت</span>
                       <select value={recTags.gender} onChange={(e) => setRecTags((t) => ({ ...t, gender: e.target.value }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="">اختر…</option>
                         <option value="male">رجالي</option>
                         <option value="female">نسائي</option>
@@ -4204,7 +4204,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <label className="block">
                       <span className="text-sm font-bold text-accent-700">سرعة التلاوة</span>
                       <select value={recTags.pace} onChange={(e) => setRecTags((t) => ({ ...t, pace: e.target.value as VoiceTags['pace'] }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="slow">بطيئة</option>
                         <option value="normal">عادية</option>
                         <option value="fast">سريعة</option>
@@ -4213,7 +4213,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <label className="block">
                       <span className="text-sm font-bold text-accent-700">ضجيج المكان</span>
                       <select value={recTags.noise} onChange={(e) => setRecTags((t) => ({ ...t, noise: e.target.value as VoiceTags['noise'] }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="low">هادئ</option>
                         <option value="medium">متوسط</option>
                       </select>
@@ -4232,7 +4232,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <label className="block">
                         <span className="text-xs font-bold text-accent-700">السورة</span>
                         <select value={plDraft.surah} onChange={(e) => setPlDraft((d) => ({ ...d, surah: Number(e.target.value) }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base bg-white">
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
                           {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                         </select>
                       </label>
@@ -4240,22 +4240,22 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <span className="text-xs font-bold text-accent-700">الآية</span>
                         <input type="number" min={1} max={SURAH_AYAH_COUNTS[plDraft.surah - 1] || 1} value={plDraft.ayah}
                           onChange={(e) => setPlDraft((d) => ({ ...d, ayah: Math.max(1, Math.min(SURAH_AYAH_COUNTS[d.surah - 1] || 1, Number(e.target.value) || 1)) }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base" />
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" />
                       </label>
                       <label className="block">
                         <span className="text-xs font-bold text-accent-700">ستقول (خطأً)</span>
                         <input value={plDraft.spoken} onChange={(e) => setPlDraft((d) => ({ ...d, spoken: e.target.value }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base" dir="rtl" />
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" dir="rtl" />
                       </label>
                       <label className="block">
                         <span className="text-xs font-bold text-accent-700">بدل كلمة</span>
                         <input value={plDraft.expected} onChange={(e) => setPlDraft((d) => ({ ...d, expected: e.target.value }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base" dir="rtl" />
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" dir="rtl" />
                       </label>
                       <label className="block col-span-2">
                         <span className="text-xs font-bold text-accent-700">نوع الخطأ</span>
                         <select value={plDraft.type} onChange={(e) => setPlDraft((d) => ({ ...d, type: e.target.value as FixedTaxonomy }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-gray-200 text-base bg-white">
+                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
                           {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
                         </select>
                       </label>
@@ -4289,7 +4289,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       setStartNum(n);
                       if (endKind !== 'same') setEndNum(containingUnit(endKind, unitStartGlobal(k, n)));
                     }}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                     <option value="surah">سورة</option>
                     <option value="juz">جزء</option>
                     <option value="hizb">حزب</option>
@@ -4300,13 +4300,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <span className="text-sm font-bold text-accent-700">{startKind === 'surah' ? 'السورة' : startKind === 'juz' ? 'رقم الجزء' : startKind === 'hizb' ? 'رقم الحزب' : 'رقم الربع'}</span>
                   {startKind === 'surah' ? (
                     <select value={startNum} onChange={(e) => setStartNum(Number(e.target.value))}
-                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                       {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                     </select>
                   ) : (
                     <input type="number" min={1} max={unitMax(startKind)} value={startNum}
                       onChange={(e) => setStartNum(Math.max(1, Math.min(unitMax(startKind), Number(e.target.value) || 1)))}
-                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                   )}
                 </label>
               </div>
@@ -4322,7 +4322,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       setEndKind(k);
                       if (k !== 'same') setEndNum(containingUnit(k, unitStartGlobal(startKind, startNum)));
                     }}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                     <option value="same">نفس الوحدة</option>
                     <option value="hizb">حزب</option>
                     <option value="juz">جزء</option>
@@ -4334,13 +4334,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="text-sm font-bold text-accent-700">{endKind === 'surah' ? 'السورة' : endKind === 'juz' ? 'رقم الجزء' : 'رقم الحزب'}</span>
                     {endKind === 'surah' ? (
                       <select value={endNum} onChange={(e) => setEndNum(Number(e.target.value))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                       </select>
                     ) : (
                       <input type="number" min={1} max={unitMax(endKind)} value={endNum}
                         onChange={(e) => setEndNum(Math.max(1, Math.min(unitMax(endKind), Number(e.target.value) || 1)))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                     )}
                   </label>
                 )}
@@ -4368,7 +4368,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     setFrom(1);
                     setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
                   }}
-                  className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                  className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                   {SURAHS.map((s) => (
                     <option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>
                   ))}
@@ -4379,13 +4379,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <span className="text-sm font-bold text-accent-700">من آية</span>
                   <input type="number" min={1} max={surahCount} value={from}
                     onChange={(e) => setFrom(Number(e.target.value) || 1)}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                 </label>
                 <label className="block">
                   <span className="text-sm font-bold text-accent-700">إلى آية</span>
                   <input type="number" min={1} max={surahCount} value={to}
                     onChange={(e) => setTo(Number(e.target.value) || 1)}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                 </label>
               </div>
               <p className="text-sm text-accent-600">
@@ -4706,12 +4706,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                             </button>
                             {spokenTokens(liveRef.current.finals).length > 0 && (
                               <button onClick={evaluateStalled}
-                                className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
+                                className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
                                 قيّم اللي اتسمع
                               </button>
                             )}
                             <button onClick={() => startMic()}
-                              className="px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
+                              className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
                               ابدأ من جديد
                             </button>
                           </div>
@@ -4848,7 +4848,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>)}
             {!contZeroMatch && testMode === 'continuous' && (
-              <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+              <div className="bg-white border border-hairline rounded-xl px-4 py-3">
                 <p className="text-sm text-accent-600 leading-relaxed" dir="rtl">
                   سمعت {contHeardWords.toLocaleString('ar-EG')} كلمة، وطابقت {contMatchedWords.toLocaleString('ar-EG')} كلمة • النص الخام (مختصر للعرض): {heardCapped || '—'}
                 </p>
@@ -4901,7 +4901,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 Renders on every done screen (both modes, zero-match
                 or scored) so a failed run always has an exportable
                 record — screenshots are no longer the only evidence. */}
-            <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+            <div className="bg-white border border-hairline rounded-2xl shadow-sm p-5">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-bold text-accent-800">سجل التشخيص</h2>
                 <button type="button" onClick={() => { setDiagOpen((v) => !v); diagPermRefresh(); }} className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
@@ -4914,7 +4914,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               {diagOpen && (
                 <div className="mt-3 space-y-2">
                   <p className="text-xs text-accent-600" dir="rtl">{stampLine} • إذن الميكروفون: {micPerm}</p>
-                  <div className="max-h-64 overflow-y-auto bg-stone-50 border border-gray-200 rounded-xl p-3 space-y-1" dir="ltr">
+                  <div className="max-h-64 overflow-y-auto bg-stone-50 border border-hairline rounded-xl p-3 space-y-1" dir="ltr">
                     {diagEventsRef.current.slice(-DIAG_DISPLAY_CAP).map((ev, i) => (
                       <p key={i} className="text-xs text-accent-700 break-words">
                         <span className="text-accent-400">{ev.rel}ms</span> <span className="font-bold">{ev.k}</span>
@@ -5003,11 +5003,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         const planned = plannedFor(a.surah_no, a.ayah_no);
                         const st = derived(key);
                         return (
-                          <div key={a.id} className="border border-gray-200 rounded-xl p-3 space-y-2">
+                          <div key={a.id} className="border border-hairline rounded-xl p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-bold text-accent-800">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
                               <select value={st} onChange={(e) => setStatus(key, a.surah_no, a.ayah_no, e.target.value)}
-                                className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
+                                className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
                                 <option value="correct">صحيح</option>
                                 <option value="planted">خطأ مزروع (مخطط)</option>
                                 <option value="unintended">أخطأت دون قصد</option>
@@ -5043,12 +5043,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                   );
                                 })}
                                 <div className="grid grid-cols-2 gap-2">
-                                  <input placeholder="قلت (خطأً)" value={(unDraft[key]?.spoken) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), spoken: e.target.value } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
-                                  <input placeholder="بدل كلمة" value={(unDraft[key]?.expected) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), expected: e.target.value } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
-                                  <select value={(unDraft[key]?.type) || 'substitution'} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: e.target.value as FixedTaxonomy } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white">
+                                  <input placeholder="قلت (خطأً)" value={(unDraft[key]?.spoken) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), spoken: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
+                                  <input placeholder="بدل كلمة" value={(unDraft[key]?.expected) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), expected: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
+                                  <select value={(unDraft[key]?.type) || 'substitution'} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: e.target.value as FixedTaxonomy } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
                                     {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
                                   </select>
-                                  <input placeholder="تفاصيل اختيارية" value={(unDraft[key]?.free) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), free: e.target.value } }))} className="px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
+                                  <input placeholder="تفاصيل اختيارية" value={(unDraft[key]?.free) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), free: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
                                 </div>
                                 <button onClick={() => addUnintended(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة خطأ غير مقصود</button>
                               </div>
@@ -5065,7 +5065,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                   );
                                 })}
                                 <div className="flex gap-2">
-                                  <input placeholder="الكلمة التي تعثرت فيها" value={scDraft[key] || ''} onChange={(e) => setScDraft((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm" dir="rtl" />
+                                  <input placeholder="الكلمة التي تعثرت فيها" value={scDraft[key] || ''} onChange={(e) => setScDraft((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
                                   <button onClick={() => addSelfCorrected(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة</button>
                                 </div>
                               </div>
@@ -5073,7 +5073,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         );
                       })}
-                      <button onClick={allCorrect} className="px-4 py-2 bg-white border border-gray-200 text-accent-700 text-sm font-bold rounded-xl">كلها صحيحة (ما عدا الآيات ذات الخطة)</button>
+                      <button onClick={allCorrect} className="px-4 py-2 bg-white border border-hairline text-accent-700 text-sm font-bold rounded-xl">كلها صحيحة (ما عدا الآيات ذات الخطة)</button>
                       {preview.status === 'complete' ? (
                         <p className="text-sm font-bold text-emerald-700">الحالة مكتملة — جاهزة للمدونة.</p>
                       ) : (
@@ -5104,7 +5104,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>
               <button onClick={() => onNavigate('app')}
-                className="flex-1 py-3 bg-white border border-gray-200 text-accent-700 font-bold rounded-xl">
+                className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
                 العودة إلى لوحتي
               </button>
             </div>

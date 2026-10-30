@@ -42,13 +42,13 @@ export default function QRCodeSection() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {stores.map((s) => (
-                <div key={s.label} className="flex flex-col items-center gap-3 p-5 bg-gradient-to-b from-gray-50 to-white rounded-2xl border-2 border-gray-100 hover:border-emerald-200 transition-smooth">
+                <div key={s.label} className="flex flex-col items-center gap-3 p-5 bg-gradient-to-b from-gray-50 to-white rounded-2xl border-2 border-hairline hover:border-emerald-200 transition-smooth">
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-md ${s.color}`}>
                     {s.icon}
                   </div>
                   <div className="text-center">
                     <p className="text-sm font-bold text-accent-800">{s.label}</p>
-                    <p className="text-[11px] text-accent-600">{s.desc}</p>
+                    <p className="text-xs text-accent-600">{s.desc}</p>
                   </div>
 
                   {/* QR Code */}

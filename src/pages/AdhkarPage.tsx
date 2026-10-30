@@ -661,7 +661,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   const pct = progress.d > 0 ? Math.min(100, (progress.t / progress.d) * 100) : 0;
 
   return (
-    <main className="min-h-screen bg-stone-50 pb-24 px-4 pt-6" dir="rtl">
+    <main className="min-h-screen page-bg pb-24 px-4 pt-6" dir="rtl">
       <div className="max-w-2xl mx-auto">
         <button onClick={() => onNavigate('home')} className="text-sm text-emerald-700 font-semibold underline">
           → الرئيسية
@@ -677,13 +677,13 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="grid grid-cols-2 gap-2 mt-4">
           <button
             onClick={() => switchWird('morning')}
-            className={`py-3 font-bold rounded-xl ${wird === 'morning' ? 'bg-emerald-700 text-white' : 'bg-white border border-stone-200 text-accent-700'}`}
+            className={`py-3 font-bold rounded-xl ${wird === 'morning' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار الصباح
           </button>
           <button
             onClick={() => switchWird('evening')}
-            className={`py-3 font-bold rounded-xl ${wird === 'evening' ? 'bg-emerald-700 text-white' : 'bg-white border border-stone-200 text-accent-700'}`}
+            className={`py-3 font-bold rounded-xl ${wird === 'evening' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار المساء
           </button>
@@ -693,13 +693,13 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button
             onClick={() => switchVoice('male')}
-            className={`py-2 font-bold rounded-xl text-sm ${voice === 'male' ? 'bg-teal-700 text-white' : 'bg-white border border-stone-200 text-accent-700'}`}
+            className={`py-2 font-bold rounded-xl text-sm ${voice === 'male' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت رجالي
           </button>
           <button
             onClick={() => switchVoice('female')}
-            className={`py-2 font-bold rounded-xl text-sm ${voice === 'female' ? 'bg-teal-700 text-white' : 'bg-white border border-stone-200 text-accent-700'}`}
+            className={`py-2 font-bold rounded-xl text-sm ${voice === 'female' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت نسائي
           </button>
@@ -740,7 +740,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
                 <button
                   onClick={() => jumpTo(index - 1, playing)}
                   disabled={index === 0}
-                  className="p-3 bg-white border border-stone-200 rounded-full disabled:opacity-40"
+                  className="p-3 bg-white border border-hairline rounded-full disabled:opacity-40"
                   aria-label="الذكر السابق"
                 >
                   <SkipBack className="w-5 h-5" />
@@ -757,15 +757,15 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
                 <button
                   onClick={() => jumpTo(index + 1, playing)}
                   disabled={index >= list.length - 1}
-                  className="p-3 bg-white border border-stone-200 rounded-full disabled:opacity-40"
+                  className="p-3 bg-white border border-hairline rounded-full disabled:opacity-40"
                   aria-label="الذكر التالي"
                 >
                   <SkipForward className="w-5 h-5" />
                 </button>
-                <button onClick={restart} className="p-3 bg-white border border-stone-200 rounded-full" aria-label="من الأول">
+                <button onClick={restart} className="p-3 bg-white border border-hairline rounded-full" aria-label="من الأول">
                   <RotateCcw className="w-5 h-5" />
                 </button>
-                <button onClick={() => setBlackScreen(true)} className="p-3 bg-white border border-stone-200 rounded-full" aria-label="شاشة سوداء">
+                <button onClick={() => setBlackScreen(true)} className="p-3 bg-white border border-hairline rounded-full" aria-label="شاشة سوداء">
                   <SunMoon className="w-5 h-5" />
                 </button>
               </div>
@@ -774,7 +774,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         </div>
 
         {/* List: tap to jump */}
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-3 mt-4">
+        <div className="bg-white rounded-2xl border border-hairline shadow-sm p-3 mt-4">
           {list.map((item, i) => (
             <button
               key={item.id}

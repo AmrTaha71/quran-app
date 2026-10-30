@@ -101,7 +101,7 @@ function StatChip({ icon, label, value, color }: { icon: React.ReactNode; label:
       <span className="text-emerald-100">{icon}</span>
       <div className="min-w-0">
         <p className="text-base font-bold text-white leading-none tabular-nums">{value.toLocaleString('ar-EG')}</p>
-        <p className="text-[10px] text-emerald-200 mt-0.5">{label}</p>
+        <p className="text-xs text-emerald-200 mt-0.5">{label}</p>
       </div>
     </div>
   );

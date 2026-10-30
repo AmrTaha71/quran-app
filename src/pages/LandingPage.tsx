@@ -30,8 +30,8 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
   const percentage = Math.round((stats.withLinks / stats.total) * 100);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-stone-50">
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-emerald-100 shadow-sm">
+    <div className="min-h-screen page-bg">
+      <header className="sticky top-0 z-50 app-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
@@ -51,7 +51,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
                 {LANGUAGES.find((l) => l.code === lang)?.flag}
               </button>
               {showLangMenu && (
-                <div className="absolute left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-2 min-w-[150px] z-50 animate-slide-up">
+                <div className="absolute left-0 mt-2 bg-white rounded-xl shadow-xl border border-hairline p-2 min-w-[150px] z-50 animate-slide-up">
                   {LANGUAGES.map((l) => (
                     <button
                       key={l.code}

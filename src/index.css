@@ -160,6 +160,23 @@ body {
   --polish-sh3: 0 -1px 0 rgba(28, 43, 38, 0.06), 0 -8px 24px -8px rgba(28, 43, 38, 0.08);
   --polish-sh4: 0 2px 4px rgba(28, 43, 38, 0.06), 0 12px 24px -4px rgba(28, 43, 38, 0.12), 0 32px 64px -12px rgba(28, 43, 38, 0.22);
   --polish-sh-hero: 0 3px 5px rgba(67, 46, 14, 0.12), 0 12px 28px rgba(67, 46, 14, 0.18), 0 28px 58px rgba(67, 46, 14, 0.12);
+  /* Type/color Phase 1 tokens (reconciled reviews, 2026-10-31).
+     Neutral hairline stays --polish-hairline (reused, not duplicated). */
+  --page-bg: #F7F5EF;
+  --page-wash: linear-gradient(180deg, rgba(23, 107, 80, 0.035) 0%, #FFFFFF 45%, rgba(82, 67, 43, 0.025) 100%);
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --card-bg: #FFFFFF;
+  --surface-raised: #FFFEFA;
+  --ink: #1c2b26;
+  --ink-2: #4b5a53;
+  --ink-3: #5f6e66;
+  --emerald-primary: #176B50;
+  --emerald-active: #245E49;
+  --gold-accent: #B58A38;
+  --amber-link: #85551B;
+  --hairline-emerald: rgba(6, 95, 70, 0.18);
+  --hairline-amber: rgba(180, 83, 9, 0.2);
+  --hairline-input: #8d877b;
 }
 /* Press: buttons sink 1px + scale 0.96. Down is fast (100ms), release
    is controlled (180ms). No shadow animation in the base class. */
@@ -253,3 +270,13 @@ body {
     transform: none !important;
   }
 }
+
+/* Type/color Phase 1 classes (2026-10-31). Font-role utilities are
+   DEFINED here, not yet applied (Phases 2-3). */
+.page-bg { background-color: var(--page-bg); background-image: var(--page-wash); }
+.app-header { background: var(--header-bg); border-bottom: 1px solid var(--polish-hairline); }
+.border-hairline { border-color: var(--polish-hairline); }
+.font-quran { font-family: "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif; font-synthesis: none; }
+.font-display-ar { font-family: "Noto Naskh Arabic", "Amiri", "Geeza Pro", serif; }
+.font-ui { font-family: "Cairo", system-ui, -apple-system, sans-serif; }
+html { -webkit-text-size-adjust: 100%; }

@@ -580,8 +580,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-gray-50 to-gray-50">
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-emerald-100 shadow-sm">
+    <div className="min-h-screen page-bg">
+      <header className="sticky top-0 z-40 app-header">
         <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 bg-gradient-to-br from-emerald-500 to-teal-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
@@ -671,7 +671,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* OpenAI balance monitor — estimated from app-side usage logging */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-5 mb-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-bold text-accent-800">رصيد OpenAI (تقديري)</p>
@@ -704,7 +704,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               )}
               <div className="flex flex-wrap gap-2 mt-3">
                 {Object.entries(usage.byFn).map(([fn, v]) => (
-                  <span key={fn} className="px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-accent-600">
+                  <span key={fn} className="px-2.5 py-1 bg-gray-50 border border-hairline rounded-lg text-xs text-accent-600">
                     {USAGE_LABELS[fn] || fn}: {v.calls.toLocaleString('ar-EG')} مكالمة — ${v.cost.toFixed(4)}
                   </span>
                 ))}
@@ -713,7 +713,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 <div className="flex gap-2 mt-4">
                   <input value={balanceDraft} onChange={(e) => setBalanceDraft(e.target.value)} inputMode="decimal"
                     placeholder="5.00"
-                    className="w-32 px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500" />
+                    className="w-32 px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500" />
                   <button onClick={saveStartingBalance} className="px-3 py-2 bg-emerald-700 text-white text-sm font-semibold rounded-xl">حفظ</button>
                   <button onClick={() => setEditingBalance(false)} className="px-3 py-2 text-sm text-accent-600">إلغاء</button>
                 </div>
@@ -731,13 +731,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* Toolbar — beautified */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                 placeholder="بحث بالنص، رقم، أو سورة:آية (مثل 2:255)..."
-                className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-smooth" />
+                className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-smooth" />
             </div>
             {searchHint && (
               <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
@@ -745,11 +745,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               </div>
             )}
             <select value={surahFilter} onChange={(e) => { setSurahFilter(e.target.value); setPage(0); }}
-              className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth">
+              className="px-3 py-2.5 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth">
               <option value="">كل السور</option>
               {SURAHS.map((s) => <option key={s.no} value={s.no}>{s.no}. {s.name}</option>)}
             </select>
-            <div className="flex items-center gap-1 bg-gray-50 rounded-xl p-1 border border-gray-200">
+            <div className="flex items-center gap-1 bg-gray-50 rounded-xl p-1 border border-hairline">
               {(['all', 'green', 'red'] as VerseFilter[]).map((f) => (
                 <button key={f} onClick={() => { setStatusFilter(f); setPage(0); }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-smooth ${
@@ -768,7 +768,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* Legend */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded border-r-4 border-emerald-400 bg-emerald-50"></div>
@@ -790,7 +790,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* Verse table — beautified */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
               <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
@@ -832,7 +832,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         {showLinksFor === verse.id && verseLinks.length > 0 && (
                           <div className="mt-3 space-y-1.5 animate-slide-up">
                             {verseLinks.map((link) => (
-                              <div key={link.id} className="flex items-start gap-2 text-xs bg-white/80 rounded-lg p-2.5 border border-gray-100">
+                              <div key={link.id} className="flex items-start gap-2 text-xs bg-white/80 rounded-lg p-2.5 border border-hairline">
                                 <span className={`px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${getLinkTypeColors(link.link_types)}`}>
                                   {formatTypes(link.link_types)}
                                 </span>
@@ -842,10 +842,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                                   {link.audio_url && (
                                     <div className="flex items-center gap-1 mt-1">
                                       <Volume2 className="w-3 h-3 text-emerald-600" />
-                                      <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline text-[10px]">مقطع رنا</a>
+                                      <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline text-xs">مقطع رنا</a>
                                     </div>
                                   )}
-                                  {link.status === 'pending' && <span className="text-[10px] text-amber-700 font-semibold">بانتظار المراجعة</span>}
+                                  {link.status === 'pending' && <span className="text-xs text-amber-700 font-semibold">بانتظار المراجعة</span>}
                                 </div>
                                 <button onClick={() => deleteLink(link.id)} disabled={!!savingIds[link.id]} aria-label="حذف الرابط" className="icon-action text-red-500 hover:bg-red-100 rounded p-1 flex-shrink-0 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
                               </div>
@@ -860,12 +860,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           title="سجلي المقطع يا رنا"
                           className="flex flex-col items-center justify-center gap-1 w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-2xl shadow-lg hover:shadow-xl transition-smooth">
                           <Mic className="w-6 h-6" />
-                          <span className="text-[10px] font-bold leading-tight text-center">سجلي المقطع<br />يا رنا</span>
+                          <span className="text-xs font-bold leading-tight text-center">سجلي المقطع<br />يا رنا</span>
                         </button>
                         <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
                           title="عرض الروابط"
                           className={`flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-smooth ${
-                            showLinksFor === verse.id ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-50 text-accent-600 hover:bg-gray-100 border border-gray-200'
+                            showLinksFor === verse.id ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-50 text-accent-600 hover:bg-gray-100 border border-hairline'
                           }`}>
                           <Settings className="w-3.5 h-3.5" /> الروابط
                         </button>
@@ -884,7 +884,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           )}
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-gray-100 bg-gray-50">
+            <div className="flex items-center justify-between p-4 border-t border-hairline bg-gray-50">
               <p className="text-xs text-accent-600">صفحة {formatAr(page + 1)} من {formatAr(totalPages)} — {formatAr(totalCount)} آية</p>
               <div className="flex items-center gap-1">
                 <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} aria-label="الصفحة السابقة" className="icon-action p-2 text-accent-600 hover:bg-white rounded-lg disabled:opacity-30 transition-smooth"><ChevronRight className="w-4 h-4" /></button>
@@ -900,7 +900,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       {showPending && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowPending(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 sticky top-0 bg-white rounded-t-2xl z-10">
+            <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-2xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />
                 <h3 className="font-bold text-accent-800">روابط بانتظار المراجعة ({pendingLinks.length})</h3>
@@ -943,7 +943,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   {pendingLinks.slice(0, pendingVisible).map((link) => {
                   const verse = pendingVerses[link.verse_id];
                   return (
-                    <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                    <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-hairline">
                       {verse && (
                         <div className="mb-2 text-xs text-accent-600">
                           {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{verse.ayah_text?.slice(0, 80)}...</span>
@@ -983,7 +983,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         <div className="mb-2">
                           {link.link_title && <p className="text-sm font-bold text-accent-700 mb-1">{link.link_title}</p>}
                           <p className="text-sm text-accent-600 leading-relaxed">{link.link_content}</p>
-                          <button onClick={() => startEditText(link)} className="text-[11px] text-blue-600 hover:underline mt-1">تعديل النص مباشرة</button>
+                          <button onClick={() => startEditText(link)} className="text-xs text-blue-600 hover:underline mt-1">تعديل النص مباشرة</button>
                         </div>
                       )}
 
@@ -1029,10 +1029,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                                 <Volume2 className="w-3.5 h-3.5" /> تشغيل ({link.voice_type === 'female' ? 'نسائي' : 'رجالي'})
                               </button>
                             )}
-                            <span className="text-[11px] text-blue-500">جاهز للنشر</span>
+                            <span className="text-xs text-blue-500">جاهز للنشر</span>
                           </div>
                         ) : (
-                          <p className="text-[11px] text-blue-400 mb-2">لم يتم توليد الصوت بعد</p>
+                          <p className="text-xs text-blue-400 mb-2">لم يتم توليد الصوت بعد</p>
                         )}
                         <div className="flex gap-1.5">
                           <button onClick={() => generateVoiceForLink(link, 'male')} disabled={generatingVoiceId === link.id}
@@ -1051,7 +1051,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       <div className="flex gap-2 mt-3">
                         <input type="text" value={rephraseCmds[link.id] || ''} onChange={(e) => setRephraseCmds((prev) => ({ ...prev, [link.id]: e.target.value }))}
                           placeholder="طلب تعديل (اختياري): مثلاً — اجعله أقصر"
-                          className="flex-1 px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-emerald-500" />
+                          className="flex-1 px-2.5 py-1.5 bg-white border border-hairline rounded-lg text-xs focus:outline-none focus:border-emerald-500" />
                         <button onClick={() => rephrasePending(link)} disabled={rephrasingId === link.id}
                           className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
                           <RefreshCw className="w-3 h-3" /> {rephrasingId === link.id ? '...' : 'صياغة'}
@@ -1066,7 +1066,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                             <button onClick={() => applyProposal(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg disabled:opacity-50">{savingIds[link.id] ? 'جارٍ الحفظ…' : 'اعتمديه يا رنا'}</button>
                             <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-600 text-xs hover:bg-gray-100 rounded-lg">تجاهليه يا رنا</button>
                           </div>
-                          <p className="text-[11px] text-accent-600 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي يا رنا — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
+                          <p className="text-xs text-accent-600 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي يا رنا — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
                         </div>
                       )}
                                             <div className="flex gap-2 mt-3">

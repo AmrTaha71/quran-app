@@ -67,7 +67,7 @@ export default function EditVerseModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-slide-up my-auto">
-        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+        <div className="flex items-center justify-between p-4 border-b border-hairline">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-accent-50 rounded-lg flex items-center justify-center">
               <Edit3 className="w-4 h-4 text-accent-600" />
@@ -90,7 +90,7 @@ export default function EditVerseModal({
                   max={114}
                   value={surahNo}
                   onChange={(e) => setSurahNo(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
+                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
               <div>
@@ -99,7 +99,7 @@ export default function EditVerseModal({
                   type="text"
                   value={surahName}
                   onChange={(e) => setSurahName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
+                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
               <div>
@@ -109,7 +109,7 @@ export default function EditVerseModal({
                   min={1}
                   value={ayahNo}
                   onChange={(e) => setAyahNo(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
+                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
             </div>
@@ -120,7 +120,7 @@ export default function EditVerseModal({
                 value={ayahText}
                 onChange={(e) => setAyahText(e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-lg font-arabic focus:outline-none focus:border-emerald-500 transition-smooth resize-none"
+                className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-lg font-arabic focus:outline-none focus:border-emerald-500 transition-smooth resize-none"
                 dir="rtl"
               />
             </div>

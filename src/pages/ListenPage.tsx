@@ -1448,8 +1448,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const locked = active;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
+    <div className="min-h-screen page-bg pb-24">
+      <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <button
             onClick={() => onNavigate('home')}

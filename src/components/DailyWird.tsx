@@ -103,7 +103,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
             <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-accent-600 ring-2 ring-amber-400' : 'bg-gray-100 text-accent-600'}`}>
               {d.done ? <Check className="w-4 h-4" /> : d.label}
             </span>
-            <span className="text-[10px] text-accent-600">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>
+            <span className="text-xs text-accent-600">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>
           </div>
         ))}
       </div>

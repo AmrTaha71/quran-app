@@ -52,7 +52,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   placeholder="admin"
-                  className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
+                  className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-hairline rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
                 />
               </div>
             </div>
@@ -67,7 +67,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••"
-                  className="w-full pr-10 pl-10 py-3 bg-gray-50 border border-gray-200 rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
+                  className="w-full pr-10 pl-10 py-3 bg-gray-50 border border-hairline rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">

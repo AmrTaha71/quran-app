@@ -359,9 +359,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter ? 1 : 0) + (debouncedSearch ? 1 : 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24 route-in">
+    <div className="min-h-screen page-bg pb-24 route-in">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
+      <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
@@ -380,7 +380,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 {LANGUAGES.find((l) => l.code === lang)?.flag}
               </button>
               {showLangMenu && (
-                <div className="absolute left-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-2 min-w-[150px] z-50 animate-slide-up">
+                <div className="absolute left-0 mt-2 bg-white rounded-xl shadow-xl border border-hairline p-2 min-w-[150px] z-50 animate-slide-up">
                   {LANGUAGES.map((l) => (
                     <button key={l.code}
                       onClick={() => { setLang(l.code); setShowLangMenu(false); }}
@@ -542,7 +542,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         )}
 
         {/* Filter toggle bar */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-hairline shadow-sm mb-4 overflow-hidden">
           <button onClick={() => setShowFilters(!showFilters)}
             className="w-full flex items-center justify-between p-4 text-right">
             <div className="flex items-center gap-2">
@@ -575,7 +575,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   <input type="text" value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                     placeholder={t('search')}
-                    className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
+                    className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-hairline rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={toggleVoiceSearch}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
                     className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
@@ -588,7 +588,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     {searchHint}
                   </div>
                 )}
-                <p className="text-[11px] text-accent-600 mt-1.5">يقبل البحث الرسم العثماني والإملائي — اكتب كما تنطق، وسيجد الآيات حتى لو اختلف رسم الكلمة.</p>
+                <p className="text-xs text-accent-600 mt-1.5">يقبل البحث الرسم العثماني والإملائي — اكتب كما تنطق، وسيجد الآيات حتى لو اختلف رسم الكلمة.</p>
               </div>
 
               {/* Surah selection */}
@@ -597,14 +597,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto p-1">
                   <button onClick={() => { setSurahFilter(''); setPage(0); }}
                     className={`p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                      surahFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-gray-200 hover:border-emerald-300'
+                      surahFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
                     }`}>
                     كل السور
                   </button>
                   {SURAHS.map((s) => (
                     <button key={s.no} onClick={() => { setSurahFilter(String(s.no)); setPage(0); }}
                       className={`flex items-center gap-1.5 p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                        surahFilter === String(s.no) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-gray-200 hover:border-emerald-300'
+                        surahFilter === String(s.no) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
                       }`}>
                       <span className="text-xs opacity-60">{s.no}.</span>
                       <span className="truncate">{s.name}</span>
@@ -621,14 +621,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setLinkTypeFilter(''); setPage(0); }}
                     className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                      linkTypeFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-gray-200 hover:border-emerald-300'
+                      linkTypeFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
                     }`}>
                     كل الأنواع
                   </button>
                   {LINK_TYPES.map((lt) => (
                     <button key={lt.value} onClick={() => { setLinkTypeFilter(lt.value); setPage(0); }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                        linkTypeFilter === lt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-gray-200 hover:border-emerald-300'
+                        linkTypeFilter === lt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
                       }`}>
                       {lt.label}
                     </button>
@@ -652,7 +652,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
           </div>
         ) : verses.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 py-20 text-center shadow-sm">
+          <div className="bg-white rounded-2xl border border-hairline py-20 text-center shadow-sm">
             <BookOpen className="w-14 h-14 text-gray-300 mx-auto mb-3" />
             <p className="text-base text-accent-400">{listFilter ? 'لا توجد آيات في هذه القائمة' : t('noLinksYet')}</p>
           </div>
@@ -805,7 +805,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
+          <div className="flex items-center justify-between mt-4 bg-white rounded-xl border border-hairline p-3 shadow-sm">
             <p className="text-sm text-accent-600">
               {page + 1} / {totalPages}
             </p>
@@ -856,7 +856,7 @@ function ListFilterTab({ active, onClick, label, icon, count }: { active: boolea
     <button
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-smooth ${
-        active ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-accent-600 hover:bg-gray-50 border border-gray-200'
+        active ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-accent-600 hover:bg-gray-50 border border-hairline'
       }`}
     >
       {icon}
