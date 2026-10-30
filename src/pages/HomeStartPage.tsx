@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, LayoutDashboard, Mic, Headphones, Settings, Link, SunMoon } from 'lucide-react';
+import { BookOpen, Mic, Headphones, Settings, Link, SunMoon } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
-import { loadWird, WIRD_TYPE_LABEL } from '../lib/wird';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
 import { readListeningWird } from '../lib/listenPlayback';
@@ -15,8 +14,8 @@ type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow
 // Light start page (الرئيسية) for logged-in users: NOT a second
 // dashboard. One resume card (last Mushaf page, from the same
 // quran-mushaf-page key QuranMushafPage itself reads on open, so
-// "continue" lands exactly where the user left off), one line for
-// today's wird, and quick buttons only. Lists, search and filters
+// "continue" lands exactly where the user left off), and quick
+// buttons only. Lists, search and filters
 // stay on لوحتي — this page must stay light enough to read at a glance.
 function readLastPage(): { page: number; visited: boolean } {
   try {
@@ -64,11 +63,6 @@ export default function HomeStartPage({ session, onNavigate }: {
   const [listeningWird] = useState(() => {
     try { return readListeningWird(); } catch { return null; }
   });
-  const [wird] = useState(loadWird);
-  const today = new Date().toLocaleDateString('en-CA');
-  const doneToday = wird.doneDays.includes(today);
-  const pagesText =
-    wird.target === 1 ? 'صفحة واحدة' : wird.target === 2 ? 'صفحتين' : `${wird.target.toLocaleString('ar-EG')} صفحات`;
   const juz = getJuzFromPage(lastPage.page);
 
   useEffect(() => {
@@ -231,7 +225,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* Quick buttons: the two feature actions are full-width
             large buttons like the big buttons in the cards above
-            (Amr 17:48); لوحتي + الإعدادات stay a small 2-col row. */}
+            (Amr 17:48); الإعدادات stays a small button below. */}
         <button
           onClick={() => onNavigate('follow')}
           className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30"
@@ -250,43 +244,12 @@ export default function HomeStartPage({ session, onNavigate }: {
           </span>
           سمّع لنفسك
         </button>
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <button
-            onClick={() => onNavigate('app')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <LayoutDashboard className="w-5 h-5 text-emerald-600" /> لوحتي
-          </button>
-          <button
-            onClick={() => onNavigate('settings')}
-            className="py-3.5 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
-          >
-            <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
-          </button>
-        </div>
-
-        {/* Today's wird, moved below the quick buttons (Amr 20:02) —
-            the full card lives on لوحتي; the hint opens Settings,
-            where the daily wird is configured (first section). */}
-        <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-4 mb-4">
-          <button
-            onClick={() => onNavigate('app')}
-            className="w-full text-right"
-          >
-            <p className="font-bold text-accent-800">
-              ورد اليوم: {WIRD_TYPE_LABEL[wird.type]} — {pagesText}
-            </p>
-            <p className="text-sm text-accent-600 mt-1">
-              {doneToday ? 'تم ✓ تقبل الله منك.' : 'لم ينجز بعد — من لوحتي علّمه منجزا.'}
-            </p>
-          </button>
-          <button
-            onClick={() => onNavigate('settings')}
-            className="mt-2 text-sm text-emerald-700 font-semibold underline"
-          >
-            اظبط وردك اليومي من الإعدادات
-          </button>
-        </div>
+        <button
+          onClick={() => onNavigate('settings')}
+          className="w-full py-3.5 mb-4 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2"
+        >
+          <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
+        </button>
 
         <p className="text-center text-sm text-emerald-700 font-semibold mt-6">
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
