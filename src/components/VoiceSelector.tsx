@@ -84,7 +84,7 @@ export default function VoiceSelector({ text }: { text: string }) {
       {showSettings && (
         <div className="absolute z-30 mt-2 bg-white rounded-xl shadow-xl border border-hairline p-3 min-w-[200px] animate-slide-up"
           style={{ top: '100%', right: 0 }}>
-          <p className="text-xs font-bold text-accent-700 mb-2">اختيار الصوت</p>
+          <p className="text-xs font-medium text-accent-700 mb-2">اختيار الصوت</p>
           <div className="space-y-1">
             <div className="mb-2">
               <p className="text-xs text-accent-600 mb-1">أصوات رجالية</p>

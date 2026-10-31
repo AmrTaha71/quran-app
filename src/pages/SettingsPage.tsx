@@ -431,22 +431,22 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Settings className="w-7 h-7 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-bold text-accent-800">الإعدادات</h1>
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">الإعدادات</h1>
             <p className="text-sm text-accent-600">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
           </div>
           {savedTick && (
-            <span className="mr-auto flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1">
+            <span className="mr-auto flex items-center gap-1 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-hairline-emerald rounded-full px-3 py-1">
               <Check className="w-4 h-4" /> تم الحفظ
             </span>
           )}
 <div className="w-full flex gap-2 overflow-x-auto pb-1">
           {[['sec-wird', 'الورد'], ['sec-look', 'شكل الصفحة'], ['sec-adhan', 'الأذان'], ['sec-pwa', 'التثبيت'], ['sec-download', 'تحميل المصحف'], ['sec-voice', 'التلاوة والصوت'], ['sec-lang', 'اللغة'], ['sec-pass', 'كلمة المرور']].map(([id, label]) => (
             <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-bold text-accent-700">{label}</button>
+              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-semibold text-accent-700">{label}</button>
           ))}
           {isAdmin && (
             <button onClick={() => document.getElementById('sec-admin')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-bold text-accent-700">الإدارة</button>
+              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-semibold text-accent-700">الإدارة</button>
           )}
         </div>
         </div>
@@ -459,7 +459,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             shows in a line right under the button. The لوحتي card
             reads the saved value, so it only changes on save. */}
         <section id="sec-wird" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
           </h2>
           <p className="text-sm text-accent-600 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p>
@@ -483,14 +483,14 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             حفظ
           </button>
           {wirdTotal(draftWird.parts) === 0 && (
-            <p className="mt-2 text-sm font-semibold text-amber-700">اختر صفحة واحدة على الأقل في جزء واحد قبل الحفظ.</p>
+            <p className="mt-2 text-sm font-semibold text-amber-link">اختر صفحة واحدة على الأقل في جزء واحد قبل الحفظ.</p>
           )}
           {justSavedWird && (
-            <p className="mt-3 flex items-center gap-1.5 text-sm font-bold text-emerald-700">
+            <p className="mt-3 flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
               <Check className="w-4 h-4" /> تم الحفظ
             </p>
           )}
-          <p className="mt-2 text-sm font-semibold text-accent-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+          <p className="mt-2 text-sm font-semibold text-accent-700 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
             وردك اليومي المسجل: {wirdTotal(wird.parts) === 0
               ? 'لم يتم تحديد ورد بعد'
               : (Object.keys(WIRD_TYPE_LABEL) as WirdType[]).filter((k) => wird.parts[k] > 0).map((k) => `${WIRD_TYPE_LABEL[k]} — ${formatPages(wird.parts[k])}`).join('، ')} يوميًا
@@ -499,15 +499,15 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
         {/* Page look — the section the user asked for by name */}
         <section id="sec-look" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
-            <Sparkles className="w-5 h-5 text-amber-500" /> اختر شكل الصفحة بنفسك
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+            <Sparkles className="w-5 h-5 text-amber-link" /> اختر شكل الصفحة بنفسك
           </h2>
           <p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {EDITIONS.map((ed, i) => (
               <button key={ed.id} onClick={() => pickEdition(i)}
-                className={`text-right p-4 rounded-xl border-2 transition-smooth ${editionIdx === i ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-emerald-200 hover:bg-emerald-50/30'}`}>
-                <p className="font-bold text-accent-800 flex items-center gap-2">
+                className={`text-right p-4 rounded-xl border-2 transition-smooth ${editionIdx === i ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/30'}`}>
+                <p className="font-semibold text-accent-800 flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-emerald-600" /> {ed.name}
                   {editionIdx === i && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
                 </p>
@@ -521,7 +521,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               so the user sees exactly what the Mushaf will open with. */}
           <div className="mt-4">
             <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {EDITIONS[editionIdx].name}</p>
-            <div className="relative mx-auto w-full max-w-[300px] rounded-lg overflow-hidden shadow-lg bg-amber-50">
+            <div className="relative mx-auto w-full max-w-[300px] rounded-2xl overflow-hidden shadow-lg bg-amber-50">
               {previewFailed ? (
                 <p className="text-sm text-accent-600 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
               ) : (
@@ -539,9 +539,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <p className="text-xs text-accent-600 text-center mt-2">صفحة الفاتحة — نفس الشكل اللي هيتفتح بيه المصحف</p>
           </div>
           <button onClick={toggleGold}
-            className={`mt-4 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${goldFrame ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-amber-200'}`}>
+            className={`mt-4 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${goldFrame ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
             <span className="text-right">
-              <span className="block font-bold text-accent-800">إطار ذهبي حول الصفحة</span>
+              <span className="block font-medium text-accent-800">إطار ذهبي حول الصفحة</span>
               <span className="block text-sm text-accent-600">إطار ذهبي أنيق فوق صورة الصفحة في المصحف</span>
             </span>
             <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${goldFrame ? 'bg-amber-500' : 'bg-gray-300'}`}>
@@ -558,11 +558,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             bar, no fullscreen banner. Part 2 (the pages download
             below) is separate, so the app itself stays light. */}
         <section id="sec-pwa" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Smartphone className="w-5 h-5 text-emerald-600" /> ثبّت التطبيق على جهازك
           </h2>
           {isStandalone ? (
-            <p className="text-sm text-emerald-700 font-bold">
+            <p className="text-sm text-emerald-700 font-semibold">
               التطبيق مثبّت على جهازك ✓ — بيفتح من أيقونة الشاشة الرئيسية من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
             </p>
           ) : (
@@ -576,7 +576,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   installed app). Say so before the user installs, and
                   recommend install-first-then-download ordering. */}
               {installPlatform === 'ios' && (
-                <p className="text-sm font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-3 leading-relaxed">
+                <p className="text-sm text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-3 leading-relaxed">
                   تنبيه مهم قبل التثبيت على آيفون/آيباد: النسخة المثبتة لها مساحة تخزين منفصلة عن سفاري — بعد التثبيت هتحتاج تسجيل دخول من جديد، وأي صفحات حمّلتها من سفاري مش هتكون موجودة في النسخة المثبتة وهتحتاج تحميلها تاني. عشان كده: ثبّت الأول، وبعدين حمّل الصفحات من داخل التطبيق المثبت.
                 </p>
               )}
@@ -589,15 +589,15 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {installOutcome && <p className="text-sm text-accent-500 mt-2">{installOutcome}</p>}
                 </>
               ) : installPlatform === 'android' ? (
-                <p className="text-sm font-bold text-accent-700 leading-relaxed">
+                <p className="text-sm text-accent-700 leading-relaxed">
                   من متصفح كروم على جهازك: افتح قائمة المتصفح (⋮) ثم اختر «إضافة إلى الشاشة الرئيسية» أو «تثبيت التطبيق»، وبعدين افتح التطبيق من الأيقونة الجديدة.
                 </p>
               ) : installPlatform === 'ios' ? (
-                <p className="text-sm font-bold text-accent-700 leading-relaxed">
+                <p className="text-sm text-accent-700 leading-relaxed">
                   من سفاري: اضغط زر المشاركة (Share) ثم «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)، وبعدين افتح التطبيق من أيقونة الشاشة الرئيسية.
                 </p>
               ) : (
-                <p className="text-sm font-bold text-accent-700 leading-relaxed">
+                <p className="text-sm text-accent-700 leading-relaxed">
                   من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»، وبعدين افتح التطبيق من الأيقونة الجديدة.
                 </p>
               )}
@@ -609,19 +609,19 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             pattern): after this, every flip is a local read, instant
             on any connection, even offline. Madinah edition only. */}
         <section id="sec-download" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
           </h2>
           <p className="text-sm text-accent-600 mb-4">
             مصحف المدينة هو الافتراضي: حمّل صفحاته الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي. مفيش حاجة تانية بتتحمل لوحدها.
           </p>
           {!dlSupported ? (
-            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+            <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
               جهازك مش بيدعم تحميل الصفحات على الجهاز — الصفحات هتفضل تتحمل من النت زي قبل كده.
             </p>
           ) : (
             <>
-              <p className="text-sm font-bold text-accent-700 mb-2">
+              <p className="text-sm font-semibold text-accent-700 mb-2">
                 {dlCached === null ? 'جارٍ فحص الصفحات المحملة…' : dlCached >= 604 ? 'كل الصفحات محملة على جهازك ✓' : `محمل منها ${dlCached.toLocaleString('ar-EG')} من ٦٠٤ صفحة`}
               </p>
               {dlRunning && (
@@ -633,20 +633,20 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               )}
               {dlFailed.length > 0 && !dlRunning && (
-                <p className="text-sm text-amber-700 mb-3">تعذر تحميل {dlFailed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
+                <p className="text-sm text-amber-link mb-3">تعذر تحميل {dlFailed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
               )}
               {dlUnverified.length > 0 && !dlRunning && (
-                <p className="text-sm text-amber-700 mb-3">عدد {dlUnverified.length.toLocaleString('ar-EG')} صفحة اتحفظت من غير تأكيد (الشبكة منعت التأكد من سلامتها) — هي بتتفتح من غير نت، لكنها مش محسوبة في العداد، والتحميل الجاي هيأكدها ويحسبها.</p>
+                <p className="text-sm text-amber-link mb-3">عدد {dlUnverified.length.toLocaleString('ar-EG')} صفحة اتحفظت من غير تأكيد (الشبكة منعت التأكد من سلامتها) — هي بتتفتح من غير نت، لكنها مش محسوبة في العداد، والتحميل الجاي هيأكدها ويحسبها.</p>
               )}
               {dlStopped && !dlRunning && (
                 <p className="text-sm text-accent-600 mb-3">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
               )}
               {dlError && !dlRunning && (
-                <p className={`text-sm mb-3 ${dlQuotaFull ? 'text-red-600 font-bold' : 'text-red-600'}`}>{dlError}</p>
+                <p className={`text-sm mb-3 ${dlQuotaFull ? 'text-red-600 font-medium' : 'text-red-600'}`}>{dlError}</p>
               )}
               {dlConfirm && !dlRunning ? (
-                <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 mb-3">
-                  <p className="text-sm font-bold text-amber-800">
+                <div className="rounded-xl bg-amber-50 border border-hairline-amber p-3 mb-3">
+                  <p className="text-sm font-medium text-amber-800">
                     مصحف المدينة حجمه حوالي ٢٤٠ ميجابايت — يفضل واي فاي.
                     {dlSpace && dlSpace.freeMB !== null && ` المتاح على جهازك حوالي ${dlSpace.freeMB.toFixed(0)} ميجابايت، والتحميل محتاج حوالي ${dlSpace.neededMB.toLocaleString('ar-EG')} ميجابايت.`}
                     {' '}متأكد عايز تحمله على جهازك؟
@@ -657,7 +657,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                       أيوه، حمّل
                     </button>
                     <button onClick={() => setDlConfirm(false)}
-                      className="px-5 py-2 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
+                      className="px-5 py-2 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
                       إلغاء
                     </button>
                   </div>
@@ -671,13 +671,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </button>
                   ) : (
                     <button onClick={stopDownload} disabled={dlStopping}
-                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-bold rounded-xl">
+                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-semibold rounded-xl">
                       {dlStopping ? 'جارٍ الإيقاف…' : 'إيقاف التحميل'}
                     </button>
                   )}
                   {dlCached !== null && dlCached > 0 && !dlRunning && (
                     <button onClick={clearDownload}
-                      className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
+                      className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
                       مسح المحمل
                     </button>
                   )}
@@ -692,7 +692,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   user picks that edition, and every start shows the
                   edition's size first (confirm box). */}
               <div className="border-t border-hairline mt-5 pt-4">
-                <p className="font-bold text-accent-800 mb-1">مصاحف إضافية — اختياري</p>
+                <p className="font-semibold text-accent-800 mb-1">مصاحف إضافية — اختياري</p>
                 <p className="text-sm text-accent-600 mb-3">مفيش مصحف بيتحمل لوحده — كل واحد بيتحمل بس لو اخترته من هنا، وبحجمه قبل ما تدوس تحميل.</p>
                 <div className="grid gap-3">
                   {EDITION_DOWNLOADS.filter((e) => e.id !== 'madinah').map((ed) => {
@@ -700,7 +700,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                     const full = st.cached !== null && st.cached >= ed.pages;
                     return (
                       <div key={ed.id} className="rounded-xl border border-hairline p-4">
-                        <p className="font-bold text-accent-800">{ed.name}</p>
+                        <p className="font-semibold text-accent-800">{ed.name}</p>
                         <p className="text-sm text-accent-600">
                           حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت • {ed.pages.toLocaleString('ar-EG')} صفحة
                           {st.cached === null ? '' : full ? ' • كل الصفحات محملة ✓' : ` • محمل منها ${st.cached.toLocaleString('ar-EG')} من ${ed.pages.toLocaleString('ar-EG')}`}
@@ -714,20 +714,20 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         )}
                         {st.failed.length > 0 && !st.running && (
-                          <p className="text-sm text-amber-700 mt-2">تعذر تحميل {st.failed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
+                          <p className="text-sm text-amber-link mt-2">تعذر تحميل {st.failed.length.toLocaleString('ar-EG')} صفحة — دوس تحميل تاني عشان يكمل الناقص.</p>
                         )}
                         {st.unverified.length > 0 && !st.running && (
-                          <p className="text-sm text-amber-700 mt-2">عدد {st.unverified.length.toLocaleString('ar-EG')} صفحة اتحفظت من غير تأكيد (الشبكة منعت التأكد من سلامتها) — هي بتتفتح من غير نت، لكنها مش محسوبة في العداد، والتحميل الجاي هيأكدها ويحسبها.</p>
+                          <p className="text-sm text-amber-link mt-2">عدد {st.unverified.length.toLocaleString('ar-EG')} صفحة اتحفظت من غير تأكيد (الشبكة منعت التأكد من سلامتها) — هي بتتفتح من غير نت، لكنها مش محسوبة في العداد، والتحميل الجاي هيأكدها ويحسبها.</p>
                         )}
                         {st.stopped && !st.running && (
                           <p className="text-sm text-accent-600 mt-2">وقفت التحميل — اللي اتحمّل محفوظ، ودوس تاني عشان تكمل.</p>
                         )}
                         {st.error && !st.running && (
-                          <p className={`text-sm mt-2 ${st.quota ? 'text-red-600 font-bold' : 'text-red-600'}`}>{st.error}</p>
+                          <p className={`text-sm mt-2 ${st.quota ? 'text-red-600 font-medium' : 'text-red-600'}`}>{st.error}</p>
                         )}
                         {st.confirm && !st.running ? (
-                          <div className="mt-3 rounded-xl bg-amber-50 border border-amber-200 p-3">
-                            <p className="text-sm font-bold text-amber-800">
+                          <div className="mt-3 rounded-xl bg-amber-50 border border-hairline-amber p-3">
+                            <p className="text-sm font-medium text-amber-800">
                               {ed.name} حجمه حوالي {ed.approxMB.toLocaleString('ar-EG')} ميجابايت — يفضل واي فاي.
                               {st.space && st.space.freeMB !== null && ` المتاح على جهازك حوالي ${st.space.freeMB.toFixed(0)} ميجابايت.`}
                               {' '}متأكد عايز تحمله على جهازك؟
@@ -738,7 +738,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                                 أيوه، حمّل
                               </button>
                               <button onClick={() => patchOpt(ed.id, { confirm: false })}
-                                className="px-5 py-2 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
+                                className="px-5 py-2 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
                                 إلغاء
                               </button>
                             </div>
@@ -752,13 +752,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                               </button>
                             ) : (
                               <button onClick={() => stopOptDownload(ed.id)} disabled={st.stopping}
-                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-bold rounded-xl">
+                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-semibold rounded-xl">
                                 {st.stopping ? 'جارٍ الإيقاف…' : 'إيقاف التحميل'}
                               </button>
                             )}
                             {st.cached !== null && st.cached > 0 && !st.running && (
                               <button onClick={() => clearOptDownload(ed.id)}
-                                className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
+                                className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
                                 مسح المحمل
                               </button>
                             )}
@@ -775,7 +775,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
         {/* Recitation + voice defaults */}
         <section id="sec-voice" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Volume2 className="w-5 h-5 text-emerald-600" /> التلاوة والصوت
           </h2>
           <p className="text-sm text-accent-600 mb-4">القارئ الافتراضي لتلاوة الآيات.</p>
@@ -783,7 +783,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div className="flex flex-wrap gap-2 mb-5">
             {RECITERS.map((r) => (
               <button key={r.id} onClick={() => pickReciter(r.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-bold border transition-smooth ${reciterId === r.id ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-smooth ${reciterId === r.id ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
                 {r.name}
               </button>
             ))}
@@ -792,11 +792,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <p className="text-xs text-accent-600 mb-3">للرجال: الصوت الرجالي المولّد دائماً. للنساء: الصوت النسائي.</p>
           <div className="flex gap-2">
             <button onClick={() => pickGender('female')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'female' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${linkGender === 'female' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
               امرأة
             </button>
             <button onClick={() => pickGender('male')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold border transition-smooth ${linkGender === 'male' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${linkGender === 'male' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
               رجل
             </button>
           </div>
@@ -805,13 +805,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
         {/* Language */}
         <section id="sec-lang" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-4">
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-emerald-600" /> لغة التطبيق
           </h2>
           <div className="flex flex-wrap gap-2">
             {LANGUAGES.map((l) => (
               <button key={l.code} onClick={() => { setLang(l.code); saved(); }}
-                className={`px-4 py-2 rounded-lg text-sm font-bold border transition-smooth ${lang === l.code ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-smooth ${lang === l.code ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
                 {l.flag} {l.nativeName}
               </button>
             ))}
@@ -820,7 +820,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
         {/* Password — logged-in change, no email link needed */}
         <section id="sec-pass" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Lock className="w-5 h-5 text-emerald-600" /> كلمة السر
           </h2>
           <p className="text-sm text-accent-600 mb-4">غيّر كلمة السر من هنا على طول، من غير ما تستنى رابط إيميل.</p>
@@ -841,8 +841,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </section>
 
         {adminGateError && (
-          <section id="sec-admin" className="bg-white rounded-2xl border border-amber-200 shadow-sm scroll-mt-36 p-5">
-            <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <section id="sec-admin" className="bg-white rounded-2xl border border-hairline-amber shadow-sm scroll-mt-36 p-5">
+            <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-amber-600" /> لوحة الإدارة
             </h2>
             <p className="text-sm text-accent-500 mb-4">تعذّر التأكد من صلاحية الإدارة — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
@@ -854,8 +854,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
 
         {isAdmin && (
-          <section id="sec-admin" className="bg-white rounded-2xl border border-emerald-200 shadow-sm scroll-mt-36 p-5">
-            <h2 className="text-base font-bold text-accent-800 flex items-center gap-2 mb-1">
+          <section id="sec-admin" className="bg-white rounded-2xl border border-hairline-emerald shadow-sm scroll-mt-36 p-5">
+            <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
             </h2>
             <p className="text-sm text-accent-600 mb-4">القسم ده بيظهر للأدمن بس — المستخدم العادي مش بيشوفه.</p>
@@ -867,7 +867,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
 
         <button onClick={resetDefaults} disabled={resetting}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-bold rounded-xl border border-hairline transition-smooth disabled:opacity-50">
+          className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-semibold rounded-xl border border-hairline transition-smooth disabled:opacity-50">
           <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
         </button>
         <p className="text-xs text-accent-400 leading-relaxed -mt-2">
@@ -876,7 +876,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
 
         <details className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
-          <summary className="text-base font-bold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
+          <summary className="text-base font-semibold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
           <p className="text-xs text-accent-400 leading-relaxed mt-2 mb-3">
             آخر ٣٠ حدثًا لتشخيص مشكلة الرجوع للرئيسية بعد قفل الشاشة — بعد ما تحصل المشكلة، افتح القسم ده وخد لقطة شاشة وأرسلها. لا يحتوي على أي رموز أو بيانات حساب.
           </p>

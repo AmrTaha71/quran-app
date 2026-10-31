@@ -52,7 +52,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
     <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
       <div className="flex items-center gap-2 mb-3">
         <CalendarDays className="w-5 h-5 text-amber-600" />
-        <h2 className="font-bold text-accent-800">وردك اليومي</h2>
+        <h2 className="font-semibold text-accent-800">وردك اليومي</h2>
         {wird.streak > 0 && (
           <span className="mr-auto flex items-center gap-1 text-sm font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">
             <Flame className="w-4 h-4" /> {wird.streak.toLocaleString('ar-EG')} يوم متتالي
@@ -60,7 +60,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
         )}
       </div>
       <div className="bg-amber-50 border border-hairline-amber rounded-xl p-3 mb-4">
-        <p className="font-bold text-accent-800">المطلوب اليوم:</p>
+        <p className="font-medium text-accent-800">المطلوب اليوم:</p>
         {partEntries.length === 0 ? (
           <p className="text-sm text-accent-600 mt-1">لم يتم تحديد ورد بعد — حدده من الإعدادات.</p>
         ) : (
@@ -80,7 +80,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
           الإعدادات (this link), always available — even after today
           is marked done, so tomorrow's wird can be set any time. */}
       <button onClick={() => onNavigate('settings')}
-        className="flex items-center gap-1.5 text-sm font-bold text-amber-link hover:text-amber-800 mb-4">
+        className="flex items-center gap-1.5 text-sm font-semibold text-amber-link hover:text-amber-800 mb-4">
         <Settings className="w-4 h-4" /> تعديل الورد من الإعدادات
       </button>
 
@@ -100,7 +100,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
       <div className="flex justify-between mt-4">
         {last7.map((d) => (
           <div key={d.date} className="flex flex-col items-center gap-1">
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-accent-600 ring-2 ring-amber-400' : 'bg-gray-100 text-accent-600'}`}>
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-accent-600 ring-2 ring-amber-400' : 'bg-gray-100 text-accent-600'}`}>
               {d.done ? <Check className="w-4 h-4" /> : d.label}
             </span>
             <span className="text-xs text-accent-600">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>

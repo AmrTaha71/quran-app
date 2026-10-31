@@ -66,13 +66,13 @@ export default function EditVerseModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg animate-slide-up my-auto">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg animate-slide-up my-auto">
         <div className="flex items-center justify-between p-4 border-b border-hairline">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-accent-50 rounded-lg flex items-center justify-center">
               <Edit3 className="w-4 h-4 text-accent-600" />
             </div>
-            <h3 className="font-bold text-accent-800">تعديل الآية</h3>
+            <h3 className="font-semibold text-accent-800">تعديل الآية</h3>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg transition-smooth">
             <X className="w-5 h-5" />
@@ -90,7 +90,7 @@ export default function EditVerseModal({
                   max={114}
                   value={surahNo}
                   onChange={(e) => setSurahNo(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
+                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
               <div>
@@ -99,7 +99,7 @@ export default function EditVerseModal({
                   type="text"
                   value={surahName}
                   onChange={(e) => setSurahName(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
+                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
               <div>
@@ -109,7 +109,7 @@ export default function EditVerseModal({
                   min={1}
                   value={ayahNo}
                   onChange={(e) => setAyahNo(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
+                  className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
             </div>
@@ -120,13 +120,13 @@ export default function EditVerseModal({
                 value={ayahText}
                 onChange={(e) => setAyahText(e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-lg font-arabic focus:outline-none focus:border-emerald-500 transition-smooth resize-none"
+                className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-lg font-arabic focus:outline-none focus:border-emerald-500 transition-smooth resize-none"
                 dir="rtl"
               />
             </div>
 
             {error && (
-              <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">
                 {error}
               </div>
             )}
@@ -135,7 +135,7 @@ export default function EditVerseModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition-smooth disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
                 {saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}
@@ -144,7 +144,7 @@ export default function EditVerseModal({
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="px-4 py-2.5 text-red-600 hover:bg-red-50 font-semibold rounded-lg transition-smooth border border-red-200"
+                  className="px-4 py-2.5 text-red-600 hover:bg-red-50 font-semibold rounded-xl transition-smooth border border-red-200"
                 >
                   حذف
                 </button>
@@ -152,7 +152,7 @@ export default function EditVerseModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2.5 text-accent-600 hover:bg-gray-100 font-semibold rounded-lg transition-smooth"
+                className="px-4 py-2.5 text-accent-600 hover:bg-gray-100 font-semibold rounded-xl transition-smooth"
               >
                 إلغاء
               </button>

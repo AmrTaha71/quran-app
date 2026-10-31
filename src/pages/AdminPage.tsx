@@ -522,7 +522,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
-          <h1 className="text-xl font-bold text-accent-800 mb-2">لوحة الإدارة</h1>
+          <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 mb-2">لوحة الإدارة</h1>
           <p className="text-sm text-accent-600 mb-5">سجل دخول بحسابك العادي أولاً — لو حسابك أدمن، الإدارة هتفتح لك من الإعدادات.</p>
           <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">تسجيل الدخول</button>
           <button onClick={() => onNavigate('home')} className="w-full text-sm text-accent-600 hover:text-accent-700 py-3">العودة للرئيسية</button>
@@ -537,7 +537,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
-          <h1 className="text-xl font-bold text-accent-800 mb-2">تعذّر التأكد من صلاحية الإدارة</h1>
+          <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 mb-2">تعذّر التأكد من صلاحية الإدارة</h1>
           <p className="text-sm text-accent-500 mb-5">الاتصال بالخادم فشل أثناء التحقق — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
           <button onClick={() => setGateAttempt((a) => a + 1)} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">إعادة المحاولة</button>
           <button onClick={() => onNavigate('app')} className="w-full text-sm text-accent-500 hover:text-accent-700 py-3">العودة للوحتي</button>
@@ -549,7 +549,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
-          <h1 className="text-xl font-bold text-accent-800 mb-2">الصفحة دي للأدمن بس</h1>
+          <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 mb-2">الصفحة دي للأدمن بس</h1>
           <p className="text-sm text-accent-600 mb-5">حسابك شغال كمستخدم عادي تماماً، وده مقصود — الإدارة مش بتظهر للمستخدم العادي.</p>
           <button onClick={() => onNavigate('app')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">العودة للوحتي</button>
         </div>
@@ -589,7 +589,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             </div>
             <div>
               <h1 className="text-base font-bold text-accent-800">روابط الذكر الحكيم</h1>
-              <p className="text-xs text-accent-600 truncate">لوحة الإدارة — {session.user.email}</p>
+              <p className="text-xs text-accent-600">لوحة الإدارة — {session.user.email}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -658,7 +658,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <p className="text-xs text-amber-100 mt-1">منهم دخلوا فعلًا: {userStats.signed_in.toLocaleString('ar-EG')} • حسابات جديدة آخر ٣٠ يوم: {userStats.new_30d.toLocaleString('ar-EG')}</p>
                 </>
               ) : userStatsError ? (
-                <p className="text-sm font-bold text-white">{userStatsError}</p>
+                <p className="text-sm font-medium text-white">{userStatsError}</p>
               ) : (
                 <p className="text-sm text-amber-100">جارٍ التحميل…</p>
               )}
@@ -666,7 +666,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <button onClick={fetchUserStats} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-white/15 hover:bg-white/25 rounded-lg transition-smooth">
               <RefreshCw className="w-3.5 h-3.5" /> تحديث
             </button>
-            <p className="text-sm font-bold text-white bg-white/15 rounded-xl px-3 py-2">تقبّل الله منكم، ونتشارك الأجر كلنا</p>
+            <p className="text-sm font-semibold text-white bg-white/15 rounded-xl px-3 py-2">تقبّل الله منكم، ونتشارك الأجر كلنا</p>
           </div>
         </div>
 
@@ -674,7 +674,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         <div className="bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-bold text-accent-800">رصيد OpenAI (تقديري)</p>
+              <p className="text-sm font-medium text-accent-800">رصيد OpenAI (تقديري)</p>
               <p className="text-xs text-accent-600 mt-0.5">من سجل استخدام التطبيق فقط — الرقم الدقيق في صفحة Usage على OpenAI</p>
             </div>
             {usage && (
@@ -698,7 +698,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 </div>
               </div>
               {Math.max(0, startingBalance - usage.total) < 1 && (
-                <div className="mt-3 px-3 py-2 bg-amber-50 border border-hairline-amber rounded-lg text-xs font-semibold text-amber-800">
+                <div className="mt-3 px-3 py-2 bg-amber-50 border border-hairline-amber rounded-2xl text-xs font-semibold text-amber-800">
                   تنبيه: الرصيد المتبقي أقل من $1 — اشحن رصيد OpenAI قبل ما تتوقف خدمات الذكاء والصوت.
                 </div>
               )}
@@ -806,7 +806,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <div key={verse.id} className={`p-4 ${bgClass} ${isRanaTarget ? 'ring-2 ring-amber-400 ring-offset-1' : ''} hover:shadow-sm transition-smooth animate-fade-in relative`}>
                     {isRanaTarget && (
                       <div className="absolute -top-2 right-4 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg animate-bounce-slow">
-                        <span className="text-xs font-bold whitespace-nowrap">سجلي من هنا يا رنا</span>
+                        <span className="text-xs font-semibold whitespace-nowrap">سجلي من هنا يا رنا</span>
                         <svg className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
@@ -832,7 +832,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         {showLinksFor === verse.id && verseLinks.length > 0 && (
                           <div className="mt-3 space-y-1.5 animate-slide-up">
                             {verseLinks.map((link) => (
-                              <div key={link.id} className="flex items-start gap-2 text-xs bg-white/80 rounded-lg p-2.5 border border-hairline">
+                              <div key={link.id} className="flex items-start gap-2 text-xs bg-white/80 rounded-2xl p-2.5 border border-hairline">
                                 <span className={`px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${getLinkTypeColors(link.link_types)}`}>
                                   {formatTypes(link.link_types)}
                                 </span>
@@ -860,7 +860,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           title="سجلي المقطع يا رنا"
                           className="flex flex-col items-center justify-center gap-1 w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-2xl shadow-lg hover:shadow-xl transition-smooth">
                           <Mic className="w-6 h-6" />
-                          <span className="text-xs font-bold leading-tight text-center">سجلي المقطع<br />يا رنا</span>
+                          <span className="text-xs font-semibold text-center">سجلي المقطع<br />يا رنا</span>
                         </button>
                         <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
                           title="عرض الروابط"
@@ -899,11 +899,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       {/* Pending Links Review Modal */}
       {showPending && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowPending(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-2xl z-10">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-3xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-accent-800">روابط بانتظار المراجعة ({pendingLinks.length})</h3>
+                <h3 className="font-semibold text-accent-800">روابط بانتظار المراجعة ({pendingLinks.length})</h3>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => fetchPendingLinks()} disabled={pendingLoading}
@@ -971,7 +971,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       {editingLinkId === link.id ? (
                         <div className="mb-2">
                           <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={3}
-                            className="w-full px-3 py-2 bg-white border border-hairline-input rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none" />
+                            className="w-full px-3 py-2 bg-white border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 resize-none" />
                           <div className="flex gap-2 mt-1">
                             <button onClick={() => saveEditText(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
                               <Check className="w-3 h-3" /> {savingIds[link.id] ? 'جارٍ الحفظ…' : 'حفظ النص'}
@@ -981,7 +981,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         </div>
                       ) : (
                         <div className="mb-2">
-                          {link.link_title && <p className="text-sm font-bold text-accent-700 mb-1">{link.link_title}</p>}
+                          {link.link_title && <p className="text-sm font-semibold text-accent-700 mb-1">{link.link_title}</p>}
                           <p className="text-sm text-accent-600 leading-relaxed">{link.link_content}</p>
                           <button onClick={() => startEditText(link)} className="text-xs text-blue-600 hover:underline mt-1">تعديل النص مباشرة</button>
                         </div>
@@ -998,7 +998,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           first listen is the original recording, inline
                           — the synthetic box below is only after it. */}
                       {link.audio_url && (
-                        <div className="bg-emerald-50 rounded-lg p-3 border border-hairline-emerald mt-2">
+                        <div className="bg-emerald-50 rounded-2xl p-3 border border-hairline-emerald mt-2">
                           <p className="text-xs font-semibold text-emerald-700 mb-2">الصوت الأصلي</p>
                           <button onClick={() => new Audio(link.audio_url!).play()}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg">
@@ -1007,7 +1007,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         </div>
                       )}
 
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 mt-2">
+                      <div className="bg-blue-50 rounded-2xl p-3 border border-blue-100 mt-2">
                         <p className="text-xs font-semibold text-blue-700 mb-2">الصوت المخلّق للمستخدم</p>
                         {(link.synthetic_audio_url_female || link.synthetic_audio_url_male || link.synthetic_audio_url) ? (
                           <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -1051,7 +1051,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       <div className="flex gap-2 mt-3">
                         <input type="text" value={rephraseCmds[link.id] || ''} onChange={(e) => setRephraseCmds((prev) => ({ ...prev, [link.id]: e.target.value }))}
                           placeholder="طلب تعديل (اختياري): مثلاً — اجعله أقصر"
-                          className="flex-1 px-2.5 py-1.5 bg-white border border-hairline rounded-lg text-xs focus:outline-none focus:border-emerald-500" />
+                          className="flex-1 px-2.5 py-1.5 bg-white border border-hairline rounded-xl text-xs focus:outline-none focus:border-emerald-500" />
                         <button onClick={() => rephrasePending(link)} disabled={rephrasingId === link.id}
                           className="flex items-center gap-1 px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
                           <RefreshCw className="w-3 h-3" /> {rephrasingId === link.id ? '...' : 'صياغة'}
@@ -1059,7 +1059,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       </div>
 
                       {proposals[link.id] && (
-                        <div className="bg-violet-50 rounded-lg p-3 border border-violet-200 mt-3">
+                        <div className="bg-violet-50 rounded-2xl p-3 border border-violet-200 mt-3">
                           <p className="text-xs font-semibold text-violet-700 mb-1">صياغة مقترحة بالذكاء الاصطناعي{proposals[link.id].command ? ` (طلب: ${proposals[link.id].command})` : ''}</p>
                           <p className="text-sm text-accent-700 leading-relaxed mb-2">{proposals[link.id].text}</p>
                           <div className="flex gap-2">
@@ -1084,7 +1084,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   })}
                   {pendingVisible < pendingLinks.length && (
                   <button onClick={() => setPendingVisible((v) => v + 50)}
-                    className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-link text-sm font-semibold rounded-lg border border-hairline-amber">
+                    className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-link text-sm font-semibold rounded-xl border border-hairline-amber">
                     عرض المزيد ({pendingLinks.length - pendingVisible} متبقية)
                   </button>
                 )}

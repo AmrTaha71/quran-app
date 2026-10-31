@@ -114,9 +114,9 @@ export function LongPressMenu({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-3xl shadow-2xl p-5 w-full max-w-xs animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-bold text-accent-800">إضافة إلى قائمة</p>
+          <p className="text-sm font-semibold text-accent-800">إضافة إلى قائمة</p>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action text-ink-3 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />
           </button>
@@ -171,11 +171,11 @@ export function LinkLongPressMenu({
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-sm animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-3xl shadow-2xl p-5 w-full max-w-sm animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Bookmark className="w-5 h-5 text-emerald-600" />
-            <p className="text-sm font-bold text-accent-800">إضافة الرابط إلى قائمة</p>
+            <p className="text-sm font-semibold text-accent-800">إضافة الرابط إلى قائمة</p>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action text-ink-3 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />
@@ -183,7 +183,7 @@ export function LinkLongPressMenu({
         </div>
         <div className="bg-gray-50 rounded-xl p-3 mb-4">
           <p className="text-xs text-accent-600 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
-          <p className="text-xs text-accent-700 truncate font-semibold">{link.link_title || link.link_content}</p>
+          <p className="text-xs text-accent-700 font-semibold">{link.link_title || link.link_content}</p>
         </div>
         <div className="space-y-2">
           {items.map((item) => (
@@ -193,7 +193,7 @@ export function LinkLongPressMenu({
               className={`w-full flex items-center gap-3 p-3.5 rounded-xl ${item.color} transition-smooth`}
             >
               {item.icon}
-              <span className="text-sm font-bold">{item.label}</span>
+              <span className="text-sm font-medium">{item.label}</span>
             </button>
           ))}
         </div>

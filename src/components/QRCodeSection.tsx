@@ -31,7 +31,7 @@ export default function QRCodeSection() {
                   <QrCode className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-accent-800">حمّل التطبيق</h3>
+                  <h3 className="text-lg font-semibold text-accent-800">حمّل التطبيق</h3>
                   <p className="text-xs text-accent-600">امسح الرمز بكاميرا هاتفك</p>
                 </div>
               </div>
@@ -47,7 +47,7 @@ export default function QRCodeSection() {
                     {s.icon}
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-bold text-accent-800">{s.label}</p>
+                    <p className="text-sm font-medium text-accent-800">{s.label}</p>
                     <p className="text-xs text-accent-600">{s.desc}</p>
                   </div>
 

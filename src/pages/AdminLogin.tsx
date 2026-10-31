@@ -37,7 +37,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
             <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center shadow-lg mb-4">
               <BookOpen className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-accent-800">لوحة الإدارة</h1>
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">لوحة الإدارة</h1>
             <p className="text-sm text-accent-600 mt-1">روابط الذكر الحكيم</p>
           </div>
 
@@ -77,7 +77,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 text-center">
+              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600 text-center">
                 {error}
               </div>
             )}

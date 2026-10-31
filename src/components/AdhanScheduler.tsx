@@ -75,7 +75,7 @@ export default function AdhanScheduler() {
               audioRef.current = null;
               setBanner(null);
             }}
-            className="flex-1 py-2 bg-white text-emerald-800 font-bold rounded-xl"
+            className="flex-1 py-2 bg-white text-emerald-800 font-semibold rounded-xl"
           >
             إيقاف الصوت وإغلاق
           </button>

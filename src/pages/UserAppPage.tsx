@@ -400,7 +400,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               </button>
             )}
             <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-link hover:bg-amber-50 rounded-lg transition-smooth font-semibold border border-hairline-amber">
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-link hover:bg-amber-50 rounded-xl transition-smooth font-semibold border border-hairline-amber">
               <BookMarked className="w-5 h-5" /> المصحف
             </button>
             <button onClick={() => onNavigate('home')}
@@ -450,7 +450,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         <div className="mb-5 bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-5 shadow-lg text-white">
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 flex-shrink-0 text-emerald-100" />
-            <p className="text-lg font-bold leading-relaxed">
+            <p className="text-lg font-semibold leading-relaxed">
               {ISLAMIC_GREETING}
             </p>
             {session && !editingName && (
@@ -491,7 +491,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="mb-5 bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
               <BadgeCheck className="w-5 h-5 text-amber-600" />
-              <h2 className="font-bold text-accent-800">مركز الحفظ</h2>
+              <h2 className="font-semibold text-accent-800">مركز الحفظ</h2>
             </div>
             <p className="text-2xl font-bold text-accent-800">
               حفظت {formatAr(memorizedFromStart)} آية من أول المصحف من {formatAr(TOTAL_VERSES)} — {formatAr(Math.round((memorizedFromStart / TOTAL_VERSES) * 100))}٪
@@ -513,7 +513,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-1">
               <Mic className="w-5 h-5 text-amber-600" />
-              <h2 className="font-bold text-accent-800">سمّع لنفسك</h2>
+              <h2 className="font-semibold text-accent-800">سمّع لنفسك</h2>
             </div>
             <p className="text-sm text-accent-600 leading-relaxed flex-1">
               بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٣ ثواني (الافتراضي — وبتتظبط من إعدادات التسميع) وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة. ولو المتصفح مش بيدعم الميكروفون، التقييم بيبقى يدوي.
@@ -547,7 +547,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             className="w-full flex items-center justify-between p-4 text-right">
             <div className="flex items-center gap-2">
               <Filter className="w-5 h-5 text-emerald-600" />
-              <span className="text-base font-bold text-accent-800">أدوات الفلترة</span>
+              <span className="text-base font-semibold text-accent-800">أدوات الفلترة</span>
               {activeFiltersCount > 0 && (
                 <span className="flex items-center justify-center w-6 h-6 bg-emerald-700 text-white text-xs font-bold rounded-full">
                   {activeFiltersCount}
@@ -607,7 +607,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                         surahFilter === String(s.no) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                       }`}>
                       <span className="text-xs opacity-60">{s.no}.</span>
-                      <span className="truncate">{s.name}</span>
+                      <span>{s.name}</span>
                     </button>
                   ))}
                 </div>
@@ -675,7 +675,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   className="w-full flex items-center justify-between bg-white rounded-2xl border border-hairline-emerald shadow-sm p-4 hover:shadow-md transition-smooth">
                   <span className="flex items-center gap-2">
                     <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-lg">{g.no.toLocaleString('ar-EG')}</span>
-                    <span className="text-base font-bold text-accent-800">سورة {g.name}</span>
+                    <span className="text-base font-semibold text-accent-800">سورة {g.name}</span>
                   </span>
                   <span className="flex items-center gap-1 text-sm font-semibold text-emerald-700">عرض الآيات <ChevronLeft className="w-5 h-5" /></span>
                 </button>

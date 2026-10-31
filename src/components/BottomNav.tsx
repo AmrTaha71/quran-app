@@ -56,7 +56,7 @@ export default function BottomNav({
               onClick={() => {
                 onNavigate(item.id);
               }}
-              className={`icon-action relative polish-press flex-1 flex-col py-2 text-sm font-bold ${
+              className={`icon-action relative polish-press flex-1 flex-col py-2 text-sm font-semibold ${
                 active ? 'text-emerald-700 bg-emerald-50' : 'text-accent-500 hover:bg-gray-50'
               }`}
               aria-current={active ? 'page' : undefined}

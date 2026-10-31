@@ -669,21 +669,21 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
 
         <div className="flex items-center gap-2 mt-3">
           <SunMoon className="w-6 h-6 text-emerald-700" />
-          <h1 className="text-xl font-bold text-accent-800">أذكار الصباح والمساء</h1>
-          <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">تلاوة وصوت مولّد</span>
+          <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">أذكار الصباح والمساء</h1>
+          <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-1 rounded-full">تلاوة وصوت مولّد</span>
         </div>
 
         {/* Wird tabs */}
         <div className="grid grid-cols-2 gap-2 mt-4">
           <button
             onClick={() => switchWird('morning')}
-            className={`py-3 font-bold rounded-xl ${wird === 'morning' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-3 font-semibold rounded-xl ${wird === 'morning' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار الصباح
           </button>
           <button
             onClick={() => switchWird('evening')}
-            className={`py-3 font-bold rounded-xl ${wird === 'evening' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-3 font-semibold rounded-xl ${wird === 'evening' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار المساء
           </button>
@@ -693,20 +693,20 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button
             onClick={() => switchVoice('male')}
-            className={`py-2 font-bold rounded-xl text-sm ${voice === 'male' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-2 font-semibold rounded-xl text-sm ${voice === 'male' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت رجالي
           </button>
           <button
             onClick={() => switchVoice('female')}
-            className={`py-2 font-bold rounded-xl text-sm ${voice === 'female' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-2 font-semibold rounded-xl text-sm ${voice === 'female' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت نسائي
           </button>
         </div>
 
         {/* Now playing */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 mt-4 polish-listen-card sticky top-0 z-30">
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mt-4 polish-listen-card sticky top-0 z-30">
           {completed ? (
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">تم وردك ✓</p>
@@ -722,9 +722,9 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
               </p>
               <p className="mt-1">
                 {isRecitation(clip, voice) ? (
-                  <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة — {adhkarReciterLabel(clip, reciter)}</span>
+                  <span className="text-xs font-medium bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة — {adhkarReciterLabel(clip, reciter)}</span>
                 ) : (
-                  <span className="text-xs font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
+                  <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
                 )}
               </p>
               <p className="text-lg leading-relaxed text-accent-800 font-semibold mt-2">{clip.display}</p>
@@ -779,14 +779,14 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
             <button
               key={item.id}
               onClick={() => jumpTo(i, playing)}
-              className={`w-full text-right flex items-center gap-3 px-3 py-2.5 rounded-xl relative polish-listen-row ${i === index && !completed ? 'bg-amber-50 border border-amber-200' : ''}${playing && i === index && !completed ? ' is-playing' : ''}`}
+              className={`w-full text-right flex items-center gap-3 px-3 py-2.5 rounded-xl relative polish-listen-row ${i === index && !completed ? 'bg-amber-50 border border-hairline-amber' : ''}${playing && i === index && !completed ? ' is-playing' : ''}`}
             >
-              <span className={`text-xs font-bold w-6 text-center ${i < index ? 'text-emerald-600' : i === index ? 'text-amber-700' : 'text-stone-400'}`}>
+              <span className={`text-xs font-bold w-6 text-center ${i < index ? 'text-emerald-700' : i === index ? 'text-amber-link' : 'text-stone-400'}`}>
                 {i < index ? '✓' : i === index && !completed ? '▶' : i + 1}
               </span>
               <span className="flex-1 text-sm text-accent-800">{preview(item.display)}</span>
               {isRecitation(item, voice) && (
-                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة</span>
+                <span className="text-xs font-medium bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة</span>
               )}
               <span className="text-xs font-bold bg-stone-100 text-stone-600 px-2 py-1 rounded-full">×{item.count}</span>
             </button>
@@ -821,7 +821,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           onMouseUp={blackPressEnd}
         >
           {showBlackHint && (
-            <p className="text-white/20 text-sm font-bold">اضغط مطوّلًا للعودة</p>
+            <p className="text-white/20 text-sm font-medium">اضغط مطوّلًا للعودة</p>
           )}
         </div>
       )}

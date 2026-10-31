@@ -1470,14 +1470,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <button
             onClick={() => onNavigate('home')}
-            className="px-4 py-2 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+            className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
           >
             الرئيسية
           </button>
           <div>
             <h1
-              className="text-lg font-bold text-accent-800 flex items-center gap-2"
-              style={{ fontFamily: "'Noto Naskh Arabic', serif" }}
+              className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 flex items-center gap-2"
             >
               <Headphones className="w-5 h-5 text-emerald-600" />
               استمع للقرآن
@@ -1491,8 +1490,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       <main className="max-w-5xl mx-auto px-4 py-5">
         {/* Resume card FIRST, when a listening wird is saved */}
         {savedWird && showResume && (
-          <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-5 mb-4">
-            <p className="font-bold text-accent-800">
+          <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-5 mb-4">
+            <p className="font-semibold text-accent-800">
               استئناف من سورة {surahName(savedWird.surah)}، الآية {savedWird.ayah}
             </p>
             <p className="text-sm text-accent-600 mt-1">ورد استماع محفوظ من آخر مرة توقفت فيها.</p>
@@ -1505,7 +1504,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
               <button
                 onClick={dismissResume}
-                className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
               >
                 ابدأ من الأول
               </button>
@@ -1517,8 +1516,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             selected riwaya. Per-riwaya: switching riwaya shows
             that riwaya's own saved position, not another's. */}
         {riwayaId !== null && savedRiwayatResume && showRiwayatResume && (
-          <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-5 mb-4">
-            <p className="font-bold text-accent-800">
+          <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-5 mb-4">
+            <p className="font-semibold text-accent-800">
               استئناف — سورة {surahName(savedRiwayatResume.surah)}، رواية{' '}
               {RIWAYAT.find((r) => r.id === savedRiwayatResume.riwaya)?.name || ''}
             </p>
@@ -1532,7 +1531,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
               <button
                 onClick={dismissRiwayatResume}
-                className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
               >
                 ابدأ من الأول
               </button>
@@ -1544,8 +1543,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             Mirrors the riwaya card; shown only while hadr is the
             selected pace mode. */}
         {hadrOn && savedHadrResume && showHadrResume && (
-          <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-5 mb-4">
-            <p className="font-bold text-accent-800">
+          <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-5 mb-4">
+            <p className="font-semibold text-accent-800">
               استئناف — {HADR_NAME}: سورة {surahName(savedHadrResume.surah)}
             </p>
             <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بوضع الحدر.</p>
@@ -1558,7 +1557,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
               <button
                 onClick={dismissHadrResume}
-                className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
               >
                 ابدأ من الأول
               </button>
@@ -1571,7 +1570,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             engine plays (locked), like every other mode switch here. */}
         {hubView === 'hub' && (
         <div className="mb-4">
-          <p className="font-bold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
+          <p className="font-semibold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
           <p className="text-sm text-accent-600 mb-4">اضغط على كارت لاختيار التفاصيل والبدء.</p>
           {/* Saved journey resumes first, so a returning journey
               user continues in one tap without entering a card. */}
@@ -1579,8 +1578,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             const saved = savedJourneys[m.id];
             if (!saved || hiddenJourneyResumes.includes(m.id)) return null;
             return (
-              <div key={`hub-resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-4 mb-3">
-                <p className="font-bold text-accent-800">
+              <div key={`hub-resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-4 mb-3">
+                <p className="font-semibold text-accent-800">
                   استئناف — {m.name}:{' '}
                   {saved.kind === 'tafsir'
                     ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
@@ -1595,7 +1594,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   </button>
                   <button
                     onClick={() => dismissJourneyResume(m.id)}
-                    className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
                   >
                     ابدأ من الأول
                   </button>
@@ -1616,7 +1615,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     changeRiwaya(null);
                     setHubView(m.id);
                   }}
-                  className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
+                  className="w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
                 >
                   <span className="block text-lg">{m.name}</span>
                   <span className="block text-sm font-normal text-accent-600 mt-1">{m.description}</span>
@@ -1629,7 +1628,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <button
               disabled={locked}
               onClick={() => setHubView('free')}
-              className="w-full p-5 rounded-2xl font-bold text-right bg-white border border-emerald-200 text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
+              className="w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
             >
               <span className="block text-lg">سماع حر</span>
               <span className="block text-sm font-normal text-accent-600 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
@@ -1642,15 +1641,15 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             Free-listening detail: shown only when the سماع حر hub
             card is entered (hubView 'free'). */}
         {hubView === 'free' && (
-        <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
           <button
             disabled={locked}
             onClick={() => setHubView('hub')}
-            className="mb-4 py-2 px-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl disabled:opacity-50"
+            className="mb-4 py-2 px-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl disabled:opacity-50"
           >
             ← عودة إلى الكروت
           </button>
-          <label className="block font-bold text-accent-800 mb-2" htmlFor="listen-surah">
+          <label className="block font-medium text-accent-800 mb-2" htmlFor="listen-surah">
             اختر السورة
           </label>
           <select
@@ -1664,7 +1663,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 setCurrent(1);
               }
             }}
-            className="w-full py-3 px-3 bg-white border border-emerald-200 rounded-xl font-bold text-accent-800 disabled:opacity-50"
+            className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
           >
             {SURAHS.map((s) => (
               <option key={s.no} value={s.no}>
@@ -1680,14 +1679,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               active. Selecting a riwaya or hadr hides the
               reciter group; the speed picker stays visible for
               riwaya (and is disabled, not hidden, for hadr). */}
-          <p className="font-bold text-accent-800 mt-5 mb-2">حفص</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">حفص</p>
           <button
             disabled={locked}
             onClick={selectHafs}
-            className={`w-full p-4 rounded-xl font-bold text-right disabled:opacity-50 ${
+            className={`w-full p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
               riwayaId === null && !hadrOn
                 ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-emerald-200 text-accent-800'
+                : 'bg-white border border-hairline-emerald text-accent-800'
             }`}
           >
             حفص — القراء الثمانية
@@ -1698,17 +1697,17 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
 
           {riwayaId === null && !hadrOn && (
             <>
-          <p className="font-bold text-accent-800 mt-5 mb-2">القراء للاختيار بينهم</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">القراء للاختيار بينهم</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {RECITERS.map((r) => (
               <button
                 key={r.id}
                 disabled={locked}
                 onClick={() => changeReciter(r.id)}
-                className={`w-full px-4 py-2.5 rounded-xl font-bold text-center disabled:opacity-50 ${
+                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
                   reciterId === r.id
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-emerald-200 text-accent-800'
+                    : 'bg-white border border-hairline-emerald text-accent-800'
                 }`}
               >
                 {r.name}
@@ -1721,17 +1720,17 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           {/* Group 2 — الروايات, as clear rows (not wrapping
               chips): each row shows riwaya + narrator, and the
               selected row is unmistakable (emerald + check). */}
-          <p className="font-bold text-accent-800 mt-5 mb-2">الروايات</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">الروايات</p>
           <div className="grid gap-2">
             {RIWAYAT.map((r) => (
               <button
                 key={r.id}
                 disabled={locked}
                 onClick={() => selectRiwaya(r.id)}
-                className={`w-full p-3.5 rounded-xl font-bold text-right disabled:opacity-50 flex items-center justify-between gap-2 ${
+                className={`w-full p-3.5 rounded-xl font-semibold text-right disabled:opacity-50 flex items-center justify-between gap-2 ${
                   riwayaId === r.id
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-emerald-200 text-accent-800'
+                    : 'bg-white border border-hairline-emerald text-accent-800'
                 }`}
               >
                 {r.name}
@@ -1751,17 +1750,17 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               follows ayah files via 'ended' events, not a clock,
               so speed cannot desync it (no timers in the ayah
               advance path — verified by grep, see EVIDENCE.md). */}
-          <p className="font-bold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
           <div className="grid grid-cols-3 gap-2">
             {PLAYBACK_RATES.map((rate) => (
               <button
                 key={rate}
                 disabled={locked || hadrOn}
                 onClick={() => changeRate(rate)}
-                className={`w-full px-4 py-2.5 rounded-xl font-bold text-center disabled:opacity-50 ${
+                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
                   playbackRate === rate
                     ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-emerald-200 text-accent-800'
+                    : 'bg-white border border-hairline-emerald text-accent-800'
                 }`}
               >
                 {PLAYBACK_RATE_LABELS[rate]}
@@ -1784,10 +1783,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           <button
             disabled={locked}
             onClick={selectHadr}
-            className={`w-full p-4 rounded-xl font-bold text-right mt-5 disabled:opacity-50 ${
+            className={`w-full p-4 rounded-xl font-semibold text-right mt-5 disabled:opacity-50 ${
               hadrOn
                 ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-emerald-200 text-accent-800'
+                : 'bg-white border border-hairline-emerald text-accent-800'
             }`}
           >
             {HADR_FULL_LABEL}
@@ -1798,15 +1797,15 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
 
           {riwayaId === null && !hadrOn && (
             <>
-          <p className="font-bold text-accent-800 mt-5 mb-2">نوع الاستماع</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">نوع الاستماع</p>
           <div className="grid grid-cols-2 gap-3">
             <button
               disabled={locked}
               onClick={() => setMode('free')}
-              className={`p-4 rounded-xl font-bold text-right disabled:opacity-50 ${
+              className={`p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                 mode === 'free'
                   ? 'bg-emerald-600 text-white'
-                  : 'bg-white border border-emerald-200 text-accent-800'
+                  : 'bg-white border border-hairline-emerald text-accent-800'
               }`}
             >
               استماع حر
@@ -1817,10 +1816,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <button
               disabled={locked}
               onClick={() => setMode('wird')}
-              className={`p-4 rounded-xl font-bold text-right disabled:opacity-50 ${
+              className={`p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                 mode === 'wird'
                   ? 'bg-emerald-600 text-white'
-                  : 'bg-white border border-emerald-200 text-accent-800'
+                  : 'bg-white border border-hairline-emerald text-accent-800'
               }`}
             >
               ورد استماع
@@ -1873,11 +1872,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             pickers live here now — the player pickers above are
             hidden in detail views. */}
         {riwayaId === null && !hadrOn && hubView !== 'hub' && hubView !== 'free' && (
-        <div id="three-mode-section" className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
+        <div id="three-mode-section" className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
           <button
             disabled={locked}
             onClick={() => setHubView('hub')}
-            className="mb-4 py-2 px-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl disabled:opacity-50"
+            className="mb-4 py-2 px-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl disabled:opacity-50"
           >
             ← عودة إلى الكروت
           </button>
@@ -1889,7 +1888,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           </p>
           <div className="grid grid-cols-2 gap-3 mt-4">
             <div>
-              <label className="block font-bold text-accent-800 mb-2" htmlFor="journey-surah">
+              <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-surah">
                 ابدأ من سورة
               </label>
               <select
@@ -1903,7 +1902,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     setCurrent(1);
                   }
                 }}
-                className="w-full py-3 px-3 bg-white border border-emerald-200 rounded-xl font-bold text-accent-800 disabled:opacity-50"
+                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
               >
                 {SURAHS.map((s) => (
                   <option key={s.no} value={s.no}>
@@ -1913,7 +1912,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </select>
             </div>
             <div>
-              <label className="block font-bold text-accent-800 mb-2" htmlFor="journey-reciter">
+              <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-reciter">
                 قارئ البداية
               </label>
               <select
@@ -1921,7 +1920,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 value={reciterId}
                 disabled={locked}
                 onChange={(e) => changeReciter(e.target.value)}
-                className="w-full py-3 px-3 bg-white border border-emerald-200 rounded-xl font-bold text-accent-800 disabled:opacity-50"
+                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
               >
                 {RECITERS.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -1937,7 +1936,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               resumed journey keeps the order it started with. */}
           {hubView === 'tadabbur' && (
             <div className="mt-4">
-              <p className="font-bold text-accent-800 mb-2">ترتيب التفسير</p>
+              <p className="font-semibold text-accent-800 mb-2">ترتيب التفسير</p>
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="ترتيب التفسير">
                 <button
                   disabled={locked}
@@ -1945,10 +1944,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     setTadabburTafsirOrder('before');
                     writeTadabburTafsirOrder('before');
                   }}
-                  className={`py-3 px-3 font-bold rounded-xl disabled:opacity-50 ${
+                  className={`py-3 px-3 font-semibold rounded-xl disabled:opacity-50 ${
                     tadabburTafsirOrder === 'before'
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-white border border-emerald-200 text-accent-800'
+                      : 'bg-white border border-hairline-emerald text-accent-800'
                   }`}
                 >
                   التفسير قبل الربع
@@ -1959,10 +1958,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     setTadabburTafsirOrder('after');
                     writeTadabburTafsirOrder('after');
                   }}
-                  className={`py-3 px-3 font-bold rounded-xl disabled:opacity-50 ${
+                  className={`py-3 px-3 font-semibold rounded-xl disabled:opacity-50 ${
                     tadabburTafsirOrder === 'after'
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-white border border-emerald-200 text-accent-800'
+                      : 'bg-white border border-hairline-emerald text-accent-800'
                   }`}
                 >
                   التفسير بعد الربع
@@ -1999,10 +1998,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   <button
                     disabled={disabled}
                     onClick={() => void startJourney(m.id)}
-                    className={`w-full p-4 rounded-xl font-bold text-right disabled:opacity-50 ${
+                    className={`w-full p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                       journeyMode === m.id
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-white border border-emerald-200 text-accent-800'
+                        : 'bg-white border border-hairline-emerald text-accent-800'
                     }${preselectedMode === m.id && journeyMode !== m.id ? ' ring-2 ring-emerald-500' : ''}`}
                   >
                     {m.name}
@@ -2011,7 +2010,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     </span>
                   </button>
                   {preselectedMode === m.id && !locked && (
-                    <p className="text-xs text-emerald-700 font-bold mt-2">
+                    <p className="text-xs text-emerald-700 font-medium mt-2">
                       مختارة من الرئيسية — اضغط للبدء أو استأنف من البطاقة المحفوظة.
                     </p>
                   )}
@@ -2031,8 +2030,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             const saved = savedJourneys[m.id];
             if (!saved || hiddenJourneyResumes.includes(m.id)) return null;
             return (
-              <div key={`resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-4 mt-4">
-                <p className="font-bold text-accent-800">
+              <div key={`resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-4 mt-4">
+                <p className="font-semibold text-accent-800">
                   استئناف — {m.name}:{' '}
                   {saved.kind === 'tafsir'
                     ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
@@ -2048,7 +2047,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   </button>
                   <button
                     onClick={() => dismissJourneyResume(m.id)}
-                    className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
                   >
                     ابدأ من الأول
                   </button>
@@ -2061,8 +2060,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
 
         {/* Playback view */}
         {active && (
-          <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
-            <p className="font-bold text-accent-800">
+          <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
+            <p className="font-semibold text-accent-800">
               {journeyMode !== null
                 ? journeyItem !== null
                   ? journeyItem.kind === 'tafsir'
@@ -2081,11 +2080,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
               <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
             )}
-            {engineError && <p className="text-sm text-red-600 font-bold mt-2">{engineError}</p>}
+            {engineError && <p className="text-sm text-red-600 font-medium mt-2">{engineError}</p>}
             {/* Redirect B: interruption resume — prominent, tap-only */}
             {interrupted && (
-              <div className="mt-4 bg-amber-50 border border-amber-300 rounded-xl p-4">
-                <p className="font-bold text-accent-800">توقف التشغيل مؤقتا</p>
+              <div className="mt-4 bg-amber-50 border border-hairline-amber rounded-xl p-4">
+                <p className="font-semibold text-accent-800">توقف التشغيل مؤقتا</p>
                 <p className="text-sm text-accent-600 mt-1">اضغط استئناف للمتابعة من حيث توقفت.</p>
                 <button
                   onClick={() => void resumeAfterInterruption()}
@@ -2110,13 +2109,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <>
               <button
                 onClick={() => void engineRef.current?.prev()}
-                className="px-4 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2"
               >
                 <SkipBack className="w-5 h-5" /> الآية السابقة
               </button>
               <button
                 onClick={() => void engineRef.current?.next()}
-                className="px-4 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2"
               >
                 الآية التالية <SkipForward className="w-5 h-5" />
               </button>
@@ -2143,20 +2142,20 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     void engineRef.current?.restart();
                   }
                 }}
-                className="px-4 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2"
               >
                 <RotateCcw className="w-5 h-5" /> {journeyMode !== null ? 'من أول الرحلة' : 'من أول السورة'}
               </button>
               <button
                 onClick={stopPlayback}
-                className="px-4 py-3 bg-white border border-red-200 text-red-700 font-bold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center gap-2"
               >
                 <Square className="w-5 h-5" /> إيقاف
               </button>
             </div>
             <button
               onClick={() => setBlackScreen(true)}
-              className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+              className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
               aria-label="شاشة سوداء"
             >
               <Moon className="w-5 h-5" />
@@ -2171,10 +2170,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             voice), and hadr is surah-file (no ayah steps), so this
             block hides under either. */}
         {riwayaId === null && !hadrOn && hubView !== 'hub' && (
-        <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800 mb-3">سورة {surahName(surah)}</p>
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
+          <p className="font-semibold text-accent-800 mb-3">سورة {surahName(surah)}</p>
           {textLoading && <p className="text-accent-600">جارٍ تحميل نص السورة…</p>}
-          {textError && <p className="text-red-600 font-bold">{textError}</p>}
+          {textError && <p className="text-red-600 font-medium">{textError}</p>}
           {!textLoading && !textError && ayahs && (
             <div className="space-y-2">
               {ayahs.map((row) => (
@@ -2190,7 +2189,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   className={`w-full text-right p-3 rounded-xl border leading-loose ${
                     active && row.ayah_no === currentAyah
                       ? 'bg-amber-100 border-amber-300'
-                      : 'bg-white border-emerald-100'
+                      : 'bg-white border-hairline-emerald'
                   }`}
                   style={{ fontFamily: "'Noto Naskh Arabic', serif", fontSize: '1.25rem' }}
                 >
@@ -2208,22 +2207,22 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         {/* Offline section: this surah + reciter only, never whole-Quran.
             Hafs only in v1 — riwaya and hadr modes have no offline downloads. */}
         {riwayaId === null && !hadrOn && hubView === 'free' && (
-        <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 mb-4">
-          <p className="font-bold text-accent-800">الاستماع دون اتصال</p>
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
+          <p className="font-semibold text-accent-800">الاستماع دون اتصال</p>
           <p className="text-sm text-accent-600 mt-1">
             سورة {surahName(surah)} — {RECITERS.find((r) => r.id === reciterId)?.name || ''}
           </p>
-          {offlineError && <p className="text-sm text-red-600 font-bold mt-2">{offlineError}</p>}
+          {offlineError && <p className="text-sm text-red-600 font-medium mt-2">{offlineError}</p>}
           {offlineChecking ? (
             <p className="text-accent-600 mt-3">جارٍ التحقق…</p>
           ) : downloaded ? (
             <div className="mt-3">
-              <p className="inline-block px-3 py-1.5 bg-emerald-100 text-emerald-800 font-bold rounded-xl">
+              <p className="inline-block px-3 py-1.5 bg-emerald-100 text-emerald-800 font-medium rounded-xl">
                 متاح دون اتصال
               </p>
               <button
                 onClick={() => void handleDeleteDownload()}
-                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-bold rounded-xl flex items-center justify-center gap-2"
+                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center justify-center gap-2"
               >
                 <Trash2 className="w-5 h-5" /> حذف التحميل
               </button>
@@ -2232,7 +2231,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="mt-3">
               {estimate ? (
                 <div>
-                  <p className="font-bold text-accent-800">
+                  <p className="font-semibold text-accent-800">
                     حجم التحميل: {formatApproxSize(estimate.bytes)} — {estimate.count} مقاطع
                   </p>
                   <div className="flex gap-3 mt-3">
@@ -2246,7 +2245,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     <button
                       disabled={downloading}
                       onClick={() => setEstimate(null)}
-                      className="flex-1 py-3 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl disabled:opacity-50"
+                      className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl disabled:opacity-50"
                     >
                       إلغاء
                     </button>
@@ -2302,7 +2301,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           onMouseUp={blackPressEnd}
         >
           {showBlackHint && (
-            <p className="text-white/20 text-sm font-bold">اضغط مطوّلًا للعودة</p>
+            <p className="text-white/20 text-sm font-medium">اضغط مطوّلًا للعودة</p>
           )}
         </div>
       )}

@@ -104,7 +104,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
           <div>
-            <h1 className="text-lg font-bold text-accent-800" style={{ fontFamily: "'Noto Naskh Arabic', serif" }}>روابط الذكر الحكيم</h1>
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">روابط الذكر الحكيم</h1>
             <p className="text-sm text-accent-600">للحفظ بالتربيطات</p>
           </div>
         </div>
@@ -118,7 +118,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4">
-          <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
+          <p className="font-semibold text-accent-800">{ISLAMIC_GREETING}</p>
           <p className="text-sm text-accent-600 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
           </p>
@@ -129,7 +129,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* Resume where the user left off */}
         <div className="bg-emerald-600 rounded-2xl shadow-sm polish-card polish-fade-up p-5 mb-4 text-white" style={{ animationDelay: '60ms' }}>
-          <p className="font-bold text-lg">
+          <p className="font-semibold text-lg">
             {lastPage.visited ? 'أكمل من حيث توقفت' : 'ابدأ من أول المصحف'}
           </p>
           <p className="text-emerald-100 mt-1">
@@ -142,7 +142,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               } catch {}
               onNavigate('mushaf');
             }}
-            className="mt-4 w-full py-3 bg-white text-emerald-700 font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+            className="mt-4 w-full py-3 bg-white text-emerald-700 font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
           >
             <BookOpen className="w-5 h-5" />
             {lastPage.visited ? `أكمل الحفظ — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف للحفظ'}
@@ -163,20 +163,20 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* استمع للقرآن: after سمّع لنفسك. */}
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '180ms' }}>
-          <p className="font-bold text-accent-800 flex items-center gap-2">
+          <p className="font-semibold text-accent-800 flex items-center gap-2">
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
           <p className="text-xs text-accent-500 mt-1">
             واقفل الشاشة لو عاوز
           </p>
           {listeningWird && (
-            <p className="text-sm text-amber-link font-bold mt-2">
+            <p className="text-sm text-amber-link font-semibold mt-2">
               لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
             </p>
           )}
           <button
             onClick={() => onNavigate('listen')}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
           >
             <Headphones className="w-5 h-5" />
             استمع للقرآن
@@ -187,7 +187,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             (46 clips, male/female toggle in the player). Placed
             directly after the listen card: the audio hub. */}
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
-          <p className="font-bold text-accent-800 flex items-center gap-2">
+          <p className="font-semibold text-accent-800 flex items-center gap-2">
             <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
           </p>
           <p className="text-xs text-accent-500 mt-1">
@@ -195,7 +195,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           </p>
           <button
             onClick={() => onNavigate('adhkar')}
-            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+            className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
           >
             <SunMoon className="w-5 h-5" />
             استمع للأذكار
@@ -205,7 +205,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* تربيط اليوم: real approved link only; hidden on any failure */}
         {linkOfDay && (
           <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm polish-card p-4 mb-4">
-            <p className="font-bold text-accent-800 flex items-center gap-2">
+            <p className="font-semibold text-accent-800 flex items-center gap-2">
               <Link className="w-5 h-5 text-amber-600" /> تربيط اليوم
             </p>
             <p className="text-sm text-accent-600 mt-1">
@@ -220,7 +220,7 @@ export default function HomeStartPage({ session, onNavigate }: {
                 try { localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: linkOfDay.surah, ayah: linkOfDay.ayah })); } catch { /* ignore */ }
                 onNavigate('mushaf');
               }}
-              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+              className="mt-3 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
             >
               <BookOpen className="w-5 h-5" />
               افتح الآية وسمّعها
@@ -245,7 +245,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
         <button
           onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 bg-white border border-hairline-emerald text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+          className="w-full py-3.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
         >
           <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
         </button>
@@ -259,16 +259,16 @@ export default function HomeStartPage({ session, onNavigate }: {
       {/* First-run screen (home only, once per device): 3 steps, dismissible */}
       {showIntro && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50" onClick={dismissIntro}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={(e) => e.stopPropagation()}>
             <p className="text-lg font-bold text-accent-800 mb-1">احفظ القرآن بالتربيطات</p>
             <p className="text-sm text-accent-600 mb-4">٣ خطوات، وكل آية تثبت في ذهنك:</p>
             <ol className="text-right space-y-3 text-base text-accent-700">
-              <li><span className="font-bold text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
-              <li><span className="font-bold text-amber-link">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>
-              <li><span className="font-bold text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
+              <li><span className="font-medium text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
+              <li><span className="font-medium text-amber-link">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>
+              <li><span className="font-medium text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
             </ol>
             <button onClick={dismissIntro}
-              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl polish-press polish-press-depth polish-focus">
+              className="mt-5 w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl polish-press polish-press-depth polish-focus">
               ابدأ
             </button>
           </div>

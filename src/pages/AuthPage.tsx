@@ -435,8 +435,8 @@ export default function AuthPage({
                 className="w-full text-sm text-emerald-700 hover:text-emerald-800 font-semibold py-1">
                 عندك حساب؟ ادخل بدل ما تسجل
               </button>
-              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
               <button type="button" onClick={handleResendConfirmation} disabled={loading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                 {loading ? '...' : 'إعادة إرسال رابط التأكيد'}
@@ -451,7 +451,7 @@ export default function AuthPage({
               <p className="text-sm text-accent-600 text-center mb-4">اختر كلمة سر جديدة لحسابك</p>
               {resetLinkExpired ? (
                 <>
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center leading-relaxed">
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center leading-relaxed">
                     انتهت صلاحية رابط استرجاع كلمة السر أو تم استخدامه من قبل. اطلب رابطًا جديدًا من صفحة استرجاع كلمة السر.
                   </div>
                   <button type="button" onClick={() => { onRecoveryExit?.(); setMode('recover'); }}
@@ -461,7 +461,7 @@ export default function AuthPage({
                 </>
               ) : resetDone ? (
                 <>
-                  {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+                  {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
                   <button type="button" onClick={() => { onRecoveryExit?.(); onNavigate('app'); }}
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth">
                     الذهاب إلى لوحتي
@@ -491,7 +491,7 @@ export default function AuthPage({
                       className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                     </div>
                   </div>
-                  {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
+                  {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
                   <button type="submit" disabled={loading}
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                     {loading ? '...' : 'حفظ كلمة السر الجديدة'}
@@ -516,8 +516,8 @@ export default function AuthPage({
                     className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
               </div>
-              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
               <button type="submit" disabled={loading}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50">
                 <RotateCcw className="w-4 h-4" />
@@ -567,7 +567,7 @@ export default function AuthPage({
                 </div>
               </div>
 
-              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
+              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
@@ -678,9 +678,9 @@ export default function AuthPage({
                 </div>
               </div>
 
-              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
-              {profileWarning && <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-800 text-center leading-relaxed">{profileWarning}</div>}
+              {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
+              {profileWarning && <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-2xl text-xs text-amber-800 text-center leading-relaxed">{profileWarning}</div>}
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">

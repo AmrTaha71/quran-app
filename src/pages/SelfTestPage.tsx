@@ -4011,7 +4011,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   }, [phase, showFullHeard, heardRawText]);
   const HEARD_CHIP_CAP = 400;
   const fullHeardToggle = (
-    <button type="button" onClick={() => setShowFullHeard((v) => !v)} className="mt-2 text-sm font-bold text-emerald-700 hover:underline">
+    <button type="button" onClick={() => setShowFullHeard((v) => !v)} className="mt-2 text-sm font-semibold text-emerald-700 hover:underline">
       {showFullHeard ? 'إخفاء النص الكامل' : 'عرض النص الكامل'}
     </button>
   );
@@ -4042,7 +4042,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Mic className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-accent-800">سمّع لنفسك</h1>
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">سمّع لنفسك</h1>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
           <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"
@@ -4080,27 +4080,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     استكمال الاختبار
                   </button>
                   <button onClick={() => { try { localStorage.removeItem(PROGRESS_KEY); } catch {} setSavedProgress(null); }}
-                    className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
+                    className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
                     تجاهل
                   </button>
                 </div>
               </div>
             )}
             <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4">
-              <h2 className="font-bold text-accent-800">إعدادات التسميع</h2>
+              <h2 className="font-semibold text-accent-800">إعدادات التسميع</h2>
               <div>
-                <p className="text-sm font-bold text-accent-700 mb-2">مستوى التدقيق</p>
+                <p className="text-sm font-medium text-accent-700 mb-2">مستوى التدقيق</p>
                 <div className="grid grid-cols-3 gap-2">
                   <button onClick={() => applySettings('beginner', reciteMode)}
-                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'beginner' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-semibold ${verifyLevel === 'beginner' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     مبتدئ
                   </button>
                   <button onClick={() => applySettings('intermediate', reciteMode)}
-                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'intermediate' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-semibold ${verifyLevel === 'intermediate' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     متوسط
                   </button>
                   <button onClick={() => applySettings('advanced', reciteMode)}
-                    className={`py-2.5 rounded-xl font-bold ${verifyLevel === 'advanced' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-semibold ${verifyLevel === 'advanced' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     متقدم
                   </button>
                 </div>
@@ -4113,7 +4113,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </p>
               </div>
               <div>
-                <p className="text-sm font-bold text-accent-700 mb-2">سرعة التصحيح</p>
+                <p className="text-sm font-medium text-accent-700 mb-2">سرعة التصحيح</p>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm text-accent-700">فترة التريث قبل النطق:</span>
                   <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay - 1, corrRate)} disabled={corrDelay <= CORR_DELAY_MIN}
@@ -4122,11 +4122,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay + 1, corrRate)} disabled={corrDelay >= CORR_DELAY_MAX}
                     className="px-3 py-1.5 bg-white border border-hairline rounded-lg font-bold disabled:opacity-40">+</button>
                 </div>
-                <p className="text-sm font-bold text-accent-700 mb-2">سرعة نطق الكلمة الصحيحة:</p>
+                <p className="text-sm font-medium text-accent-700 mb-2">سرعة نطق الكلمة الصحيحة:</p>
                 <div className="grid grid-cols-4 gap-2">
                   {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
                     <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelay, r)}
-                      className={`py-2.5 rounded-xl font-bold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                      className={`py-2.5 rounded-xl font-semibold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                       {CORR_RATE_LABEL[r]}
                     </button>
                   ))}
@@ -4136,14 +4136,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </p>
               </div>
               <div>
-                <p className="text-sm font-bold text-accent-700 mb-2">طريقة التسميع</p>
+                <p className="text-sm font-medium text-accent-700 mb-2">طريقة التسميع</p>
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => applySettings(verifyLevel, 'ayah')}
-                    className={`py-2.5 rounded-xl font-bold ${reciteMode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-semibold ${reciteMode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     آية آية
                   </button>
                   <button onClick={() => applySettings(verifyLevel, 'continuous')} disabled={!micSupported}
-                    className={`py-2.5 rounded-xl font-bold disabled:opacity-40 ${reciteMode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                    className={`py-2.5 rounded-xl font-semibold disabled:opacity-40 ${reciteMode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                     متصل
                   </button>
                 </div>
@@ -4172,7 +4172,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="flex items-center gap-3">
                 <input type="checkbox" checked={recording} onChange={toggleRecording} className="w-5 h-5 accent-emerald-600" />
                 <div>
-                  <p className="font-bold text-accent-800">وضع التسجيل (لمدونة الاختبار)</p>
+                  <p className="font-semibold text-accent-800">وضع التسجيل (لمدونة الاختبار)</p>
                   <p className="text-sm text-accent-600 leading-relaxed">عند التشغيل، يسجّل الاختبار أحداث التصحيح وخطة الأخطاء المزروعة لتصديرها كحالة اختبار — لا يغيّر التقييم ولا يرفع أي شيء تلقائيًا. مغلق افتراضيًا.</p>
                 </div>
               </div>
@@ -4180,7 +4180,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
-                      <span className="text-sm font-bold text-accent-700">لهجة الصوت</span>
+                      <span className="text-sm font-medium text-accent-700">لهجة الصوت</span>
                       <select value={recTags.dialect} onChange={(e) => setRecTags((t) => ({ ...t, dialect: e.target.value }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="">اختر…</option>
@@ -4193,7 +4193,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </select>
                     </label>
                     <label className="block">
-                      <span className="text-sm font-bold text-accent-700">جنس الصوت</span>
+                      <span className="text-sm font-medium text-accent-700">جنس الصوت</span>
                       <select value={recTags.gender} onChange={(e) => setRecTags((t) => ({ ...t, gender: e.target.value }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="">اختر…</option>
@@ -4202,7 +4202,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </select>
                     </label>
                     <label className="block">
-                      <span className="text-sm font-bold text-accent-700">سرعة التلاوة</span>
+                      <span className="text-sm font-medium text-accent-700">سرعة التلاوة</span>
                       <select value={recTags.pace} onChange={(e) => setRecTags((t) => ({ ...t, pace: e.target.value as VoiceTags['pace'] }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="slow">بطيئة</option>
@@ -4211,7 +4211,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </select>
                     </label>
                     <label className="block">
-                      <span className="text-sm font-bold text-accent-700">ضجيج المكان</span>
+                      <span className="text-sm font-medium text-accent-700">ضجيج المكان</span>
                       <select value={recTags.noise} onChange={(e) => setRecTags((t) => ({ ...t, noise: e.target.value as VoiceTags['noise'] }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="low">هادئ</option>
@@ -4220,40 +4220,40 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </label>
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-accent-700 mb-2">خطة الأخطاء المزروعة (قبل البدء)</p>
+                    <p className="text-sm font-medium text-accent-700 mb-2">خطة الأخطاء المزروعة (قبل البدء)</p>
                     <p className="text-sm text-accent-600 leading-relaxed mb-2">سجّل هنا ما ستنطقه خطأً وأين — قبل أن ترى نتيجة التطبيق. عند النهاية ستؤكد ما نفذته فعلًا. الخطة والواقع حقلان منفصلان، وهذا يلتقط الأخطاء غير المقصودة أيضًا. بنود خارج النطاق المبدوء تُحذف عند التصدير.</p>
                     {recPlan.map((p, pi) => (
                       <div key={pi} className="flex items-center gap-2 mb-2 text-sm">
                         <span className="flex-1 text-accent-700" dir="rtl">سورة {SURAHS.find((s) => s.no === p.surah)?.name || p.surah} آية {p.ayah}: ستقول «{p.spoken}» بدل «{p.expectedWord}» ({TAXONOMY_LABELS[p.type]})</span>
-                        <button onClick={() => setRecPlan((prev) => prev.filter((_, i) => i !== pi))} className="px-3 py-1.5 text-sm font-bold text-red-700 bg-red-50 rounded-lg">حذف</button>
+                        <button onClick={() => setRecPlan((prev) => prev.filter((_, i) => i !== pi))} className="px-3 py-1.5 text-sm font-semibold text-red-700 bg-red-50 rounded-lg">حذف</button>
                       </div>
                     ))}
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
-                        <span className="text-xs font-bold text-accent-700">السورة</span>
+                        <span className="text-xs font-semibold text-accent-700">السورة</span>
                         <select value={plDraft.surah} onChange={(e) => setPlDraft((d) => ({ ...d, surah: Number(e.target.value) }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
                           {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                         </select>
                       </label>
                       <label className="block">
-                        <span className="text-xs font-bold text-accent-700">الآية</span>
+                        <span className="text-xs font-semibold text-accent-700">الآية</span>
                         <input type="number" min={1} max={SURAH_AYAH_COUNTS[plDraft.surah - 1] || 1} value={plDraft.ayah}
                           onChange={(e) => setPlDraft((d) => ({ ...d, ayah: Math.max(1, Math.min(SURAH_AYAH_COUNTS[d.surah - 1] || 1, Number(e.target.value) || 1)) }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" />
                       </label>
                       <label className="block">
-                        <span className="text-xs font-bold text-accent-700">ستقول (خطأً)</span>
+                        <span className="text-xs font-semibold text-accent-700">ستقول (خطأً)</span>
                         <input value={plDraft.spoken} onChange={(e) => setPlDraft((d) => ({ ...d, spoken: e.target.value }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" dir="rtl" />
                       </label>
                       <label className="block">
-                        <span className="text-xs font-bold text-accent-700">بدل كلمة</span>
+                        <span className="text-xs font-semibold text-accent-700">بدل كلمة</span>
                         <input value={plDraft.expected} onChange={(e) => setPlDraft((d) => ({ ...d, expected: e.target.value }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" dir="rtl" />
                       </label>
                       <label className="block col-span-2">
-                        <span className="text-xs font-bold text-accent-700">نوع الخطأ</span>
+                        <span className="text-xs font-semibold text-accent-700">نوع الخطأ</span>
                         <select value={plDraft.type} onChange={(e) => setPlDraft((d) => ({ ...d, type: e.target.value as FixedTaxonomy }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
                           {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
@@ -4274,13 +4274,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             </div>
 
             <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
-              <h2 className="font-bold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
+              <h2 className="font-semibold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
                 ابدأ من أول سورة أو جزء أو حزب أو ربع، واخلص عند نهاية نفس الوحدة، أو عند نهاية حزب أو جزء أو سورة.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-sm font-bold text-accent-700">يبدأ من أول</span>
+                  <span className="text-sm font-medium text-accent-700">يبدأ من أول</span>
                   <select value={startKind}
                     onChange={(e) => {
                       const k = e.target.value as UnitKind;
@@ -4297,7 +4297,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-sm font-bold text-accent-700">{startKind === 'surah' ? 'السورة' : startKind === 'juz' ? 'رقم الجزء' : startKind === 'hizb' ? 'رقم الحزب' : 'رقم الربع'}</span>
+                  <span className="text-sm font-medium text-accent-700">{startKind === 'surah' ? 'السورة' : startKind === 'juz' ? 'رقم الجزء' : startKind === 'hizb' ? 'رقم الحزب' : 'رقم الربع'}</span>
                   {startKind === 'surah' ? (
                     <select value={startNum} onChange={(e) => setStartNum(Number(e.target.value))}
                       className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
@@ -4315,7 +4315,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-sm font-bold text-accent-700">لغاية نهاية</span>
+                  <span className="text-sm font-medium text-accent-700">لغاية نهاية</span>
                   <select value={endKind}
                     onChange={(e) => {
                       const k = e.target.value as EndKind;
@@ -4331,7 +4331,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </label>
                 {endKind !== 'same' && (
                   <label className="block">
-                    <span className="text-sm font-bold text-accent-700">{endKind === 'surah' ? 'السورة' : endKind === 'juz' ? 'رقم الجزء' : 'رقم الحزب'}</span>
+                    <span className="text-sm font-medium text-accent-700">{endKind === 'surah' ? 'السورة' : endKind === 'juz' ? 'رقم الجزء' : 'رقم الحزب'}</span>
                     {endKind === 'surah' ? (
                       <select value={endNum} onChange={(e) => setEndNum(Number(e.target.value))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
@@ -4346,7 +4346,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 )}
               </div>
               {unitPreviewValid ? (
-                <p className="text-sm font-bold text-emerald-700">{rangeSummary(unitPreview.start, unitPreview.end)}</p>
+                <p className="text-sm font-medium text-emerald-700">{rangeSummary(unitPreview.start, unitPreview.end)}</p>
               ) : (
                 <p className="text-sm text-red-600 font-semibold">نهاية النطاق قبل بدايته — اختر نهاية أبعد (جزء/حزب/سورة أكبر)</p>
               )}
@@ -4358,9 +4358,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             </div>
 
             <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
-              <h2 className="font-bold text-accent-800">أو يدوي: سورة وآيات</h2>
+              <h2 className="font-semibold text-accent-800">أو يدوي: سورة وآيات</h2>
               <label className="block">
-                <span className="text-sm font-bold text-accent-700">السورة</span>
+                <span className="text-sm font-medium text-accent-700">السورة</span>
                 <select value={surah}
                   onChange={(e) => {
                     const n = Number(e.target.value);
@@ -4376,13 +4376,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-sm font-bold text-accent-700">من آية</span>
+                  <span className="text-sm font-medium text-accent-700">من آية</span>
                   <input type="number" min={1} max={surahCount} value={from}
                     onChange={(e) => setFrom(Number(e.target.value) || 1)}
                     className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                 </label>
                 <label className="block">
-                  <span className="text-sm font-bold text-accent-700">إلى آية</span>
+                  <span className="text-sm font-medium text-accent-700">إلى آية</span>
                   <input type="number" min={1} max={surahCount} value={to}
                     onChange={(e) => setTo(Number(e.target.value) || 1)}
                     className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
@@ -4407,7 +4407,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             and closes BEFORE the session, so a dead mic or a denied
             permission is caught in the lobby instead of mid-test. */}
             <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-3">
-              <h2 className="font-bold text-accent-800">جرّب الميكروفون قبل ما تبدأ</h2>
+              <h2 className="font-semibold text-accent-800">جرّب الميكروفون قبل ما تبدأ</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
                 اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال، ومفيش أي تسجيل بيتحفظ أو بيترفع.
               </p>
@@ -4425,20 +4425,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
               {micCheckState === 'done' && micCheckResult && (
                 micCheckResult.permission === 'granted' && micCheckResult.heardSomething ? (
-                  <p className="text-sm font-bold text-emerald-700">تمام — الميكروفون شغال وسمعك (ده فحص الميكروفون بس، مش اختبار التعرف على الكلام). ابدأ التسميع وانت مطمن.</p>
+                  <p className="text-sm font-semibold text-emerald-700">تمام — الميكروفون شغال وسمعك (ده فحص الميكروفون بس، مش اختبار التعرف على الكلام). ابدأ التسميع وانت مطمن.</p>
                 ) : micCheckResult.permission === 'granted' ? (
-                  <p className="text-sm font-bold text-amber-link">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
+                  <p className="text-sm font-semibold text-amber-link">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
                 ) : micCheckResult.permission === 'denied' ? (
-                  <p className="text-sm font-bold text-red-600">الميكروفون مقفول — اسمح بيه من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.</p>
+                  <p className="text-sm font-medium text-red-600">الميكروفون مقفول — اسمح بيه من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.</p>
                 ) : (
-                  <p className="text-sm font-bold text-red-600">ما قدرتش أفتح الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.</p>
+                  <p className="text-sm font-medium text-red-600">ما قدرتش أفتح الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.</p>
                 )
               )}
             </div>
 
             {history.length > 0 && (
               <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5">
-                <h2 className="font-bold text-accent-800 mb-3">نتائجك السابقة</h2>
+                <h2 className="font-semibold text-accent-800 mb-3">نتائجك السابقة</h2>
                 <ul className="space-y-2">
                   {history.slice(0, 5).map((h, i) => (
                     <li key={i} className="flex items-center justify-between text-sm gap-2">
@@ -4454,12 +4454,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
 
         {phase === 'testing' && textOfflineNotice && (
-          <p className="text-sm font-bold text-amber-link bg-amber-50 border border-hairline-amber rounded-lg px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
+          <p className="text-sm font-medium text-amber-link bg-amber-50 border border-hairline-amber rounded-2xl px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
         )}
 
         {phase === 'testing' && testMode === 'continuous' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between text-sm font-bold">
+            <div className="flex items-center justify-between text-sm font-semibold">
               <span className="text-accent-700">
                 {rangeStart && rangeEnd ? (
                   rangeStart.surah === rangeEnd.surah
@@ -4518,26 +4518,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                   <p className="text-xs text-accent-500 mb-3">الاستماع المباشر محتاج إنترنت</p>
                   {ayahs[contProgress.ayahIdx] && (
-                    <p className="text-sm font-bold text-emerald-700 mb-4">
+                    <p className="text-sm font-semibold text-emerald-700 mb-4">
                       الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
                     </p>
                   )}
                   {contPrompting && (
                     <>
-                      <p className="text-sm font-bold text-blue-700 mb-2">بصحح لك… اسمع الكلمة الصح، وبعدها كمّل — للتصحيح فقط</p>
+                      <p className="text-sm font-semibold text-blue-700 mb-2">بصحح لك… اسمع الكلمة الصح، وبعدها كمّل — للتصحيح فقط</p>
                       {contLastPrompt.length > 0 && (
                         <p className="text-2xl font-bold text-blue-800 mb-4" dir="rtl">الصح: {contPromptHasContext && contLastPrompt.length > 0 ? (<><span className="opacity-50">{contLastPrompt[0]}</span>{' '}{contLastPrompt.slice(1).join(' ')}</>) : contLastPrompt.join(' ')}</p>
                       )}
                     </>
                   )}
                   {contAudioFailed && !contPrompting && contLastPrompt.length > 0 && (
-                    <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-4">
+                    <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-4">
                       التصحيح الصوتي ما كمّلش — الكلمة الصح قدامك: {contLastPrompt.join(' ')} — اضغط «أعد سماع التصحيح» عشان تحاول تاني
                     </p>
                   )}
                   {contLastPrompt.length > 0 && !contPrompting && (
                     <button onClick={() => speakContPrompt(contLastPrompt)}
-                      className="mb-4 px-5 py-2.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-sm font-bold rounded-xl">
+                      className="mb-4 px-5 py-2.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl">
                       🔊 أعد سماع التصحيح: {contPromptHasContext && contLastPrompt.length > 0 ? (<><span className="opacity-50">{contLastPrompt[0]}</span>{' '}{contLastPrompt.slice(1).join(' ')}</>) : contLastPrompt.join(' ')}
                     </button>
                   )}
@@ -4552,7 +4552,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       أنهيت التسميع
                     </button>
                     <button onClick={() => { diagPush('tap', { label: 'stop-cont' }); stopContinuousMic(); }}
-                      className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-bold rounded-xl flex items-center gap-2">
+                      className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2">
                       <Square className="w-4 h-4" /> قف
                     </button>
                   </div>
@@ -4564,7 +4564,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             </div>
             <p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>
             <button onClick={() => { diagPush('tap', { label: 'stop-to-setup' }); stopContinuousMic(); setPhase('setup'); }}
-              className="block mx-auto text-sm font-bold text-accent-600 hover:text-accent-700 underline">
+              className="block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
               إلغاء التسميع والعودة للإعدادات
             </button>
           </div>
@@ -4572,7 +4572,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
         {phase === 'testing' && testMode === 'ayah' && ayahs[index] && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between text-sm font-bold">
+            <div className="flex items-center justify-between text-sm font-semibold">
               <span className="text-accent-700">سورة {SURAHS.find((s) => s.no === ayahs[index].surah_no)?.name || ''} — آية {ayahs[index].ayah_no}</span>
               <span className="text-emerald-700">آية {index + 1} من {ayahs.length}</span>
             </div>
@@ -4586,7 +4586,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               {(!micSupported || manualMode) ? (
                 <>
                   {!micSupported && (
-                    <p className="text-sm font-bold text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-4">
+                    <p className="text-sm font-medium text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-4">
                       {micAbsentMessage(' — قيّم نفسك يدوي:')}
                     </p>
                   )}
@@ -4603,7 +4603,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </button>
                       {micSupported && (
                         <button onClick={() => { manualPreferredRef.current = false; setManualMode(false); }}
-                          className="mt-3 block mx-auto text-sm font-bold text-accent-600 hover:text-accent-700 underline">
+                          className="mt-3 block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
                           أو سمّع بالميكروفون بدل كده
                         </button>
                       )}
@@ -4648,7 +4648,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   {(wrongByAyah[index]?.length ?? 0) > 0 && (
                     <button onClick={() => replayAyahCorrection()}
-                      className="mt-3 px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-sm font-bold rounded-xl">
+                      className="mt-3 px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-sm font-semibold rounded-xl">
                       🔊 أعد سماع التصحيح
                     </button>
                   )}
@@ -4659,17 +4659,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       correction above. */}
                   {ayahs[index] && isRefUnitEnabled(ayahs[index].surah_no, ayahs[index].ayah_no) && wrongIndices.length > 0 && (
                     <button onClick={() => playRefUnit()}
-                      className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-hairline-amber hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
+                      className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-hairline-amber hover:bg-amber-100 text-amber-800 text-sm font-semibold rounded-xl">
                       {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
                     </button>
                   )}
                   {refUnitFailedIdx === index && (
-                    <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">
+                    <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">
                       تعذر تشغيل الوحدة المرجعية — استخدم «أعد سماع التصحيح»
                     </p>
                   )}
                   {ayahAudioFailed && (wrongByAyah[index]?.length ?? 0) > 0 && (
-                    <p className="text-sm font-bold text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">
+                    <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-3">
                       التصحيح الصوتي ما اشتغلش — الكلمات الصح بالأحمر قدامك، واضغط «أعد سماع التصحيح» عشان تحاول تاني
                     </p>
                   )}
@@ -4706,12 +4706,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                             </button>
                             {spokenTokens(liveRef.current.finals).length > 0 && (
                               <button onClick={evaluateStalled}
-                                className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
+                                className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl">
                                 قيّم اللي اتسمع
                               </button>
                             )}
                             <button onClick={() => startMic()}
-                              className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-bold rounded-xl">
+                              className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl">
                               ابدأ من جديد
                             </button>
                           </div>
@@ -4729,7 +4729,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <Mic className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
                       <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}
-                        className="mt-3 text-sm font-bold text-accent-600 hover:text-accent-700 underline">
+                        className="mt-3 text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
                         أو قيّم نفسك يدوي بدل الميكروفون
                       </button>
                     </>
@@ -4769,7 +4769,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                             في حاجة محتاجة تتصلح — كمّل أو صلّح، عندك {countdown.toLocaleString('ar-EG')} ثواني
                           </p>
                           <button onClick={() => showMistakeNow()}
-                            className="mt-1 text-sm font-bold text-amber-link underline">
+                            className="mt-1 text-sm font-semibold text-amber-link underline">
                             خلاص، وريني الغلط
                           </button>
                         </div>
@@ -4785,7 +4785,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           خلصت، قيّمها
                         </button>
                         <button onClick={() => resetMicState()}
-                          className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-bold rounded-xl flex items-center gap-2">
+                          className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2">
                           <Square className="w-4 h-4" /> قف
                         </button>
                       </div>
@@ -4796,7 +4796,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   {micError && (
                     <button onClick={() => { diagPush('tap', { label: 'manual-mode' }); stopRec(); clearTimers(); manualPreferredRef.current = true; setManualMode(true); }}
-                      className="mt-2 text-sm font-bold text-accent-600 underline">
+                      className="mt-2 text-sm font-semibold text-accent-600 underline">
                       قيّم يدوي بدل كده
                     </button>
                   )}
@@ -4808,11 +4808,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <div className="flex justify-between">
               <button onClick={() => goToAyah(index - 1)}
                 disabled={index === 0}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30">
+                className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30">
                 <ChevronRight className="w-5 h-5" /> الآية السابقة
               </button>
               <button onClick={skipAyah}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-bold text-accent-600 hover:bg-gray-100 rounded-lg">
+                className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg">
                 {index + 1 < ayahs.length ? (<>تخطي الآية <ChevronLeft className="w-5 h-5" /></>) : 'إنهاء التسميع'}
               </button>
             </div>
@@ -4859,7 +4859,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
             {!contZeroMatch && missed.length > 0 && (
               <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-5">
-                <h2 className="font-bold text-accent-800 mb-3">آيات تحتاج مراجعة ({missed.length})</h2>
+                <h2 className="font-semibold text-accent-800 mb-3">آيات تحتاج مراجعة ({missed.length})</h2>
                 <ul className="space-y-2">
                   {ayahs.map((a, i) => (!grades[i] && !skipped[i] ? (
                     <li key={a.id} className="text-sm">
@@ -4875,7 +4875,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                             🔁 سمّعها تاني
                           </button>
                           <button onClick={() => openInMushaf(a.surah_no, a.ayah_no)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-emerald-700 bg-emerald-50 rounded-lg">
                             <BookOpen className="w-4 h-4" /> افتح في المصحف
                           </button>
                         </div>
@@ -4903,8 +4903,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 record — screenshots are no longer the only evidence. */}
             <div className="bg-white border border-hairline rounded-2xl shadow-sm p-5">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="font-bold text-accent-800">سجل التشخيص</h2>
-                <button type="button" onClick={() => { setDiagOpen((v) => !v); diagPermRefresh(); }} className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-emerald-50 rounded-lg">
+                <h2 className="font-semibold text-accent-800">سجل التشخيص</h2>
+                <button type="button" onClick={() => { setDiagOpen((v) => !v); diagPermRefresh(); }} className="px-3 py-1.5 text-sm font-semibold text-emerald-700 bg-emerald-50 rounded-lg">
                   {diagOpen ? 'إخفاء السجل' : `عرض السجل (${diagEventsRef.current.length})`}
                 </button>
               </div>
@@ -4934,7 +4934,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             </div>
             {recSessionRef.current?.recording && (
               <div className="bg-white border border-hairline-amber rounded-2xl shadow-sm p-5 space-y-4">
-                <h2 className="font-bold text-accent-800">تسجيل حالة اختبار</h2>
+                <h2 className="font-semibold text-accent-800">تسجيل حالة اختبار</h2>
                 <p className="text-sm text-accent-600 leading-relaxed">هذا الاختبار سُجّل لمدونة الاختبار. صنّف كل آية، ثم أكّد الموافقة وصدّر الحالة.</p>
                 {(() => {
                   const preview = recBuildPreview();
@@ -5005,7 +5005,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         return (
                           <div key={a.id} className="border border-hairline rounded-xl p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
-                              <span className="text-sm font-bold text-accent-800">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
+                              <span className="text-sm font-semibold text-accent-800">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
                               <select value={st} onChange={(e) => setStatus(key, a.surah_no, a.ayah_no, e.target.value)}
                                 className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
                                 <option value="correct">صحيح</option>
@@ -5038,7 +5038,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                   return (
                                     <div key={idx} className="flex items-center gap-2 text-sm">
                                       <span className="flex-1 text-accent-700" dir="rtl">قلت «{e.spoken}» بدل «{e.expectedWord}» ({e.type ? TAXONOMY_LABELS[e.type] : ''}){e.free ? ` — ${e.free}` : ''}</span>
-                                      <button onClick={() => removeEntry(key, idx)} className="px-3 py-1 text-sm font-bold text-red-700 bg-red-50 rounded-lg">حذف</button>
+                                      <button onClick={() => removeEntry(key, idx)} className="px-3 py-1 text-sm font-semibold text-red-700 bg-red-50 rounded-lg">حذف</button>
                                     </div>
                                   );
                                 })}
@@ -5060,7 +5060,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                   return (
                                     <div key={idx} className="flex items-center gap-2 text-sm">
                                       <span className="flex-1 text-accent-700" dir="rtl">تعثرت في «{e.spoken}» ثم صححتها لنفسي</span>
-                                      <button onClick={() => removeEntry(key, idx)} className="px-3 py-1 text-sm font-bold text-red-700 bg-red-50 rounded-lg">حذف</button>
+                                      <button onClick={() => removeEntry(key, idx)} className="px-3 py-1 text-sm font-semibold text-red-700 bg-red-50 rounded-lg">حذف</button>
                                     </div>
                                   );
                                 })}
@@ -5073,12 +5073,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         );
                       })}
-                      <button onClick={allCorrect} className="px-4 py-2 bg-white border border-hairline text-accent-700 text-sm font-bold rounded-xl">كلها صحيحة (ما عدا الآيات ذات الخطة)</button>
+                      <button onClick={allCorrect} className="px-4 py-2 bg-white border border-hairline text-accent-700 text-sm font-semibold rounded-xl">كلها صحيحة (ما عدا الآيات ذات الخطة)</button>
                       {preview.status === 'complete' ? (
-                        <p className="text-sm font-bold text-emerald-700">الحالة مكتملة — جاهزة للمدونة.</p>
+                        <p className="text-sm font-semibold text-emerald-700">الحالة مكتملة — جاهزة للمدونة.</p>
                       ) : (
                         <div className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3">
-                          <p className="font-bold">الحالة جزئية (لن تُحسب في التقرير):</p>
+                          <p className="font-semibold">الحالة جزئية (لن تُحسب في التقرير):</p>
                           <ul className="list-disc pr-5 mt-1 space-y-1">
                             {preview.reasons.map((r, i) => (<li key={i}>{r}</li>))}
                           </ul>
@@ -5104,7 +5104,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>
               <button onClick={() => onNavigate('app')}
-                className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-bold rounded-xl">
+                className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
                 العودة إلى لوحتي
               </button>
             </div>

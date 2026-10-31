@@ -501,14 +501,14 @@ export default function LinkModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg polish-modal-enter my-8">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg polish-modal-enter my-8">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
               <Bookmark className="w-4 h-4 text-emerald-600" />
             </div>
-            <h3 className="font-bold text-accent-800">إنشاء رابط للآية</h3>
+            <h3 className="font-semibold text-accent-800">إنشاء رابط للآية</h3>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg transition-smooth">
             <X className="w-5 h-5" />
@@ -517,7 +517,7 @@ export default function LinkModal({
 
         <div className="p-4 space-y-4">
           {/* Verse context */}
-          <div className="bg-gray-50 rounded-lg p-3">
+          <div className="bg-gray-50 rounded-2xl p-3">
             <p className="text-xs text-accent-600 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
             <p className="font-arabic text-base text-accent-700 line-clamp-2">{verse.ayah_text}</p>
           </div>
@@ -560,7 +560,7 @@ export default function LinkModal({
                     {isRecording ? 'وقفي التسجيل يا رنا' : 'سجلي مباشر يا رنا'}
                   </button>
                   {isRecording && liveTranscript && (
-                    <div className="bg-white rounded-lg p-3 border border-hairline-emerald animate-fade-in">
+                    <div className="bg-white rounded-2xl p-3 border border-hairline-emerald animate-fade-in">
                       <p className="text-xs text-emerald-700 font-semibold mb-1">يتم التحويل الآن:</p>
                       <p className="text-sm text-accent-700">{liveTranscript}</p>
                     </div>
@@ -568,7 +568,7 @@ export default function LinkModal({
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-px bg-gray-200" /><span className="text-xs text-accent-600">أو</span><div className="flex-1 h-px bg-gray-200" />
                   </div>
-                  <label className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-white border-2 border-hairline-emerald text-emerald-700 hover:bg-emerald-50 cursor-pointer transition-smooth">
+                  <label className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold bg-white border-2 border-hairline-emerald text-emerald-700 hover:bg-emerald-50 cursor-pointer transition-smooth">
                     <Upload className="w-5 h-5" /> رفع ملف صوتي
                     <input type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
                   </label>
@@ -579,7 +579,7 @@ export default function LinkModal({
                 <p className="text-xs text-accent-600 mb-2 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> أو إدخال نص يدوياً</p>
                 <textarea value={linkContent} onChange={(e) => setLinkContent(e.target.value)}
                   placeholder="اكتب العلامة أو اللفظ أو المفهوم..." rows={3}
-                  className="w-full px-3 py-2 bg-white border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth resize-none" />
+                  className="w-full px-3 py-2 bg-white border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth resize-none" />
                 {linkContent.trim() && (
                   <div className="flex gap-2 mt-2">
                     <button onClick={() => { setOriginalTranscript(linkContent.trim()); doRephrase(linkContent.trim(), '', 'rephrase'); }}
@@ -600,7 +600,7 @@ export default function LinkModal({
           {phase === 'confirm_recording' && (
             <div className="space-y-3 animate-slide-up">
               <div className="bg-emerald-50 rounded-xl p-4 border border-hairline-emerald text-center">
-                <p className="text-sm font-bold text-accent-800 mb-3">كويس التسجيل كده؟</p>
+                <p className="text-sm font-semibold text-accent-800 mb-3">كويس التسجيل كده؟</p>
                 {audioPublicUrl && (
                   <button onClick={() => playAudio(audioPublicUrl)}
                     className="flex items-center justify-center gap-2 mx-auto px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition-smooth">
@@ -615,7 +615,7 @@ export default function LinkModal({
                   <Check className="w-5 h-5" /> تمام اعتمد التسجيل
                 </button>
                 <button onClick={discardRecording}
-                  className="flex-1 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-xl transition-smooth text-sm">
+                  className="flex-1 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-xl transition-smooth text-sm">
                   لا ح أعيد التسجيل
                 </button>
               </div>
@@ -646,7 +646,7 @@ export default function LinkModal({
             <div className="space-y-3 animate-slide-up">
               {/* Rana's original audio */}
               {audioPublicUrl && (
-                <div className="flex items-center gap-2 bg-emerald-50 rounded-lg p-2.5">
+                <div className="flex items-center gap-2 bg-emerald-50 rounded-2xl p-2.5">
                   <Mic className="w-4 h-4 text-emerald-600" />
                   <button onClick={() => playAudio(audioPublicUrl)} className="text-xs font-semibold text-emerald-700 hover:underline">
                     تشغيل المقطع الأصلي (صوت رنا)
@@ -654,14 +654,14 @@ export default function LinkModal({
                 </div>
               )}
               {audioError && !audioPublicUrl && (
-                <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-link text-center">
+                <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-2xl text-xs text-amber-link text-center">
                   {audioError}
                 </div>
               )}
 
               {/* Original transcript */}
               {originalTranscript && (
-                <div className="bg-white rounded-lg p-3 border border-hairline">
+                <div className="bg-white rounded-2xl p-3 border border-hairline">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-accent-600">النص المنطوق الأصلي</span>
                     <button onClick={() => playBrowserTTS(originalTranscript, voiceType)} className="text-accent-400 hover:text-emerald-600"><Mic className="w-4 h-4" /></button>
@@ -671,14 +671,14 @@ export default function LinkModal({
               )}
 
               {/* Rephrased text */}
-              <div className="bg-violet-50 rounded-lg p-3 border border-violet-200">
+              <div className="bg-violet-50 rounded-2xl p-3 border border-violet-200">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-violet-600">{reviewMode === 'keep_original' ? 'النص المنقّى' : 'النص المعاد صياغته'}</span>
                   <button onClick={() => playTTS(rephrasedText)} className="text-violet-400 hover:text-violet-600"><Mic className="w-4 h-4" /></button>
                 </div>
                 <textarea value={rephrasedText} onChange={(e) => { setRephrasedText(e.target.value); setSyntheticAudioUrl(null); setVoiceFromEdited(true); }}
                   rows={4}
-                  className="w-full px-3 py-2 bg-white border border-violet-200 rounded-lg text-sm text-accent-700 leading-relaxed focus:outline-none focus:border-violet-500 transition-smooth resize-none" />
+                  className="w-full px-3 py-2 bg-white border border-violet-200 rounded-xl text-sm text-accent-700 leading-relaxed focus:outline-none focus:border-violet-500 transition-smooth resize-none" />
               </div>
 
               {/* Voice type selection + generate */}
@@ -699,7 +699,7 @@ export default function LinkModal({
                   </button>
                 </div>
                 <button onClick={generateVoice}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg transition-smooth">
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-smooth">
                   <Mic className="w-4 h-4" /> {voiceType === 'male' ? 'يلا حوّل نسخة منه لصوت رجالي' : 'حوّل نسخة منه لصوت نسائي'}
                 </button>
                 <p className="text-xs text-accent-600 text-center mt-1.5">
@@ -716,7 +716,7 @@ export default function LinkModal({
 
               {/* Synthetic audio preview */}
               {syntheticAudioUrl && (
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-3 border border-blue-200 animate-slide-up">
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-3 border border-blue-200 animate-slide-up">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Mic className="w-4 h-4 text-blue-600" />
@@ -734,11 +734,11 @@ export default function LinkModal({
               {/* Title */}
               <input type="text" value={linkTitle} onChange={(e) => setLinkTitle(e.target.value)}
                 placeholder="عنوان مختصر (اختياري)"
-                className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
 
               {/* AI version history: the approve-or-re-request loop */}
               {versions.length > 1 && (
-                <div className="bg-white rounded-lg p-3 border border-hairline">
+                <div className="bg-white rounded-2xl p-3 border border-hairline">
                   <p className="text-xs font-semibold text-accent-600 mb-2">نسخ الصياغة يا رنا — اختاري أي نسخة لعرضها، وبعدين وافقي واحفظي أو اطلبي تعديل جديد</p>
                   <div className="space-y-1.5">
                     {versions.map((v, i) => {
@@ -747,8 +747,8 @@ export default function LinkModal({
                         <div key={i} className={`flex items-center gap-2 rounded-lg px-2.5 py-2 border ${isActive ? 'bg-emerald-50 border-emerald-300' : 'bg-gray-50 border-transparent'}`}>
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold text-violet-600">{v.label}</p>
-                            <p className="text-xs text-accent-600 truncate">{v.text}</p>
-                            {isActive && <p className="text-xs font-bold text-emerald-700 mt-0.5">✓ النسخة المعروضة حالياً</p>}
+                            <p className="text-xs text-accent-600">{v.text}</p>
+                            {isActive && <p className="text-xs font-medium text-emerald-700 mt-0.5">✓ النسخة المعروضة حالياً</p>}
                           </div>
                           <button onClick={() => { setRephrasedText(v.text); setSyntheticAudioUrl(null); setVoiceFromEdited(v.text.trim() !== originalTranscript.trim()); }}
                             className={`flex-shrink-0 px-2.5 py-1.5 text-white text-xs font-semibold rounded-lg ${isActive ? 'bg-emerald-700' : 'bg-violet-600 hover:bg-violet-700'}`}>
@@ -765,7 +765,7 @@ export default function LinkModal({
               <div className="flex gap-2">
                 <input type="text" value={rephraseCommand} onChange={(e) => setRephraseCommand(e.target.value)}
                   placeholder="تعديل إضافي: مثلاً — اجعله أقصر"
-                  className="flex-1 px-3 py-2 bg-gray-50 border border-hairline rounded-lg text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="flex-1 px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 <button onClick={() => doRephrase(originalTranscript || linkContent, rephraseCommand, 'rephrase')}
                   className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-smooth whitespace-nowrap">
                   <RefreshCw className="w-3.5 h-3.5" /> حاول تصيغ بصورة أفضل
@@ -773,24 +773,24 @@ export default function LinkModal({
               </div>
 
               {error && (
-                <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-link text-center flex items-center justify-center gap-2">
+                <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-2xl text-xs text-amber-link text-center flex items-center justify-center gap-2">
                   <AlertCircle className="w-4 h-4" /> {error}
                 </div>
               )}
 
               {/* Actions: Rana's own words for the written text */}
-              <p className="text-sm font-bold text-emerald-700 text-center pt-1">النص المكتوب حلو كده يا رنا؟</p>
+              <p className="text-sm font-semibold text-emerald-700 text-center pt-1">النص المكتوب حلو كده يا رنا؟</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <button onClick={handleSave}
                   className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition-smooth text-sm shadow-md hover:shadow-lg">
                   <Check className="w-5 h-5" /> اه ده كويس كده
                 </button>
                 <button onClick={() => doRephrase(originalTranscript || linkContent, rephraseCommand, 'rephrase')}
-                  className="flex items-center gap-1.5 px-3 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-lg transition-smooth">
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold rounded-xl transition-smooth">
                   <RefreshCw className="w-4 h-4" /> لا مش حلو، حاول تاني
                 </button>
                 <button onClick={() => doRephrase(originalTranscript || linkContent, '', 'keep_original')}
-                  className="flex items-center gap-1.5 px-3 py-2.5 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition-smooth">
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold rounded-xl transition-smooth">
                   <FileText className="w-4 h-4" /> لا خلاص التزم بالنص الأصلي
                 </button>
               </div>
@@ -812,13 +812,13 @@ export default function LinkModal({
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
                 <Check className="w-8 h-8 text-emerald-600" />
               </div>
-              <p className="text-sm font-bold text-accent-800">تم يا رنا — اتبعت الرابط للمراجعة بنجاح</p>
+              <p className="text-sm font-semibold text-accent-800">تم يا رنا — اتبعت الرابط للمراجعة بنجاح</p>
               <p className="text-xs text-accent-600">سيظهر للمستخدمين بعد موافقة الإدارة</p>
             </div>
           )}
 
           {phase === 'input' && error && (
-            <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-link text-center flex items-center justify-center gap-2">
+            <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-2xl text-xs text-amber-link text-center flex items-center justify-center gap-2">
               <AlertCircle className="w-4 h-4" /> {error}
             </div>
           )}

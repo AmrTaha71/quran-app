@@ -69,7 +69,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
             </div>
             <button
               onClick={() => onNavigate(session ? 'app' : 'auth')}
-              className="px-5 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth"
+              className="px-5 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 rounded-xl transition-smooth"
             >
               {session ? 'لوحتي' : t('login')}
             </button>
@@ -90,7 +90,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
             <Link className="w-10 h-10 text-white" />
           </div>
 
-          <h2 className="text-4xl md:text-6xl font-bold text-accent-800 mb-4 leading-tight">
+          <h2 className="text-4xl md:text-6xl font-bold font-display-ar text-accent-800 mb-4">
             {t('appName')}
           </h2>
           <p className="text-xl text-accent-600 mb-10 max-w-2xl mx-auto leading-relaxed">

@@ -33,7 +33,7 @@ export default function OfflineBanner() {
   }, []);
   if (online) return null;
   return (
-    <div className="fixed top-0 right-0 left-0 z-[200] bg-amber-700 text-white text-center text-sm font-bold py-2 pt-[calc(0.5rem_+_env(safe-area-inset-top))] px-4 flex items-center justify-center gap-2 pointer-events-none">
+    <div className="fixed top-0 right-0 left-0 z-[200] bg-amber-700 text-white text-center text-sm font-semibold py-2 pt-[calc(0.5rem_+_env(safe-area-inset-top))] px-4 flex items-center justify-center gap-2 pointer-events-none">
       <WifiOff className="w-4 h-4 flex-shrink-0" />
       {hasDownload
         ? 'لا يوجد اتصال بالإنترنت — الصفحات المحمّلة على جهازك متاحة بالكامل، وأي صفحة أخرى زرتها من قبل متاحة أيضاً'

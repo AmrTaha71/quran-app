@@ -183,7 +183,7 @@ export default function ShareButton({
             className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-hairline p-5 animate-slide-up max-h-[calc(100dvh-2rem)] overflow-y-auto"
             style={panelStyle ? { top: panelStyle.top, left: panelStyle.left, width: panelStyle.width } : { left: 16, right: 16 }}>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-base font-bold text-accent-800 flex items-center gap-2">
+              <p className="text-base font-semibold text-accent-800 flex items-center gap-2">
                 <Share2 className="w-5 h-5 text-emerald-600" />
                 شاركنا في الأجر
               </p>
@@ -192,7 +192,7 @@ export default function ShareButton({
               </button>
             </div>
 
-            <p className="text-sm text-emerald-700 font-semibold text-center mb-4 bg-emerald-50 rounded-lg py-2 border border-hairline-emerald">
+            <p className="text-sm text-emerald-700 font-semibold text-center mb-4 bg-emerald-50 rounded-2xl py-2 border border-hairline-emerald">
               «دلّ على الخير كفاعله» — شارك التطبيق واكسب الأجر
             </p>
 
@@ -223,16 +223,16 @@ export default function ShareButton({
               </p>
               <button
                 onClick={() => void handleCopy()}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-white text-sm font-bold transition-smooth bg-teal-600 hover:bg-teal-700"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-smooth bg-teal-600 hover:bg-teal-700"
               >
                 <Link2 className="w-5 h-5" />
                 {copied ? 'تم نسخ رابط الويب' : 'نسخ رابط الويب'}
               </button>
               {copyFailed && (
                 <div className="mt-3">
-                  <p className="text-xs font-bold text-red-600 text-center mb-2">تعذّر النسخ التلقائي — انسخ الرابط يدويًا:</p>
+                  <p className="text-xs font-medium text-red-600 text-center mb-2">تعذّر النسخ التلقائي — انسخ الرابط يدويًا:</p>
                   <input readOnly value={shareUrl} onFocus={(e) => e.target.select()}
-                    className="w-full px-3 py-2 rounded-lg border border-hairline bg-gray-50 text-xs text-accent-700 break-all" dir="ltr" />
+                    className="w-full px-3 py-2 rounded-xl border border-hairline bg-gray-50 text-xs text-accent-700 break-all" dir="ltr" />
                 </div>
               )}
             </div>

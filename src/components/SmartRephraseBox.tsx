@@ -179,7 +179,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
       <div className="bg-gradient-to-br from-violet-50 to-emerald-50 rounded-xl border border-violet-100 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles className="w-4 h-4 text-violet-600" />
-          <h4 className="text-sm font-bold text-accent-800">إعادة الصياغة الذكية</h4>
+          <h4 className="text-sm font-semibold text-accent-800">إعادة الصياغة الذكية</h4>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
@@ -222,18 +222,18 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-violet-600" />
-          <h4 className="text-sm font-bold text-accent-800">إعادة الصياغة الذكية</h4>
+          <h4 className="text-sm font-semibold text-accent-800">إعادة الصياغة الذكية</h4>
         </div>
         <button onClick={resetAll} className="text-xs text-accent-600 hover:text-accent-600">إغلاق</button>
       </div>
 
       {saveStatus === 'saved' && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-semibold mb-3">
+        <div className="flex items-center gap-2 p-3 bg-emerald-100 text-emerald-700 rounded-2xl text-sm font-semibold mb-3">
           <Check className="w-4 h-4" /> تم الحفظ بنجاح!
         </div>
       )}
       {saveStatus === 'rejected' && (
-        <div className="flex items-center gap-2 p-3 bg-red-100 text-red-700 rounded-lg text-sm font-semibold mb-3">
+        <div className="flex items-center gap-2 p-3 bg-red-100 text-red-700 rounded-2xl text-sm font-semibold mb-3">
           <X className="w-4 h-4" /> تم الرفض.
         </div>
       )}
@@ -242,7 +242,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
         <>
           {/* Side by side display */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-            <div className="bg-white rounded-lg p-3 border border-hairline">
+            <div className="bg-white rounded-2xl p-3 border border-hairline">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-accent-600">النص الأصلي</span>
                 <button onClick={() => playTTS(originalText)} className="text-accent-400 hover:text-emerald-600">
@@ -251,7 +251,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
               </div>
               <p className="text-sm text-accent-700 leading-relaxed">{originalText}</p>
             </div>
-            <div className="bg-white rounded-lg p-3 border border-violet-200">
+            <div className="bg-white rounded-2xl p-3 border border-violet-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-violet-600">النص المعاد صياغته</span>
                 <button onClick={() => playTTS(rephrasedText)} className="text-violet-400 hover:text-violet-600">
