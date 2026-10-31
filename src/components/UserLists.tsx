@@ -87,7 +87,7 @@ export function ListToggleButtons({
           title={item.type === 'favorites' ? 'المفضلة' : item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
           aria-label={item.type === 'favorites' ? 'المفضلة' : item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
           className={`icon-action p-1.5 rounded-lg transition-smooth ${
-            lists[item.type].has(verse.id) ? item.activeColor : 'text-gray-400 hover:bg-gray-100'
+            lists[item.type].has(verse.id) ? item.activeColor : 'text-ink-3 hover:bg-gray-100'
           }`}
         >
           {item.icon}
@@ -108,7 +108,7 @@ export function LongPressMenu({
   const items: { type: ListType; icon: React.ReactNode; color: string; label: string }[] = [
     { type: 'favorites', icon: <Heart className="w-4 h-4" />, color: 'text-red-500 bg-red-50', label: 'المفضلة' },
     { type: 'read_later', icon: <Bookmark className="w-4 h-4" />, color: 'text-blue-500 bg-blue-50', label: 'أرجع لها لاحقاً' },
-    { type: 'difficult', icon: <AlertTriangle className="w-4 h-4" />, color: 'text-amber-500 bg-amber-50', label: 'صعبة' },
+    { type: 'difficult', icon: <AlertTriangle className="w-4 h-4" />, color: 'text-amber-link bg-amber-50', label: 'صعبة' },
     { type: 'memorized', icon: <BadgeCheck className="w-4 h-4" />, color: 'text-emerald-500 bg-emerald-50', label: 'تم الحفظ' },
   ];
 
@@ -117,7 +117,7 @@ export function LongPressMenu({
       <div className="bg-white rounded-2xl shadow-2xl p-5 w-full max-w-xs animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-bold text-accent-800">إضافة إلى قائمة</p>
-          <button onClick={onClose} aria-label="إغلاق" className="icon-action text-gray-400 hover:bg-gray-100 rounded-lg p-1">
+          <button onClick={onClose} aria-label="إغلاق" className="icon-action text-ink-3 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -165,7 +165,7 @@ export function LinkLongPressMenu({
   const items: { type: ListType; icon: React.ReactNode; color: string; label: string }[] = [
     { type: 'favorites', icon: <Heart className="w-5 h-5" />, color: 'text-red-500 bg-red-50 hover:bg-red-100', label: 'المفضلة' },
     { type: 'read_later', icon: <Bookmark className="w-5 h-5" />, color: 'text-blue-500 bg-blue-50 hover:bg-blue-100', label: 'أرجع لها لاحقاً' },
-    { type: 'difficult', icon: <AlertTriangle className="w-5 h-5" />, color: 'text-amber-500 bg-amber-50 hover:bg-amber-100', label: 'صعبة' },
+    { type: 'difficult', icon: <AlertTriangle className="w-5 h-5" />, color: 'text-amber-link bg-amber-50 hover:bg-amber-100', label: 'صعبة' },
     { type: 'memorized', icon: <BadgeCheck className="w-5 h-5" />, color: 'text-emerald-500 bg-emerald-50 hover:bg-emerald-100', label: 'تم الحفظ' },
   ];
 
@@ -177,7 +177,7 @@ export function LinkLongPressMenu({
             <Bookmark className="w-5 h-5 text-emerald-600" />
             <p className="text-sm font-bold text-accent-800">إضافة الرابط إلى قائمة</p>
           </div>
-          <button onClick={onClose} aria-label="إغلاق" className="icon-action text-gray-400 hover:bg-gray-100 rounded-lg p-1">
+          <button onClick={onClose} aria-label="إغلاق" className="icon-action text-ink-3 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />
           </button>
         </div>

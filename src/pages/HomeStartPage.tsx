@@ -117,7 +117,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md polish-hero-medal" />
         </div>
 
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4">
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4">
           <p className="font-bold text-accent-800">{ISLAMIC_GREETING}</p>
           <p className="text-sm text-accent-600 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
@@ -162,7 +162,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
 
         {/* استمع للقرآن: after سمّع لنفسك. */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '180ms' }}>
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '180ms' }}>
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
           </p>
@@ -170,7 +170,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             واقفل الشاشة لو عاوز
           </p>
           {listeningWird && (
-            <p className="text-sm text-amber-700 font-bold mt-2">
+            <p className="text-sm text-amber-link font-bold mt-2">
               لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
             </p>
           )}
@@ -186,7 +186,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* أذكار الصباح والمساء: LIVE — generated-voice clips
             (46 clips, male/female toggle in the player). Placed
             directly after the listen card: the audio hub. */}
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
           <p className="font-bold text-accent-800 flex items-center gap-2">
             <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
           </p>
@@ -204,7 +204,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* تربيط اليوم: real approved link only; hidden on any failure */}
         {linkOfDay && (
-          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm polish-card p-4 mb-4">
+          <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm polish-card p-4 mb-4">
             <p className="font-bold text-accent-800 flex items-center gap-2">
               <Link className="w-5 h-5 text-amber-600" /> تربيط اليوم
             </p>
@@ -228,13 +228,15 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* Quick buttons: الحق الإمام stays a full-width large
-            button like the big buttons in the cards above
-            (Amr 17:48); سمّع لنفسك moved above استمع للقرآن;
-            الإعدادات stays a small button below. */}
+        {/* Quick buttons: two-column grid on sm+ (blanket approval
+            2026-10-31 overrides the 17:48 full-width rule for
+            الحق الإمام; phones stay single-column, so the button
+            is still full-width on small screens). سمّع لنفسك moved
+            above استمع للقرآن; الإعدادات sits beside الحق الإمام. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
         <button
           onClick={() => onNavigate('follow')}
-          className="w-full py-4 mb-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30 polish-press polish-press-depth polish-focus"
+          className="w-full py-4 bg-gradient-to-l from-teal-700 to-teal-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg shadow-lg shadow-teal-700/30 polish-press polish-press-depth polish-focus"
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Mic className="w-6 h-6 text-white" />
@@ -243,10 +245,11 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
         <button
           onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 mb-4 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+          className="w-full py-3.5 bg-white border border-hairline-emerald text-accent-800 font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
         >
           <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
         </button>
+        </div>
 
         <p className="text-center text-sm text-emerald-700 font-semibold mt-6">
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
@@ -261,7 +264,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <p className="text-sm text-accent-600 mb-4">٣ خطوات، وكل آية تثبت في ذهنك:</p>
             <ol className="text-right space-y-3 text-base text-accent-700">
               <li><span className="font-bold text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
-              <li><span className="font-bold text-amber-700">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>
+              <li><span className="font-bold text-amber-link">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>
               <li><span className="font-bold text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
             </ol>
             <button onClick={dismissIntro}

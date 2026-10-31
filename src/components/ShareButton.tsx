@@ -187,12 +187,12 @@ export default function ShareButton({
                 <Share2 className="w-5 h-5 text-emerald-600" />
                 شاركنا في الأجر
               </p>
-              <button onClick={() => setOpen(false)} aria-label="إغلاق" className="icon-action text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setOpen(false)} aria-label="إغلاق" className="icon-action text-ink-3 hover:text-ink-2 p-1 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-sm text-emerald-700 font-semibold text-center mb-4 bg-emerald-50 rounded-lg py-2 border border-emerald-100">
+            <p className="text-sm text-emerald-700 font-semibold text-center mb-4 bg-emerald-50 rounded-lg py-2 border border-hairline-emerald">
               «دلّ على الخير كفاعله» — شارك التطبيق واكسب الأجر
             </p>
 

@@ -359,13 +359,13 @@ export default function AuthPage({
       <div className="fixed top-4 right-4 z-50">
         <button
           onClick={() => setShowLangMenu(!showLangMenu)}
-          className="flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur rounded-xl shadow-md border border-gray-100 text-sm font-semibold text-accent-700 hover:bg-white transition-smooth"
+          className="flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur rounded-xl shadow-md border border-hairline text-sm font-semibold text-accent-700 hover:bg-white transition-smooth"
         >
           <Globe className="w-4 h-4" />
           {LANGUAGES.find((l) => l.code === lang)?.nativeName}
         </button>
         {showLangMenu && (
-          <div className="absolute mt-2 bg-white rounded-xl shadow-xl border border-gray-200 p-2 min-w-[160px] animate-slide-up">
+          <div className="absolute mt-2 bg-white rounded-xl shadow-xl border border-hairline p-2 min-w-[160px] animate-slide-up">
             {LANGUAGES.map((l) => (
               <button
                 key={l.code}
@@ -383,7 +383,7 @@ export default function AuthPage({
       </div>
 
       <div className="relative w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8">
           {/* Logo */}
           <div className="flex flex-col items-center mb-6">
             <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center shadow-lg mb-3">
@@ -395,18 +395,18 @@ export default function AuthPage({
 
           {/* One-off App-shell notice (e.g. session expired routing). */}
           {notice && (
-            <div className="flex items-start gap-2 p-3 mb-5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 leading-relaxed">
+            <div className="flex items-start gap-2 p-3 mb-5 bg-amber-50 border border-hairline-amber rounded-xl text-xs text-amber-800 leading-relaxed">
               <span className="flex-1">{notice}</span>
               {onDismissNotice && (
                 <button type="button" onClick={onDismissNotice} aria-label="إغلاق"
-                  className="text-amber-500 hover:text-amber-700 font-bold shrink-0">✕</button>
+                  className="text-amber-link hover:text-amber-link font-bold shrink-0">✕</button>
               )}
             </div>
           )}
 
           {/* Mode tabs (hidden on the request and reset forms) */}
           {mode !== 'recover' && mode !== 'reset' && (
-            <div className="flex bg-gray-50 rounded-xl p-1 mb-5 border border-gray-100">
+            <div className="flex bg-gray-50 rounded-xl p-1 mb-5 border border-hairline">
               <button
                 onClick={() => { setMode('login'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
@@ -428,7 +428,7 @@ export default function AuthPage({
 
           {checkEmail ? (
             <div className="space-y-3">
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-800 text-center leading-relaxed">
+              <div className="p-4 bg-emerald-50 border border-hairline-emerald rounded-xl text-sm text-emerald-800 text-center leading-relaxed">
                 تم إنشاء الحساب — افتح إيميلك <span className="font-bold" dir="ltr">{checkEmail}</span> واضغط رابط التأكيد، وبعدين سجل دخول. لو مش لاقي الرسالة، تأكد من مجلد السبام.
               </div>
               <button type="button" onClick={() => { setCheckEmail(null); setSuccess(''); setError(''); setMode('login'); }}
@@ -436,7 +436,7 @@ export default function AuthPage({
                 عندك حساب؟ ادخل بدل ما تسجل
               </button>
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
               <button type="button" onClick={handleResendConfirmation} disabled={loading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                 {loading ? '...' : 'إعادة إرسال رابط التأكيد'}
@@ -461,7 +461,7 @@ export default function AuthPage({
                 </>
               ) : resetDone ? (
                 <>
-                  {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-600 text-center">{success}</div>}
+                  {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
                   <button type="button" onClick={() => { onRecoveryExit?.(); onNavigate('app'); }}
                     className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth">
                     الذهاب إلى لوحتي
@@ -475,7 +475,7 @@ export default function AuthPage({
                       <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                       <input type={showPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required
                       placeholder="••••••"
-                      className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                      className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
                         className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -488,7 +488,7 @@ export default function AuthPage({
                       <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                       <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
                       placeholder="••••••"
-                      className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                      className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                     </div>
                   </div>
                   {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
@@ -513,11 +513,11 @@ export default function AuthPage({
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                     placeholder="email@example.com"
-                    className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                    className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
               </div>
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
               <button type="submit" disabled={loading}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50">
                 <RotateCcw className="w-4 h-4" />
@@ -549,7 +549,7 @@ export default function AuthPage({
                   <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
                   placeholder={t('enterUsername')}
                   autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
-                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 <p className="text-xs text-accent-600 mt-1">لو حسابك جديد (بعد تفعيل التحقق بالإيميل)، سجل دخول بالإيميل مش باسم المستخدم — الحسابات الجديدة ملهاش عنوان مشتق.</p>
               </div>
@@ -559,7 +559,7 @@ export default function AuthPage({
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
                   placeholder="••••••"
-                  className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -588,7 +588,7 @@ export default function AuthPage({
                   <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
                   placeholder={t('enterUsername')}
                   autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
-                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
               </div>
 
@@ -598,7 +598,7 @@ export default function AuthPage({
                   <Heart className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="text" value={preferredName} onChange={(e) => setPreferredName(e.target.value)}
                   placeholder="مثال: أبو آية، أبو عمر، أم مريم، أم يوسف"
-                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 <p className="text-xs text-accent-600 mt-1">الكنية اللي هناديك بيها في التطبيق — مثال: أبو آية، أبو عمر، أم مريم، أم يوسف. وتقدر تغيرها بعد كده من لوحتك.</p>
               </div>
@@ -609,7 +609,7 @@ export default function AuthPage({
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
                   placeholder="email@example.com"
-                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 <p className="text-xs text-accent-600 mt-1">هنبعت لك رابط تأكيد على الإيميل ده — لازم تفتحه وتضغطه قبل ما تقدر تدخل. والإيميل ده هو اللي هترجع بيه كلمة السر بعد كده.</p>
               </div>
@@ -620,7 +620,7 @@ export default function AuthPage({
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
                   placeholder="••••••"
-                  className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -634,14 +634,14 @@ export default function AuthPage({
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setGender('male')}
                     className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-smooth ${
-                      gender === 'male' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-gray-50 text-accent-500 border-gray-200'
+                      gender === 'male' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-gray-50 text-accent-500 border-hairline'
                     }`}>
                     <Shield className="w-4 h-4" />
                     {t('male')}
                   </button>
                   <button type="button" onClick={() => setGender('female')}
                     className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-smooth ${
-                      gender === 'female' ? 'bg-pink-50 text-pink-700 border-pink-300' : 'bg-gray-50 text-accent-500 border-gray-200'
+                      gender === 'female' ? 'bg-pink-50 text-pink-700 border-pink-300' : 'bg-gray-50 text-accent-500 border-hairline'
                     }`}>
                     <Heart className="w-4 h-4" />
                     {t('female')}
@@ -655,7 +655,7 @@ export default function AuthPage({
                 <div className="relative">
                   <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} required
-                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                  className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 {birthDate && (
                   <p className="text-xs text-accent-600 mt-1">{t('age')}: {calculateAge(birthDate)} {(lang === 'ar' || lang === 'ar-EG') ? 'سنة' : ''}</p>
@@ -667,20 +667,20 @@ export default function AuthPage({
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('country')} / {t('phone')}</label>
                 <div className="flex gap-2">
                   <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)}
-                    className="px-2 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500">
+                    className="px-2 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500">
                     {COUNTRY_CODES.map((c) => (
                       <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
                     ))}
                   </select>
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                     placeholder={t('phone')}
-                    className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
+                    className="flex-1 px-3 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
               </div>
 
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 text-center">{error}</div>}
-              {success && <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
-              {profileWarning && <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-center leading-relaxed">{profileWarning}</div>}
+              {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-lg text-xs text-emerald-700 text-center">{success}</div>}
+              {profileWarning && <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-800 text-center leading-relaxed">{profileWarning}</div>}
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">

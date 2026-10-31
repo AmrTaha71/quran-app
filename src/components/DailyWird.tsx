@@ -49,7 +49,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
   const partEntries = (Object.keys(WIRD_TYPE_LABEL) as WirdType[]).filter((k) => (wird.parts?.[k] ?? 0) > 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+    <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
       <div className="flex items-center gap-2 mb-3">
         <CalendarDays className="w-5 h-5 text-amber-600" />
         <h2 className="font-bold text-accent-800">وردك اليومي</h2>
@@ -59,7 +59,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
           </span>
         )}
       </div>
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
+      <div className="bg-amber-50 border border-hairline-amber rounded-xl p-3 mb-4">
         <p className="font-bold text-accent-800">المطلوب اليوم:</p>
         {partEntries.length === 0 ? (
           <p className="text-sm text-accent-600 mt-1">لم يتم تحديد ورد بعد — حدده من الإعدادات.</p>
@@ -80,7 +80,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
           الإعدادات (this link), always available — even after today
           is marked done, so tomorrow's wird can be set any time. */}
       <button onClick={() => onNavigate('settings')}
-        className="flex items-center gap-1.5 text-sm font-bold text-amber-700 hover:text-amber-800 mb-4">
+        className="flex items-center gap-1.5 text-sm font-bold text-amber-link hover:text-amber-800 mb-4">
         <Settings className="w-4 h-4" /> تعديل الورد من الإعدادات
       </button>
 

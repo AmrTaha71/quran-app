@@ -4060,13 +4060,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 buried in the settings card. A user on a voiceless
                 browser deserves this banner first, not last. */}
             {!micSupported && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
+              <div className="bg-amber-50 border border-hairline-amber rounded-2xl shadow-sm p-5">
                 <p className="font-bold text-amber-800 mb-1">متصفحك مش بيدعم التسميع المباشر</p>
                 <p className="text-sm text-accent-600 leading-relaxed">افتح التطبيق من Safari على iPhone/iPad عشان تسمّع بالميكروفون. هنا تقدر تقيّم نفسك يدوي بدل كده.</p>
               </div>
             )}
             {savedProgress && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
+              <div className="bg-amber-50 border border-hairline-amber rounded-2xl shadow-sm p-5">
                 <p className="font-bold text-accent-800 mb-1">عندك اختبار غير مكتمل</p>
                 <p className="text-sm text-accent-600 mb-3">
                   {savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah
@@ -4086,7 +4086,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </div>
             )}
-            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 space-y-4">
+            <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4">
               <h2 className="font-bold text-accent-800">إعدادات التسميع</h2>
               <div>
                 <p className="text-sm font-bold text-accent-700 mb-2">مستوى التدقيق</p>
@@ -4153,7 +4153,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p>
                 {!micSupported && (
-                  <p className="text-sm text-amber-700 mt-1">{micAbsentSetupNote}</p>
+                  <p className="text-sm text-amber-link mt-1">{micAbsentSetupNote}</p>
                 )}
               </div>
               <p className="text-xs text-accent-600 leading-relaxed">
@@ -4168,7 +4168,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               (schema v1): the start buttons disable when the chosen
               range spans surahs.
             */}
-            <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-5 space-y-4">
+            <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4">
               <div className="flex items-center gap-3">
                 <input type="checkbox" checked={recording} onChange={toggleRecording} className="w-5 h-5 accent-emerald-600" />
                 <div>
@@ -4273,7 +4273,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
 
-            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
+            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
               <h2 className="font-bold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
                 ابدأ من أول سورة أو جزء أو حزب أو ربع، واخلص عند نهاية نفس الوحدة، أو عند نهاية حزب أو جزء أو سورة.
@@ -4357,7 +4357,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             </div>
 
-            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-4">
+            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
               <h2 className="font-bold text-accent-800">أو يدوي: سورة وآيات</h2>
               <label className="block">
                 <span className="text-sm font-bold text-accent-700">السورة</span>
@@ -4406,7 +4406,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             {/* Batch 2: lobby mic check — a real mic opens, samples,
             and closes BEFORE the session, so a dead mic or a denied
             permission is caught in the lobby instead of mid-test. */}
-            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5 space-y-3">
+            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-3">
               <h2 className="font-bold text-accent-800">جرّب الميكروفون قبل ما تبدأ</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
                 اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال، ومفيش أي تسجيل بيتحفظ أو بيترفع.
@@ -4427,7 +4427,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 micCheckResult.permission === 'granted' && micCheckResult.heardSomething ? (
                   <p className="text-sm font-bold text-emerald-700">تمام — الميكروفون شغال وسمعك (ده فحص الميكروفون بس، مش اختبار التعرف على الكلام). ابدأ التسميع وانت مطمن.</p>
                 ) : micCheckResult.permission === 'granted' ? (
-                  <p className="text-sm font-bold text-amber-700">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
+                  <p className="text-sm font-bold text-amber-link">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
                 ) : micCheckResult.permission === 'denied' ? (
                   <p className="text-sm font-bold text-red-600">الميكروفون مقفول — اسمح بيه من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.</p>
                 ) : (
@@ -4437,7 +4437,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             </div>
 
             {history.length > 0 && (
-              <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-5">
+              <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5">
                 <h2 className="font-bold text-accent-800 mb-3">نتائجك السابقة</h2>
                 <ul className="space-y-2">
                   {history.slice(0, 5).map((h, i) => (
@@ -4454,7 +4454,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
 
         {phase === 'testing' && textOfflineNotice && (
-          <p className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
+          <p className="text-sm font-bold text-amber-link bg-amber-50 border border-hairline-amber rounded-lg px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
         )}
 
         {phase === 'testing' && testMode === 'continuous' && (
@@ -4473,18 +4473,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="h-full bg-emerald-500 transition-all" style={{ width: `${contProgress.total > 0 ? (contProgress.matched / contProgress.total) * 100 : 0}%` }} />
             </div>
 
-            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6 text-center">
+            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-6 text-center">
               {!contListening ? (
                 <>
                   {contStalled && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                    <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4">
                       <p className="text-base font-bold text-amber-800">
                         الاستماع وقف — لكن اللي سمعته محفوظ، كمّل من غير ما يضيع
                       </p>
                     </div>
                   )}
                   {contNoMatch && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                    <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4">
                       <p className="text-base font-bold text-amber-800">
                         مش سامعك كويس — وقّفت التسميع مؤقتًا، واللي سمعته محفوظ. اضغط «كمّل التسميع المتصل» عشان تكمل من غير ما يضيع
                       </p>
@@ -4580,13 +4580,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="h-full bg-emerald-500 transition-all" style={{ width: `${((index + (currentDone ? 1 : 0)) / ayahs.length) * 100}%` }} />
             </div>
 
-            <div className="bg-white rounded-2xl border border-emerald-100 shadow-sm p-6 text-center">
+            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-6 text-center">
               {/* Fallback: no live engine, or the user chose manual for
                   this ayah — the exact v1 reveal + self-grade flow. */}
               {(!micSupported || manualMode) ? (
                 <>
                   {!micSupported && (
-                    <p className="text-sm font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
+                    <p className="text-sm font-bold text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-4">
                       {micAbsentMessage(' — قيّم نفسك يدوي:')}
                     </p>
                   )}
@@ -4644,7 +4644,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ))}
                   </p>
                   {wrongExtras.length > 0 && (
-                    <p className="text-sm text-amber-700 mt-3">كلمات زائدة سمعتها: {wrongExtras.join(' ')}</p>
+                    <p className="text-sm text-amber-link mt-3">كلمات زائدة سمعتها: {wrongExtras.join(' ')}</p>
                   )}
                   {(wrongByAyah[index]?.length ?? 0) > 0 && (
                     <button onClick={() => replayAyahCorrection()}
@@ -4659,7 +4659,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       correction above. */}
                   {ayahs[index] && isRefUnitEnabled(ayahs[index].surah_no, ayahs[index].ayah_no) && wrongIndices.length > 0 && (
                     <button onClick={() => playRefUnit()}
-                      className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-amber-300 hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
+                      className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-hairline-amber hover:bg-amber-100 text-amber-800 text-sm font-bold rounded-xl">
                       {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
                     </button>
                   )}
@@ -4677,7 +4677,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       resets the mic state; a fresh pass overwrites
                       the grade (and the wrong words) for this ayah. */}
                   <button onClick={() => { stopRefUnit(); goToAyah(index); }}
-                    className="mt-5 ml-2 px-6 py-3 bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-700 text-lg font-bold rounded-xl shadow">
+                    className="mt-5 ml-2 px-6 py-3 bg-white border border-hairline-emerald hover:bg-emerald-50 text-emerald-700 text-lg font-bold rounded-xl shadow">
                     🔁 سمّع الآية دي تاني
                   </button>
                   <button onClick={nextAfterMic}
@@ -4690,7 +4690,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {micState === 'idle' && (
                     <>
                       {micStalled && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4">
+                        <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4">
                           <p className="text-base font-bold text-amber-800">
                             الاستماع وقف — لكن اللي سمعته محفوظ ومش هيضيع
                           </p>
@@ -4764,12 +4764,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       })()}
                       <p className="text-xs text-accent-500 mb-3">الاستماع المباشر محتاج إنترنت</p>
                       {micState === 'correcting' && (
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 polish-correction-window">
+                        <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4 polish-correction-window">
                           <p className="text-base font-bold text-amber-800">
                             في حاجة محتاجة تتصلح — كمّل أو صلّح، عندك {countdown.toLocaleString('ar-EG')} ثواني
                           </p>
                           <button onClick={() => showMistakeNow()}
-                            className="mt-1 text-sm font-bold text-amber-700 underline">
+                            className="mt-1 text-sm font-bold text-amber-link underline">
                             خلاص، وريني الغلط
                           </button>
                         </div>
@@ -4823,7 +4823,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         {phase === 'done' && (
           <div className="space-y-5">
             {contZeroMatch && testMode === 'continuous' && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+              <div className="bg-amber-50 border border-hairline-amber rounded-2xl p-5">
                 <p className="font-bold text-amber-800">لم يُطابق الجهاز أي كلمة — هذه ليست نتيجة ٠٪</p>
                 <p className="text-sm text-accent-700 leading-relaxed mt-2">
                   سمعت {contHeardWords.toLocaleString('ar-EG')} كلمة، وطابقت {contMatchedWords.toLocaleString('ar-EG')} كلمة. عندما لا يطابق الجهاز أي كلمة، لا نعرض قائمة "آيات تحتاج مراجعة" ولا نسجل النتيجة في السجل، لأنها ستكون مضللة: المشكلة غالبًا في ما سمعه الجهاز أو في الميكروفون، وليست في حفظك. تأكد من الميكروفون، ثم أعد التسميع. النص الخام أدناه هو ما سمعه الجهاز حرفيًا — صوّره مع رقم النسخة إن تكرر الأمر.
@@ -4881,7 +4881,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </div>
                       </div>
                       {wrongByAyah[i]?.length ? <p className="text-red-600 text-lg mt-1 font-arabic leading-relaxed" dir="rtl">الكلمات الغلط: {wrongByAyah[i].map((w, wi) => (<span key={wi}>{w} </span>))}</p> : null}
-                      {extraByAyah[i]?.length ? <p className="text-amber-700 text-xs mt-1" dir="rtl">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
+                      {extraByAyah[i]?.length ? <p className="text-amber-link text-xs mt-1" dir="rtl">كلمات زائدة: {extraByAyah[i].join(' ')}</p> : null}
                     </li>
                   ) : null))}
                 </ul>
@@ -4889,7 +4889,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
 
             {!contZeroMatch && contExtras.length > 0 && testMode === 'continuous' && (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 leading-relaxed" dir="rtl">
+              <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 leading-relaxed" dir="rtl">
                 كلمات زائدة سمعتها أثناء التسميع المتصل: {contExtras.join(' ')}
               </p>
             )}
@@ -4923,7 +4923,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ))}
                     {diagEventsRef.current.length === 0 && <p className="text-xs text-accent-500">لا توجد أحداث مسجلة.</p>}
                   </div>
-                  {diagTruncatedRef.current && <p className="text-xs text-amber-700" dir="rtl">السجل تجاوز 2000 حدث — الأقدم حُذف من الأحداث (قائمة النهائيات كاملة في JSON).</p>}
+                  {diagTruncatedRef.current && <p className="text-xs text-amber-link" dir="rtl">السجل تجاوز 2000 حدث — الأقدم حُذف من الأحداث (قائمة النهائيات كاملة في JSON).</p>}
                   {diagEventsRef.current.length > DIAG_DISPLAY_CAP && <p className="text-xs text-accent-500" dir="rtl">معروض آخر 500 حدث فقط — باقي الأحداث في JSON.</p>}
                   <div className="flex items-center gap-2">
                     <button type="button" onClick={() => void diagCopyJson()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl">نسخ JSON التشخيصي</button>
@@ -4933,7 +4933,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
             {recSessionRef.current?.recording && (
-              <div className="bg-white border border-amber-200 rounded-2xl shadow-sm p-5 space-y-4">
+              <div className="bg-white border border-hairline-amber rounded-2xl shadow-sm p-5 space-y-4">
                 <h2 className="font-bold text-accent-800">تسجيل حالة اختبار</h2>
                 <p className="text-sm text-accent-600 leading-relaxed">هذا الاختبار سُجّل لمدونة الاختبار. صنّف كل آية، ثم أكّد الموافقة وصدّر الحالة.</p>
                 {(() => {
@@ -5016,7 +5016,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                               </select>
                             </div>
                             {st === 'planted' && (planned.length === 0 ? (
-                              <p className="text-sm text-amber-700">لا توجد خطة لهذه الآية — إن زرعت خطأً غير مخطط، اختر «أخطأت دون قصد».</p>
+                              <p className="text-sm text-amber-link">لا توجد خطة لهذه الآية — إن زرعت خطأً غير مخطط، اختر «أخطأت دون قصد».</p>
                             ) : (
                               <div className="space-y-1">
                                 {planned.map((p, pi) => {
@@ -5077,7 +5077,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       {preview.status === 'complete' ? (
                         <p className="text-sm font-bold text-emerald-700">الحالة مكتملة — جاهزة للمدونة.</p>
                       ) : (
-                        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                        <div className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3">
                           <p className="font-bold">الحالة جزئية (لن تُحسب في التقرير):</p>
                           <ul className="list-disc pr-5 mt-1 space-y-1">
                             {preview.reasons.map((r, i) => (<li key={i}>{r}</li>))}

@@ -35,14 +35,14 @@ export default function QRCodeSection() {
                   <p className="text-xs text-accent-600">امسح الرمز بكاميرا هاتفك</p>
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} aria-label="إغلاق" className="icon-action p-2 text-gray-400 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => setOpen(false)} aria-label="إغلاق" className="icon-action p-2 text-ink-3 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {stores.map((s) => (
-                <div key={s.label} className="flex flex-col items-center gap-3 p-5 bg-gradient-to-b from-gray-50 to-white rounded-2xl border-2 border-hairline hover:border-emerald-200 transition-smooth">
+                <div key={s.label} className="flex flex-col items-center gap-3 p-5 bg-gradient-to-b from-gray-50 to-white rounded-2xl border-2 border-hairline hover:border-hairline-emerald transition-smooth">
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-md ${s.color}`}>
                     {s.icon}
                   </div>
@@ -52,7 +52,7 @@ export default function QRCodeSection() {
                   </div>
 
                   {/* QR Code */}
-                  <div className="w-32 h-32 bg-white border-3 border-emerald-100 rounded-2xl flex items-center justify-center p-2 shadow-sm">
+                  <div className="w-32 h-32 bg-white border-3 border-hairline-emerald rounded-2xl flex items-center justify-center p-2 shadow-sm">
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(s.url)}`}
                       alt={`QR ${s.label}`}

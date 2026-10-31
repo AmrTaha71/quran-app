@@ -108,7 +108,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               <p className="text-base text-accent-500">
                 {(lang === 'ar' || lang === 'ar-EG') ? 'من أصل' : 'out of'} {formatNum(stats.total, lang)} {t('verse')}
               </p>
-              <p className="text-sm text-amber-700 mt-1">{formatNum(stats.total - stats.withLinks, lang)} {t('remaining')}</p>
+              <p className="text-sm text-amber-link mt-1">{formatNum(stats.total - stats.withLinks, lang)} {t('remaining')}</p>
             </div>
           </div>
 
@@ -141,7 +141,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
         </div>
       </section>
 
-      <footer className="py-10 px-4 border-t border-emerald-100 bg-white">
+      <footer className="py-10 px-4 border-t border-hairline-emerald bg-white">
         <div className="max-w-6xl mx-auto text-center text-base text-accent-500">
           <p>{t('appName')} © 2026</p>
           <p className="mt-2 text-sm text-emerald-700 font-semibold">معك في كل آية، حتى نُتمّ حفظ كتاب الله</p>

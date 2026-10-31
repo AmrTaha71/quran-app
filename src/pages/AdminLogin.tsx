@@ -32,7 +32,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
       </div>
 
       <div className="relative w-full max-w-md">
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8">
           <div className="flex flex-col items-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center shadow-lg mb-4">
               <BookOpen className="w-8 h-8 text-white" />
@@ -52,7 +52,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   placeholder="admin"
-                  className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-hairline rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
+                  className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-hairline rounded-xl text-accent-800 placeholder:text-ink-3 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
                 />
               </div>
             </div>
@@ -67,7 +67,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••"
-                  className="w-full pr-10 pl-10 py-3 bg-gray-50 border border-hairline rounded-xl text-accent-800 placeholder:text-gray-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
+                  className="w-full pr-10 pl-10 py-3 bg-gray-50 border border-hairline rounded-xl text-accent-800 placeholder:text-ink-3 focus:outline-none focus:border-emerald-500 focus:bg-white transition-smooth"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">

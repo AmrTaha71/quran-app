@@ -351,7 +351,7 @@ function AppContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-emerald-50 to-white">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+          <div className="w-12 h-12 border-4 border-hairline-emerald border-t-emerald-600 rounded-full animate-spin" />
         </div>
       </div>
     );

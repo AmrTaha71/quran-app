@@ -521,7 +521,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
+        <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
           <h1 className="text-xl font-bold text-accent-800 mb-2">لوحة الإدارة</h1>
           <p className="text-sm text-accent-600 mb-5">سجل دخول بحسابك العادي أولاً — لو حسابك أدمن، الإدارة هتفتح لك من الإعدادات.</p>
           <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">تسجيل الدخول</button>
@@ -531,12 +531,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     );
   }
   if (isAdmin === null) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" /></div>;
+    return <div className="min-h-screen flex items-center justify-center"><div className="w-10 h-10 border-4 border-hairline-emerald border-t-emerald-600 rounded-full animate-spin" /></div>;
   }
   if (gateError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
+        <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
           <h1 className="text-xl font-bold text-accent-800 mb-2">تعذّر التأكد من صلاحية الإدارة</h1>
           <p className="text-sm text-accent-500 mb-5">الاتصال بالخادم فشل أثناء التحقق — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
           <button onClick={() => setGateAttempt((a) => a + 1)} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">إعادة المحاولة</button>
@@ -548,7 +548,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
-        <div className="bg-white rounded-2xl shadow-xl border border-emerald-100 p-8 w-full max-w-md text-center">
+        <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
           <h1 className="text-xl font-bold text-accent-800 mb-2">الصفحة دي للأدمن بس</h1>
           <p className="text-sm text-accent-600 mb-5">حسابك شغال كمستخدم عادي تماماً، وده مقصود — الإدارة مش بتظهر للمستخدم العادي.</p>
           <button onClick={() => onNavigate('app')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">العودة للوحتي</button>
@@ -562,16 +562,16 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const remaining = TOTAL_VERSES - stats.withLinks;
 
   const getLinkTypeColors = (types: string[]): string => {
-    if (!types || types.length === 0) return 'bg-gray-100 text-gray-700';
+    if (!types || types.length === 0) return 'bg-gray-100 text-ink-2';
     const first = types[0];
     const map: Record<string, string> = {
       wajih: 'bg-blue-100 text-blue-700', sifa: 'bg-cyan-100 text-cyan-700',
       mutashabihat: 'bg-teal-100 text-teal-700', sabab_nuzul: 'bg-orange-100 text-orange-700',
       fawaaid: 'bg-emerald-100 text-emerald-700', lafdhi: 'bg-pink-100 text-pink-700',
-      adadi: 'bg-amber-100 text-amber-700', maqam: 'bg-indigo-100 text-indigo-700',
+      adadi: 'bg-amber-100 text-amber-link', maqam: 'bg-indigo-100 text-indigo-700',
       takrir: 'bg-rose-100 text-rose-700',
     };
-    return map[first] || 'bg-gray-100 text-gray-700';
+    return map[first] || 'bg-gray-100 text-ink-2';
   };
 
   const formatTypes = (types: string[]): string => {
@@ -595,12 +595,12 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           <div className="flex flex-wrap items-center gap-2">
             {(pendingLinks.length > 0 || pendingError) && (
               <button onClick={() => { setPendingVisible(50); setShowPending(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-smooth font-semibold border border-amber-200">
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link bg-amber-50 hover:bg-amber-100 rounded-lg transition-smooth font-semibold border border-hairline-amber">
                 <Clock className="w-4 h-4" /> مراجعة ({pendingLinks.length})
               </button>
             )}
             <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition-smooth font-semibold">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link hover:bg-amber-50 rounded-lg transition-smooth font-semibold">
               <BookOpen className="w-4 h-4" /> المصحف
             </button>
             <button onClick={() => onNavigate('app')} className="px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">تطبيق المستخدم</button>
@@ -678,7 +678,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               <p className="text-xs text-accent-600 mt-0.5">من سجل استخدام التطبيق فقط — الرقم الدقيق في صفحة Usage على OpenAI</p>
             </div>
             {usage && (
-              <button onClick={loadUsage} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 transition-smooth">
+              <button onClick={loadUsage} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-hairline-emerald transition-smooth">
                 <RefreshCw className="w-3.5 h-3.5" /> تحديث
               </button>
             )}
@@ -698,7 +698,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 </div>
               </div>
               {Math.max(0, startingBalance - usage.total) < 1 && (
-                <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-300 rounded-lg text-xs font-semibold text-amber-800">
+                <div className="mt-3 px-3 py-2 bg-amber-50 border border-hairline-amber rounded-lg text-xs font-semibold text-amber-800">
                   تنبيه: الرصيد المتبقي أقل من $1 — اشحن رصيد OpenAI قبل ما تتوقف خدمات الذكاء والصوت.
                 </div>
               )}
@@ -734,13 +734,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-3" />
               <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                 placeholder="بحث بالنص، رقم، أو سورة:آية (مثل 2:255)..."
                 className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 transition-smooth" />
             </div>
             {searchHint && (
-              <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">
+              <div className="flex items-center gap-1.5 text-xs text-amber-link bg-amber-50 px-3 py-1.5 rounded-lg border border-hairline-amber">
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> {searchHint}
               </div>
             )}
@@ -793,7 +793,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         <div className="bg-white rounded-2xl border border-hairline shadow-sm overflow-hidden">
           {loading ? (
             <div className="flex justify-center items-center py-20">
-              <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+              <div className="w-10 h-10 border-4 border-hairline-emerald border-t-emerald-600 rounded-full animate-spin" />
             </div>
           ) : (
             <div className="divide-y divide-gray-100">
@@ -820,7 +820,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                           <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg">{verse.surah_no}:{verse.ayah_no}</span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
-                          <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-gray-500 bg-gray-50'}`}>
+                          <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-ink-3 bg-gray-50'}`}>
                             <Bookmark className="w-3 h-3" /> {verse.links_count || 0} رابط
                           </span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
@@ -845,7 +845,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                                       <a href={link.audio_url} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline text-xs">مقطع رنا</a>
                                     </div>
                                   )}
-                                  {link.status === 'pending' && <span className="text-xs text-amber-700 font-semibold">بانتظار المراجعة</span>}
+                                  {link.status === 'pending' && <span className="text-xs text-amber-link font-semibold">بانتظار المراجعة</span>}
                                 </div>
                                 <button onClick={() => deleteLink(link.id)} disabled={!!savingIds[link.id]} aria-label="حذف الرابط" className="icon-action text-red-500 hover:bg-red-100 rounded p-1 flex-shrink-0 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
                               </div>
@@ -910,7 +910,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg disabled:opacity-50">
                   <RefreshCw className={`w-3.5 h-3.5 ${pendingLoading ? 'animate-spin' : ''}`} /> تحديث القائمة
                 </button>
-                <button onClick={() => setShowPending(false)} aria-label="إغلاق" className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
+                <button onClick={() => setShowPending(false)} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
               </div>
             </div>
             <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
@@ -971,7 +971,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       {editingLinkId === link.id ? (
                         <div className="mb-2">
                           <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={3}
-                            className="w-full px-3 py-2 bg-white border border-emerald-200 rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none" />
+                            className="w-full px-3 py-2 bg-white border border-hairline-input rounded-lg text-sm focus:outline-none focus:border-emerald-500 resize-none" />
                           <div className="flex gap-2 mt-1">
                             <button onClick={() => saveEditText(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50">
                               <Check className="w-3 h-3" /> {savingIds[link.id] ? 'جارٍ الحفظ…' : 'حفظ النص'}
@@ -998,7 +998,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           first listen is the original recording, inline
                           — the synthetic box below is only after it. */}
                       {link.audio_url && (
-                        <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100 mt-2">
+                        <div className="bg-emerald-50 rounded-lg p-3 border border-hairline-emerald mt-2">
                           <p className="text-xs font-semibold text-emerald-700 mb-2">الصوت الأصلي</p>
                           <button onClick={() => new Audio(link.audio_url!).play()}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg">
@@ -1084,7 +1084,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   })}
                   {pendingVisible < pendingLinks.length && (
                   <button onClick={() => setPendingVisible((v) => v + 50)}
-                    className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-700 text-sm font-semibold rounded-lg border border-amber-200">
+                    className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-link text-sm font-semibold rounded-lg border border-hairline-amber">
                     عرض المزيد ({pendingLinks.length - pendingVisible} متبقية)
                   </button>
                 )}
@@ -1104,9 +1104,9 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
 
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   const colorMap: Record<string, string> = {
-    emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    emerald: 'bg-emerald-50 text-emerald-700 border-hairline-emerald',
     red: 'bg-red-50 text-red-600 border-red-100',
-    amber: 'bg-amber-50 text-amber-600 border-amber-100',
+    amber: 'bg-amber-50 text-amber-link border-hairline-amber',
   };
   return (
     <div className={`p-5 rounded-2xl border ${colorMap[color]} flex items-center gap-4 shadow-sm hover:shadow-md transition-smooth`}>

@@ -510,7 +510,7 @@ export default function LinkModal({
             </div>
             <h3 className="font-bold text-accent-800">إنشاء رابط للآية</h3>
           </div>
-          <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-smooth">
+          <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg transition-smooth">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -531,7 +531,7 @@ export default function LinkModal({
               {LINK_TYPES.map((t) => (
                 <button key={t.value} type="button" onClick={() => toggleType(t.value)}
                   className={`py-2 text-xs font-semibold rounded-lg border transition-smooth ${
-                    selectedTypes.includes(t.value) ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
+                    selectedTypes.includes(t.value) ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                   }`}>
                   {t.label}
                 </button>
@@ -548,7 +548,7 @@ export default function LinkModal({
           {/* Phase: Input */}
           {phase === 'input' && (
             <div className="space-y-3">
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-hairline-emerald">
                 <p className="text-sm font-semibold text-accent-700 mb-3 text-center">تسجيل صوتي مباشر يا رنا</p>
                 <p className="text-xs text-accent-600 mb-4 text-center">سجلي المقطع يا رنا — سيتم تحويله لنص أثناء التسجيل</p>
                 <div className="flex flex-col gap-2.5">
@@ -560,7 +560,7 @@ export default function LinkModal({
                     {isRecording ? 'وقفي التسجيل يا رنا' : 'سجلي مباشر يا رنا'}
                   </button>
                   {isRecording && liveTranscript && (
-                    <div className="bg-white rounded-lg p-3 border border-emerald-200 animate-fade-in">
+                    <div className="bg-white rounded-lg p-3 border border-hairline-emerald animate-fade-in">
                       <p className="text-xs text-emerald-700 font-semibold mb-1">يتم التحويل الآن:</p>
                       <p className="text-sm text-accent-700">{liveTranscript}</p>
                     </div>
@@ -568,7 +568,7 @@ export default function LinkModal({
                   <div className="flex items-center gap-2">
                     <div className="flex-1 h-px bg-gray-200" /><span className="text-xs text-accent-600">أو</span><div className="flex-1 h-px bg-gray-200" />
                   </div>
-                  <label className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-white border-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 cursor-pointer transition-smooth">
+                  <label className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-white border-2 border-hairline-emerald text-emerald-700 hover:bg-emerald-50 cursor-pointer transition-smooth">
                     <Upload className="w-5 h-5" /> رفع ملف صوتي
                     <input type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
                   </label>
@@ -599,7 +599,7 @@ export default function LinkModal({
           {/* Phase: Confirm recording — Rana approves the take first */}
           {phase === 'confirm_recording' && (
             <div className="space-y-3 animate-slide-up">
-              <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-100 text-center">
+              <div className="bg-emerald-50 rounded-xl p-4 border border-hairline-emerald text-center">
                 <p className="text-sm font-bold text-accent-800 mb-3">كويس التسجيل كده؟</p>
                 {audioPublicUrl && (
                   <button onClick={() => playAudio(audioPublicUrl)}
@@ -654,7 +654,7 @@ export default function LinkModal({
                 </div>
               )}
               {audioError && !audioPublicUrl && (
-                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 text-center">
+                <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-link text-center">
                   {audioError}
                 </div>
               )}
@@ -773,7 +773,7 @@ export default function LinkModal({
               </div>
 
               {error && (
-                <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 text-center flex items-center justify-center gap-2">
+                <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-link text-center flex items-center justify-center gap-2">
                   <AlertCircle className="w-4 h-4" /> {error}
                 </div>
               )}
@@ -818,7 +818,7 @@ export default function LinkModal({
           )}
 
           {phase === 'input' && error && (
-            <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 text-center flex items-center justify-center gap-2">
+            <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-lg text-xs text-amber-link text-center flex items-center justify-center gap-2">
               <AlertCircle className="w-4 h-4" /> {error}
             </div>
           )}

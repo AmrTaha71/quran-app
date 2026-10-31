@@ -400,7 +400,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               </button>
             )}
             <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-700 hover:bg-amber-50 rounded-lg transition-smooth font-semibold border border-amber-200">
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-amber-link hover:bg-amber-50 rounded-lg transition-smooth font-semibold border border-hairline-amber">
               <BookMarked className="w-5 h-5" /> المصحف
             </button>
             <button onClick={() => onNavigate('home')}
@@ -413,7 +413,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {profileRepairNeeded && (
-          <div className="mb-5 bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+          <div className="mb-5 bg-amber-50 border border-hairline-amber rounded-2xl p-4 shadow-sm">
             <p className="text-sm text-amber-800 leading-relaxed">
               بيانات ملفك (اسم المستخدم والنوع) لم تُحفظ بعد — اضغط لإعادة المحاولة، ولو استمرت المشكلة ستظل لوحتك شغالة عادي.
             </p>
@@ -438,7 +438,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 {profileRepairBusy ? '...' : 'إعادة المحاولة'}
               </button>
               <button onClick={() => setProfileRepairNeeded(false)}
-                className="px-3 py-2 text-sm text-amber-700 hover:text-amber-900">
+                className="px-3 py-2 text-sm text-amber-link hover:text-amber-900">
                 إخفاء
               </button>
             </div>
@@ -464,7 +464,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <div className="flex gap-2 mt-3">
               <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
                 placeholder="اكتب كنيتك (مثال: أبو …)"
-                className="flex-1 px-3 py-2 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
+                className="flex-1 px-3 py-2 rounded-xl text-sm text-accent-800 bg-white/95 border border-hairline-input focus:outline-none" />
               <button onClick={savePreferredName} className="px-3 py-2 bg-white text-emerald-700 text-sm font-bold rounded-xl">حفظ</button>
               <button onClick={() => setEditingName(false)} className="px-3 py-2 text-sm text-emerald-100">إلغاء</button>
             </div>
@@ -488,7 +488,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             is 0. The full memorized list stays reachable via the
             "تم الحفظ" tab below, whose count is the true total. */}
         {session && memorizedFromStart > 0 && (
-          <div className="mb-5 bg-white rounded-2xl border border-amber-200 shadow-sm p-5">
+          <div className="mb-5 bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
               <BadgeCheck className="w-5 h-5 text-amber-600" />
               <h2 className="font-bold text-accent-800">مركز الحفظ</h2>
@@ -510,7 +510,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {/* Daily wird + self-test entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           <DailyWird onNavigate={onNavigate} />
-          <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 flex flex-col">
+          <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-1">
               <Mic className="w-5 h-5 text-amber-600" />
               <h2 className="font-bold text-accent-800">سمّع لنفسك</h2>
@@ -571,7 +571,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">بحث في الآيات والروابط</label>
                 <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-3" />
                   <input type="text" value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                     placeholder={t('search')}
@@ -583,7 +583,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   </button>
                 </div>
                 {searchHint && (
-                  <div className="flex items-center gap-1.5 text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200 mt-2">
+                  <div className="flex items-center gap-1.5 text-sm text-amber-link bg-amber-50 px-3 py-2 rounded-lg border border-hairline-amber mt-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
                     {searchHint}
                   </div>
@@ -597,14 +597,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto p-1">
                   <button onClick={() => { setSurahFilter(''); setPage(0); }}
                     className={`p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                      surahFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
+                      surahFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                     }`}>
                     كل السور
                   </button>
                   {SURAHS.map((s) => (
                     <button key={s.no} onClick={() => { setSurahFilter(String(s.no)); setPage(0); }}
                       className={`flex items-center gap-1.5 p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                        surahFilter === String(s.no) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
+                        surahFilter === String(s.no) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                       }`}>
                       <span className="text-xs opacity-60">{s.no}.</span>
                       <span className="truncate">{s.name}</span>
@@ -621,14 +621,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setLinkTypeFilter(''); setPage(0); }}
                     className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                      linkTypeFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
+                      linkTypeFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                     }`}>
                     كل الأنواع
                   </button>
                   {LINK_TYPES.map((lt) => (
                     <button key={lt.value} onClick={() => { setLinkTypeFilter(lt.value); setPage(0); }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                        linkTypeFilter === lt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
+                        linkTypeFilter === lt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                       }`}>
                       {lt.label}
                     </button>
@@ -649,11 +649,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {/* Verses list */}
         {loading ? (
           <div className="flex justify-center items-center py-20">
-            <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+            <div className="w-12 h-12 border-4 border-hairline-emerald border-t-emerald-600 rounded-full animate-spin" />
           </div>
         ) : verses.length === 0 ? (
           <div className="bg-white rounded-2xl border border-hairline py-20 text-center shadow-sm">
-            <BookOpen className="w-14 h-14 text-gray-300 mx-auto mb-3" />
+            <BookOpen className="w-14 h-14 text-ink-3 mx-auto mb-3" />
             <p className="text-base text-accent-400">{listFilter ? 'لا توجد آيات في هذه القائمة' : t('noLinksYet')}</p>
           </div>
         ) : !debouncedSearch && !surahFilter ? (
@@ -672,7 +672,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               }
               return groups.map((g) => (
                 <button key={g.no} onClick={() => { setSurahFilter(String(g.no)); setPage(0); }}
-                  className="w-full flex items-center justify-between bg-white rounded-2xl border border-emerald-100 shadow-sm p-4 hover:shadow-md transition-smooth">
+                  className="w-full flex items-center justify-between bg-white rounded-2xl border border-hairline-emerald shadow-sm p-4 hover:shadow-md transition-smooth">
                   <span className="flex items-center gap-2">
                     <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-lg">{g.no.toLocaleString('ar-EG')}</span>
                     <span className="text-base font-bold text-accent-800">سورة {g.name}</span>
@@ -693,7 +693,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   onTouchStart={() => handleLongPressStart(verse)}
                   onTouchEnd={handleLongPressClear}
                   onTouchMove={handleLongPressClear}
-                  className="bg-white rounded-2xl border border-emerald-100 overflow-hidden shadow-sm hover:shadow-md transition-smooth animate-fade-in"
+                  className="bg-white rounded-2xl border border-hairline-emerald overflow-hidden shadow-sm hover:shadow-md transition-smooth animate-fade-in"
                 >
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-4 mb-3">
@@ -750,7 +750,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                             } catch { /* storage unavailable: still navigate to the Mushaf */ }
                             onNavigate('mushaf');
                           }}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth bg-amber-50 text-amber-link hover:bg-amber-100 border border-hairline-amber"
                         >
                           <BookMarked className="w-5 h-5" />
                           فتح في المصحف
@@ -791,7 +791,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                 );
                               })()}
                             </div>
-                            <span className="text-xs text-gray-300 hidden sm:inline">اضغط مطولاً للقائمة</span>
+                            <span className="text-xs text-ink-3 hidden sm:inline">اضغط مطولاً للقائمة</span>
                           </div>
                         ))}
                       </div>
@@ -878,9 +878,9 @@ function getLinkTypeColor(type: string): string {
     sabab_nuzul: 'bg-orange-100 text-orange-700',
     fawaaid: 'bg-emerald-100 text-emerald-700',
     lafdhi: 'bg-pink-100 text-pink-700',
-    adadi: 'bg-amber-100 text-amber-700',
+    adadi: 'bg-amber-100 text-amber-link',
     maqam: 'bg-indigo-100 text-indigo-700',
     takrir: 'bg-rose-100 text-rose-700',
   };
-  return colors[type] || 'bg-gray-100 text-gray-700';
+  return colors[type] || 'bg-gray-100 text-ink-2';
 }
