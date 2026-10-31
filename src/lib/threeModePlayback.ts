@@ -11,6 +11,25 @@
 // (see selectInterstitial). The journey ends after surah 114's
 // last ayah and its quarter's interstitial.
 //
+// TAFSIR ORDER (user toggle, 2026-10-31; tadabbur only):
+// - 'after' (default): exactly the model above — the interstitial
+//   reviews the quarter just heard, sized from MEASURED played
+//   time. Nothing in this path changed for the toggle.
+// - 'before': each quarter's tafsir plays as a PREVIEW before the
+//   quarter's ayahs. The marker that ends quarter Q is the
+//   injection point for quarter Q+1's preview: when the marker is
+//   reached, the engine looks ahead through the generator,
+//   buffers Q+1's ayahs, resolves the preview from them, and
+//   queues it; the buffered ayahs then play in order. The first
+//   quarter has no preceding marker, so its preview is generated
+//   when its first ayah is reached instead. The last quarter's
+//   preview is generated at the previous quarter's marker, so
+//   every quarter — first and last included — gets a preview, and
+//   the journey still ends at 114:6 with no trailing tafsir.
+//   A preview is sized from PLANNED time (see resolvePreview),
+//   never from heard time: nothing has been heard yet. The
+//   after-mode sizing path (resolveInterstitial) is untouched.
+//
 // RUNTIME MEASUREMENT (no estimated durations anywhere):
 // - A quarter's played duration is the sum of its ayah clips'
 //   actual played time (audio.duration when known, else the time
@@ -58,7 +77,12 @@ import {
   tafsirClipUrl,
   writeThreeModeResume,
 } from './threeModeListen';
-import type { JourneyItem, ThreeMode, ThreeModePosition } from './threeModeListen';
+import type {
+  JourneyItem,
+  TadabburTafsirOrder,
+  ThreeMode,
+  ThreeModePosition,
+} from './threeModeListen';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
 
 const ERROR_MESSAGE = 'تعذرت التلاوة — تحقق من الاتصال وحاول تاني';
@@ -72,6 +96,14 @@ export interface JourneyEngineOptions {
   startSurah: number;
   startReciterId: string;
   startAyah?: number;
+  /**
+   * Tadabbur only: 'before' plays each quarter's tafsir as a
+   * preview before the quarter; 'after' (default) reviews the
+   * quarter after it. Ignored for single/varied modes, and a
+   * resumed journey's saved order (startItem's position) wins
+   * over this value at the page layer — see ListenPage.
+   */
+  tafsirOrder?: TadabburTafsirOrder;
   /** Resume seek: jump to this item without playing earlier items. */
   startItem?: { kind: 'ayah' | 'tafsir'; surah: number; ayah: number };
   /** Saved interstitial list, for resuming into a tafsir item. */
@@ -87,6 +119,12 @@ export interface JourneyEngineOptions {
   resolveAyahUrl?: (reciterId: string, surah: number, ayah: number) => Promise<string>;
   /** Injected in tests; default probes clip metadata in the browser. */
   probeTafsirDuration?: (surah: number, ayah: number) => Promise<number | null>;
+  /**
+   * Injected in tests; default resolves the ayah URL (via
+   * resolveAyahUrl, injected or default) and probes its metadata.
+   * Used ONLY by before-mode preview sizing (planned durations).
+   */
+  probeAyahDuration?: (reciterId: string, surah: number, ayah: number) => Promise<number | null>;
   onItemChange?: (item: JourneyPlayable) => void;
   onEnded?: () => void;
   onError?: (message: string) => void;
@@ -122,13 +160,13 @@ function defaultResolveAyahUrl(
   return Promise.resolve(reciter.audioUrl(surah, ayah));
 }
 
-function defaultProbeTafsirDuration(surah: number, ayah: number): Promise<number | null> {
+// Shared metadata prober: detached Audio element, preload =
+// 'metadata', never the playing element. 10s timeout; null on any
+// failure (a clip whose metadata will not load is skipped, never
+// guessed). Used by the tafsir prober and by before-mode planned
+// recitation probing alike.
+function probeAudioMetadata(url: string): Promise<number | null> {
   return new Promise((resolve) => {
-    const url = tafsirClipUrl(surah, ayah);
-    if (!url) {
-      resolve(null);
-      return;
-    }
     let done = false;
     const finish = (value: number | null): void => {
       if (done) return;
@@ -167,6 +205,12 @@ function defaultProbeTafsirDuration(surah: number, ayah: number): Promise<number
   });
 }
 
+function defaultProbeTafsirDuration(surah: number, ayah: number): Promise<number | null> {
+  const url = tafsirClipUrl(surah, ayah);
+  if (!url) return Promise.resolve(null);
+  return probeAudioMetadata(url);
+}
+
 export class JourneyEngine {
   private readonly mode: ThreeMode;
   private readonly startSurah: number;
@@ -182,6 +226,12 @@ export class JourneyEngine {
     surah: number,
     ayah: number,
   ) => Promise<number | null>;
+  private readonly probeAyahDurationOpt?: (
+    reciterId: string,
+    surah: number,
+    ayah: number,
+  ) => Promise<number | null>;
+  private readonly tafsirOrder: TadabburTafsirOrder;
   private readonly onItemChange?: (item: JourneyPlayable) => void;
   private readonly onEnded?: () => void;
   private readonly onError?: (message: string) => void;
@@ -208,6 +258,22 @@ export class JourneyEngine {
   // Interstitial queue for the marker being played through.
   private pendingTafsir: { surah: number; ayah: number }[] = [];
   private currentInterstitial: { surah: number; ayah: number }[] | null = null;
+  // BEFORE-mode only: ayah items collected by lookahead for the
+  // quarter whose preview is queued/playing. They are returned in
+  // order after the preview drains, before the generator is pulled
+  // again — so a preview never skips the quarter it previews.
+  // Always empty in after-mode (and in single/varied modes).
+  // INVARIANT: the buffer is non-empty only while seekTarget is
+  // null (seek paths never buffer; the Q1-preview seek path
+  // buffers only after clearing the seek).
+  private bufferedAyahs: Extract<JourneyItem, { kind: 'ayah' }>[] = [];
+  // Quarter of the last ayah RETURNED (buffered, sought, or
+  // direct). The before-mode "new quarter" check fires only when
+  // a generator ayah's quarter differs from this — i.e. at
+  // journey start / restart, the only points where a generator
+  // ayah can begin a quarter without a preceding marker having
+  // already queued that quarter's preview.
+  private lastAyahQuarter: number | null = null;
   // A quarterEnd marker seen during BACKGROUND preparation (while
   // an ayah plays). It is deliberately NOT resolved there: the
   // quarter's played duration is incomplete until its last ayah
@@ -357,8 +423,10 @@ export class JourneyEngine {
       ? opts.startReciterId
       : DEFAULT_RECITER_ID;
     this.startAyah = opts.startAyah ?? 1;
+    this.tafsirOrder = opts.tafsirOrder === 'before' ? 'before' : 'after';
     this.resolveAyahUrl = opts.resolveAyahUrl ?? defaultResolveAyahUrl;
     this.probeTafsirDuration = opts.probeTafsirDuration ?? defaultProbeTafsirDuration;
+    this.probeAyahDurationOpt = opts.probeAyahDuration;
     this.onItemChange = opts.onItemChange;
     this.onEnded = opts.onEnded;
     this.onError = opts.onError;
@@ -423,6 +491,12 @@ export class JourneyEngine {
       ayah: cur.ayah,
       time,
       ...(this.currentInterstitial ? { interstitial: this.currentInterstitial } : {}),
+      // Tadabbur only: the order this journey runs in, so a resume
+      // rebuilds the same item stream (previews included) instead
+      // of silently re-ordering. Single/varied positions never
+      // carry it, and pre-toggle tadabbur positions (absent) read
+      // as 'after' at the page layer.
+      ...(this.mode === 'tadabbur' ? { tafsirOrder: this.tafsirOrder } : {}),
     };
   }
 
@@ -479,6 +553,8 @@ export class JourneyEngine {
     this.pendingTafsir = [];
     this.currentInterstitial = null;
     this.pendingMarker = null;
+    this.bufferedAyahs = [];
+    this.lastAyahQuarter = null;
     this.resetQuarterTracking();
     acquireAudio('listen', this.handlePreempted);
     this.holdsAudio = true;
@@ -539,6 +615,7 @@ export class JourneyEngine {
     this.pendingTafsir = [];
     this.currentInterstitial = null;
     this.pendingMarker = null;
+    this.bufferedAyahs = [];
     this.pendingStartTime = null;
     if (holdsBefore) {
       releaseAudio('listen');
@@ -619,6 +696,185 @@ export class JourneyEngine {
       });
   }
 
+  // ----------------------------------------------------------------
+  // BEFORE-mode preview machinery (tadabbur only; after-mode never
+  // calls any of this — its path below is untouched).
+  // ----------------------------------------------------------------
+
+  private isBeforeMode(): boolean {
+    return this.mode === 'tadabbur' && this.tafsirOrder === 'before';
+  }
+
+  // Planned recitation duration for one ayah: injected override in
+  // tests, else resolve the ayah URL and probe its metadata. Null
+  // on any failure (skipped, never guessed).
+  private async probeRecitationDuration(
+    reciterId: string,
+    surah: number,
+    ayah: number,
+  ): Promise<number | null> {
+    try {
+      if (this.probeAyahDurationOpt) {
+        return await this.probeAyahDurationOpt(reciterId, surah, ayah);
+      }
+      const url = await this.resolveAyahUrl(reciterId, surah, ayah);
+      return await probeAudioMetadata(url);
+    } catch {
+      return null;
+    }
+  }
+
+  // Lookahead: pull generator items until the next quarterEnd
+  // marker or the journey's end. Ayah items are collected in
+  // order; a marker is STASHED in pendingMarker (it is the next
+  // boundary, to be processed once the collected quarter has
+  // played). Callers own the collected ayahs (buffering).
+  private collectUpcomingQuarter(): { surah: number; ayah: number; reciterId: string }[] {
+    const collected: { surah: number; ayah: number; reciterId: string }[] = [];
+    for (;;) {
+      const step = this.generator.next();
+      if (step.done) return collected;
+      const item = step.value;
+      if (item.kind === 'quarterEnd') {
+        this.pendingMarker = item.quarter;
+        return collected;
+      }
+      collected.push({ surah: item.surah, ayah: item.ayah, reciterId: item.reciterId });
+    }
+  }
+
+  // Preview selection for one quarter's UPCOMING ayahs (in order).
+  // Sizing basis is PLANNED time, not heard time: the sum of the
+  // quarter's recitation-clip metadata durations that resolve,
+  // probed in parallel (each probe carries the prober's own
+  // timeout; failures are skipped). The sum is an HONEST LOWER
+  // BOUND when probes fail — it is never scaled or extrapolated,
+  // so a partial sum only shortens the preview, exactly like
+  // after-mode's shortfall when candidates run out. The selector
+  // is the same selectInterstitial (first clips in order until
+  // the sum reaches planned/4), with tafsir durations probed
+  // sequentially and early-exited like resolveInterstitial.
+  // If no planned duration resolves at all, the fallback is the
+  // first up to 3 upcoming ayahs with resolvable tafsir clips —
+  // a preview, never silence, never a hang. An empty return means
+  // the quarter plays without a preview (e.g. tafsir base
+  // unconfigured — the page disables tadabbur then, so in-app
+  // this is only a defensive path).
+  private async resolvePreview(
+    quarterAyahs: { surah: number; ayah: number; reciterId: string }[],
+  ): Promise<{ surah: number; ayah: number }[]> {
+    if (quarterAyahs.length === 0) return [];
+    const plannedResults = await Promise.all(
+      quarterAyahs.map(async (a) => {
+        try {
+          return await this.probeRecitationDuration(a.reciterId, a.surah, a.ayah);
+        } catch {
+          return null;
+        }
+      }),
+    );
+    let planned = 0;
+    for (const d of plannedResults) {
+      if (typeof d === 'number' && Number.isFinite(d) && d > 0) planned += d;
+    }
+    const candidates: { surah: number; ayah: number; duration: number }[] = [];
+    const target = planned > 0 ? planned / 4 : null;
+    for (const a of quarterAyahs) {
+      if (target !== null) {
+        const picked = selectInterstitial(candidates, planned);
+        let sum = 0;
+        for (const p of picked) {
+          const c = candidates.find((x) => x.surah === p.surah && x.ayah === p.ayah);
+          sum += c ? c.duration : 0;
+        }
+        if (sum >= target) break;
+      } else if (candidates.length >= 3) {
+        break;
+      }
+      const key = `${a.surah}:${a.ayah}`;
+      let d = this.probedDurations.get(key);
+      if (d === undefined) {
+        try {
+          const probed = await this.probeTafsirDuration(a.surah, a.ayah);
+          if (typeof probed === 'number' && Number.isFinite(probed) && probed > 0) {
+            d = probed;
+            this.probedDurations.set(key, probed);
+          }
+        } catch {
+          d = undefined;
+        }
+      }
+      if (d !== undefined) candidates.push({ surah: a.surah, ayah: a.ayah, duration: d });
+    }
+    if (planned > 0) return selectInterstitial(candidates, planned);
+    return candidates.slice(0, 3).map(({ surah, ayah }) => ({ surah, ayah }));
+  }
+
+  // Process one quarterEnd marker in before-mode. Returns a
+  // playable item, or null meaning "no preview to play here —
+  // caller falls through to the buffered ayahs / generator".
+  // Seek handling comes first (no lookahead while seeking):
+  // - seeking a tafsir item whose quarter FOLLOWS this marker
+  //   (marker quarter + 1): the saved preview list belongs HERE
+  //   (previews attach to the marker BEFORE their quarter, the
+  //   mirror of after-mode attaching to the marker AFTER it).
+  //   Replay the saved list from the target index.
+  // - any other seek: discard the marker (nothing was played, so
+  //   there is nothing to preview from — same rule as after-mode).
+  // Normal path: collect the upcoming quarter, buffer it, queue
+  // its preview, and return the preview's first clip.
+  private async resolveBeforeMarker(
+    markerQuarter: number,
+  ): Promise<JourneyPlayable | null> {
+    if (this.seekTarget !== null) {
+      if (this.seekTarget.kind === 'tafsir') {
+        const targetQuarter = quarterContaining(this.seekTarget.surah, this.seekTarget.ayah);
+        if (targetQuarter !== null && targetQuarter.q === markerQuarter + 1) {
+          const saved = this.seekInterstitial ?? [];
+          const startIdx = saved.findIndex(
+            (x) => x.surah === this.seekTarget?.surah && x.ayah === this.seekTarget?.ayah,
+          );
+          this.pendingTafsir = startIdx >= 0 ? saved.slice(startIdx) : saved.slice();
+          this.currentInterstitial = saved.slice();
+          this.seekTarget = null;
+          this.seekInterstitial = null;
+          this.lastAyahQuarter = targetQuarter.q;
+          this.resetQuarterTracking();
+          if (this.pendingTafsir.length > 0) {
+            const t = this.pendingTafsir.shift() as { surah: number; ayah: number };
+            return { kind: 'tafsir', surah: t.surah, ayah: t.ayah };
+          }
+          // Saved list empty: skip the preview entirely (mirror
+          // of after-mode's empty-list marker handling).
+          return null;
+        }
+        this.resetQuarterTracking();
+        return null;
+      }
+      // Seeking an ayah: discard the marker.
+      this.resetQuarterTracking();
+      return null;
+    }
+    const upcoming = this.collectUpcomingQuarter();
+    if (upcoming.length === 0) return null;
+    this.bufferedAyahs = upcoming.map((a) => ({
+      kind: 'ayah' as const,
+      surah: a.surah,
+      ayah: a.ayah,
+      reciterId: a.reciterId,
+    }));
+    const firstQuarter = quarterContaining(upcoming[0].surah, upcoming[0].ayah);
+    if (firstQuarter !== null) this.lastAyahQuarter = firstQuarter.q;
+    const picked = await this.resolvePreview(upcoming);
+    this.pendingTafsir = picked.slice();
+    this.currentInterstitial = picked.length > 0 ? picked.slice() : null;
+    if (this.pendingTafsir.length > 0) {
+      const t = this.pendingTafsir.shift() as { surah: number; ayah: number };
+      return { kind: 'tafsir', surah: t.surah, ayah: t.ayah };
+    }
+    return null;
+  }
+
   private async resolveInterstitial(): Promise<{ surah: number; ayah: number }[]> {
     // Mode (1)/(2) have no interstitials at all.
     if (this.mode !== 'tadabbur') return [];
@@ -669,6 +925,37 @@ export class JourneyEngine {
       const t = this.pendingTafsir.shift() as { surah: number; ayah: number };
       return { kind: 'tafsir', surah: t.surah, ayah: t.ayah };
     }
+    // BEFORE-mode: buffered quarter ayahs play before any stashed
+    // marker is processed — the stash is the NEXT boundary, and
+    // processing it early would overwrite this buffer with the
+    // following quarter. (No-op in after-mode: the buffer is
+    // always empty there, so the existing order below is kept.)
+    if (this.bufferedAyahs.length > 0) {
+      const b = this.bufferedAyahs.shift() as Extract<JourneyItem, { kind: 'ayah' }>;
+      const qu = quarterContaining(b.surah, b.ayah);
+      if (qu !== null) this.lastAyahQuarter = qu.q;
+      return b;
+    }
+    // BEFORE-mode: a stashed marker is the next quarter's preview
+    // trigger. Preview sizing needs no played data, so unlike
+    // after-mode it never waits for the boundary path. The marker
+    // is captured and cleared BEFORE resolving, so the lookahead's
+    // stash of the FOLLOWING marker survives.
+    if (this.pendingMarker !== null && this.isBeforeMode()) {
+      const quarterNo = this.pendingMarker;
+      this.pendingMarker = null;
+      const item = await this.resolveBeforeMarker(quarterNo);
+      if (item) return item;
+      if (this.bufferedAyahs.length > 0) {
+        const b = this.bufferedAyahs.shift() as Extract<JourneyItem, { kind: 'ayah' }>;
+        const qu = quarterContaining(b.surah, b.ayah);
+        if (qu !== null) this.lastAyahQuarter = qu.q;
+        return b;
+      }
+      // No preview and no buffered ayahs (seek-discard or an
+      // empty quarter): fall through to the generator loop, which
+      // continues discarding while seeking, or ends the journey.
+    }
     // A marker deferred during background preparation is consumed
     // only by the boundary path (resolveMarkers true), when the
     // quarter's played duration is complete.
@@ -693,6 +980,20 @@ export class JourneyEngine {
       if (step.done) return null;
       const item = step.value;
       if (item.kind === 'quarterEnd') {
+        if (this.isBeforeMode()) {
+          // This marker ends a quarter; the NEXT quarter's
+          // preview belongs here (before its ayahs).
+          const bItem = await this.resolveBeforeMarker(item.quarter);
+          if (bItem) return bItem;
+          if (this.bufferedAyahs.length > 0) {
+            const b = this.bufferedAyahs.shift() as Extract<JourneyItem, { kind: 'ayah' }>;
+            const qu = quarterContaining(b.surah, b.ayah);
+            if (qu !== null) this.lastAyahQuarter = qu.q;
+            return b;
+          }
+          // Seek-discard or an empty quarter: keep looping.
+          continue;
+        }
         if (this.mode !== 'tadabbur') {
           this.resetQuarterTracking();
           continue;
@@ -748,10 +1049,50 @@ export class JourneyEngine {
         continue;
       }
       // Ayah item: resume-seek discards non-matching items.
+      if (this.isBeforeMode() && this.seekTarget !== null && this.seekTarget.kind === 'tafsir') {
+        // BEFORE-mode seek into a preview of the journey's FIRST
+        // quarter: no marker precedes it (that preview is
+        // generated at journey start), so the marker branch can
+        // never catch it. The first ayah of that quarter triggers
+        // the saved list instead. Any other quarter's preview is
+        // caught by its preceding marker; other ayahs pass by.
+        const targetQuarter = quarterContaining(this.seekTarget.surah, this.seekTarget.ayah);
+        const ayahQuarter = quarterContaining(item.surah, item.ayah);
+        const firstQuarter = quarterContaining(this.startSurah, this.startAyah);
+        if (
+          targetQuarter !== null &&
+          ayahQuarter !== null &&
+          firstQuarter !== null &&
+          targetQuarter.q === ayahQuarter.q &&
+          targetQuarter.q === firstQuarter.q
+        ) {
+          const saved = this.seekInterstitial ?? [];
+          const startIdx = saved.findIndex(
+            (x) => x.surah === this.seekTarget?.surah && x.ayah === this.seekTarget?.ayah,
+          );
+          this.pendingTafsir = startIdx >= 0 ? saved.slice(startIdx) : saved.slice();
+          this.currentInterstitial = saved.slice();
+          this.seekTarget = null;
+          this.seekInterstitial = null;
+          this.lastAyahQuarter = targetQuarter.q;
+          this.resetQuarterTracking();
+          if (this.pendingTafsir.length > 0) {
+            // Buffer the triggering ayah (seek already cleared,
+            // so the invariant holds): it plays after the preview.
+            this.bufferedAyahs = [item];
+            const t = this.pendingTafsir.shift() as { surah: number; ayah: number };
+            return { kind: 'tafsir', surah: t.surah, ayah: t.ayah };
+          }
+          // Saved list empty: play the quarter's first ayah.
+          return item;
+        }
+        continue;
+      }
       if (this.seekTarget !== null) {
         if (this.seekTarget.kind === 'ayah') {
           if (item.surah === this.seekTarget.surah && item.ayah === this.seekTarget.ayah) {
             this.seekTarget = null;
+            this.lastAyahQuarter = quarterContaining(item.surah, item.ayah)?.q ?? null;
             return item;
           }
           continue;
@@ -761,6 +1102,42 @@ export class JourneyEngine {
         // ends first, the seek has failed — startFirstItem falls
         // back to the journey's start.
         continue;
+      }
+      // BEFORE-mode quarter start. A generator ayah can begin a
+      // quarter without a preceding marker only at journey start
+      // (or restart) — every later quarter is preceded by its
+      // marker, which already queued its preview. So this fires
+      // once per journey: buffer this ayah plus the rest of its
+      // quarter, preview first.
+      if (this.isBeforeMode()) {
+        const qu = quarterContaining(item.surah, item.ayah);
+        if (qu !== null && qu.q !== this.lastAyahQuarter) {
+          this.bufferedAyahs = [item];
+          const rest = this.collectUpcomingQuarter();
+          for (const a of rest) {
+            this.bufferedAyahs.push({
+              kind: 'ayah' as const,
+              surah: a.surah,
+              ayah: a.ayah,
+              reciterId: a.reciterId,
+            });
+          }
+          this.lastAyahQuarter = qu.q;
+          const previewAyahs = this.bufferedAyahs.map((b) => ({
+            surah: b.surah,
+            ayah: b.ayah,
+            reciterId: b.reciterId,
+          }));
+          const picked = await this.resolvePreview(previewAyahs);
+          this.pendingTafsir = picked.slice();
+          this.currentInterstitial = picked.length > 0 ? picked.slice() : null;
+          if (this.pendingTafsir.length > 0) {
+            const t = this.pendingTafsir.shift() as { surah: number; ayah: number };
+            return { kind: 'tafsir', surah: t.surah, ayah: t.ayah };
+          }
+          const first = this.bufferedAyahs.shift() as Extract<JourneyItem, { kind: 'ayah' }>;
+          return first;
+        }
       }
       return item;
     }

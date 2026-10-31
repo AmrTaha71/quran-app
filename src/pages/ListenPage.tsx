@@ -40,10 +40,12 @@ import {
   TAFSIR_ATTRIBUTION,
   clearThreeModeResume,
   readAllThreeModeResumes,
+  readTadabburTafsirOrder,
   tafsirConfigured,
   threeModeName,
+  writeTadabburTafsirOrder,
 } from '../lib/threeModeListen';
-import type { ThreeMode, ThreeModePosition } from '../lib/threeModeListen';
+import type { TadabburTafsirOrder, ThreeMode, ThreeModePosition } from '../lib/threeModeListen';
 import { JourneyEngine as JourneyEngineClass } from '../lib/threeModePlayback';
 import type { JourneyEngine, JourneyPlayable } from '../lib/threeModePlayback';
 import { getQuranTextCache } from '../lib/quranTextCache';
@@ -246,6 +248,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // resume per mode (hidden per mode after resume/dismiss).
   const [journeyMode, setJourneyMode] = useState<ThreeMode | null>(null);
   const [journeyItem, setJourneyItem] = useState<JourneyPlayable | null>(null);
+  // Tadabbur tafsir order (user toggle, 2026-10-31): persisted,
+  // default 'after'. Applies to fresh journeys; a resumed journey
+  // keeps the order it started with (see startJourney).
+  const [tadabburTafsirOrder, setTadabburTafsirOrder] =
+    useState<TadabburTafsirOrder>(readTadabburTafsirOrder);
   const [savedJourneys, setSavedJourneys] = useState<
     Partial<Record<ThreeMode, ThreeModePosition>>
   >(() => {
@@ -705,6 +712,16 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       startReciterId: startReciter,
       startAyah: 1,
       playbackRate,
+      // Tadabbur order: a resume keeps the order its journey
+      // started with (recorded on the position; pre-toggle
+      // positions carry no order and were always 'after', so they
+      // stay 'after'). Only a fresh journey uses the toggle.
+      tafsirOrder:
+        journey === 'tadabbur'
+          ? fromSaved
+            ? (fromSaved.tafsirOrder ?? 'after')
+            : tadabburTafsirOrder
+          : undefined,
       startItem: fromSaved
         ? { kind: fromSaved.kind, surah: fromSaved.surah, ayah: fromSaved.ayah }
         : undefined,
@@ -1914,6 +1931,48 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </select>
             </div>
           </div>
+          {/* Tadabbur tafsir order (user toggle, 2026-10-31):
+              preview before each quarter, or review after it.
+              Persisted on tap; applies to fresh journeys, while a
+              resumed journey keeps the order it started with. */}
+          {hubView === 'tadabbur' && (
+            <div className="mt-4">
+              <p className="font-bold text-accent-800 mb-2">ترتيب التفسير</p>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="ترتيب التفسير">
+                <button
+                  disabled={locked}
+                  onClick={() => {
+                    setTadabburTafsirOrder('before');
+                    writeTadabburTafsirOrder('before');
+                  }}
+                  className={`py-3 px-3 font-bold rounded-xl disabled:opacity-50 ${
+                    tadabburTafsirOrder === 'before'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white border border-emerald-200 text-accent-800'
+                  }`}
+                >
+                  التفسير قبل الربع
+                </button>
+                <button
+                  disabled={locked}
+                  onClick={() => {
+                    setTadabburTafsirOrder('after');
+                    writeTadabburTafsirOrder('after');
+                  }}
+                  className={`py-3 px-3 font-bold rounded-xl disabled:opacity-50 ${
+                    tadabburTafsirOrder === 'after'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white border border-emerald-200 text-accent-800'
+                  }`}
+                >
+                  التفسير بعد الربع
+                </button>
+              </div>
+              <p className="text-xs text-accent-600 mt-2">
+                يُطبَّق على الرحلات الجديدة؛ الرحلة المحفوظة تكمل بنفس ترتيبها.
+              </p>
+            </div>
+          )}
           {/* Explicit start control: the mode card below also starts
               playback on tap, but it reads as an info card (same
               name as the hub card just tapped), so first-time

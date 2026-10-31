@@ -8,10 +8,15 @@
 //       reciters, in the fixed rotation below (owner rule 22:01
 //       EEST 2026-10-29: quarters, not surahs).
 //   (3) ختمة وتفسير — varied khatma + one الميسر interstitial PER
-//       QUARTER (after each completed quarter except the last —
-//       owner decision 22:13 EEST 2026-10-29: the khatma completes
+//       QUARTER. Placement follows the user's tafsir-order toggle
+//       (TadabburTafsirOrder): 'after' (default) plays the
+//       interstitial after each completed quarter except the last
+//       — owner decision 22:13 EEST 2026-10-29: the khatma completes
 //       clearly at 114:6; the final quarter's tafsir is not played
-//       in-journey).
+//       in-journey. 'before' plays a PREVIEW before each quarter
+//       instead, including the first and the last (the last
+//       quarter's preview plays before its ayahs, so the journey
+//       still completes clearly at 114:6 with no trailing tafsir).
 //
 // Every mode is FREE-CHOICE (start surah + starting reciter are the
 // user's choice) + RESUME in all three modes (tap-only, never
@@ -78,6 +83,34 @@ import type { Quarter } from './quarters';
 
 export type ThreeMode = 'single' | 'varied' | 'tadabbur';
 
+// Tadabbur tafsir order (user toggle, 2026-10-31): whether each
+// quarter's الميسر tafsir plays BEFORE the quarter (a preview:
+// understand, then recite) or AFTER it (a review: recite, then
+// reflect). Default 'after' = the original behavior. A saved
+// position records the order it started with, so resuming never
+// silently re-orders a journey in progress (see ThreeModePosition).
+export type TadabburTafsirOrder = 'before' | 'after';
+
+export const TADABBUR_TAFSIR_ORDER_KEY = 'quran-tadabbur-tafsir-order';
+
+export function readTadabburTafsirOrder(): TadabburTafsirOrder {
+  try {
+    const raw = localStorage.getItem(TADABBUR_TAFSIR_ORDER_KEY);
+    if (raw === 'before' || raw === 'after') return raw;
+  } catch {
+    // Swallow: fall through to the default.
+  }
+  return 'after';
+}
+
+export function writeTadabburTafsirOrder(order: TadabburTafsirOrder): void {
+  try {
+    localStorage.setItem(TADABBUR_TAFSIR_ORDER_KEY, order === 'before' ? 'before' : 'after');
+  } catch {
+    // Swallow: persistence must never break playback.
+  }
+}
+
 export const THREE_MODES: { id: ThreeMode; name: string; description: string }[] = [
   {
     id: 'single',
@@ -92,7 +125,7 @@ export const THREE_MODES: { id: ThreeMode; name: string; description: string }[]
   {
     id: 'tadabbur',
     name: 'ختمة وتفسير',
-    description: 'ختمة منوّعة، وبعد كل ربع وقفة تفسير من التفسير الميسر بحجم يتناسب مع الربع.',
+    description: 'ختمة منوّعة، مع وقفة تفسير من التفسير الميسر بحجم يتناسب مع الربع، قبل الربع أو بعده حسب اختيارك.',
   },
 ];
 
@@ -288,6 +321,12 @@ export interface ThreeModePosition {
   ayah: number;
   time: number;
   interstitial?: { surah: number; ayah: number }[];
+  // Tadabbur only: the tafsir order this journey started with.
+  // Absent on positions saved before the toggle existed, which
+  // consumers read as 'after' (the original behavior) — so old
+  // resumes are unaffected. The engine writes it for tadabbur
+  // journeys; single/varied positions never carry it.
+  tafsirOrder?: TadabburTafsirOrder;
 }
 
 export const THREE_MODE_RESUME_KEY = 'quran-three-mode-resume';
@@ -303,7 +342,7 @@ function storage(): Storage | null {
 
 function cleanPosition(mode: ThreeMode, raw: unknown): ThreeModePosition | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { startSurah, startReciterId, kind, surah, ayah, time, interstitial } = raw as {
+  const { startSurah, startReciterId, kind, surah, ayah, time, interstitial, tafsirOrder } = raw as {
     startSurah?: unknown;
     startReciterId?: unknown;
     kind?: unknown;
@@ -311,6 +350,7 @@ function cleanPosition(mode: ThreeMode, raw: unknown): ThreeModePosition | null 
     ayah?: unknown;
     time?: unknown;
     interstitial?: unknown;
+    tafsirOrder?: unknown;
   };
   if (!Number.isInteger(startSurah) || (startSurah as number) < 1 || (startSurah as number) > 114)
     return null;
@@ -335,6 +375,11 @@ function cleanPosition(mode: ThreeMode, raw: unknown): ThreeModePosition | null 
     }
     if (list.length > 0) cleanInterstitial = list;
   }
+  // Only the two valid order values survive; anything else
+  // (including absence on pre-toggle positions) reads as 'after'
+  // at the consumer, so the field stays optional here.
+  const cleanOrder: TadabburTafsirOrder | undefined =
+    tafsirOrder === 'before' || tafsirOrder === 'after' ? tafsirOrder : undefined;
   return {
     mode,
     startSurah: startSurah as number,
@@ -344,6 +389,7 @@ function cleanPosition(mode: ThreeMode, raw: unknown): ThreeModePosition | null 
     ayah: ayah as number,
     time: cleanTime,
     ...(cleanInterstitial ? { interstitial: cleanInterstitial } : {}),
+    ...(cleanOrder ? { tafsirOrder: cleanOrder } : {}),
   };
 }
 
