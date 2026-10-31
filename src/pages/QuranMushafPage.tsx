@@ -258,6 +258,7 @@ export default function QuranMushafPage({
   const displayedPageRef = useRef(displayedPage);
   const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
   const [ayahFilter, setAyahFilter] = useState('');
+  const [versesListOpen, setVersesListOpen] = useState(false);
   // Search-jump highlight: the ayah tapped in لوحتي, marked amber on
   // its exact words until the page turns or fullscreen exits.
   const [searchHighlight, setSearchHighlight] = useState<{ surah: number; ayah: number } | null>(null);
@@ -3415,10 +3416,20 @@ export default function QuranMushafPage({
 
           </div>
 
-          {/* Verses list with tap-to-show-links — below the page now,
-              so the page itself fills the screen width. */}
+          {/* Verses list with tap-to-show-links — collapsed under a
+              button so the page itself fills the screen; one tap
+              restores the full list (the only ayah-tap path on
+              non-Madinah editions, where word taps don't work). */}
           <div>
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden sticky top-24">
+            <button onClick={() => setVersesListOpen((o) => !o)}
+              aria-expanded={versesListOpen}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm text-base font-bold text-accent-700 hover:bg-emerald-50/50 transition-smooth">
+              <BookOpen className="w-5 h-5 text-emerald-700" />
+              {versesListOpen ? 'إخفاء آيات السورة' : `عرض آيات سورة ${currentSurahName}`}
+              <span className="text-accent-500">{versesListOpen ? '▲' : '▼'}</span>
+            </button>
+            {versesListOpen && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden sticky top-24 mt-4">
               <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-emerald-50 to-teal-50">
                 <div className="flex items-center gap-2">
                   <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
@@ -3532,6 +3543,7 @@ export default function QuranMushafPage({
                 )}
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>
