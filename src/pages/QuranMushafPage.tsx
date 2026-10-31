@@ -3208,7 +3208,7 @@ export default function QuranMushafPage({
     <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/30 to-white pb-24">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <BookOpen className="w-6 h-6 text-white" />
@@ -3254,41 +3254,41 @@ export default function QuranMushafPage({
         </div>
       </header>
 
-      <div className="max-w-6xl xl:max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 sm:px-3 py-3">
         {/* A personal word before reading — a daily dua for the reader.
             Prefixed with the intention reminder: whoever opens the
             Mushaf is here to memorize or link memorization. Same quiet
             line, no new chrome. */}
-        <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-4">
+        <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-2">
           <Heart className="w-4 h-4" /> استحضر النية · {dailyDua()}
         </p>
 
         {/* Index info bar — Juz / Hizb / Surah */}
-        <div className="bg-gradient-to-r from-amber-100 to-stone-100 rounded-2xl border border-amber-200 p-4 mb-4 shadow-sm">
+        <div className="bg-gradient-to-r from-amber-100 to-stone-100 rounded-2xl border border-amber-200 p-2.5 mb-3 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <button onClick={() => { setShowIndex(true); setIndexTab('juz'); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-amber-50 text-amber-800 rounded-xl text-sm font-semibold transition-smooth border border-amber-300 shadow-sm">
+                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-amber-50 text-amber-800 rounded-xl text-sm font-semibold transition-smooth border border-amber-300 shadow-sm">
                 <LayoutGrid className="w-4 h-4" /> {currentJuz.name}
               </button>
               <button onClick={() => { setShowIndex(true); setIndexTab('hizb'); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded-xl text-sm font-semibold transition-smooth border border-emerald-300 shadow-sm">
+                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-800 rounded-xl text-sm font-semibold transition-smooth border border-emerald-300 shadow-sm">
                 <Hash className="w-4 h-4" /> الحزب {currentHizb.number}
               </button>
               <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-blue-50 text-blue-800 rounded-xl text-sm font-semibold transition-smooth border border-blue-300 shadow-sm">
+                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-blue-50 text-blue-800 rounded-xl text-sm font-semibold transition-smooth border border-blue-300 shadow-sm">
                 <BookMarked className="w-4 h-4" /> سورة {currentSurahName}
               </button>
             </div>
             <button onClick={() => setShowEditionPicker(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-sm font-semibold transition-smooth border border-amber-200">
+              className="flex items-center gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-sm font-semibold transition-smooth border border-amber-200">
               <Layers className="w-4 h-4" /> {edition.name}
             </button>
           </div>
         </div>
 
         {/* Toolbar */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-4 mb-4 shadow-sm">
+        <div className="bg-white rounded-2xl border border-gray-200 p-2.5 mb-3 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
               className="flex items-center gap-2 px-4 py-2.5 bg-stone-50 hover:bg-stone-100 text-accent-700 rounded-xl text-sm font-semibold transition-smooth border border-gray-200">
@@ -3330,7 +3330,7 @@ export default function QuranMushafPage({
         </div>
 
         {followOn && !showFullscreen && (
-          <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 mb-6">
+          <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 mb-3">
             <span className="flex items-center gap-2 text-sm font-bold text-emerald-800">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               الحق الإمام شغال
@@ -3352,12 +3352,12 @@ export default function QuranMushafPage({
             silently do nothing today. Warn here (and in fullscreen
             below, and in the edition picker) instead of silence. */}
         {edition.id !== 'madinah' && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4 text-sm font-bold text-amber-800 leading-relaxed">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-3 text-sm font-bold text-amber-800 leading-relaxed">
             تنبيه: في {edition.name}، الضغط على كلمات الصفحة والتمييز الدقيق داخل الصورة غير متاح — المزايا دي مبنية على صفحات مصحف المدينة فقط. القراءة وآيات السورة والروابط تحت شغالة عادي.
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-6">
+        <div className="grid grid-cols-1 gap-3">
           {/* Mushaf page image — full width: the page is the reading
               surface, so it must fill the screen instead of sitting
               beside the list (the list now follows below the page). */}
@@ -3367,7 +3367,7 @@ export default function QuranMushafPage({
                 scrollable card, so every edge stays reachable by
                 scrolling; at zoom <= 1 the old transform path is
                 untouched. goToPage also resets zoom (above). */}
-            <div className={`relative bg-gradient-to-br from-stone-50 to-white rounded-2xl shadow-xl border-2 border-amber-200 p-3 sm:p-6 max-w-full ${zoom > 1 ? 'overflow-auto max-h-[85dvh]' : 'overflow-hidden'}`}>
+            <div className={`relative bg-gradient-to-br from-stone-50 to-white rounded-2xl shadow-xl border-2 border-amber-200 p-1.5 sm:p-2 max-w-full ${zoom > 1 ? 'overflow-auto max-h-[85dvh]' : 'overflow-hidden'}`}>
               {imageLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-amber-50/80 z-10">
                   <div className="flex flex-col items-center gap-3">
@@ -3404,7 +3404,7 @@ export default function QuranMushafPage({
                 <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] rounded-2xl" />
               )}
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-accent-600 font-semibold">
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-accent-600 font-semibold">
               <span>صفحة {currentPage} من {TOTAL_PAGES}</span>
               <span className="text-amber-600">•</span>
               <span>{edition.name}</span>
