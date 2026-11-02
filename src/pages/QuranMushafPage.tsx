@@ -334,16 +334,9 @@ export default function QuranMushafPage({
   // Golden frame: a pointer-events-none overlay above the page image.
   // It never touches layout, so tap mapping and the no-dance geometry
   // are unaffected. Persisted across visits.
-  const [goldFrame, setGoldFrame] = useState(() => {
+  const [goldFrame] = useState(() => {
     try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
   });
-  const toggleGoldFrame = () => {
-    setGoldFrame((v) => {
-      const next = !v;
-      try { localStorage.setItem('quran-gold-frame', next ? '1' : '0'); } catch { /* ignore */ }
-      return next;
-    });
-  };
   const [showCleanHint, setShowCleanHint] = useState(false);
   useEffect(() => {
     if (!cleanMode) return;
@@ -351,6 +344,29 @@ export default function QuranMushafPage({
     const t = setTimeout(() => setShowCleanHint(false), 4000);
     return () => clearTimeout(t);
   }, [cleanMode]);
+  // Fullscreen overlays auto-hide (2026-11-01, user request): the top
+  // info bar (timer + page + Juz/Hizb/Surah chips) and the left-side
+  // buttons fade out after 3s without interaction and reappear on any
+  // tap inside fullscreen. Reveal uses capture phase, never bubble:
+  // inner handlers stopPropagation, so a bubble listener on the
+  // container would never see word taps; capture runs first and never
+  // blocks the tap itself (no preventDefault, no stopPropagation here).
+  // X buttons, page-turn arrows and the bottom ayah strip are NOT in
+  // this set — they stay visible always. Clean mode keeps its own
+  // rules; only its timer chip joins the fade (the clean-mode page
+  // pill stays).
+  const [fsOverlaysVisible, setFsOverlaysVisible] = useState(true);
+  const fsOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function pokeFsOverlays() {
+    setFsOverlaysVisible(true);
+    if (fsOverlayTimer.current) clearTimeout(fsOverlayTimer.current);
+    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 3000);
+  }
+  useEffect(() => {
+    if (!showFullscreen) return;
+    pokeFsOverlays();
+    return () => { if (fsOverlayTimer.current) clearTimeout(fsOverlayTimer.current); };
+  }, [showFullscreen]);
   const [showIndex, setShowIndex] = useState(false);
   const [indexTab, setIndexTab] = useState<IndexTab>('surah');
   const [pageInput, setPageInput] = useState('');
@@ -3320,10 +3336,6 @@ export default function QuranMushafPage({
                 className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
               <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
                 className="icon-action p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
-              <button onClick={toggleGoldFrame} title="إطار ذهبي حول الصفحة"
-                className={`px-2.5 py-2 text-sm font-bold rounded-lg transition-smooth ${goldFrame ? 'bg-amber-200 text-amber-800 ring-1 ring-amber-400' : 'text-accent-600 hover:bg-amber-100'}`}>
-                إطار ذهبي
-              </button>
               {!showFullscreen && <WorshipTimer />}
             </div>
           </div>
@@ -3403,15 +3415,6 @@ export default function QuranMushafPage({
               {goldFrame && (
                 <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] rounded-2xl" />
               )}
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-accent-600 font-semibold">
-              <span>صفحة {currentPage} من {TOTAL_PAGES}</span>
-              <span className="text-amber-600">•</span>
-              <span>{edition.name}</span>
-              <span className="text-amber-600">•</span>
-              <span>{currentJuz.name}</span>
-              <span className="text-amber-600">•</span>
-              <span>الحزب {currentHizb.number}</span>
             </div>
 
           </div>
@@ -3645,6 +3648,7 @@ export default function QuranMushafPage({
       {/* Fullscreen viewer with intro */}
       {showFullscreen && (
         <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-[#f8f1de]'} flex ${useMadinahCover ? 'items-start' : 'items-center'} justify-center select-none overflow-hidden overscroll-contain`}
+          onPointerDownCapture={pokeFsOverlays}
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
             if (cleanMode) { setCleanMode(false); return; }
@@ -3854,12 +3858,12 @@ export default function QuranMushafPage({
               the intro splash. Safe-area top (S6) so the notch never
               covers it. */}
           {!showRatelIntro && cleanMode && (
-            <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+            <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
               <WorshipTimer dark />
             </div>
           )}
           {!showRatelIntro && !cleanMode && (
-            <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)]">
+            <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
               <WorshipTimer dark />
               <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">صفحة {labelPage}</span>
               {/* Juz/Hizb collapse below 420px: on a 320-360px phone the
@@ -3919,23 +3923,17 @@ export default function QuranMushafPage({
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
-              className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg">
+              className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               <Layers className="w-5 h-5" /> {edition.name}
             </button>
           )}
 
-          {!showRatelIntro && !cleanMode && (
-            <button onClick={(e) => { e.stopPropagation(); toggleGoldFrame(); }}
-              className={`absolute top-[calc(68px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${goldFrame ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
-              إطار ذهبي
-            </button>
-          )}
 
           {/* وضع الحفظ toggle: hides the popup ayah text until revealed. */}
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); toggleHifzMode(); }}
               title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار روابطها أولًا'}
-              className={`absolute top-[calc(124px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'}`}>
+              className={`absolute top-[calc(68px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               وضع الحفظ {hifzMode ? '✓' : ''}
             </button>
           )}

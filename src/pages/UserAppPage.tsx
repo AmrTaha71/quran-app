@@ -22,7 +22,6 @@ import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import QRCodeSection from '../components/QRCodeSection';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
-import ProgressWidget from '../components/ProgressWidget';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow' | 'test';
 const PAGE_SIZE = 15;
@@ -501,11 +500,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </p>
           </div>
         )}
-
-        {/* Progress Widget */}
-        <div className="mb-5">
-          <ProgressWidget />
-        </div>
 
         {/* Daily wird + self-test entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
