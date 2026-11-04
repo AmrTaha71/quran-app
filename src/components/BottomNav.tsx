@@ -82,6 +82,12 @@ export default function BottomNav({
         )}
         {items.map((item) => {
           const active = item.id === current;
+          // Icons: one size (w-7) everywhere; inactive icons get a
+          // bolder stroke (2.5) so they read solid, not faint outlines
+          // next to the filled active icon.
+          const iconEl = active
+            ? cloneElement(item.icon, { fill: 'currentColor' })
+            : cloneElement(item.icon, { strokeWidth: 2.5 });
           return (
             <button
               key={item.id}
@@ -96,7 +102,7 @@ export default function BottomNav({
             >
               <span className={active ? 'nav-pill-active' : 'flex flex-col items-center'}>
                 <span className={`nav-icon ${active ? 'nav-icon-on' : ''}`}>
-                  {active ? cloneElement(item.icon, { fill: 'currentColor' }) : item.icon}
+                  {iconEl}
                 </span>
                 <span>{item.label}</span>
               </span>

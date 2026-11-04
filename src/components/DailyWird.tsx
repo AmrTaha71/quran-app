@@ -42,7 +42,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
+    <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 h-full">
       <div className="flex items-center gap-2 mb-3">
         <CalendarDays className="w-5 h-5 text-amber-600" />
         <h2 className="font-semibold text-accent-800">وردك اليومي</h2>

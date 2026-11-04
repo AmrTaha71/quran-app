@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
@@ -32,6 +32,10 @@ function readStored<T>(key: string, fallback: T, parse: (raw: string) => T | nul
 
 export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const { lang, setLang } = useLang();
+  // Settings hub (2026-11-04): null = hub grid of doors; otherwise
+  // the id of the open door. All section state lives in this
+  // component, so switching hub<->detail never loses a control.
+  const [openDoor, setOpenDoor] = useState<string | null>(null);
   const [editionIdx, setEditionIdx] = useState(() =>
     readStored('quran-mushaf-edition', 0, (raw) => {
       const n = Number(raw);
@@ -438,6 +442,24 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
   };
 
+  // Settings hub doors (2026-11-04): one door per setting category.
+  // Titles/subtitles are labels only — every control lives in its
+  // detail view, unchanged. The admin door renders only when its
+  // section would (admin error or admin user), exactly as before.
+  const doors = [
+    { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: 'أجزاء الورد الثلاثة وعدد الصفحات', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
+    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف والإطار الذهبي', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
+    { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: 'الموقع والتنبيهات والصوت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'download', icon: Download, title: 'صفحات المصحف على جهازك', sub: 'تحميل الصفحات للقراءة دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
+    { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
+    { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+  ];
+
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <header className="sticky top-0 z-40 app-header">
@@ -454,20 +476,30 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <Check className="w-4 h-4" /> تم الحفظ
             </span>
           )}
-<div className="w-full flex gap-2 overflow-x-auto pb-1">
-          {[['sec-wird', 'الورد'], ['sec-look', 'شكل الصفحة'], ['sec-adhan', 'الأذان'], ['sec-pwa', 'التثبيت'], ['sec-download', 'تحميل المصحف'], ['sec-voice', 'التلاوة والصوت'], ['sec-lang', 'اللغة'], ['sec-pass', 'كلمة المرور']].map(([id, label]) => (
-            <button key={id} onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-semibold text-accent-700">{label}</button>
-          ))}
-          {isAdmin && (
-            <button onClick={() => document.getElementById('sec-admin')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-              className="shrink-0 px-3 py-1.5 bg-white border border-hairline rounded-full text-sm font-semibold text-accent-700">الإدارة</button>
-          )}
-        </div>
         </div>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        {openDoor === null ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {doors.filter((d) => d.id !== 'admin' || adminGateError || isAdmin).map((d) => (
+              <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
+                className="text-right p-4 bg-white rounded-2xl border border-hairline shadow-sm">
+                <span className={`w-11 h-11 rounded-xl border flex items-center justify-center mb-3 ${d.box}`}>
+                  <d.icon className={`w-6 h-6 ${d.fg}`} />
+                </span>
+                <span className="block text-sm font-semibold text-accent-800">{d.title}</span>
+                <span className="block text-xs text-accent-600 mt-1">{d.sub}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <button onPointerDown={pressFeedback} onClick={() => setOpenDoor(null)}
+              className="w-full py-3 bg-white border border-hairline rounded-xl text-base font-semibold text-accent-700">
+              ← عودة إلى الإعدادات
+            </button>
+            {openDoor === 'wird' && (<>
         {/* Daily wird — FIRST section by request: the user sets all
             THREE parts in this one window (pages per part, 0 = skip
             that part today), presses حفظ once, and the saved wird
@@ -511,7 +543,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               : (Object.keys(WIRD_TYPE_LABEL) as WirdType[]).filter((k) => wird.parts[k] > 0).map((k) => `${WIRD_TYPE_LABEL[k]} — ${formatPages(wird.parts[k])}`).join('، ')} يوميًا
           </p>
         </section>
-
+            </>)}
+            {openDoor === 'look' && (<>
         {/* Page look — the section the user asked for by name */}
         <section id="sec-look" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
@@ -564,11 +597,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </span>
           </button>
         </section>
-
+            </>)}
+            {openDoor === 'adhan' && (<>
         {/* Adhan prayer times — location (GPS or country-then-city),
             today's times, alert type and sound. */}
         <AdhanSettingsSection />
-
+            </>)}
+            {openDoor === 'pwa' && (<>
         {/* Part 1 — install the app itself (PWA): no Safari, no link
             bar, no fullscreen banner. Part 2 (the pages download
             below) is separate, so the app itself stays light. */}
@@ -619,7 +654,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>
           )}
         </section>
-
+            </>)}
+            {openDoor === 'download' && (<>
         {/* Mushaf pages on the device — one-tap full download (Hafidz
             pattern): after this, every flip is a local read, instant
             on any connection, even offline. Madinah edition only. */}
@@ -787,7 +823,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>
           )}
         </section>
-
+            </>)}
+            {openDoor === 'voice' && (<>
         {/* Recitation + voice defaults */}
         <section id="sec-voice" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
@@ -829,7 +866,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </span>
           </button>
         </section>
-
+            </>)}
+            {openDoor === 'lang' && (<>
         {/* Language */}
         <section id="sec-lang" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-4">
@@ -844,7 +882,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             ))}
           </div>
         </section>
-
+            </>)}
+            {openDoor === 'pass' && (<>
         {/* Password — logged-in change, no email link needed */}
         <section id="sec-pass" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
           <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
@@ -866,7 +905,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             حفظ كلمة السر الجديدة
           </button>
         </section>
-
+            </>)}
+            {openDoor === 'admin' && (<>
         {adminGateError && (
           <section id="sec-admin" className="bg-white rounded-2xl border border-hairline-amber shadow-sm scroll-mt-36 p-5">
             <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
@@ -892,7 +932,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </section>
         )}
-
+              {!adminGateError && !isAdmin && (
+                <p className="text-sm text-accent-600">لا توجد صلاحية إدارة على هذا الحساب — ارجع للأبواب.</p>
+              )}
+            </>)}
+            {openDoor === 'reset' && (<>
         <button onClick={resetDefaults} disabled={resetting}
           className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-semibold rounded-xl border border-hairline transition-smooth disabled:opacity-50">
           <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
@@ -901,8 +945,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           يعيد: شكل الصفحة، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
         </p>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
-
-        <details className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
+            </>)}
+            {openDoor === 'diag' && (<>
+        <details open className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
           <summary className="text-base font-semibold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
           <p className="text-xs text-accent-400 leading-relaxed mt-2 mb-3">
             آخر ٣٠ حدثًا لتشخيص مشكلة الرجوع للرئيسية بعد قفل الشاشة — بعد ما تحصل المشكلة، افتح القسم ده وخد لقطة شاشة وأرسلها. لا يحتوي على أي رموز أو بيانات حساب.
@@ -923,8 +968,10 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </pre>
           )}
         </details>
+            </>)}
+          </>
+        )}
       </div>
-
       <BottomNav current="settings" onNavigate={onNavigate} />
     </div>
   );

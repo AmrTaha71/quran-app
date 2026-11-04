@@ -505,3 +505,136 @@ body { background-color: #F3EDD9; }
     transform: none !important;
   }
 }
+
+/* ============ PALETTE + GLASS + WATER + ICONS pass (2026-11-04) ============
+   Morning verdict on the bold pass: the background reads (very light
+   creamy shows on Home/Lawhati/Settings) but the colors overall are
+   "very very very weak, not attractive"; the glass bar is invisible
+   ("I see normal icons"); the ripple does not read as water ("press
+   on water and it moves under your hand"); icons look handmade (one
+   high, one low, different colors, faint/empty). This pass answers
+   all four, concretely:
+   1. PALETTE — a new, coordinated, CHIC system, clearly different
+      from the pale cream era: a warm sand ground with real presence
+      (top #FBF3DF, foot #E9DCC0, stronger emerald + gold glows, a
+      stronger dot texture), porcelain cards (#FFFCF3) that stand off
+      it, and deeper, more saturated door gradients. Meaning-colors
+      stay as bolder versions only (amber = links/SelfTest, teal =
+      listen, emerald = primary). Every pair below was computed with
+      a WCAG relative-luminance script (never by eye); two first
+      drafts FAILED and were deepened until they passed: white on
+      amber top #B4630A was 4.44 -> #9E5608 is 5.54; gold #96711F on
+      porcelain was 4.38 -> #86651A is 5.26. Final pairs: white on
+      emerald top #0C7A4E = 5.37, on amber top #9E5608 = 5.54, on teal
+      top #0E7A6E = 5.21, on deeps #053B27/#4A2703/#073C36 = 12.64 /
+      13.27 / 12.29; ink #1c2b26 on bg extremes = 13.34 / 10.87; ink-2
+      #43534C on bg extremes = 7.36 / 5.99, on porcelain = 7.93; white
+      on amber-link #85551B = 6.34; amber-link on porcelain = 6.18;
+      emerald-deep #053B27 on nav glass blend = 9.92, on porcelain =
+      12.32; ink-2 on nav glass blend = 6.38; amber-700/emerald-700
+      icons on white = 5.02 / 5.48 (icon bar 3.0). No gold/amber body
+      text below AA exists.
+   2. GLASS — diagnosis of the invisibility: the old bar was
+      0.82->0.70 alpha (near-opaque) in cream-on-cream, with an 18px
+      blur, over pages whose bottom padding leaves only flat
+      background behind the bar at rest — so there was nothing to
+      blur and no tint edge to see. Fix: alpha 0.58->0.45, blur 24px +
+      saturate(1.8), a gold top border + white inner line, over the
+      deeper, glow-bearing background (which now gives the blur
+      something visible to smear). Scrolling cards visibly blur
+      through it; the active pill + labels stay readable (pairs
+      above). Page bottom padding is UNCHANGED (content must stay
+      reachable above the bar).
+   3. WATER — see pressFeedback.ts: wash + two expanding rings,
+      650-800ms, adaptive color (white on dark hosts, deep emerald
+      on light hosts), from the exact touch point, on ALL interactive
+      elements via a global delegate (deduped against direct
+      pressFeedback handlers). Reduced-motion still disables it.
+   4. ICONS — one system (see BottomNav/Home/UserAppPage/DailyWird):
+      nav w-7 with a bolder inactive stroke; all other UI icons w-5
+      (badge interiors w-5 in w-9 circles); no faint grays (accent-*
+      and ink-3 icon colors replaced by ink-2/emerald-700/amber-700);
+      header action buttons share one padding; the Lawhati SelfTest
+      button anchors to the card bottom so both side-by-side cards
+      read as one designed row. Rules kept: transform/opacity-only
+      animation; no tracking/leading/truncate/overflow rules on
+      Arabic text (water spans live in the empty .ripple-layer
+      overlay, as before); Mushaf image/word taps/highlights/popup
+      untouched; share button full-width untouched. */
+:root {
+  --chic-bg-top: #FBF3DF;
+  --chic-bg-foot: #E9DCC0;
+  --chic-mushaf-top: #FDF6E3;
+  --chic-mushaf-foot: #EEDFC0;
+  --chic-porcelain: #FFFCF3;
+  --chic-gold: #86651A;
+  --chic-gold-hairline: rgba(134, 101, 26, 0.55);
+  --chic-gold-border: rgba(134, 101, 26, 0.40);
+  --chic-emerald-top: #0C7A4E;
+  --chic-emerald-deep: #053B27;
+  --chic-amber-top: #9E5608;
+  --chic-amber-deep: #4A2703;
+  --chic-teal-top: #0E7A6E;
+  --chic-teal-deep: #073C36;
+  --chic-grad-emerald: linear-gradient(160deg, #0C7A4E 0%, #053B27 100%);
+  --chic-grad-amber: linear-gradient(160deg, #9E5608 0%, #4A2703 100%);
+  --chic-grad-teal: linear-gradient(160deg, #0E7A6E 0%, #073C36 100%);
+}
+/* Rich sand ground with presence (later rule wins over .page-bg). */
+.page-bg {
+  background-color: #E9DCC0;
+  background-image:
+    radial-gradient(720px 360px at 85% -5%, rgba(12, 122, 78, 0.20), transparent 65%),
+    radial-gradient(560px 300px at 5% 0%, rgba(180, 140, 40, 0.20), transparent 65%),
+    radial-gradient(circle, rgba(5, 59, 39, 0.10) 1px, transparent 1.6px),
+    linear-gradient(180deg, #FBF3DF 0%, #E9DCC0 100%);
+  background-size: auto, auto, 26px 26px, auto;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+}
+body { background-color: #E9DCC0; }
+/* Mushaf margins: same treatment, warmer (amber-forward). Background
+   only — never an animation, never near the image box. */
+.mushaf-page-bg {
+  background-color: #EEDFC0;
+  background-image:
+    radial-gradient(720px 360px at 88% -5%, rgba(158, 86, 8, 0.20), transparent 65%),
+    radial-gradient(560px 300px at 5% 0%, rgba(12, 122, 78, 0.12), transparent 65%),
+    radial-gradient(circle, rgba(5, 59, 39, 0.08) 1px, transparent 1.6px),
+    linear-gradient(180deg, #FDF6E3 0%, #EEDFC0 100%);
+  background-size: auto, auto, 26px 26px, auto;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+}
+/* Deeper, more saturated door gradients (white text pairs above). */
+.grad-emerald-door { background-color: #053B27; background-image: var(--chic-grad-emerald); }
+.grad-amber-door { background-color: #4A2703; background-image: var(--chic-grad-amber); }
+.grad-teal-door { background-color: #073C36; background-image: var(--chic-grad-teal); }
+/* Stronger door light + shadow so doors read luminous, not flat. */
+.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.50), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 18px 36px -14px rgba(9, 39, 29, 0.60); }
+/* Porcelain cards that stand off the sand ground (not white-on-white). */
+.glass-card {
+  background: linear-gradient(180deg, #FFFCF3 0%, #FBF3DF 100%);
+  border: 1px solid var(--chic-gold-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 24px -12px rgba(9, 39, 29, 0.28);
+}
+/* UNMISTAKABLE glass nav: truly translucent + strong blur + gold top
+   edge + white inner line. Content scrolling beneath visibly smears
+   through it; at rest the deeper background glows show through. */
+.glass-nav {
+  background: linear-gradient(180deg, rgba(214, 232, 220, 0.58) 0%, rgba(240, 232, 205, 0.45) 100%);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  backdrop-filter: blur(24px) saturate(1.8);
+  border-top: 1px solid var(--chic-gold-hairline);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 -10px 28px -10px rgba(28, 43, 38, 0.18);
+}
+/* Deeper active pill wash on the translucent bar. */
+.nav-pill-active {
+  background: linear-gradient(180deg, rgba(5, 59, 39, 0.22), rgba(5, 59, 39, 0.12));
+}
+/* Water effect spans (drawn by pressFeedback.ts via WAAPI, removed
+   after ~800ms). Colors are set inline (adaptive to host darkness);
+   these classes only carry shape + pointer-events. They live inside
+   the empty .ripple-layer overlay span — never on text. */
+.water-wash { position: absolute; border-radius: 9999px; pointer-events: none; will-change: transform, opacity; }
+.water-ring { position: absolute; border-radius: 9999px; border: 2px solid; pointer-events: none; will-change: transform, opacity; }

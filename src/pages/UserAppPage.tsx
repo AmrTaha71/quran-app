@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
+import { pressFeedback, installGlobalWater } from '../lib/pressFeedback';
 import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
@@ -43,6 +44,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   // always renders first, selection behavior is unchanged, and any
   // failure silently keeps the static LINK_TYPES order.
   const [orderedLinkTypes, setOrderedLinkTypes] = useState<{ value: string; label: string }[]>([...LINK_TYPES]);
+  // Water ripple on every interactive element (global delegate in
+  // pressFeedback.ts; idempotent install, also covers this page).
+  useEffect(() => { installGlobalWater(); }, []);
   useEffect(() => {
     const CACHE_KEY = 'quran-link-type-order';
     try {
@@ -444,7 +448,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowLangMenu(!showLangMenu)}
-                className="flex items-center gap-1.5 px-2.5 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
+                className="flex items-center gap-1.5 px-2.5 py-2.5 text-sm text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth">
                 <Globe className="w-5 h-5" />
                 {LANGUAGES.find((l) => l.code === lang)?.flag}
               </button>
@@ -464,7 +468,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </div>
             {session && (
               <button onClick={async () => { await signOut(); onNavigate('home'); }}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth font-semibold">
+                className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth font-semibold">
                 <LogOut className="w-5 h-5" /> خروج
               </button>
             )}
@@ -473,7 +477,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <BookMarked className="w-5 h-5" /> المصحف
             </button>
             <button onClick={() => onNavigate('home')}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth">
               <Home className="w-5 h-5" />
             </button>
           </div>
@@ -518,7 +522,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             here), a one-line reminder, and a personal dua */}
         <div className="mb-5 bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-5 shadow-lg text-white">
           <div className="flex items-center gap-2">
-            <Heart className="w-5 h-5 flex-shrink-0 text-emerald-100" />
+            <Heart className="w-5 h-5 flex-shrink-0 text-white" fill="currentColor" />
             <p className="text-lg font-semibold leading-relaxed">
               {ISLAMIC_GREETING}
             </p>
@@ -560,7 +564,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {session && memorizedFromStart > 0 && (
           <div className="mb-5 bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
-              <BadgeCheck className="w-5 h-5 text-amber-600" />
+              <BadgeCheck className="w-5 h-5 text-amber-700" />
               <h2 className="font-semibold text-accent-800">مركز الحفظ</h2>
             </div>
             <p className="text-2xl font-bold text-accent-800">
@@ -581,11 +585,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <DailyWird onNavigate={onNavigate} />
           <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-1">
-              <Mic className="w-5 h-5 text-amber-600" />
+              <Mic className="w-5 h-5 text-amber-700" />
               <h2 className="font-semibold text-accent-800">سمّع لنفسك</h2>
             </div>
             <button onClick={() => onNavigate('test')}
-              className="mt-4 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
+              className="mt-4 md:mt-auto w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
               ابدأ التسميع
             </button>
           </div>
@@ -608,9 +612,10 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {/* Filter toggle bar */}
         <div className="bg-white rounded-2xl border border-hairline shadow-sm mb-4 overflow-hidden">
           <button onClick={() => setShowFilters(!showFilters)}
+            onPointerDown={pressFeedback}
             className="w-full flex items-center justify-between p-4 text-right">
             <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-emerald-600" />
+              <Filter className="w-5 h-5 text-emerald-700" />
               <span className="text-base font-semibold text-accent-800">أدوات الفلترة</span>
               {activeFiltersCount > 0 && (
                 <span className="flex items-center justify-center w-6 h-6 bg-emerald-700 text-white text-xs font-bold rounded-full">
@@ -625,7 +630,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   مسح الكل
                 </button>
               )}
-              <ChevronLeft className={`w-5 h-5 text-accent-400 transition-transform ${showFilters ? '-rotate-90' : ''}`} />
+              <ChevronLeft className={`w-5 h-5 text-ink-2 transition-transform ${showFilters ? '-rotate-90' : ''}`} />
             </div>
           </button>
 
@@ -635,15 +640,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">بحث في الآيات والروابط</label>
                 <div className="relative">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-ink-3" />
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-700" />
                   <input type="text" value={search}
                     onChange={(e) => { setSearch(e.target.value); setPage(0); }}
                     placeholder={t('search')}
                     className="w-full pr-11 pl-12 py-3 bg-gray-50 border border-hairline rounded-xl text-base focus:outline-none focus:border-emerald-500 transition-smooth" />
                   <button type="button" onClick={toggleVoiceSearch}
+                    onPointerDown={pressFeedback}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
                     className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                    <Mic className="w-6 h-6" />
+                    <Mic className="w-5 h-5" />
                   </button>
                 </div>
                 {searchHint && (
@@ -680,7 +686,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               {/* Link type filter */}
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5 flex items-center gap-1.5">
-                  <Layers className="w-4 h-4 text-emerald-600" /> نوع الرابط
+                  <Layers className="w-5 h-5 text-emerald-700" /> نوع الرابط
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setLinkTypeFilter([]); setPage(0); }}
@@ -913,11 +919,18 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 }
 
 function ListFilterTab({ active, onClick, label, icon, count }: { active: boolean; onClick: () => void; label: string; icon: React.ReactNode; count?: number }) {
+  // Icon system: one size (w-5, set at the call site) and one rule —
+  // active icons are white on emerald, inactive icons are solid
+  // emerald-700 on white (never faint gray outlines, which read as
+  // "empty" next to the filled active tab).
   return (
     <button
+      onPointerDown={pressFeedback}
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-smooth ${
-        active ? 'bg-emerald-600 text-white shadow-md' : 'bg-white text-accent-600 hover:bg-gray-50 border border-hairline'
+        active
+          ? 'bg-emerald-600 text-white shadow-md [&>svg]:text-white'
+          : 'bg-white text-ink-2 hover:bg-gray-50 border border-hairline [&>svg]:text-emerald-700'
       }`}
     >
       {icon}

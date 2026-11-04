@@ -157,7 +157,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           style={{ animationDelay: '120ms' }}
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Headphones className="w-6 h-6 text-white" />
+            <Headphones className="w-5 h-5 text-white" />
           </span>
           سمّع لنفسك
         </button>
@@ -170,7 +170,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           style={{ animationDelay: '180ms' }}
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Mic className="w-6 h-6 text-white" />
+            <Mic className="w-5 h-5 text-white" />
           </span>
           الحق الإمام
         </button>
@@ -221,7 +221,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {linkOfDay && (
           <div className="rounded-2xl glass-card polish-card p-4 mb-4">
             <p className="font-semibold text-accent-800 flex items-center gap-2">
-              <Link className="w-5 h-5 text-amber-600" /> تربيط اليوم
+              <Link className="w-5 h-5 text-amber-700" /> تربيط اليوم
             </p>
             <p className="text-sm text-accent-600 mt-1">
               سورة {linkOfDay.surahName} — آية {linkOfDay.ayah.toLocaleString('ar-EG')}
@@ -251,7 +251,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           onClick={() => onNavigate('settings')}
           className="w-full py-3.5 mb-4 glass-card text-accent-800 font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
         >
-          <Settings className="w-5 h-5 text-emerald-600" /> الإعدادات
+          <Settings className="w-5 h-5 text-emerald-700" /> الإعدادات
         </button>
 
         <p className="text-center text-sm text-emerald-700 font-semibold mt-6">
