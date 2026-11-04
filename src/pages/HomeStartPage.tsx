@@ -119,16 +119,17 @@ export default function HomeStartPage({ session, onNavigate }: {
           <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md polish-hero-medal" />
         </div>
 
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4">
-          <p className="font-semibold text-ink">{ISLAMIC_GREETING}</p>
-          <p className="text-sm text-ink-2 mt-1">
+        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4 text-center">
+          <p className="text-xl md:text-2xl font-bold text-ink">{ISLAMIC_GREETING}</p>
+          <p className="text-sm md:text-base text-ink-2 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
           </p>
         </div>
 
         {/* Resume where the user left off */}
         <div className="grad-emerald-door glass-door-highlight rounded-2xl polish-card polish-fade-up p-5 mb-4 text-white" style={{ animationDelay: '60ms' }}>
-          <p className="font-semibold text-lg">
+          <p className="text-xl font-bold">الحفظ</p>
+          <p className="font-semibold text-lg mt-1">
             {lastPage.visited ? 'أكمل من حيث توقفت' : 'ابدأ من أول المصحف'}
           </p>
           <p className="text-emerald-100 mt-1">
@@ -175,42 +176,41 @@ export default function HomeStartPage({ session, onNavigate }: {
           الحق الإمام
         </button>
 
-        {/* استمع للقرآن: after الحق الإمام. */}
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
-          {listeningWird && (
-            <p className="text-sm text-emerald-700 font-semibold mt-2">
-              لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
-            </p>
-          )}
-          <button
-            onPointerDown={pressFeedback}
-            onClick={() => onNavigate('listen')}
-            className="mt-4 w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
-          >
-            <Headphones className="w-5 h-5" />
-            استمع للقرآن
-          </button>
-          <p className="mt-2 text-center text-xs font-light text-ink-2">
-            أغلق الشاشة لو عايز
+        {/* استمع للقرآن: full door, same size as الحق الإمام. */}
+        {listeningWird && (
+          <p className="text-sm text-emerald-700 font-semibold text-center mb-2">
+            لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
           </p>
-        </div>
+        )}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => onNavigate('listen')}
+          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
+          style={{ animationDelay: '240ms' }}
+        >
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <Headphones className="w-5 h-5 text-white" />
+          </span>
+          استمع للقرآن
+          <span className="text-xs font-semibold text-emerald-900 bg-amber-100/95 rounded-full px-2 py-0.5">اقفل الشاشة لو عايز</span>
+        </button>
 
         {/* أذكار الصباح والمساء: LIVE — generated-voice clips
             (46 clips, male/female toggle in the player). Placed
             directly after the listen card: the audio hub. */}
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '300ms' }}>
-          <button
-            onPointerDown={pressFeedback}
-            onClick={() => onNavigate('adhkar')}
-            className="mt-4 w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
-          >
-            <SunMoon className="w-5 h-5" />
-            استمع للأذكار
-          </button>
-          <p className="mt-2 text-center text-xs font-light text-ink-2">
-            أغلق الشاشة لو عايز
-          </p>
-        </div>
+        {/* استمع للأذكار: full door, same size as الحق الإمام. */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => onNavigate('adhkar')}
+          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
+          style={{ animationDelay: '300ms' }}
+        >
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <SunMoon className="w-5 h-5 text-white" />
+          </span>
+          استمع للأذكار
+          <span className="text-xs font-semibold text-emerald-900 bg-amber-100/95 rounded-full px-2 py-0.5">(اقفل الشاشة لو عايز)</span>
+        </button>
 
         {/* Share app (moved from لوحتي, 2026-11-04): after the adhkar card. */}
         <div className="mb-4 qr-home">
@@ -249,9 +249,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         <button
           onPointerDown={pressFeedback}
           onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 mb-4 glass-card text-ink font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+          className="w-full py-3.5 mb-4 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
         >
-          <Settings className="w-5 h-5 text-emerald-700" /> الإعدادات
+          <Settings className="w-5 h-5 text-white" /> الإعدادات
         </button>
 
         <p className="text-center text-sm text-emerald-700 font-semibold mt-6">

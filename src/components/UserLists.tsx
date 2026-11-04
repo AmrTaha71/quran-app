@@ -2,16 +2,23 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import type { QuranVerse, AyahLink } from '../lib/types';
-import { Heart, Bookmark, AlertTriangle, BadgeCheck, X } from 'lucide-react';
+import { Bookmark, AlertTriangle, BadgeCheck, X } from 'lucide-react';
 
-export type ListType = 'favorites' | 'read_later' | 'difficult' | 'memorized';
+export type ListType = 'read_later' | 'difficult' | 'memorized';
 
 export function useUserLists() {
   const [lists, setLists] = useState<Record<ListType, Set<number>>>({
-    favorites: new Set(),
     read_later: new Set(),
     difficult: new Set(),
     memorized: new Set(),
+  });
+  // Per-link labels: keys `${verseId}:${linkId}` for rows that carry a
+  // link_id. The verse-level sets above still include those verses (a
+  // verse with a labeled link shows in the matching filter), but only
+  // this map can render a single link row's own active state.
+  const [linkLists, setLinkLists] = useState<Record<'read_later' | 'difficult', Set<string>>>({
+    read_later: new Set(),
+    difficult: new Set(),
   });
 
   const fetchLists = useCallback(async () => {
@@ -20,15 +27,19 @@ export function useUserLists() {
 
     const { data } = await supabase
       .from('user_lists')
-      .select('verse_id, list_type')
+      .select('verse_id, link_id, list_type')
       .eq('user_id', session.user.id);
 
     if (data) {
       setLists({
-        favorites: new Set(data.filter((d) => d.list_type === 'favorites').map((d) => d.verse_id)),
         read_later: new Set(data.filter((d) => d.list_type === 'read_later').map((d) => d.verse_id)),
         difficult: new Set(data.filter((d) => d.list_type === 'difficult').map((d) => d.verse_id)),
         memorized: new Set(data.filter((d) => d.list_type === 'memorized').map((d) => d.verse_id)),
+      });
+      const linkKey = (d: { verse_id: number; link_id: unknown }) => `${d.verse_id}:${d.link_id}`;
+      setLinkLists({
+        read_later: new Set(data.filter((d) => d.list_type === 'read_later' && d.link_id != null).map(linkKey)),
+        difficult: new Set(data.filter((d) => d.list_type === 'difficult' && d.link_id != null).map(linkKey)),
       });
     }
   }, []);
@@ -61,7 +72,38 @@ export function useUserLists() {
     await fetchLists();
   };
 
-  return { lists, toggleList, fetchLists };
+  // Per-link toggle (a true toggle, unlike the legacy verse path above
+  // which inserts when a link_id is given even if the verse is already
+  // listed): delete the exact (verse, link, type) row if present,
+  // otherwise insert it. Same user_lists table, same list_type values.
+  const toggleLinkList = async (verseId: number, linkId: number, listType: 'read_later' | 'difficult') => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data } = await supabase.from('user_lists')
+      .select('verse_id')
+      .eq('user_id', session.user.id)
+      .eq('verse_id', verseId)
+      .eq('link_id', linkId)
+      .eq('list_type', listType)
+      .limit(1);
+    if (data && data.length > 0) {
+      await supabase.from('user_lists').delete()
+        .eq('user_id', session.user.id)
+        .eq('verse_id', verseId)
+        .eq('link_id', linkId)
+        .eq('list_type', listType);
+    } else {
+      await supabase.from('user_lists').insert({
+        user_id: session.user.id,
+        verse_id: verseId,
+        link_id: linkId,
+        list_type: listType,
+      });
+    }
+    await fetchLists();
+  };
+
+  return { lists, linkLists, toggleList, toggleLinkList, fetchLists };
 }
 
 export function ListToggleButtons({
@@ -72,7 +114,6 @@ export function ListToggleButtons({
   onToggle: (verseId: number, listType: ListType) => void;
 }) {
   const items: { type: ListType; icon: React.ReactNode; activeColor: string }[] = [
-    { type: 'favorites', icon: <Heart className="w-4 h-4" />, activeColor: 'bg-red-500 text-white' },
     { type: 'read_later', icon: <Bookmark className="w-4 h-4" />, activeColor: 'bg-blue-500 text-white' },
     { type: 'difficult', icon: <AlertTriangle className="w-4 h-4" />, activeColor: 'bg-amber-500 text-white' },
     { type: 'memorized', icon: <BadgeCheck className="w-4 h-4" />, activeColor: 'bg-emerald-500 text-white' },
@@ -84,8 +125,8 @@ export function ListToggleButtons({
         <button
           key={item.type}
           onClick={(e) => { e.stopPropagation(); onToggle(verse.id, item.type); }}
-          title={item.type === 'favorites' ? 'المفضلة' : item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
-          aria-label={item.type === 'favorites' ? 'المفضلة' : item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
+          title={item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
+          aria-label={item.type === 'read_later' ? 'أرجع لها لاحقاً' : item.type === 'difficult' ? 'صعبة' : 'تم الحفظ'}
           className={`icon-action p-1.5 rounded-lg transition-smooth ${
             lists[item.type].has(verse.id) ? item.activeColor : 'text-ink-3 hover:bg-gray-100'
           }`}
@@ -106,7 +147,6 @@ export function LongPressMenu({
 }) {
   useEscapeClose(true, onClose);
   const items: { type: ListType; icon: React.ReactNode; color: string; label: string }[] = [
-    { type: 'favorites', icon: <Heart className="w-4 h-4" />, color: 'text-red-500 bg-red-50', label: 'المفضلة' },
     { type: 'read_later', icon: <Bookmark className="w-4 h-4" />, color: 'text-blue-500 bg-blue-50', label: 'أرجع لها لاحقاً' },
     { type: 'difficult', icon: <AlertTriangle className="w-4 h-4" />, color: 'text-amber-link bg-amber-50', label: 'صعبة' },
     { type: 'memorized', icon: <BadgeCheck className="w-4 h-4" />, color: 'text-emerald-500 bg-emerald-50', label: 'تم الحفظ' },
@@ -163,7 +203,6 @@ export function LinkLongPressMenu({
 }) {
   useEscapeClose(true, onClose);
   const items: { type: ListType; icon: React.ReactNode; color: string; label: string }[] = [
-    { type: 'favorites', icon: <Heart className="w-5 h-5" />, color: 'text-red-500 bg-red-50 hover:bg-red-100', label: 'المفضلة' },
     { type: 'read_later', icon: <Bookmark className="w-5 h-5" />, color: 'text-blue-500 bg-blue-50 hover:bg-blue-100', label: 'أرجع لها لاحقاً' },
     { type: 'difficult', icon: <AlertTriangle className="w-5 h-5" />, color: 'text-amber-link bg-amber-50 hover:bg-amber-100', label: 'صعبة' },
     { type: 'memorized', icon: <BadgeCheck className="w-5 h-5" />, color: 'text-emerald-500 bg-emerald-50 hover:bg-emerald-100', label: 'تم الحفظ' },

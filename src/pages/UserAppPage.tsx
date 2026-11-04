@@ -99,7 +99,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     return () => { cancelled = true; };
   }, []);
   const [listFilter, setListFilter] = useState<ListType | ''>('');
-  const [expandedVerse, setExpandedVerse] = useState<number | null>(null);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [verseLinks, setVerseLinks] = useState<Record<number, AyahLink[]>>({});
@@ -110,7 +109,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   // voice. There is no manual voice switch anymore; gender is set
   // in Settings. Unknown gender → female side (historical default).
   const [profileGender, setProfileGender] = useState<'male' | 'female' | null>(null);
-  const [profileName, setProfileName] = useState<string | null>(null);
   const [preferredName, setPreferredName] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
@@ -169,13 +167,12 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       const { data, error } = await supabase.from('user_profiles').select('username, preferred_name, gender').eq('user_id', userId).single();
       const profile = error ? (await supabase.from('user_profiles').select('username, gender').eq('user_id', userId).single()).data : data;
       if (profile?.gender === 'male' || profile?.gender === 'female') setProfileGender(profile.gender);
-      if (profile?.username) setProfileName(profile.username);
       if ((profile as { preferred_name?: string | null } | null)?.preferred_name) setPreferredName((profile as { preferred_name: string }).preferred_name);
     };
     loadGender();
   }, [session]);
 
-  const { lists, toggleList: toggleListRaw } = useUserLists();
+  const { lists, linkLists, toggleList: toggleListRaw, toggleLinkList } = useUserLists();
 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -262,6 +259,27 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
   const toggleList = async (verseId: number, listType: ListType, linkId?: number) => {
     await toggleListRaw(verseId, listType, linkId);
+  };
+
+  // Link-menu toggles go through the true per-link toggle (tapping a
+  // labeled link again removes its label); verse menus keep the
+  // verse-level toggle, and memorized stays verse-level.
+  const toggleLink = async (verseId: number, listType: ListType, linkId?: number) => {
+    if (linkId && (listType === 'read_later' || listType === 'difficult')) {
+      await toggleLinkList(verseId, linkId, listType);
+    } else {
+      await toggleListRaw(verseId, listType, linkId);
+    }
+  };
+
+  // Link-audio replay: tapping a link's listen button again restarts
+  // the same clip instead of layering a second Audio instance over it.
+  const linkAudioRef = useRef<HTMLAudioElement | null>(null);
+  const playLinkAudio = (url: string) => {
+    try { linkAudioRef.current?.pause(); } catch {}
+    const audio = new Audio(url);
+    linkAudioRef.current = audio;
+    void audio.play().catch(() => {});
   };
 
   const fetchVerses = useCallback(async () => {
@@ -414,7 +432,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   };
 
   const listCounts = {
-    favorites: lists.favorites.size,
     read_later: lists.read_later.size,
     difficult: lists.difficult.size,
     memorized: lists.memorized.size,
@@ -442,7 +459,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </div>
             <div>
               <h1 className="text-lg font-bold text-ink">{t('appName')}</h1>
-              <p className="text-sm text-ink-2">{(preferredName || profileName) ? `لوحة ${preferredName || profileName} — روابط الآيات` : 'لوحتي — روابط الآيات'}</p>
+              <p className="text-sm text-ink-2">{preferredName ? `لوحة ${preferredName} — روابط الآيات` : 'لوحتي — روابط الآيات'}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -524,7 +541,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 flex-shrink-0 text-white" fill="currentColor" />
             <p className="text-lg font-semibold leading-relaxed">
-              {ISLAMIC_GREETING}
+              {preferredName ? `${ISLAMIC_GREETING}، يا ${preferredName}` : ISLAMIC_GREETING}
             </p>
             {session && !editingName && (
               <button onClick={() => { setNameDraft(preferredName || ''); setNameError(''); setEditingName(true); }}
@@ -544,12 +561,12 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           )}
           {nameError && <p className="text-xs text-red-200 mt-2">{nameError}</p>}
           <p className="text-sm text-emerald-50 leading-relaxed mt-2">
-            {(listCounts.favorites + listCounts.read_later + listCounts.difficult + listCounts.memorized) > 0
-              ? `ما شاء الله، بارك الله فيك — جمعت ${(listCounts.favorites + listCounts.read_later + listCounts.difficult + listCounts.memorized).toLocaleString('ar-EG')} آية في قوائمك${listCounts.memorized > 0 ? `، وحفظت ${listCounts.memorized.toLocaleString('ar-EG')} آية` : ''}، تقبل الله منك وثبّتها في قلبك`
+            {(listCounts.read_later + listCounts.difficult + listCounts.memorized) > 0
+              ? `ما شاء الله، بارك الله فيك — جمعت ${(listCounts.read_later + listCounts.difficult + listCounts.memorized).toLocaleString('ar-EG')} آية في قوائمك${listCounts.memorized > 0 ? `، وحفظت ${listCounts.memorized.toLocaleString('ar-EG')} آية` : ''}، تقبل الله منك وثبّتها في قلبك`
               : 'استحضر النية'}
           </p>
           <p className="text-sm text-emerald-100 font-semibold leading-relaxed mt-3 pt-3 border-t border-white/20">
-            {(preferredName || profileName) ? `${dailyDua()} يا ${preferredName || profileName}` : dailyDua()}
+            {dailyDua()}
           </p>
         </div>
 
@@ -600,8 +617,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="flex gap-2 mb-4 flex-wrap">
             <ListFilterTab active={listFilter === ''} onClick={() => { setListFilter(''); setPage(0); }}
               label={t('allStatus')} icon={<BookOpen className="w-5 h-5" />} />
-            <ListFilterTab active={listFilter === 'favorites'} onClick={() => { setListFilter('favorites'); setPage(0); }}
-              label={t('favorites')} icon={<Heart className="w-5 h-5" />} count={listCounts.favorites} />
             <ListFilterTab active={listFilter === 'read_later'} onClick={() => { setListFilter('read_later'); setPage(0); }}
               label={t('readLater')} icon={<Bookmark className="w-5 h-5" />} count={listCounts.read_later} />
             <ListFilterTab active={listFilter === 'difficult'} onClick={() => { setListFilter('difficult'); setPage(0); }}
@@ -658,7 +673,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     {searchHint}
                   </div>
                 )}
-                <p className="text-xs text-ink-2 mt-1.5">يقبل البحث الرسم العثماني والإملائي — اكتب كما تنطق، وسيجد الآيات حتى لو اختلف رسم الكلمة.</p>
               </div>
 
               {/* Surah selection */}
@@ -735,7 +749,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           // current page's verses, in order; no counts are shown because
           // a page holds only part of a surah's ayahs.
           <div className="space-y-3">
-            <p className="text-sm text-ink-2 leading-relaxed">اختر سورة لعرض آياتها، أو ابحث عن آية معينة من أدوات الفلترة.</p>
             {(() => {
               const groups: { no: number; name: string }[] = [];
               for (const v of verses) {
@@ -756,7 +769,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         ) : (
           <div className="space-y-4">
             {verses.map((verse) => {
-              const isExpanded = expandedVerse === verse.id;
               const links = verseLinks[verse.id] || [];
               return (
                 <div
@@ -807,14 +819,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setExpandedVerse(isExpanded ? null : verse.id)}
-                          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth ${
-                            isExpanded ? 'bg-violet-100 text-violet-700' : 'bg-gray-50 text-ink-2 hover:bg-gray-100'
-                          }`}
-                        >
-                          إعادة صياغة
-                        </button>
-                        <button
                           onClick={() => {
                             try {
                               localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: verse.surah_no, ayah: verse.ayah_no }));
@@ -853,12 +857,35 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                               <p className="text-ink-2 leading-relaxed text-base">{link.link_content}</p>
                               {(() => {
                                 const audio = resolveLinkAudio(link, linkGender);
-                                if (!audio) return null;
                                 return (
-                                  <button onClick={() => new Audio(audio.url).play()}
-                                    className="flex items-center gap-1 text-xs text-emerald-700 hover:underline mt-1">
-                                    <Volume2 className="w-4 h-4" /> استماع ({audio.label})
-                                  </button>
+                                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                                    {audio && (
+                                      <button onClick={() => playLinkAudio(audio.url)}
+                                        className="flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline">
+                                        <Volume2 className="w-4 h-4" /> استماع للتربيطة ({audio.label})
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => toggleLinkList(verse.id, link.id, 'read_later')}
+                                      onTouchStart={(e) => e.stopPropagation()}
+                                      onTouchEnd={(e) => e.stopPropagation()}
+                                      aria-label={t('readLater')}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-smooth ${
+                                        linkLists.read_later.has(`${verse.id}:${link.id}`) ? 'bg-emerald-700 text-white' : 'bg-white text-ink-2 border border-hairline hover:border-hairline-emerald'
+                                      }`}>
+                                      <Bookmark className="w-4 h-4" /> {t('readLater')}
+                                    </button>
+                                    <button
+                                      onClick={() => toggleLinkList(verse.id, link.id, 'difficult')}
+                                      onTouchStart={(e) => e.stopPropagation()}
+                                      onTouchEnd={(e) => e.stopPropagation()}
+                                      aria-label={t('difficult')}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-smooth ${
+                                        linkLists.difficult.has(`${verse.id}:${link.id}`) ? 'bg-emerald-700 text-white' : 'bg-white text-ink-2 border border-hairline hover:border-hairline-emerald'
+                                      }`}>
+                                      <AlertTriangle className="w-4 h-4" /> {t('difficult')}
+                                    </button>
+                                  </div>
                                 );
                               })()}
                             </div>
@@ -910,7 +937,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         <LinkLongPressMenu
           verse={longPressLink.verse}
           link={longPressLink.link}
-          onAddToList={toggleList}
+          onAddToList={toggleLink}
           onClose={() => setLongPressLink(null)}
         />
       )}

@@ -18,8 +18,11 @@ export default function QRCodeSection() {
         onClick={() => setOpen(true)}
         className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-accent-600 to-accent-800 hover:from-accent-700 hover:to-accent-900 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transition-smooth"
       >
-        <QrCode className="w-6 h-6" />
-        رموز QR — حمل التطبيق
+        <QrCode className="w-6 h-6 shrink-0" />
+        <span className="text-right">
+          <span className="block font-bold">حمّل التطبيق</span>
+          <span className="block text-sm font-medium text-white/85">شارك التطبيق مع غيرك</span>
+        </span>
       </button>
 
       {open && (

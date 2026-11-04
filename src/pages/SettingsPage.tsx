@@ -463,13 +463,13 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <header className="sticky top-0 z-40 app-header">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-            <Settings className="w-7 h-7 text-white" />
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-5 flex flex-wrap items-center gap-3">
+          <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
+            <Settings className="w-7 h-7 md:w-8 md:h-8 text-white" />
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">الإعدادات</h1>
-            <p className="text-sm text-accent-600">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
+            <p className="text-sm md:text-base text-accent-600">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
           </div>
           {savedTick && (
             <span className="mr-auto flex items-center gap-1 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-hairline-emerald rounded-full px-3 py-1">
@@ -479,24 +479,24 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
         {openDoor === null ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
             {doors.filter((d) => d.id !== 'admin' || adminGateError || isAdmin).map((d) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
-                className="text-right p-4 bg-white rounded-2xl border border-hairline shadow-sm">
-                <span className={`w-11 h-11 rounded-xl border flex items-center justify-center mb-3 ${d.box}`}>
-                  <d.icon className={`w-6 h-6 ${d.fg}`} />
+                className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl">
+                <span className={`w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border flex items-center justify-center mb-3 md:mb-4 ${d.box}`}>
+                  <d.icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 ${d.fg}`} />
                 </span>
-                <span className="block text-sm font-semibold text-ink">{d.title}</span>
-                <span className="block text-xs text-ink-2 mt-1">{d.sub}</span>
+                <span className="block text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-ink">{d.title}</span>
+                <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>
               </button>
             ))}
           </div>
         ) : (
           <>
             <button onPointerDown={pressFeedback} onClick={() => setOpenDoor(null)}
-              className="w-full py-3 bg-white border border-hairline rounded-xl text-base font-semibold text-accent-700">
+              className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 glass-card rounded-xl text-base md:text-lg font-semibold text-accent-700">
               ← عودة إلى الإعدادات
             </button>
             {openDoor === 'wird' && (<>
@@ -505,8 +505,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             that part today), presses حفظ once, and the saved wird
             shows in a line right under the button. The لوحتي card
             reads the saved value, so it only changes on save. */}
-        <section id="sec-wird" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+        <section id="sec-wird" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
           </h2>
           <p className="text-sm text-accent-600 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p>
@@ -546,8 +546,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'look' && (<>
         {/* Page look — the section the user asked for by name */}
-        <section id="sec-look" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+        <section id="sec-look" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Sparkles className="w-5 h-5 text-amber-link" /> اختر شكل الصفحة بنفسك
           </h2>
           <p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p>
@@ -607,8 +607,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {/* Part 1 — install the app itself (PWA): no Safari, no link
             bar, no fullscreen banner. Part 2 (the pages download
             below) is separate, so the app itself stays light. */}
-        <section id="sec-pwa" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+        <section id="sec-pwa" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Smartphone className="w-5 h-5 text-emerald-600" /> ثبّت التطبيق على جهازك
           </h2>
           {isStandalone ? (
@@ -659,8 +659,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {/* Mushaf pages on the device — one-tap full download (Hafidz
             pattern): after this, every flip is a local read, instant
             on any connection, even offline. Madinah edition only. */}
-        <section id="sec-download" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+        <section id="sec-download" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
           </h2>
           <p className="text-sm text-accent-600 mb-4">
@@ -708,7 +708,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                       أيوه، حمّل
                     </button>
                     <button onClick={() => setDlConfirm(false)}
-                      className="px-5 py-2 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
+                      className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
                       إلغاء
                     </button>
                   </div>
@@ -728,7 +728,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   {dlCached !== null && dlCached > 0 && !dlRunning && (
                     <button onClick={clearDownload}
-                      className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
+                      className="px-5 py-2.5 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
                       مسح المحمل
                     </button>
                   )}
@@ -789,7 +789,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                                 أيوه، حمّل
                               </button>
                               <button onClick={() => patchOpt(ed.id, { confirm: false })}
-                                className="px-5 py-2 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
+                                className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
                                 إلغاء
                               </button>
                             </div>
@@ -809,7 +809,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                             )}
                             {st.cached !== null && st.cached > 0 && !st.running && (
                               <button onClick={() => clearOptDownload(ed.id)}
-                                className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
+                                className="px-5 py-2.5 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
                                 مسح المحمل
                               </button>
                             )}
@@ -826,8 +826,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'voice' && (<>
         {/* Recitation + voice defaults */}
-        <section id="sec-voice" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+        <section id="sec-voice" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Volume2 className="w-5 h-5 text-emerald-600" /> التلاوة والصوت
           </h2>
           <p className="text-sm text-accent-600 mb-4">القارئ الافتراضي لتلاوة الآيات.</p>
@@ -869,8 +869,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'lang' && (<>
         {/* Language */}
-        <section id="sec-lang" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-4">
+        <section id="sec-lang" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-emerald-600" /> لغة التطبيق
           </h2>
           <div className="flex flex-wrap gap-2">
@@ -885,8 +885,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'pass' && (<>
         {/* Password — logged-in change, no email link needed */}
-        <section id="sec-pass" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-          <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+        <section id="sec-pass" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Lock className="w-5 h-5 text-emerald-600" /> كلمة السر
           </h2>
           <p className="text-sm text-accent-600 mb-4">غيّر كلمة السر من هنا على طول، من غير ما تستنى رابط إيميل.</p>
@@ -908,8 +908,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'admin' && (<>
         {adminGateError && (
-          <section id="sec-admin" className="bg-white rounded-2xl border border-hairline-amber shadow-sm scroll-mt-36 p-5">
-            <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+          <section id="sec-admin" className="bg-cream rounded-2xl border border-hairline-amber shadow-sm scroll-mt-36 p-5 md:p-6 lg:p-7">
+            <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-amber-600" /> لوحة الإدارة
             </h2>
             <p className="text-sm text-accent-500 mb-4">تعذّر التأكد من صلاحية الإدارة — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
@@ -921,8 +921,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
 
         {isAdmin && (
-          <section id="sec-admin" className="bg-white rounded-2xl border border-hairline-emerald shadow-sm scroll-mt-36 p-5">
-            <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
+          <section id="sec-admin" className="bg-cream rounded-2xl border border-hairline-emerald shadow-sm scroll-mt-36 p-5 md:p-6 lg:p-7">
+            <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
             </h2>
             <p className="text-sm text-accent-600 mb-4">القسم ده بيظهر للأدمن بس — المستخدم العادي مش بيشوفه.</p>
@@ -938,7 +938,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'reset' && (<>
         <button onClick={resetDefaults} disabled={resetting}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-white hover:bg-gray-50 text-accent-600 text-sm font-semibold rounded-xl border border-hairline transition-smooth disabled:opacity-50">
+          className="w-full flex items-center justify-center gap-2 py-3 bg-cream hover:bg-cream-deep text-accent-600 text-sm font-semibold rounded-xl border border-hairline transition-smooth disabled:opacity-50">
           <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
         </button>
         <p className="text-xs text-accent-400 leading-relaxed -mt-2">
@@ -947,8 +947,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
             </>)}
             {openDoor === 'diag' && (<>
-        <details open className="bg-white rounded-2xl border border-hairline shadow-sm p-5">
-          <summary className="text-base font-semibold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
+        <details open className="glass-card rounded-2xl p-5 md:p-6 lg:p-7">
+          <summary className="text-base md:text-lg font-semibold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
           <p className="text-xs text-accent-400 leading-relaxed mt-2 mb-3">
             آخر ٣٠ حدثًا لتشخيص مشكلة الرجوع للرئيسية بعد قفل الشاشة — بعد ما تحصل المشكلة، افتح القسم ده وخد لقطة شاشة وأرسلها. لا يحتوي على أي رموز أو بيانات حساب.
           </p>

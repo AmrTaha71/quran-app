@@ -22,11 +22,39 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
     saveWird(next);
   };
 
+  // Streak = length of the consecutive-day run ending at the latest
+  // done day (recomputed, never a stored guess: retroactive toggles
+  // recompute it, and it matches the old markDone rule whenever
+  // doneDays was gap-free).
+  const recomputeStreak = (doneDays: string[]) => {
+    const set = new Set(doneDays.filter((d) => d <= today));
+    const sorted = [...set].sort();
+    if (sorted.length === 0) return { streak: 0, lastDone: '' };
+    const lastDone = sorted[sorted.length - 1];
+    let streak = 0;
+    const cur = new Date(`${lastDone}T00:00:00`);
+    while (set.has(todayStr(cur))) {
+      streak++;
+      cur.setDate(cur.getDate() - 1);
+    }
+    return { streak, lastDone };
+  };
+
   const markDone = () => {
     if (doneToday) return;
-    const yesterday = todayStr(new Date(Date.now() - 86400000));
-    const streak = wird.lastDone === yesterday ? wird.streak + 1 : 1;
-    update({ streak, lastDone: today, doneDays: [...wird.doneDays, today] });
+    const doneDays = [...wird.doneDays, today];
+    update({ doneDays, ...recomputeStreak(doneDays) });
+  };
+
+  // Retroactive marking: past days toggle done/undone in the same
+  // quran-wird-v1 storage. Today is NOT toggled here (the
+  // "أنجزت ورد اليوم" button owns today); future days are never
+  // shown in this strip, so they cannot be marked.
+  const toggleDay = (date: string) => {
+    const doneDays = wird.doneDays.includes(date)
+      ? wird.doneDays.filter((d) => d !== date)
+      : [...wird.doneDays, date];
+    update({ doneDays, ...recomputeStreak(doneDays) });
   };
 
   // Last 7 days ending today, oldest first.
@@ -71,14 +99,26 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
       </div>
 
       <div className="flex justify-between mt-4">
-        {last7.map((d) => (
-          <div key={d.date} className="flex flex-col items-center gap-1">
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-ink-2 ring-2 ring-emerald-500' : 'bg-gray-100 text-ink-2'}`}>
-              {d.done ? <Check className="w-4 h-4" /> : d.label}
-            </span>
-            <span className="text-xs text-ink-2">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>
-          </div>
-        ))}
+        {last7.map((d) => {
+          const inner = (
+            <>
+              <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-ink-2 ring-2 ring-emerald-500' : 'bg-gray-100 text-ink-2'}`}>
+                {d.done ? <Check className="w-4 h-4" /> : d.label}
+              </span>
+              <span className="text-xs text-ink-2">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>
+            </>
+          );
+          return d.isToday ? (
+            <div key={d.date} className="flex flex-col items-center gap-1">{inner}</div>
+          ) : (
+            <button key={d.date} type="button" onClick={() => toggleDay(d.date)}
+              title={d.done ? 'إلغاء علامة الإنجاز لهذا اليوم' : 'تعليم هذا اليوم كمنجز'}
+              aria-label={`${d.date} ${d.done ? 'منجز — اضغط للإلغاء' : 'غير منجز — اضغط للتعليم'}`}
+              className="flex flex-col items-center gap-1 cursor-pointer rounded-xl hover:opacity-80 transition">
+              {inner}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
