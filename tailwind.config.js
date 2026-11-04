@@ -49,6 +49,12 @@ export default {
           3: '#5f6e66',
         },
         'amber-link': '#85551B',
+        'emerald-deep': '#0B4D33',
+        cream: {
+          DEFAULT: '#FFFEF9',
+          deep: '#F7F2E3',
+        },
+        gold: '#B58A38',
         'hairline-emerald': 'rgba(6, 95, 70, 0.18)',
         'hairline-amber': 'rgba(180, 83, 9, 0.2)',
         'hairline-input': '#8d877b',

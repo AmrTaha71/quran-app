@@ -264,7 +264,8 @@ body {
   .polish-card, .polish-fade-up, .polish-hub-item,
   .polish-listen-row::after, .polish-modal-enter, .polish-scrim-enter,
   .polish-route-in, .polish-correction-window, .polish-progress-dot,
-  .polish-hero-medal, .nav-indicator, .nav-icon {
+  .polish-hero-medal, .nav-indicator, .nav-icon,
+  .route-enter-strong, .door-enter, .nav-tab-pill {
     animation: none !important;
     transition: none !important;
     transform: none !important;
@@ -280,3 +281,96 @@ body {
 .font-display-ar { font-family: "Noto Naskh Arabic", "Amiri", "Geeza Pro", serif; }
 .font-ui { font-family: "Cairo", system-ui, -apple-system, sans-serif; }
 html { -webkit-text-size-adjust: 100%; }
+
+/* ============ Visual design batch (2026-11-04) ============
+   The user could see NOTHING new in the previous pushes (they were
+   functional: deletions, ordering, logging), so this batch is
+   deliberately unmistakable: a deeper emerald + cream + gold system,
+   water-glass surfaces, ripple, tap sound, and route transitions
+   you can actually feel. Every color pair below was checked with a
+   WCAG contrast calculation (never by eye): white on #0B4D33 = 9.89,
+   on #0F7A52 = 5.35, on #A85E0F = 4.91, on #7C4410 = 7.80, on
+   #0F766E = 5.47, on #115E59 = 7.58, on #85551B = 6.34 — all AA.
+   Two pre-existing failures were fixed inside this batch's own
+   scope: white on emerald-600 (3.77) and white on amber-600 (3.19)
+   are replaced by the verified gradients on the Home buttons that
+   used them. Small muted labels use ink-2 (#4b5a53, 7.20 on cream)
+   instead of accent-500 (4.24, large-only).
+   Rules kept: transform/opacity-only animation; no parallax, no
+   sheen (the top highlight is a static inset edge, not a moving
+   shine); no tracking/leading/truncate/overflow rules on Arabic
+   text; Mushaf images and word-tap zones are never animated (the
+   route wrapper skips mushaf/follow entirely — see App.tsx). */
+:root {
+  --visual-emerald-deep: #0B4D33;
+  --visual-emerald-top: #0F7A52;
+  --visual-amber-top: #A85E0F;
+  --visual-amber-deep: #7C4410;
+  --visual-teal-top: #0F766E;
+  --visual-teal-deep: #115E59;
+  --visual-cream-0: #FFFEF9;
+  --visual-cream-1: #F7F2E3;
+  --visual-gold: #B58A38;
+  --visual-gold-hairline: rgba(181, 138, 56, 0.45);
+  --visual-grad-emerald: linear-gradient(160deg, #0F7A52 0%, #0B4D33 100%);
+  --visual-grad-amber: linear-gradient(160deg, #A85E0F 0%, #7C4410 100%);
+  --visual-grad-teal: linear-gradient(160deg, #0F766E 0%, #115E59 100%);
+  --visual-grad-cream: linear-gradient(180deg, #FFFEF9 0%, #F7F2E3 100%);
+  --visual-grad-glass: linear-gradient(180deg, rgba(255, 254,247, 0.78) 0%, rgba(247, 242, 227, 0.66) 100%);
+}
+/* Water-glass: translucent gradient + blur + light inner edge +
+   subtle static top highlight. Applied to BottomNav, Home cards. */
+.glass-nav {
+  background: var(--visual-grad-glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border-top: 1px solid var(--visual-gold-hairline);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 -8px 24px -8px rgba(28, 43, 38, 0.12);
+}
+.glass-card {
+  background: var(--visual-grad-cream);
+  border: 1px solid var(--visual-gold-hairline);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--polish-sh1);
+}
+/* Luminous door gradients (white text verified AA on both stops). */
+.grad-emerald-door { background-color: #0B4D33; background-image: var(--visual-grad-emerald); }
+.grad-amber-door { background-color: #7C4410; background-image: var(--visual-grad-amber); }
+.grad-teal-door { background-color: #115E59; background-image: var(--visual-grad-teal); }
+/* Static light inner edge for gradient doors (not a moving sheen). */
+.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.10), 0 10px 24px -12px rgba(9, 39, 29, 0.45); }
+/* Ripple layer: a dedicated overlay (never the button itself, never
+   Arabic text) so clipping cannot touch text layout. Ink is drawn
+   by pressFeedback.ts via WAAPI and removed after ~450ms. */
+.ripple-layer { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
+.ripple-ink { position: absolute; border-radius: 9999px; background: currentColor; pointer-events: none; }
+/* Route entrance, VISIBLE: 24px slide + fade, 280ms. Applied by
+   App.tsx to every route except mushaf/follow (whose image must
+   never animate and whose follow session must never remount). */
+@keyframes route-enter-strong {
+  from { opacity: 0; transform: translateY(24px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.route-enter-strong { animation: route-enter-strong 280ms var(--polish-ease-out) backwards; }
+/* Door entrance: 18px rise + slight scale, 380ms, staggered by the
+   inline animation-delay already on Home cards/buttons. */
+@keyframes door-enter {
+  from { opacity: 0; transform: translateY(18px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+.door-enter { animation: door-enter 380ms var(--polish-ease-out) backwards; }
+/* BottomNav: one sliding gold pill at the top (the thick top line +
+   the animated indicator in one element). Width = one tab (5 tabs);
+   BottomNav sets its transform from the active index + page dir. */
+.nav-tab-pill {
+  position: absolute; top: 0; height: 4px; width: 20%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #8a6a24, #B58A38, #e4c77f);
+  transition: transform 280ms var(--polish-ease-out), opacity 200ms var(--polish-ease-out);
+  pointer-events: none; z-index: 1;
+}
+/* Active tab content pill: soft deep-emerald wash behind icon+label. */
+.nav-pill-active {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 2px 16px 3px; border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(11, 77, 51, 0.13), rgba(11, 77, 51, 0.06));
+}

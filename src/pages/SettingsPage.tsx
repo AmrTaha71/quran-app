@@ -10,6 +10,7 @@ import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
+import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
@@ -39,6 +40,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   );
   const [goldFrame, setGoldFrame] = useState(() => {
     try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
+  });
+  // Tap sound (visual batch 2026-11-04): soft click on nav + Home
+  // presses, default ON. pressFeedback reads this key live, so the
+  // toggle takes effect immediately with no cross-page state.
+  const [tapSound, setTapSound] = useState(() => {
+    try { return localStorage.getItem(TAP_SOUND_KEY) !== '0'; } catch { return true; }
   });
   const [reciterId, setReciterId] = useState(() =>
     readStored('quran-reciter', DEFAULT_RECITER_ID, (raw) =>
@@ -329,6 +336,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { localStorage.setItem('quran-gold-frame', next ? '1' : '0'); } catch {}
     saved();
   };
+  const toggleTapSound = () => {
+    const next = !tapSound;
+    setTapSound(next);
+    try { localStorage.setItem(TAP_SOUND_KEY, next ? '1' : '0'); } catch {}
+    saved();
+  };
   const pickReciter = (id: string) => {
     setReciterId(id);
     try { localStorage.setItem('quran-reciter', id); } catch {}
@@ -400,10 +413,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setGoldFrame(false);
     setReciterId(DEFAULT_RECITER_ID);
     setLinkGender(null);
+    setTapSound(true);
     try {
       localStorage.setItem('quran-mushaf-edition', '0');
       localStorage.setItem('quran-gold-frame', '0');
       localStorage.setItem('quran-reciter', DEFAULT_RECITER_ID);
+      localStorage.setItem(TAP_SOUND_KEY, '1');
       localStorage.removeItem('quran-link-voice');
       localStorage.removeItem('quran-user-gender');
     } catch {}
@@ -801,6 +816,18 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </div>
           {!linkGender && <p className="text-xs text-accent-600 mt-2">لم تختر بعد — التطبيق يستخدم الصوت النسائي حتى تختار.</p>}
+          <button
+            onPointerDown={pressFeedback}
+            onClick={toggleTapSound}
+            className={`relative mt-5 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${tapSound ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
+            <span className="text-right">
+              <span className="block font-medium text-accent-800">صوت اللمس</span>
+              <span className="block text-sm text-accent-600">صوت خفيف عند الضغط على الأزرار والتنقل — لا يعمل أبداً أثناء التلاوة أو التسميع</span>
+            </span>
+            <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${tapSound ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${tapSound ? 'mr-auto' : ''}`} />
+            </span>
+          </button>
         </section>
 
         {/* Language */}

@@ -298,8 +298,17 @@ export default function QuranMushafPage({
   // viewport (chrome gone = taller viewport), unlike a chrome show/hide
   // toggle — so the frozen aspect must re-freeze exactly here, or the
   // paper keeps the pre-native size and a band is left on screen.
+  // EXIT-PATH HARDENING (2026-11-04): this listener used to be gated
+  // on showFullscreen, so it was removed in the same handler that
+  // requested the native exit — the async fullscreenchange event
+  // then arrived with no listener, and the aspect was NEVER re-frozen
+  // on exit (the normal view kept the fullscreen aspect). It is now
+  // registered once on mount, so the aspect re-freezes on BOTH entry
+  // and exit. This fixes the stale-geometry-after-exit defect; it is
+  // NOT claimed as a fix for the exit hang itself (no code-level hang
+  // cause was found — see the batch report for the device evidence
+  // still needed).
   useEffect(() => {
-    if (!showFullscreen) return;
     const update = () => setViewportAspect(window.innerWidth / Math.max(1, window.innerHeight));
     document.addEventListener('fullscreenchange', update);
     document.addEventListener('webkitfullscreenchange', update);
@@ -307,7 +316,7 @@ export default function QuranMushafPage({
       document.removeEventListener('fullscreenchange', update);
       document.removeEventListener('webkitfullscreenchange', update);
     };
-  }, [showFullscreen]);
+  }, []);
   const [showRatelIntro, setShowRatelIntro] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showEditionPicker, setShowEditionPicker] = useState(false);
@@ -1202,9 +1211,16 @@ export default function QuranMushafPage({
     setZoom(1);
   };
 
-  // Fullscreen swipe navigation (touch): swipe left = next page, swipe
-  // right = previous page, matching the corner buttons. Attached only to
-  // the page image so swipes over the verse strip still scroll the strip.
+  // Page swipe navigation (touch): attached only to the page image so
+  // swipes over the verse strip still scroll the strip. Normal view:
+  // swipe left = next page, swipe right = previous page, matching the
+  // corner buttons. Fullscreen ONLY (user bug report 2026-11-04):
+  // the mapping is inverted — swipe left = previous page, swipe
+  // right = next page — because in fullscreen the user reported
+  // getting the previous page when swiping for the next and vice
+  // versa. The branch keys on showFullscreen state, which is true
+  // exactly when the fullscreen container is the one receiving
+  // touches, so the normal-view mapping is untouched.
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   // Timestamp of the last swipe page-turn: the compatibility click that
@@ -1227,8 +1243,16 @@ export default function QuranMushafPage({
     const dy = t.clientY - startY;
     if (Math.abs(dx) >= 60 && Math.abs(dx) >= Math.abs(dy)) {
       lastSwipeAt.current = Date.now();
-      if (dx < 0) goToPage(currentPage + 1);
-      else goToPage(currentPage - 1);
+      // Fullscreen-only inversion (2026-11-04): showFullscreen is true
+      // exactly when the fullscreen container is the one receiving
+      // touches, so this branch cannot affect the normal view.
+      if (showFullscreen) {
+        if (dx < 0) goToPage(currentPage - 1);
+        else goToPage(currentPage + 1);
+      } else {
+        if (dx < 0) goToPage(currentPage + 1);
+        else goToPage(currentPage - 1);
+      }
     }
     // Taps are handled by the wrapper's onClick, NOT here: opening the
     // popup from touchend raced with the compatibility click that follows
@@ -3837,11 +3861,25 @@ export default function QuranMushafPage({
               escapes an already-made lock with a one-tap restart. */}
 
           {!showRatelIntro && !cleanMode && (
-            <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
-              title="إغلاق" aria-label="إغلاق"
-              className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
-              <X className="w-7 h-7" />
-            </button>
+            <>
+              {/* Labeled return to the main tabs (user request
+                  2026-11-04): same shared exit path as the X, but
+                  with text so the way back is findable. Shares the
+                  X's visibility (always visible in fullscreen except
+                  clean mode / intro, where a margin tap restores
+                  controls). Glassy like the top chips (bg-black/60
+                  + backdrop-blur). */}
+              <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
+                title="عودة إلى التبويبات الرئيسية" aria-label="عودة إلى التبويبات الرئيسية"
+                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[5.75rem] px-3 py-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg flex items-center gap-1.5 text-sm font-bold">
+                <ChevronRight className="w-5 h-5" /> عودة
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
+                title="إغلاق" aria-label="إغلاق"
+                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
+                <X className="w-7 h-7" />
+              </button>
+            </>
           )}
 
           {/* MERGED top bar (STREAM S2): the worship timer and the
@@ -4335,42 +4373,12 @@ export default function QuranMushafPage({
                         <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
                         <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
                       </button>
-                      {/* Suggest + share, with the ayah-tap options
-                          (2026-10-28): propose a link for admin review,
-                          and share the ayah (panel header: شاركنا في الأجر). */}
+                      {/* Share only here now (2026-11-04): اقترح تربيط
+                          moved to the very bottom of the popup, after
+                          استمع للآية, per the user's decision. */}
                       <div className="flex gap-2 mb-3">
-                        <button onClick={() => setSuggestOpen(!suggestOpen)}
-                          className="flex-1 py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-sm hover:bg-emerald-100 transition-smooth flex items-center justify-center gap-1.5">
-                          <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيط' : 'اقترح تربيط'}
-                        </button>
                         <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} surahNo={selectedVerse.surah_no} />
                       </div>
-                      {suggestOpen && (
-                        <div className="mb-3 bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
-                          {suggestSent ? (
-                            <p className="text-sm font-bold text-emerald-700">تم إرسال اقتراحك — هيتراجع من الإدارة قبل النشر. جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
-                          ) : session ? (
-                            <>
-                              <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يظهر للإدارة للمراجعة قبل النشر.</p>
-                              <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
-                              <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
-                              <label className="block text-xs font-semibold text-accent-600 mb-1">نوع التربيط</label>
-                              <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
-                                {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
-                              </select>
-                              {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
-                              <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-xl text-sm">
-                                {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح'}
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-sm font-semibold text-accent-700 mb-2">سجّل دخولك الأول عشان نقدر نراجع اقتراحك.</p>
-                              <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-700 text-white font-bold rounded-xl text-sm">تسجيل الدخول</button>
-                            </>
-                          )}
-                        </div>
-                      )}
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
@@ -4520,22 +4528,13 @@ export default function QuranMushafPage({
                         إغلاق
                       </button>
                     </div>
-                      {/* استمع للآية كآخر اختيار في القائمة (طلب المستخدم
-                          2026-10-30): تكرار زر ثانوي فوقه، واستمع زر كامل
-                          العرض في الأسفل تمامًا، تحت إغلاق. شرائح القرّاء
-                          تتفتح تحت زر الاستماع مباشرة لأنها جزء منه،
-                          ورسالة الخطأ تحتها — لا اختيار بعدهما. */}
-                      <div className="mt-2 px-3">
-                        <button onClick={() => {
-                          const next = !reciteLoop;
-                          setReciteLoop(next);
-                          if (reciteRef.current) reciteRef.current.loop = next;
-                        }}
-                          title="تكرار الآية للحفظ"
-                          className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciteLoop ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
-                          <Repeat className="w-4 h-4" /> تكرار
-                        </button>
-                      </div>
+                      {/* ترتيب القائمة (قرار المستخدم 2026-11-04):
+                          إغلاق ← استمع للآية ← اقترح تربيط (آخر حاجة).
+                          زر تكرار مخفي من القائمة فقط: منطق التكرار
+                          (reciteLoop) باقٍ في الكود لكن لا يمكن تشغيله
+                          من الواجهة حاليًا، وافتراضيًا مغلق (false).
+                          شرائح القرّاء تتفتح تحت زر الاستماع مباشرة
+                          لأنها جزء منه، ورسالة الخطأ تحتها. */}
                       <div className="mt-2 mb-3 px-3">
                         <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
                           className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciting ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
@@ -4557,6 +4556,43 @@ export default function QuranMushafPage({
                         </div>
                       )}
                       {reciteError && <p className="text-xs text-red-500 text-center mb-3 px-3">{reciteError}</p>}
+                      {/* اقترح تربيط LAST (user decision 2026-11-04):
+                          moved here from the share row, after
+                          استمع للآية. Its form expands below it. */}
+                      <div className="mt-2 mb-3 px-3">
+                        <button onClick={() => setSuggestOpen(!suggestOpen)}
+                          className="w-full py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-sm hover:bg-emerald-100 transition-smooth flex items-center justify-center gap-1.5">
+                          <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيط' : 'اقترح تربيط'}
+                        </button>
+                      </div>
+                      {suggestOpen && (
+                        <div className="mb-4 px-3">
+                          <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
+                            {suggestSent ? (
+                              <p className="text-sm font-bold text-emerald-700">تم إرسال اقتراحك — هيتراجع من الإدارة قبل النشر. جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
+                            ) : session ? (
+                              <>
+                                <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يظهر للإدارة للمراجعة قبل النشر.</p>
+                                <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+                                <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+                                <label className="block text-xs font-semibold text-accent-600 mb-1">نوع التربيط</label>
+                                <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
+                                  {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
+                                </select>
+                                {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
+                                <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-xl text-sm">
+                                  {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح'}
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-semibold text-accent-700 mb-2">سجّل دخولك الأول عشان نقدر نراجع اقتراحك.</p>
+                                <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-700 text-white font-bold rounded-xl text-sm">تسجيل الدخول</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
                   </div>
                 </div>
               )}

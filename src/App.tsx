@@ -391,6 +391,14 @@ function AppContent() {
   // (The old early returns for listen/adhkar are gone: the
   // wrapper IS the page when its route is active.)
   let page: ReactNode;
+  // Visual batch (2026-11-04): visible route entrance — the wrapper
+  // remounts (and re-animates) on every route change EXCEPT
+  // mushaf<->follow, which share one stable key so the SAME Mushaf
+  // instance survives (a live follow session must never remount and
+  // lose its lock) and so the Mushaf page image never animates at
+  // all. The listen/adhkar wrappers below stay mounted regardless.
+  const routeKey = route === 'mushaf' || route === 'follow' ? 'mushaf-follow' : route;
+  const routeEnterClass = route === 'mushaf' || route === 'follow' ? undefined : 'route-enter-strong';
   // One branch for mushaf|follow: the same instance serves both
   // routes, so a live follow session survives switching between them
   // without remounting and losing the lock.
@@ -427,7 +435,9 @@ function AppContent() {
           </div>
         </>
       ) : null}
-      {page}
+      <div key={routeKey} className={routeEnterClass}>
+        {page}
+      </div>
       {/* Foreground adhan alerts on every route, logged in or not —
           settings live in localStorage, so this mounts unconditionally. */}
       <AdhanScheduler />

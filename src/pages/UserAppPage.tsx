@@ -555,7 +555,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             starts at the very beginning of the Mushaf (verse ids run
             1..6236 in Mushaf order), and hides entirely when that run
             is 0. The full memorized list stays reachable via the
-            "تم الحفظ" tab below, whose count is the true total. */}
+            "عرض الآيات المحفوظة" button below (the "تم الحفظ" tab was
+            removed 2026-11-04; the filter is set programmatically). */}
         {session && memorizedFromStart > 0 && (
           <div className="mb-5 bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
@@ -568,6 +569,10 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <p className="text-sm text-accent-600 leading-relaxed mt-1">
               تقدّمك من أول المصحف — وآياتك المحفوظة كلها تحت، ومع كل آية روابطها.
             </p>
+            <button onClick={() => { setListFilter('memorized'); setPage(0); }}
+              className="mt-3 text-sm font-semibold text-amber-link hover:text-amber-800">
+              عرض الآيات المحفوظة
+            </button>
           </div>
         )}
 
@@ -579,9 +584,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <Mic className="w-5 h-5 text-amber-600" />
               <h2 className="font-semibold text-accent-800">سمّع لنفسك</h2>
             </div>
-            <p className="text-sm text-accent-600 leading-relaxed flex-1">
-              بالميكروفون: اختر سورة وآيات، سمّع من حفظك والبرنامج يصحح لك — الصح يظهر بالأخضر، والغلط تاخد فرصة ٣ ثواني (الافتراضي — وبتتظبط من إعدادات التسميع) وبعدها يظهر الجزء الغلط بالأحمر. وفي النهاية نتيجتك والآيات اللي تحتاج مراجعة. ولو المتصفح مش بيدعم الميكروفون، التقييم بيبقى يدوي.
-            </p>
             <button onClick={() => onNavigate('test')}
               className="mt-4 w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl">
               ابدأ التسميع
@@ -600,8 +602,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               label={t('readLater')} icon={<Bookmark className="w-5 h-5" />} count={listCounts.read_later} />
             <ListFilterTab active={listFilter === 'difficult'} onClick={() => { setListFilter('difficult'); setPage(0); }}
               label={t('difficult')} icon={<AlertTriangle className="w-5 h-5" />} count={listCounts.difficult} />
-            <ListFilterTab active={listFilter === 'memorized'} onClick={() => { setListFilter('memorized'); setPage(0); }}
-              label="تم الحفظ" icon={<BadgeCheck className="w-5 h-5" />} count={listCounts.memorized} />
           </div>
         )}
 
@@ -689,7 +689,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     }`}>
                     كل الأنواع
                   </button>
-                  {orderedLinkTypes.map((lt) => (
+                  {/* وجه hidden per user order 2026-11-04: the type stays in lib/types and its links remain under كل الأنواع. */}
+                  {orderedLinkTypes.filter((lt) => lt.value !== 'wajih').map((lt) => (
                     <button key={lt.value} onClick={() => { setLinkTypeFilter((prev) => (prev.includes(lt.value) ? prev.filter((v) => v !== lt.value) : [...prev, lt.value])); setPage(0); }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
                         linkTypeFilter.includes(lt.value) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { CalendarDays, Flame, BookOpen, Check, Settings } from 'lucide-react';
-import { loadWird, saveWird, WIRD_TYPE_LABEL, formatPages, type WirdState, type WirdType } from '../lib/wird';
+import { CalendarDays, Flame, Check, Settings } from 'lucide-react';
+import { loadWird, saveWird, type WirdState } from '../lib/wird';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
@@ -41,13 +41,6 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
     });
   }
 
-  // Full required wird, written out in front of the user on لوحتي:
-  // all three parts with their page counts (only parts above 0),
-  // always visible whether today is done or not (done state keeps
-  // the requirement text and adds the completion note, it never
-  // replaces it).
-  const partEntries = (Object.keys(WIRD_TYPE_LABEL) as WirdType[]).filter((k) => (wird.parts?.[k] ?? 0) > 0);
-
   return (
     <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5">
       <div className="flex items-center gap-2 mb-3">
@@ -59,24 +52,8 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
           </span>
         )}
       </div>
-      <div className="bg-amber-50 border border-hairline-amber rounded-xl p-3 mb-4">
-        <p className="font-medium text-accent-800">المطلوب اليوم:</p>
-        {partEntries.length === 0 ? (
-          <p className="text-sm text-accent-600 mt-1">لم يتم تحديد ورد بعد — حدده من الإعدادات.</p>
-        ) : (
-          <ul className="mt-1 space-y-0.5">
-            {partEntries.map((k) => (
-              <li key={k} className="text-sm font-semibold text-accent-700">{WIRD_TYPE_LABEL[k]} — {formatPages(wird.parts[k])}</li>
-            ))}
-          </ul>
-        )}
-        <p className="text-sm text-accent-600 mt-1">
-          {doneToday ? 'تم ✓ تقبل الله منك.' : 'اقرأها ثم علّمها منجزة.'}
-        </p>
-      </div>
-
       {/* Configuration moved to Settings: the card shows the wird and
-          its start/complete actions; type + pages are chosen in
+          its complete action; type + pages are chosen in
           الإعدادات (this link), always available — even after today
           is marked done, so tomorrow's wird can be set any time. */}
       <button onClick={() => onNavigate('settings')}
@@ -85,10 +62,6 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
       </button>
 
       <div className="flex gap-2">
-        <button onClick={() => onNavigate('mushaf')}
-          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
-          <BookOpen className="w-5 h-5" /> {doneToday ? 'افتح المصحف' : 'ابدأ الورد'}
-        </button>
         {!doneToday && (
           <button onClick={markDone}
             className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2">
