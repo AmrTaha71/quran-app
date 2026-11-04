@@ -5,6 +5,19 @@ import { pressFeedback } from '../lib/pressFeedback';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
+// Remember the kunya label per user so each page's nav starts with the
+// right label instead of flashing 'لوحتي'. 'quran-uid' is mirrored by App.
+let navLabelCache: { uid: string; label: string } | null = null;
+function cachedNavLabel(): string {
+  try {
+    const uid = localStorage.getItem('quran-uid');
+    if (uid && navLabelCache && navLabelCache.uid === uid) return navLabelCache.label;
+  } catch {
+    // storage unavailable: default label
+  }
+  return 'لوحتي';
+}
+
 /**
  * Bottom navigation, in logical RTL order.
  * In an RTL flex row the first DOM item is the rightmost one, so
@@ -36,7 +49,7 @@ export default function BottomNav({
   // The board's name is the user's kunya when they set one
   // ("لوحة أبو …"), otherwise the plain "لوحتي". Loaded here so the
   // label matches on every page that shows this bar.
-  const [appLabel, setAppLabel] = useState('لوحتي');
+  const [appLabel, setAppLabel] = useState(cachedNavLabel);
   useEffect(() => {
     const loadLabel = async () => {
       try {
@@ -44,7 +57,9 @@ export default function BottomNav({
         const userId = session?.user?.id;
         if (!userId) return;
         const { data } = await supabase.from('user_profiles').select('preferred_name').eq('user_id', userId).single();
-        if (data?.preferred_name) setAppLabel(`لوحة ${data.preferred_name}`);
+        const label = data?.preferred_name ? `لوحة ${data.preferred_name}` : 'لوحتي';
+        navLabelCache = { uid: userId, label };
+        setAppLabel(label);
       } catch {}
     };
     loadLabel();
@@ -96,7 +111,7 @@ export default function BottomNav({
                 onNavigate(item.id);
               }}
               className={`icon-action relative polish-press flex-1 flex-col py-2 text-sm ${
-                active ? 'font-extrabold text-emerald-deep' : 'font-semibold text-ink-2 hover:bg-gray-50'
+                active ? 'font-extrabold text-emerald-deep' : 'font-semibold text-ink-2 hover:bg-emerald-50/60'
               }`}
               aria-current={active ? 'page' : undefined}
             >

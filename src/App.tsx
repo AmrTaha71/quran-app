@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import { supabase } from './lib/supabase';
 import {
   EXPLICIT_SIGNOUT_KEY,
@@ -66,6 +67,58 @@ function getRouteFromHash(): Route {
 
 const SESSION_EXPIRED_MESSAGE = 'انتهت جلستك — سجل دخول من جديد.';
 
+// Route cross-fade (approved 2026-11-04). Plain functions on purpose
+// (TDZ rule). Skipped for mushaf/follow on either side, reduced motion,
+// and browsers without startViewTransition: apply() then runs directly.
+function isMushafRoute(r: Route): boolean {
+  return r === 'mushaf' || r === 'follow';
+}
+function switchRoute(prev: Route, next: Route, apply: () => void): void {
+  try {
+    const doc = document as Document & {
+      startViewTransition?: (cb: () => void) => { finished: Promise<unknown> };
+    };
+    if (
+      prev === next ||
+      isMushafRoute(prev) ||
+      isMushafRoute(next) ||
+      typeof doc.startViewTransition !== 'function' ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+      apply();
+      return;
+    }
+    const root = document.documentElement;
+    root.classList.add('vt-active');
+    const clear = () => {
+      root.classList.remove('vt-active');
+      // The mount-only enter animations (.route-enter-strong on the
+      // route wrapper, .nav-enter on the nav) were suppressed by
+      // .vt-active during the transition; without this they would
+      // start now and rise a second time. Strip them from VISIBLE
+      // elements only (getClientRects skips display:none wrappers,
+      // and avoids the offsetParent trap on the fixed nav).
+      try {
+        document.querySelectorAll('.route-enter-strong, .nav-enter').forEach((el) => {
+          if ((el as HTMLElement).getClientRects().length === 0) return;
+          el.classList.remove('route-enter-strong', 'nav-enter');
+        });
+      } catch {
+        // decorative: never break navigation
+      }
+    };
+    const t = doc.startViewTransition(() => {
+      flushSync(apply);
+    });
+    t.finished.then(clear, clear);
+  } catch {
+    // startViewTransition threw: never leave .vt-active set, or every
+    // later mount animation would stay suppressed.
+    document.documentElement.classList.remove('vt-active');
+    apply();
+  }
+}
+
 function AppContent() {
   const [route, setRoute] = useState<Route>(getRouteFromHash());
   const [session, setSession] = useState<Session | null>(null);
@@ -86,6 +139,7 @@ function AppContent() {
   // user. A refocus SIGNED_IN with the SAME user must never route —
   // only a real transition (first sign-in, or a different user) may.
   const authUidRef = useRef<string | null>(null);
+  const pendingRouteRef = useRef<Route | null>(null);
 
   const setRecovery = (value: boolean) => {
     recoveryRef.current = value;
@@ -304,7 +358,9 @@ function AppContent() {
       // While a recovery is in progress, supabase clearing the token
       // hash (hash -> '') must not yank the user off the reset form.
       if (recoveryRef.current) return;
-      setRoute(getRouteFromHash());
+      const next = getRouteFromHash();
+      if (pendingRouteRef.current === next) return;
+      switchRoute(routeRef.current, next, () => setRoute(next));
     };
     window.addEventListener('hashchange', handleHashChange);
 
@@ -347,8 +403,13 @@ function AppContent() {
         recLog('EXPLICIT_HOME', { from: routeRef.current, to: r });
       }
     }
+    const prevRoute = routeRef.current;
+    pendingRouteRef.current = r;
     window.location.hash = r === 'home' ? '' : `/${r}`;
-    setRoute(r);
+    switchRoute(prevRoute, r, () => {
+      setRoute(r);
+      pendingRouteRef.current = null;
+    });
   };
 
   if (loading) {

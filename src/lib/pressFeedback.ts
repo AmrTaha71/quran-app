@@ -74,8 +74,13 @@ function tapSoundSuppressed(): boolean {
 // handler IS a gesture, so the context unlocks on the first tap). ---
 let tapCtx: AudioContext | null = null;
 
+let lastTapAt = 0;
+
 function playTapSound(): void {
   try {
+    const nowMs = Date.now();
+    if (nowMs - lastTapAt < 60) return;
+    lastTapAt = nowMs;
     if (!tapCtx) {
       const AC =
         window.AudioContext ||
@@ -83,14 +88,15 @@ function playTapSound(): void {
       if (!AC) return;
       tapCtx = new AC();
     }
-    if (tapCtx.state === 'suspended') void tapCtx.resume();
+    if (tapCtx.state !== 'running') void tapCtx.resume().catch(() => {});
     const t = tapCtx.currentTime;
     const osc = tapCtx.createOscillator();
     const gain = tapCtx.createGain();
+    const jitter = 0.97 + Math.random() * 0.06; // ±3% pitch so repeated taps don't machine-gun
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(1500, t);
-    osc.frequency.exponentialRampToValueAtTime(900, t + 0.06);
-    gain.gain.setValueAtTime(0.09, t);
+    osc.frequency.setValueAtTime(1500 * jitter, t);
+    osc.frequency.exponentialRampToValueAtTime(900 * jitter, t + 0.06);
+    gain.gain.setValueAtTime(0.07, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
     osc.connect(gain);
     gain.connect(tapCtx.destination);
@@ -98,6 +104,37 @@ function playTapSound(): void {
     osc.stop(t + 0.09);
   } catch {
     // sound is decorative: never let it break a press
+  }
+}
+
+/** Soft two-note rising chime. Same suppression + setting as the tap
+ *  sound; never plays an error sound. Call from a successful action. */
+export function playSuccessCue(): void {
+  try {
+    if (!isTapSoundEnabled()) return;
+    if (tapSoundSuppressed()) return;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!tapCtx) tapCtx = new AC();
+    if (tapCtx.state !== 'running') void tapCtx.resume().catch(() => {});
+    const t0 = tapCtx.currentTime;
+    [[523.25, 0], [783.99, 0.11]].forEach(([freq, delay]) => {
+      const osc = tapCtx!.createOscillator();
+      const gain = tapCtx!.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t0 + delay);
+      gain.gain.setValueAtTime(0.0001, t0 + delay);
+      gain.gain.exponentialRampToValueAtTime(0.06, t0 + delay + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + 0.45);
+      osc.connect(gain);
+      gain.connect(tapCtx!.destination);
+      osc.start(t0 + delay);
+      osc.stop(t0 + delay + 0.5);
+    });
+  } catch {
+    // decorative: never break the action
   }
 }
 
@@ -143,6 +180,7 @@ function spawnWater(host: HTMLElement, clientX: number, clientY: number): void {
       layer.className = 'ripple-layer';
       host.appendChild(layer);
     }
+    if (layer.childElementCount > 9) return; // 3 presses in flight (wash + 2 rings each)
     const dark = hostIsDark(host);
     const washColor = dark ? 'rgba(255, 255, 255, 0.32)' : 'rgba(5, 59, 39, 0.20)';
     const ringColor = dark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(5, 59, 39, 0.55)';
