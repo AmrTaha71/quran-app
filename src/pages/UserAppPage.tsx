@@ -33,7 +33,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const [totalCount, setTotalCount] = useState(0);
   const [search, setSearch] = useState('');
   const [surahFilter, setSurahFilter] = useState('');
-  const [linkTypeFilter, setLinkTypeFilter] = useState('');
+  // Multi-select (2026-11-04): selected link types; [] = all types.
+  // Tapping a chip toggles membership; «كل الأنواع» clears to [].
+  const [linkTypeFilter, setLinkTypeFilter] = useState<string[]>([]);
   // Link-type chip order (2026-11-04): most-approved first. The order
   // is computed from approved-link counts (link_types arrays on
   // approved rows only — no user content), cached in localStorage
@@ -309,11 +311,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
     } else {
       // Link-type filter narrows every path below (browse and search).
       let linkVerseIds: number[] | null = null;
-      if (linkTypeFilter) {
+      if (linkTypeFilter.length > 0) {
         const { data: linkData } = await supabase
           .from('ayah_links')
           .select('verse_id')
-          .contains('link_types', [linkTypeFilter])
+          .overlaps('link_types', linkTypeFilter)
           .eq('status', 'approved');
         linkVerseIds = (linkData || []).map((d) => d.verse_id);
         if (linkVerseIds.length === 0) {
@@ -332,15 +334,26 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         // and link-type filters apply to both sources, as before.
         try {
           const [verses, links] = await Promise.all([loadVerseIndex(), loadLinkIndex()]);
+          // Multi-select (2026-11-04): searchVerseIds takes only a
+          // single linkType, so the ANY-match filter over the selected
+          // types is applied here by intersecting with the verses
+          // that carry any selected type — the same verse set the old
+          // single-type filter produced.
+          const verseIdsWithSelectedTypes: Set<number> | null = linkTypeFilter.length > 0
+            ? new Set(links.filter((l) => l.link_types.some((t) => linkTypeFilter.includes(t))).map((l) => l.verse_id))
+            : null;
           const ids = searchVerseIds(verses, links, debouncedSearch, {
             surahNo: surahFilter ? parseInt(surahFilter) : null,
-            linkType: linkTypeFilter || null,
+            linkType: null,
           });
-          if (ids.length === 0) { setVerses([]); setTotalCount(0); setLoading(false); return; }
-          const pageIds = ids.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+          const filteredIds = verseIdsWithSelectedTypes
+            ? ids.filter((id) => verseIdsWithSelectedTypes.has(id))
+            : ids;
+          if (filteredIds.length === 0) { setVerses([]); setTotalCount(0); setLoading(false); return; }
+          const pageIds = filteredIds.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
           const { data: pageData } = await supabase.from('quran_verses').select('*').in('id', pageIds).order('id', { ascending: true });
           setVerses(pageData || []);
-          setTotalCount(ids.length);
+          setTotalCount(filteredIds.length);
         } catch {
           setSearchHint('تعذر تحميل فهرس البحث — حاول مجدداً');
           setVerses([]);
@@ -412,7 +425,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   let memorizedFromStart = 0;
   while (lists.memorized.has(memorizedFromStart + 1)) memorizedFromStart++;
 
-  const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter ? 1 : 0) + (debouncedSearch ? 1 : 0);
+  const activeFiltersCount = (surahFilter ? 1 : 0) + (linkTypeFilter.length > 0 ? 1 : 0) + (debouncedSearch ? 1 : 0);
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
@@ -606,8 +619,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               )}
             </div>
             <div className="flex items-center gap-2">
-              {(search || surahFilter || linkTypeFilter) && (
-                <button onClick={(e) => { e.stopPropagation(); setSearch(''); setSurahFilter(''); setLinkTypeFilter(''); setPage(0); }}
+              {(search || surahFilter || linkTypeFilter.length > 0) && (
+                <button onClick={(e) => { e.stopPropagation(); setSearch(''); setSurahFilter(''); setLinkTypeFilter([]); setPage(0); }}
                   className="text-sm text-red-500 hover:text-red-600 font-semibold">
                   مسح الكل
                 </button>
@@ -670,16 +683,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   <Layers className="w-4 h-4 text-emerald-600" /> نوع الرابط
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={() => { setLinkTypeFilter(''); setPage(0); }}
+                  <button onClick={() => { setLinkTypeFilter([]); setPage(0); }}
                     className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                      linkTypeFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
+                      linkTypeFilter.length === 0 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                     }`}>
                     كل الأنواع
                   </button>
                   {orderedLinkTypes.map((lt) => (
-                    <button key={lt.value} onClick={() => { setLinkTypeFilter(lt.value); setPage(0); }}
+                    <button key={lt.value} onClick={() => { setLinkTypeFilter((prev) => (prev.includes(lt.value) ? prev.filter((v) => v !== lt.value) : [...prev, lt.value])); setPage(0); }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                        linkTypeFilter === lt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
+                        linkTypeFilter.includes(lt.value) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                       }`}>
                       {lt.label}
                     </button>
