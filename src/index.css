@@ -343,16 +343,21 @@ html { -webkit-text-size-adjust: 100%; }
    by pressFeedback.ts via WAAPI and removed after ~450ms. */
 .ripple-layer { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; }
 .ripple-ink { position: absolute; border-radius: 9999px; background: currentColor; pointer-events: none; }
-/* Route entrance, VISIBLE: 24px slide + fade, 280ms. Applied by
-   App.tsx to every route except mushaf/follow (whose image must
-   never animate and whose follow session must never remount). */
+/* Route entrance, VISIBLE: 32px slide + fade, 340ms. REDEFINED in the
+   bold pass below (stronger values); the old comment here described
+   the previous 24px/280ms. Applied by App.tsx to every route except
+   mushaf/follow (whose image must never animate and whose follow
+   session must never remount) — mushaf/follow chrome animates instead
+   via .nav-enter (BottomNav, per-page mount) and .mushaf-chrome-enter
+   (Mushaf header + fullscreen corner buttons). */
 @keyframes route-enter-strong {
   from { opacity: 0; transform: translateY(24px) scale(0.985); }
   to { opacity: 1; transform: none; }
 }
 .route-enter-strong { animation: route-enter-strong 280ms var(--polish-ease-out) backwards; }
 /* Door entrance: 18px rise + slight scale, 380ms, staggered by the
-   inline animation-delay already on Home cards/buttons. */
+   inline animation-delay already on Home cards/buttons. REDEFINED in
+   the bold pass below (24px, 420ms). */
 @keyframes door-enter {
   from { opacity: 0; transform: translateY(18px) scale(0.97); }
   to { opacity: 1; transform: none; }
@@ -373,4 +378,130 @@ html { -webkit-text-size-adjust: 100%; }
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 2px 16px 3px; border-radius: 9999px;
   background: linear-gradient(180deg, rgba(11, 77, 51, 0.13), rgba(11, 77, 51, 0.06));
+}
+
+/* ============ BOLD beauty pass (2026-11-04) ============
+   The user verdict on the previous batch: NOT impressive, NOT
+   beautiful, NO transition visible, colors very normal, background
+   very ordinary. That batch was deliberately restrained and excluded
+   Mushaf/Follow from transitions — exactly where he looks most. This
+   pass is deliberately BOLDER on both axes he chose (1) bolder colors
+   + a new background, (2) visible transitions on EVERY page.
+   Direction 1: richer, deeper door gradients (tops UNCHANGED so white
+   text contrast is untouched: 5.35 / 4.91 / 5.47; bottoms deepened to
+   #083B27 / #5E3208 / #0B3D38 = 12.61 / 10.85 / 12.08), a layered page
+   background (emerald + gold glows, faint dot texture, deeper cream
+   foot — ink 12.60-14.62, ink-2 6.21-7.20 across its extremes), an
+   emerald-tinted glass nav, a deeper active pill wash (emerald-deep
+   on the blended wash = 6.28), and a deeper gold pill gradient whose
+   every stop passes the 3:1 component bar on cream (6.37 / 4.50 /
+   3.58 — the old #B58A38 end measured 2.82). Inactive nav labels move
+   from accent-500 (3.82, below AA for small text) to ink-2 (5.99).
+   Direction 2: route-enter-strong 32px/340ms; door-enter 24px/420ms
+   with a clean 60ms Home stagger; .nav-enter on the BottomNav root
+   (each page mounts its own nav, so it plays on EVERY route change
+   including to/from Mushaf/Follow; mushaf<->follow share one page
+   instance so the nav does not remount there and the gold pill slides
+   instead); .mushaf-chrome-enter on the Mushaf header and the
+   fullscreen corner buttons (عودة, X) — CHROME ONLY.
+   HARD CONSTRAINTS KEPT: the Mushaf page image is never animated
+   (no class touches the image, its frame, word taps, or highlights;
+   the App wrapper still carries NO animation class on mushaf/follow
+   routes and the mushaf-follow shared key is untouched); the Follow
+   session never remounts; no transition delays navigation or blocks
+   taps (mount-only animations, backwards fill, ending at
+   transform:none); ripple/tap-sound/suppression/reduced-motion rules
+   from the previous batch are untouched; no tracking/leading/
+   truncate/overflow rules on Arabic text (the only overflow:hidden in
+   this file remains the empty .ripple-layer overlay span). */
+:root {
+  --bold-door-emerald-deep: #083B27;
+  --bold-door-amber-deep: #5E3208;
+  --bold-door-teal-deep: #0B3D38;
+  --bold-grad-emerald: linear-gradient(160deg, #0F7A52 0%, #083B27 100%);
+  --bold-grad-amber: linear-gradient(160deg, #A85E0F 0%, #5E3208 100%);
+  --bold-grad-teal: linear-gradient(160deg, #0F766E 0%, #0B3D38 100%);
+}
+/* New page background: glows + dot texture + deeper cream foot.
+   Later rule wins over the .page-bg above (same specificity). */
+.page-bg {
+  background-color: #F3EDD9;
+  background-image:
+    radial-gradient(720px 360px at 85% -5%, rgba(15, 122, 82, 0.14), transparent 65%),
+    radial-gradient(560px 300px at 5% 0%, rgba(181, 138, 56, 0.13), transparent 65%),
+    radial-gradient(circle, rgba(11, 77, 51, 0.07) 1px, transparent 1.6px),
+    linear-gradient(180deg, #FFFEF9 0%, #F3EDD9 100%);
+  background-size: auto, auto, 26px 26px, auto;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+}
+body { background-color: #F3EDD9; }
+/* Mushaf page background: same treatment, warmer (amber-forward) so
+   the margins around the page feel rich, not flat. Background only —
+   never an animation, never near the image box. */
+.mushaf-page-bg {
+  background-color: #F3EAD3;
+  background-image:
+    radial-gradient(720px 360px at 88% -5%, rgba(168, 94, 15, 0.16), transparent 65%),
+    radial-gradient(560px 300px at 5% 0%, rgba(15, 122, 82, 0.10), transparent 65%),
+    radial-gradient(circle, rgba(11, 77, 51, 0.06) 1px, transparent 1.6px),
+    linear-gradient(180deg, #FDF8EA 0%, #F3EAD3 100%);
+  background-size: auto, auto, 26px 26px, auto;
+  background-position: 0 0, 0 0, 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat, repeat, no-repeat;
+}
+/* Deeper door gradients (tops unchanged, bottoms deepened). */
+.grad-emerald-door { background-color: #083B27; background-image: var(--bold-grad-emerald); }
+.grad-amber-door { background-color: #5E3208; background-image: var(--bold-grad-amber); }
+.grad-teal-door { background-color: #0B3D38; background-image: var(--bold-grad-teal); }
+/* Stronger door light + shadow so doors read luminous, not flat. */
+.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 16px 32px -14px rgba(9, 39, 29, 0.55); }
+/* Emerald-tinted water-glass nav (labels stay ink-2/emerald-deep). */
+.glass-nav {
+  background: linear-gradient(180deg, rgba(220, 235, 226, 0.82) 0%, rgba(247, 242, 227, 0.70) 100%);
+  border-top: 1px solid var(--visual-gold-hairline);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 -8px 24px -8px rgba(28, 43, 38, 0.12);
+}
+/* Deeper active pill wash (emerald-deep on blended wash = 6.28). */
+.nav-pill-active {
+  background: linear-gradient(180deg, rgba(11, 77, 51, 0.20), rgba(11, 77, 51, 0.10));
+}
+/* Deeper gold pill: every stop passes 3:1 on cream (6.37/4.50/3.58). */
+.nav-tab-pill {
+  background: linear-gradient(90deg, #6E5418, #8A6A24, #9A7B2D);
+}
+/* Route entrance, BOLD: 32px slide + fade, 340ms (was 24px/280ms). */
+@keyframes route-enter-strong {
+  from { opacity: 0; transform: translateY(32px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.route-enter-strong { animation: route-enter-strong 340ms var(--polish-ease-out) backwards; }
+/* Door entrance, BOLD: 24px rise + scale, 420ms (was 18px/380ms). */
+@keyframes door-enter {
+  from { opacity: 0; transform: translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.door-enter { animation: door-enter 420ms var(--polish-ease-out) backwards; }
+/* BottomNav entrance: slides up + fades on every page mount,
+   including to/from Mushaf/Follow (each page mounts its own nav). */
+@keyframes nav-enter {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
+}
+.nav-enter { animation: nav-enter 340ms var(--polish-ease-out) backwards; }
+/* Mushaf chrome entrance: header + fullscreen corner buttons slide
+   DOWN + fade on mount. Applied ONLY to chrome elements — never to
+   the image, its frame, word taps, highlights, or the bottom strip. */
+@keyframes mushaf-chrome-enter {
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: none; }
+}
+.mushaf-chrome-enter { animation: mushaf-chrome-enter 340ms var(--polish-ease-out) backwards; }
+/* Reduced motion: the two NEW motion classes stop with everything else. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-enter, .mushaf-chrome-enter {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }

@@ -251,9 +251,13 @@ function AppContent() {
         setTimeout(() => {
           void retryPendingProfile(supabase, session.user.id).catch(() => {});
         }, 0);
+        if (prevUid !== null && prevUid === session.user.id) return;
+        // Only a REAL sign-in flashes the splash: auth-js emits
+        // SIGNED_IN on every return-to-visible, and flashing +
+        // remounting the whole app on every foregrounding paused adhan
+        // audio, lost the banner, and dropped Mushaf state.
         setAuthJustSucceeded(true);
         setTimeout(() => setAuthJustSucceeded(false), 2500);
-        if (prevUid !== null && prevUid === session.user.id) return;
         // Real transition: the app opens on الرئيسية after login
         // (not the Mushaf page): it is lighter to load, and the
         // Mushaf opens from there. EXCEPTION: a share deep link in

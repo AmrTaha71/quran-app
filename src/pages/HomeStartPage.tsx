@@ -167,6 +167,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           onPointerDown={pressFeedback}
           onClick={() => onNavigate('follow')}
           className="w-full py-4 mb-4 grad-teal-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
+          style={{ animationDelay: '180ms' }}
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <Mic className="w-6 h-6 text-white" />
@@ -175,7 +176,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
 
         {/* استمع للقرآن: after الحق الإمام. */}
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '180ms' }}>
+        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
           {listeningWird && (
             <p className="text-sm text-amber-link font-semibold mt-2">
               لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
@@ -197,7 +198,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* أذكار الصباح والمساء: LIVE — generated-voice clips
             (46 clips, male/female toggle in the player). Placed
             directly after the listen card: the audio hub. */}
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
+        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '300ms' }}>
           <button
             onPointerDown={pressFeedback}
             onClick={() => onNavigate('adhkar')}

@@ -19,6 +19,12 @@ type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow
  * emerald. Every tab press also fires pressFeedback (ripple + tap
  * sound + vibration where supported); the sound is suppressed on
  * test/listen/adhkar/follow routes and while any audio plays.
+ * BOLD pass (2026-11-04): the nav itself slides up + fades on every
+ * page mount (.nav-enter — each page mounts its own nav, so this
+ * plays on every route change including to/from Mushaf/Follow;
+ * mushaf<->follow share one page instance, so there the gold pill
+ * slides instead of a nav re-entrance). Inactive labels use ink-2
+ * (5.99 on the tinted glass) instead of accent-500 (3.82, below AA).
  */
 export default function BottomNav({
   current,
@@ -61,7 +67,7 @@ export default function BottomNav({
   return (
     <nav
       aria-label="التنقل الرئيسي"
-      className="fixed bottom-0 right-0 left-0 z-40 glass-nav pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]"
+      className="fixed bottom-0 right-0 left-0 z-40 glass-nav nav-enter pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]"
     >
       <div className="max-w-5xl mx-auto flex relative">
         {activeIndex >= 0 && (
@@ -84,7 +90,7 @@ export default function BottomNav({
                 onNavigate(item.id);
               }}
               className={`icon-action relative polish-press flex-1 flex-col py-2 text-sm ${
-                active ? 'font-extrabold text-emerald-deep' : 'font-semibold text-accent-500 hover:bg-gray-50'
+                active ? 'font-extrabold text-emerald-deep' : 'font-semibold text-ink-2 hover:bg-gray-50'
               }`}
               aria-current={active ? 'page' : undefined}
             >

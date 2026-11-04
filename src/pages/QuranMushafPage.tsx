@@ -3245,9 +3245,9 @@ export default function QuranMushafPage({
   // the two link buttons below read the same.
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-stone-100 via-amber-50/30 to-white pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm">
+    <div className="min-h-screen mushaf-page-bg pb-24">
+      {/* Header — BOLD pass: chrome-enter on mount (chrome only, never the image) */}
+      <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm mushaf-chrome-enter">
         <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-2 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
@@ -3871,12 +3871,12 @@ export default function QuranMushafPage({
                   + backdrop-blur). */}
               <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
                 title="عودة إلى التبويبات الرئيسية" aria-label="عودة إلى التبويبات الرئيسية"
-                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[5.75rem] px-3 py-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg flex items-center gap-1.5 text-sm font-bold">
+                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[5.75rem] px-3 py-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg flex items-center gap-1.5 text-sm font-bold mushaf-chrome-enter">
                 <ChevronRight className="w-5 h-5" /> عودة
               </button>
               <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
                 title="إغلاق" aria-label="إغلاق"
-                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
+                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg mushaf-chrome-enter">
                 <X className="w-7 h-7" />
               </button>
             </>
@@ -4375,8 +4375,15 @@ export default function QuranMushafPage({
                       </button>
                       {/* Share only here now (2026-11-04): اقترح تربيط
                           moved to the very bottom of the popup, after
-                          استمع للآية, per the user's decision. */}
-                      <div className="flex gap-2 mb-3">
+                          استمع للآية, per the user's decision.
+                          Balance fix (2026-11-04): the share row is
+                          full-width like the other popup action
+                          buttons. ShareButton itself is shared with
+                          Landing/UserApp, so the stretch is applied
+                          here via the wrapper — the share panel is
+                          portalled to document.body, so these
+                          selectors only hit the trigger button. */}
+                      <div className="mb-3 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-center">
                         <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} surahNo={selectedVerse.surah_no} />
                       </div>
                       <div className="flex gap-2 mb-4">
