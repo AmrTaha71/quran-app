@@ -802,7 +802,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `rel` is ms since the current test started (performance.now);
   // `t` is the wall-clock epoch ms. Timestamps come from the same
   // clock the watchdog uses, so log order matches engine order.
-  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number };
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number };
   const DIAG_EVENT_CAP = 2000;
   const DIAG_DISPLAY_CAP = 500;
   const diagEventsRef = useRef<DiagEvent[]>([]);
@@ -1349,6 +1349,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // cannot be prefetched (the miss is only known when it happens).
   const requestCorrectionAudio = async (words: string[], pos?: { shape: 'context' | 'bare'; positions: CorrPosition[] }): Promise<string | null> => {
     if (words.length === 0) return null;
+    // DIAG (2026-11-04, logging only): fetch clock for the corr-fetch event below.
+    const corrFetchStart = Date.now();
     try {
       // LOCKDOWN 2026-10-29: generate-voice requires a logged-in user
       // JWT (the public anon key is rejected by the function). A
@@ -1377,14 +1379,29 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         body,
       });
       let res = await doFetch(await getCorrToken());
+      let retried401 = false;
       if (res.status === 401) {
         corrTokenRef.current = null;
+        retried401 = true;
         res = await doFetch(await getCorrToken());
       }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.audioUrl) return null;
+      const fetchMs = Date.now() - corrFetchStart;
+      // DIAG (2026-11-04, logging only): every generate-voice fetch
+      // outcome. code = HTTP status string. A 202 is the server
+      // lock (waiter gets no audioUrl) — it must be distinguishable
+      // from a real failure. The server contract is {audioUrl,
+      // voice} only, so the client cannot tell a server-cache hit
+      // from a fresh Realtime generation, nor see the server-side
+      // spoken-transcript gate result: a gate rejection surfaces
+      // here only as a non-OK status / missing audioUrl.
+      if (!res.ok || !data.audioUrl) {
+        diagPush('corr-fetch', { label: 'generate-voice', code: String(res.status), fetchMs, ok: false, reason: res.status === 202 ? 'lock-no-audio' : retried401 ? 'http-error-after-401-retry' : 'http-error' });
+        return null;
+      }
+      diagPush('corr-fetch', { label: 'generate-voice', code: String(res.status), fetchMs, ok: true, reason: retried401 ? 'retried-401' : 'audio-url' });
       return data.audioUrl;
-    } catch { return null; }
+    } catch { diagPush('corr-fetch', { label: 'generate-voice', code: 'network-error', fetchMs: Date.now() - corrFetchStart, ok: false, reason: 'network-error' }); return null; }
   };
   // Iteration 2 persistent-cache plumbing (see corrAudioStore).
   // Backend selection: IndexedDB when available, memory fallback
@@ -1491,7 +1508,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction' }); };
       a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); };
       a.onerror = () => { diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed); };
-      a.play().catch(() => { speakCorrection(words, rate, onFailed); });
+      // DIAG (2026-11-04, logging only): a refused play() used to
+      // fall back to TTS silently — the rejection (e.g.
+      // NotAllowedError) is the prime suspect for random silence,
+      // so both the accept and the reject are now logged. Acceptance
+      // pairs with the tts-start (onplaying) event; accepted but
+      // never started is the iOS timer-gating corner.
+      a.play().then(
+        () => { diagPush('tts-play-accepted', { label: 'audio-correction', reason: 'server-audio' }); },
+        (err) => { diagPush('tts-play-rejected', { label: 'audio-correction', code: err?.name || 'error', reason: 'server-audio' }); speakCorrection(words, rate, onFailed); },
+      );
     } else speakCorrection(words, rate, onFailed);
   };
   // Ayah-mode replay with the R5 visible fallback: the button is the
@@ -3101,6 +3127,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     });
   };
   const cancelContPrompt = () => {
+    // DIAG (2026-11-04, logging only): the "clip born then
+    // cancelled" case for a user stop (stopContinuousMic is the
+    // only caller) — logged BEFORE the generation bump below, so
+    // gen is still the dying clip's generation. Only when an audio
+    // element is actually live in the ref (a settled prompt already
+    // cleared it, so a lingering ref means a live clip).
+    if (contPromptAudioRef.current) diagPush('cont-prompt-clip-cancelled', { label: 'cont-prompt-audio', gen: speakGenRef.current, reason: 'cancel-prompt' });
     // Iteration 2: cancel is a generation bump — in-flight race
     // branches (fetch-win and timeout-win) check the gen and stay
     // silent, and the settled flag locks the finish path.
@@ -3306,7 +3339,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
         } catch { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
       };
-    const playUrl = (url: string, cacheKey?: string) => {
+    const playUrl = (url: string, cacheKey?: string, src?: 'cache' | 'fetch') => {
       const a = new Audio(url);
       // v13: the file is neutral-speed; the user's corrRate applies
       // here, pitch-preserved.
@@ -3351,7 +3384,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         }
         playTtsFallback(ttsCancelledUtterance ? 1500 : undefined);
       };
-      a.play().catch(() => playTtsFallback(ttsCancelledUtterance ? 1500 : undefined));
+      // DIAG (2026-11-04, logging only): same accept/reject logging
+      // as playCorrection — a refused play() here used to fall back
+      // to TTS with no trace. reason carries the clip source the
+      // client actually knows (session-cache hit vs fresh fetch);
+      // the server cache vs Realtime distinction is not visible
+      // client-side (see corr-fetch).
+      a.play().then(
+        () => { diagPush('cont-prompt-play-accepted', { label: 'cont-prompt-audio', reason: src ?? 'unknown' }); },
+        (err) => { diagPush('cont-prompt-play-rejected', { label: 'cont-prompt-audio', code: err?.name || 'error', reason: src ?? 'unknown' }); playTtsFallback(ttsCancelledUtterance ? 1500 : undefined); },
+      );
     };
     // Iteration 2: audio lookup by (version, voice, SPOKEN WORDS,
     // indices) — rate is deliberately absent (v3): one
@@ -3373,7 +3415,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     {
       const hits = corrCacheHitsRef.current;
       const misses = corrCacheMissesRef.current;
-      diagPush('cont-prompt-cache-lookup', { label: 'cont-prompt-audio', hit: url !== null, hits, misses, hitRatio: hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) / 100 : 0, entries: contAudioCacheRef.current.size, storageBytes: corrStorageBytesRef.current });
+      diagPush('cont-prompt-cache-lookup', { label: 'cont-prompt-audio', hit: url !== null, hits, misses, hitRatio: hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) / 100 : 0, entries: contAudioCacheRef.current.size, storageBytes: corrStorageBytesRef.current, gen });
     }
     cancelCorrectionSpeech();
     clearContPromptTimer();
@@ -3395,7 +3437,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       resumeAfterPrompt();
     }, NO_RESULT_WATCHDOG_MS);
     if (url) {
-      playUrl(url, audioKey);
+      playUrl(url, audioKey, 'cache');
     } else {
       // No prefetched audio (a mid-flow interrupt cannot be
       // prefetched — the miss is only known when it happens):
@@ -3437,7 +3479,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // human-audio play failure can still speak TTS again.
       playTtsFallback();
       void withTimeout(fetchP, CORR_AUDIO_TIMEOUT_MS).then((result) => {
-        if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current) return;
+        if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current) {
+          // DIAG (2026-11-04, logging only): the "clip born then
+          // cancelled" case — a real URL arrived but the guard
+          // drops it (superseded by a newer prompt, prompt already
+          // settled, or no longer prompting). Only logged when a
+          // URL actually exists; a failed fetch dropping is not a
+          // cancelled clip. Behaviour unchanged: same early return.
+          if (result.kind === 'value' && result.value) diagPush('cont-prompt-clip-cancelled', { label: 'cont-prompt-audio', gen, reason: speakGenRef.current !== gen ? 'superseded' : promptSettledRef.current ? 'settled' : 'not-prompting' });
+          return;
+        }
         if (result.kind === 'value' && result.value) {
           contAudioCacheRef.current.set(audioKey, result.value);
           diagPush('cont-prompt-audio-ready', { label: 'cont-prompt-audio', fetchMs: Date.now() - fetchStart, msFromPrompt: Date.now() - promptStartedAt });
@@ -3446,7 +3497,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             ttsFallbackUsed = false;
             if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; }
             cancelCorrectionSpeech();
-            playUrl(result.value, audioKey);
+            playUrl(result.value, audioKey, 'fetch');
           }
         } else if (result.kind === 'timeout') {
           diagPush('cont-prompt-tts-timeout', { label: 'cont-prompt-audio', timeoutMs: CORR_AUDIO_TIMEOUT_MS });

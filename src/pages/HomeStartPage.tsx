@@ -3,6 +3,7 @@ import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Mic, Headphones, Settings, Link, SunMoon } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
+import QRCodeSection from '../components/QRCodeSection';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS } from '../lib/surahs';
 import { readListeningWird } from '../lib/listenPlayback';
@@ -122,9 +123,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           <p className="text-sm text-accent-600 mt-1">
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
           </p>
-          <p className="text-sm text-emerald-700 font-semibold mt-2">
-            هنا بتحفظ بالتربيط: اضغط أي آية في المصحف وشوف روابطها.
-          </p>
         </div>
 
         {/* Resume where the user left off */}
@@ -163,12 +161,6 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* استمع للقرآن: after سمّع لنفسك. */}
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '180ms' }}>
-          <p className="font-semibold text-accent-800 flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-emerald-600" /> استمع للقرآن
-          </p>
-          <p className="text-xs text-accent-500 mt-1">
-            واقفل الشاشة لو عاوز
-          </p>
           {listeningWird && (
             <p className="text-sm text-amber-link font-semibold mt-2">
               لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
@@ -181,18 +173,15 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Headphones className="w-5 h-5" />
             استمع للقرآن
           </button>
+          <p className="mt-2 text-center text-xs font-light text-accent-500">
+            وقف الشاشة
+          </p>
         </div>
 
         {/* أذكار الصباح والمساء: LIVE — generated-voice clips
             (46 clips, male/female toggle in the player). Placed
             directly after the listen card: the audio hub. */}
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-card polish-fade-up p-5 mb-4" style={{ animationDelay: '240ms' }}>
-          <p className="font-semibold text-accent-800 flex items-center gap-2">
-            <SunMoon className="w-5 h-5 text-emerald-700" /> استمع لأذكار الصباح والمساء
-          </p>
-          <p className="text-xs text-accent-500 mt-1">
-            واقفل الشاشة لو عاوز
-          </p>
           <button
             onClick={() => onNavigate('adhkar')}
             className="mt-4 w-full py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
@@ -200,6 +189,14 @@ export default function HomeStartPage({ session, onNavigate }: {
             <SunMoon className="w-5 h-5" />
             استمع للأذكار
           </button>
+          <p className="mt-2 text-center text-xs font-light text-accent-500">
+            وقف الشاشة
+          </p>
+        </div>
+
+        {/* Share app (moved from لوحتي, 2026-11-04): after the adhkar card. */}
+        <div className="mb-4">
+          <QRCodeSection />
         </div>
 
         {/* تربيط اليوم: real approved link only; hidden on any failure */}

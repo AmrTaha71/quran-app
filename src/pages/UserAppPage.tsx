@@ -20,7 +20,6 @@ import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
 import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
-import QRCodeSection from '../components/QRCodeSection';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow' | 'test';
@@ -35,6 +34,64 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const [search, setSearch] = useState('');
   const [surahFilter, setSurahFilter] = useState('');
   const [linkTypeFilter, setLinkTypeFilter] = useState('');
+  // Link-type chip order (2026-11-04): most-approved first. The order
+  // is computed from approved-link counts (link_types arrays on
+  // approved rows only — no user content), cached in localStorage
+  // for 24h so it does not refetch on every visit. «كل الأنواع»
+  // always renders first, selection behavior is unchanged, and any
+  // failure silently keeps the static LINK_TYPES order.
+  const [orderedLinkTypes, setOrderedLinkTypes] = useState<{ value: string; label: string }[]>([...LINK_TYPES]);
+  useEffect(() => {
+    const CACHE_KEY = 'quran-link-type-order';
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { at?: number; values?: unknown };
+        if (parsed && typeof parsed.at === 'number' && Array.isArray(parsed.values) && Date.now() - parsed.at < 24 * 3600 * 1000) {
+          const byValue = new Map<string, { value: string; label: string }>();
+          for (const t of LINK_TYPES) byValue.set(t.value, t);
+          const restored: { value: string; label: string }[] = [];
+          for (const v of parsed.values) {
+            if (typeof v !== 'string') continue;
+            const t = byValue.get(v);
+            if (t && !restored.includes(t)) restored.push(t);
+          }
+          for (const t of LINK_TYPES) if (!restored.includes(t)) restored.push(t);
+          if (restored.length === LINK_TYPES.length) {
+            setOrderedLinkTypes(restored);
+            return;
+          }
+        }
+      }
+    } catch { /* fall through to a fresh count */ }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const counts = new Map<string, number>();
+        const PAGE = 1000;
+        for (let from = 0; from < 20000; from += PAGE) {
+          const { data, error } = await supabase.from('ayah_links')
+            .select('link_types').eq('status', 'approved').range(from, from + PAGE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          for (const row of data) {
+            const types = (row as { link_types?: string[] | null }).link_types;
+            if (Array.isArray(types)) {
+              for (const t of types) counts.set(t, (counts.get(t) ?? 0) + 1);
+            }
+          }
+          if (data.length < PAGE) break;
+        }
+        if (cancelled) return;
+        const ordered = [...LINK_TYPES].sort((a, b) => (counts.get(b.value) ?? 0) - (counts.get(a.value) ?? 0));
+        setOrderedLinkTypes(ordered);
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), values: ordered.map((t) => t.value) }));
+        } catch { /* cache is best-effort only */ }
+      } catch { /* silent fallback: the static order stays */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [listFilter, setListFilter] = useState<ListType | ''>('');
   const [expandedVerse, setExpandedVerse] = useState<number | null>(null);
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -619,7 +676,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     }`}>
                     كل الأنواع
                   </button>
-                  {LINK_TYPES.map((lt) => (
+                  {orderedLinkTypes.map((lt) => (
                     <button key={lt.value} onClick={() => { setLinkTypeFilter(lt.value); setPage(0); }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
                         linkTypeFilter === lt.value ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
@@ -816,10 +873,6 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           </div>
         )}
 
-        {/* QR Codes */}
-        <div className="mt-8">
-          <QRCodeSection />
-        </div>
       </div>
 
       {/* Bottom nav: الرئيسية first (rightmost in RTL). */}
