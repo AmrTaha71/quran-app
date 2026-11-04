@@ -11,6 +11,7 @@ import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
+import { isMushafNight, setMushafNight } from '../lib/mushafNight';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
@@ -45,6 +46,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [goldFrame, setGoldFrame] = useState(() => {
     try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
   });
+  const [mushafNight, setMushafNightState] = useState(isMushafNight);
   // Tap sound (visual batch 2026-11-04): soft click on nav + Home
   // presses, default ON. pressFeedback reads this key live, so the
   // toggle takes effect immediately with no cross-page state.
@@ -340,6 +342,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { localStorage.setItem('quran-gold-frame', next ? '1' : '0'); } catch {}
     saved();
   };
+  const toggleNight = () => {
+    const next = !mushafNight;
+    setMushafNightState(next);
+    setMushafNight(next);
+    saved();
+  };
   const toggleTapSound = () => {
     const next = !tapSound;
     setTapSound(next);
@@ -418,6 +426,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setReciterId(DEFAULT_RECITER_ID);
     setLinkGender(null);
     setTapSound(true);
+    setMushafNightState(false);
+    setMushafNight(false);
     try {
       localStorage.setItem('quran-mushaf-edition', '0');
       localStorage.setItem('quran-gold-frame', '0');
@@ -482,11 +492,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => d.id !== 'admin' || adminGateError || isAdmin).map((d) => (
+            {doors.filter((d) => d.id !== 'admin' || adminGateError || isAdmin).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
-                className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl">
-                <span className={`w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border flex items-center justify-center mb-3 md:mb-4 ${d.box}`}>
-                  <d.icon className={`w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 ${d.fg}`} />
+                style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
+                className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
+                <span className="w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3 md:mb-4">
+                  <d.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 text-emerald-800" />
                 </span>
                 <span className="block text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-ink">{d.title}</span>
                 <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>
@@ -494,7 +505,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             ))}
           </div>
         ) : (
-          <>
+          <div key={openDoor} className="polish-fade-up space-y-6 md:space-y-8">
             <button onPointerDown={pressFeedback} onClick={() => setOpenDoor(null)}
               className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 glass-card rounded-xl text-base md:text-lg font-semibold text-accent-700">
               ← عودة إلى الإعدادات
@@ -593,7 +604,17 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <span className="block text-sm text-accent-600">إطار ذهبي أنيق فوق صورة الصفحة في المصحف</span>
             </span>
             <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${goldFrame ? 'bg-amber-500' : 'bg-gray-300'}`}>
-              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${goldFrame ? 'mr-auto' : ''}`} />
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${goldFrame ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
+            </span>
+          </button>
+          <button onClick={toggleNight}
+            className={`mt-3 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${mushafNight ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
+            <span className="text-right">
+              <span className="block font-medium text-accent-800">خلفية القراءة الليلية</span>
+              <span className="block text-sm text-accent-600">تعتيم هادئ لهوامش صفحة المصحف — صورة الصفحة نفسها لا تتغير</span>
+            </span>
+            <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${mushafNight ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${mushafNight ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
             </span>
           </button>
         </section>
@@ -862,7 +883,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <span className="block text-sm text-accent-600">صوت خفيف عند الضغط على الأزرار والتنقل — لا يعمل أبداً أثناء التلاوة أو التسميع</span>
             </span>
             <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${tapSound ? 'bg-amber-500' : 'bg-gray-300'}`}>
-              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${tapSound ? 'mr-auto' : ''}`} />
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${tapSound ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
             </span>
           </button>
         </section>
@@ -969,7 +990,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           )}
         </details>
             </>)}
-          </>
+          </div>
         )}
       </div>
       <BottomNav current="settings" onNavigate={onNavigate} />

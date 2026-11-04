@@ -39,16 +39,42 @@ function pageSurah(page: number): string {
   return SURAHS.find((s) => s.no === result)?.name || '';
 }
 
+type LinkOfDay = { surah: number; surahName: string; ayah: number; title: string | null; text: string };
+const LOD_KEY = 'quran-link-of-day-v1';
+function lodDate(): string {
+  return new Date().toLocaleDateString('en-CA');
+}
+function readLinkOfDayCache(): LinkOfDay | null {
+  try {
+    const raw = sessionStorage.getItem(LOD_KEY);
+    if (!raw) return null;
+    const j = JSON.parse(raw) as { date: string; data: LinkOfDay };
+    return j.date === lodDate() ? j.data : null;
+  } catch {
+    return null;
+  }
+}
+function writeLinkOfDayCache(data: LinkOfDay): void {
+  try {
+    sessionStorage.setItem(LOD_KEY, JSON.stringify({ date: lodDate(), data }));
+  } catch {
+    // ignore
+  }
+}
+
 export default function HomeStartPage({ session, onNavigate }: {
   session: import('@supabase/supabase-js').Session | null;
   onNavigate: (r: Route) => void;
 }) {
-  const [preferredName, setPreferredName] = useState<string | null>(null);
+  const nameKey = `quran-pref-name:${session?.user?.id ?? ''}`;
+  const [preferredName, setPreferredName] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(nameKey); } catch { return null; }
+  });
   // تربيط اليوم: one approved link, picked deterministically by
   // day-of-year (offset = (dayOfYear - 1) % approvedCount, ordered by
   // id). Any failure or empty result hides the card entirely — link
   // content is never invented.
-  const [linkOfDay, setLinkOfDay] = useState<{ surah: number; surahName: string; ayah: number; title: string | null; text: string } | null>(null);
+  const [linkOfDay, setLinkOfDay] = useState<LinkOfDay | null>(readLinkOfDayCache);
   // First-run 3-step screen: home only, once per device, dismissible.
   const [showIntro, setShowIntro] = useState(() => {
     try { return localStorage.getItem('quran-first-run-seen') !== '1'; } catch { return false; }
@@ -69,6 +95,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
   useEffect(() => {
     const loadLinkOfDay = async () => {
+      if (readLinkOfDayCache()) return;
       try {
         const now = new Date();
         const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
@@ -82,7 +109,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         const { data: verse } = await supabase.from('quran_verses')
           .select('surah_no, surah_name, ayah_no').eq('id', link.verse_id).single();
         if (!verse) return;
-        setLinkOfDay({ surah: verse.surah_no, surahName: verse.surah_name, ayah: verse.ayah_no, title: link.link_title, text: link.link_content });
+        const lod: LinkOfDay = { surah: verse.surah_no, surahName: verse.surah_name, ayah: verse.ayah_no, title: link.link_title, text: link.link_content };
+        setLinkOfDay(lod);
+        writeLinkOfDayCache(lod);
       } catch { /* hide the card entirely on any failure */ }
     };
     loadLinkOfDay();
@@ -94,7 +123,10 @@ export default function HomeStartPage({ session, onNavigate }: {
         const userId = session?.user?.id;
         if (!userId) return;
         const { data } = await supabase.from('user_profiles').select('preferred_name').eq('user_id', userId).single();
-        if (data?.preferred_name) setPreferredName(data.preferred_name);
+        if (data?.preferred_name) {
+          setPreferredName(data.preferred_name);
+          try { sessionStorage.setItem(nameKey, data.preferred_name); } catch { /* ignore */ }
+        }
       } catch {}
     };
     loadName();
@@ -178,7 +210,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
         {/* استمع للقرآن: full door, same size as الحق الإمام. */}
         {listeningWird && (
-          <p className="text-sm text-emerald-700 font-semibold text-center mb-2">
+          <p className="text-sm text-emerald-800 font-semibold text-center mb-2">
             لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
           </p>
         )}
@@ -249,12 +281,13 @@ export default function HomeStartPage({ session, onNavigate }: {
         <button
           onPointerDown={pressFeedback}
           onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 mb-4 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
+          className="w-full py-3.5 mb-4 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus door-enter"
+          style={{ animationDelay: '360ms' }}
         >
           <Settings className="w-5 h-5 text-white" /> الإعدادات
         </button>
 
-        <p className="text-center text-sm text-emerald-700 font-semibold mt-6">
+        <p className="text-center text-sm text-emerald-800 font-semibold mt-6">
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
         </p>
       </main>

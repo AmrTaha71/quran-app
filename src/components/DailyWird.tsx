@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CalendarDays, Flame, Check, Settings } from 'lucide-react';
 import { loadWird, saveWird, type WirdState } from '../lib/wird';
+import { playSuccessCue } from '../lib/pressFeedback';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
@@ -44,6 +45,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
     if (doneToday) return;
     const doneDays = [...wird.doneDays, today];
     update({ doneDays, ...recomputeStreak(doneDays) });
+    playSuccessCue();
   };
 
   // Retroactive marking: past days toggle done/undone in the same
@@ -95,6 +97,11 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
             className="flex-1 py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2">
             <Check className="w-5 h-5" /> أنجزت ورد اليوم
           </button>
+        )}
+        {doneToday && (
+          <p className="flex-1 py-2.5 text-center font-bold text-emerald-700 flex items-center justify-center gap-2 polish-fade-up">
+            <Check className="w-5 h-5" /> أنجزت ورد اليوم
+          </p>
         )}
       </div>
 
