@@ -2860,8 +2860,17 @@ export default function QuranMushafPage({
   const resumeFollowAfterWrongLock = useCallback(() => {
     setSearchHighlight(null);
     enterFollowMode();
+    // Dead-start self-heal (same pattern as cancelFollowMicWait): the
+    // lobby ready branch means no engine should be running — if a
+    // previous session stranded listening/starting (missed onend, hung
+    // prefix, engine quirk), the guard in startFollowListening would
+    // no-op and the tap would visibly do nothing. Reset first so the
+    // escape always restarts cleanly. Lock logic, thresholds, escape
+    // behavior, and the matcher are untouched.
+    followStartGenRef.current += 1;
+    stopFollowEngines();
     void startFollowListening();
-  }, [enterFollowMode, startFollowListening]);
+  }, [enterFollowMode, startFollowListening, stopFollowEngines]);
 
   // Mic-permission start (2026-10-30, supersedes the 2026-10-29
   // foreground permission gate): the lobby buttons start DIRECTLY.
@@ -2878,6 +2887,23 @@ export default function QuranMushafPage({
   const startFollowFromLobby = (kind: 'live' | 'whisper') => {
     setFollowMicDenied(false);
     enterFollowMode();
+    // Dead-start self-heal (same pattern as cancelFollowMicWait): the
+    // lobby ready branch means no engine should be running. A previous
+    // session can strand followListeningRef/followStartingRef — missed
+    // onend, hung mic/index prefix, engine quirk — while the lobby
+    // still shows its start buttons; then the guard inside
+    // startFollowListening no-ops and the tap visibly does nothing
+    // (the reproducible stuck lobby: neither records nor starts).
+    // Reset first (generation bump invalidates any in-flight stale
+    // prefix; engine stop kills any zombie recorder/stream), so the
+    // tap always starts a clean session. This touches only the
+    // dead-start path: lock logic, thresholds, escape behavior, and
+    // the matcher are unchanged. Double-taps stay safe: once a session
+    // starts, the lobby buttons leave the ready branch, and a tap
+    // during the permission wait is blocked by the disabled buttons
+    // plus the guard.
+    followStartGenRef.current += 1;
+    stopFollowEngines();
     startFollowListening(kind === 'whisper');
   };
 
@@ -3248,20 +3274,20 @@ export default function QuranMushafPage({
     <div className="min-h-screen mushaf-page-bg pb-24">
       {/* Header — BOLD pass: chrome-enter on mount (chrome only, never the image) */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm mushaf-chrome-enter">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-700 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-              <BookOpen className="w-6 h-6 text-white" />
+        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg flex items-center justify-center shadow flex-shrink-0">
+              <BookOpen className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-accent-800">المصحف الشريف</h1>
-              <p className="text-xs text-accent-600">اقرأ واحفظ وراجع — اضغط على أي آية لمعرفة الرابط</p>
+              <h1 className="text-base font-bold text-accent-800 whitespace-nowrap">المصحف الشريف</h1>
             </div>
           </div>
+          <span className="min-w-0 flex-1 flex items-center justify-center gap-1 text-xs text-amber-700/90 font-semibold"><Heart className="w-4 h-4 flex-shrink-0" /><span className="truncate">استحضر النية · {dailyDua()}</span></span>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowLangMenu(!showLangMenu)}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth">
+                className="flex items-center gap-1.5 px-1.5 py-1 text-sm text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth">
                 <Globe className="w-4 h-4" />
                 {LANGUAGES.find((l) => l.code === lang)?.flag}
               </button>
@@ -3278,95 +3304,85 @@ export default function QuranMushafPage({
             </div>
             {session && (
               <button onClick={async () => { await signOut(); onNavigate('home'); }}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth">
+                className="flex items-center gap-1.5 px-1.5 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth">
                 <LogOut className="w-4 h-4" />
               </button>
             )}
             <button onClick={() => onNavigate('app')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">
+              className="flex items-center gap-1.5 px-2 py-1 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">
               <Bookmark className="w-4 h-4" /> لوحتي
             </button>
             <button onClick={() => onNavigate('home')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
+              className="flex items-center gap-1.5 px-2 py-1 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
               <Home className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 sm:px-3 py-3">
-        {/* A personal word before reading — a daily dua for the reader.
-            Prefixed with the intention reminder: whoever opens the
-            Mushaf is here to memorize or link memorization. Same quiet
-            line, no new chrome. */}
-        <p className="flex items-center justify-center gap-1.5 text-center text-sm text-amber-700/90 font-semibold mb-2">
-          <Heart className="w-4 h-4" /> استحضر النية · {dailyDua()}
-        </p>
+      <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 sm:px-3 pt-1 pb-3">
 
-        {/* Index info bar — Juz / Hizb / Surah */}
-        <div className="bg-gradient-to-r from-amber-100 to-stone-100 rounded-2xl border border-amber-200 p-2.5 mb-3 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <button onClick={() => { setShowIndex(true); setIndexTab('juz'); }}
-                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-amber-50 text-amber-800 rounded-xl text-sm font-semibold transition-smooth border border-amber-300 shadow-sm">
-                <LayoutGrid className="w-4 h-4" /> {currentJuz.name}
-              </button>
-              <button onClick={() => { setShowIndex(true); setIndexTab('hizb'); }}
-                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-emerald-50 text-emerald-800 rounded-xl text-sm font-semibold transition-smooth border border-emerald-300 shadow-sm">
-                <Hash className="w-4 h-4" /> الحزب {currentHizb.number}
-              </button>
-              <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
-                className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-blue-50 text-blue-800 rounded-xl text-sm font-semibold transition-smooth border border-blue-300 shadow-sm">
-                <BookMarked className="w-4 h-4" /> سورة {currentSurahName}
-              </button>
-            </div>
+        {/* Compact chrome: index chips + page nav + zoom + timer in ONE
+            wrapping bar (was two full rows). Every control kept verbatim —
+            only paddings/text sizes shrank, and icon-action (48px
+            min-height) is dropped here so the bar can be dense. The
+            niyyah line moved into the header row above; the header
+            subtitle (descriptive text, not a control) was dropped. */}
+        <div className="bg-white rounded-xl border border-gray-200 p-1.5 mb-1 shadow-sm">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <button onClick={() => { setShowIndex(true); setIndexTab('juz'); }}
+              className="flex items-center gap-1.5 px-2 py-0.5 bg-white hover:bg-amber-50 text-amber-800 rounded-lg text-xs font-semibold transition-smooth border border-amber-300 shadow-sm">
+              <LayoutGrid className="w-4 h-4" /> {currentJuz.name}
+            </button>
+            <button onClick={() => { setShowIndex(true); setIndexTab('hizb'); }}
+              className="flex items-center gap-1.5 px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded-lg text-xs font-semibold transition-smooth border border-emerald-300 shadow-sm">
+              <Hash className="w-4 h-4" /> الحزب {currentHizb.number}
+            </button>
+            <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
+              className="flex items-center gap-1.5 px-2 py-0.5 bg-white hover:bg-blue-50 text-blue-800 rounded-lg text-xs font-semibold transition-smooth border border-blue-300 shadow-sm">
+              <BookMarked className="w-4 h-4" /> سورة {currentSurahName}
+            </button>
             <button onClick={() => setShowEditionPicker(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-sm font-semibold transition-smooth border border-amber-200">
+              className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-semibold transition-smooth border border-amber-200">
               <Layers className="w-4 h-4" /> {edition.name}
             </button>
-          </div>
-        </div>
-
-        {/* Toolbar */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-2.5 mb-3 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
             <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
-              className="flex items-center gap-2 px-4 py-2.5 bg-stone-50 hover:bg-stone-100 text-accent-700 rounded-xl text-sm font-semibold transition-smooth border border-gray-200">
+              className="flex items-center gap-1.5 px-2.5 py-0.5 bg-stone-50 hover:bg-stone-100 text-accent-700 rounded-lg text-xs font-semibold transition-smooth border border-gray-200">
               <List className="w-4 h-4" /> الفهرس
             </button>
-            <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1">
               <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="الصفحة السابقة"
-                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
-                <ChevronRight className="w-6 h-6" />
+                className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
+                <ChevronRight className="w-5 h-5" />
               </button>
-              <div className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-3 py-1.5 border border-gray-200">
+              <span className="flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-0.5 border border-gray-200">
                 <input type="number" value={pageInput || currentPage}
                   onChange={(e) => setPageInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(pageInput); if (!isNaN(n)) goToPage(n); setPageInput(''); } }}
-                  className="w-16 text-center text-base font-semibold text-accent-700 bg-transparent focus:outline-none"
+                  className="w-14 text-center text-sm font-semibold text-accent-700 bg-transparent focus:outline-none"
                   placeholder={formatAr(currentPage)} />
-                <span className="text-sm text-accent-600">/ {formatAr(TOTAL_PAGES)}</span>
-              </div>
+                <span className="text-xs text-accent-600">/ {formatAr(TOTAL_PAGES)}</span>
+              </span>
               <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= TOTAL_PAGES} aria-label="الصفحة التالية"
-                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
-                <ChevronLeft className="w-6 h-6" />
+                className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
+                <ChevronLeft className="w-5 h-5" />
               </button>
-            </div>
-            <div className="flex items-center gap-1">
+            </span>
+            <span className="flex items-center gap-0.5">
               <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="تصغير الصفحة" aria-label="تصغير الصفحة"
-                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
-              <span className="text-sm text-accent-600 w-14 text-center font-semibold">{Math.round(zoom * 100)}%</span>
+                className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
+              <span className="text-xs text-accent-600 w-11 text-center font-semibold">{Math.round(zoom * 100)}%</span>
               <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
-                className="icon-action p-2 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
+                className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
               <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
-                className="icon-action p-2 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
-              {!showFullscreen && <WorshipTimer />}
-            </div>
+                className="p-1 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
+            </span>
+            {!showFullscreen && <span className="inline-flex [&>span]:py-1 [&>span]:px-2 [&>span]:text-xs"><WorshipTimer /></span>}
           </div>
         </div>
 
         {followOn && !showFullscreen && (
-          <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 mb-3">
+          <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-1.5 mb-2">
             <span className="flex items-center gap-2 text-sm font-bold text-emerald-800">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               الحق الإمام شغال
@@ -3388,7 +3404,7 @@ export default function QuranMushafPage({
             silently do nothing today. Warn here (and in fullscreen
             below, and in the edition picker) instead of silence. */}
         {edition.id !== 'madinah' && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-3 text-sm font-bold text-amber-800 leading-relaxed">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2 mb-2 text-sm font-bold text-amber-800 leading-relaxed">
             تنبيه: في {edition.name}، الضغط على كلمات الصفحة والتمييز الدقيق داخل الصورة غير متاح — المزايا دي مبنية على صفحات مصحف المدينة فقط. القراءة وآيات السورة والروابط تحت شغالة عادي.
           </div>
         )}

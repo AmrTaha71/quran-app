@@ -42,12 +42,12 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 h-full">
+    <div className="glass-card rounded-2xl shadow-sm p-5 h-full">
       <div className="flex items-center gap-2 mb-3">
-        <CalendarDays className="w-5 h-5 text-amber-600" />
-        <h2 className="font-semibold text-accent-800">وردك اليومي</h2>
+        <CalendarDays className="w-5 h-5 text-emerald-700" />
+        <h2 className="font-semibold text-ink">وردك اليومي</h2>
         {wird.streak > 0 && (
-          <span className="mr-auto flex items-center gap-1 text-sm font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">
+          <span className="mr-auto flex items-center gap-1 text-sm font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
             <Flame className="w-4 h-4" /> {wird.streak.toLocaleString('ar-EG')} يوم متتالي
           </span>
         )}
@@ -57,14 +57,14 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
           الإعدادات (this link), always available — even after today
           is marked done, so tomorrow's wird can be set any time. */}
       <button onClick={() => onNavigate('settings')}
-        className="flex items-center gap-1.5 text-sm font-semibold text-amber-link hover:text-amber-800 mb-4">
+        className="flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 mb-4">
         <Settings className="w-4 h-4" /> تعديل الورد من الإعدادات
       </button>
 
       <div className="flex gap-2">
         {!doneToday && (
           <button onClick={markDone}
-            className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+            className="flex-1 py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2">
             <Check className="w-5 h-5" /> أنجزت ورد اليوم
           </button>
         )}
@@ -73,10 +73,10 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
       <div className="flex justify-between mt-4">
         {last7.map((d) => (
           <div key={d.date} className="flex flex-col items-center gap-1">
-            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-accent-600 ring-2 ring-amber-400' : 'bg-gray-100 text-accent-600'}`}>
+            <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${d.done ? 'bg-emerald-700 text-white' : d.isToday ? 'bg-white text-ink-2 ring-2 ring-emerald-500' : 'bg-gray-100 text-ink-2'}`}>
               {d.done ? <Check className="w-4 h-4" /> : d.label}
             </span>
-            <span className="text-xs text-accent-600">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>
+            <span className="text-xs text-ink-2">{d.isToday ? 'اليوم' : d.date.slice(5)}</span>
           </div>
         ))}
       </div>

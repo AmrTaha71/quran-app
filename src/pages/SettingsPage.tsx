@@ -447,17 +447,17 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // detail view, unchanged. The admin door renders only when its
   // section would (admin error or admin user), exactly as before.
   const doors = [
-    { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: 'أجزاء الورد الثلاثة وعدد الصفحات', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
-    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف والإطار الذهبي', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
-    { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: 'الموقع والتنبيهات والصوت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
-    { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
-    { id: 'download', icon: Download, title: 'صفحات المصحف على جهازك', sub: 'تحميل الصفحات للقراءة دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
-    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
-    { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
-    { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
-    { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
-    { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-600' },
-    { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-600' },
+    { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: 'أجزاء الورد الثلاثة وعدد الصفحات', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف والإطار الذهبي', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: 'الموقع والتنبيهات والصوت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'download', icon: Download, title: 'صفحات المصحف على جهازك', sub: 'تحميل الصفحات للقراءة دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
   ];
 
   return (
@@ -488,8 +488,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <span className={`w-11 h-11 rounded-xl border flex items-center justify-center mb-3 ${d.box}`}>
                   <d.icon className={`w-6 h-6 ${d.fg}`} />
                 </span>
-                <span className="block text-sm font-semibold text-accent-800">{d.title}</span>
-                <span className="block text-xs text-accent-600 mt-1">{d.sub}</span>
+                <span className="block text-sm font-semibold text-ink">{d.title}</span>
+                <span className="block text-xs text-ink-2 mt-1">{d.sub}</span>
               </button>
             ))}
           </div>

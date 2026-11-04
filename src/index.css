@@ -638,3 +638,11 @@ body { background-color: #E9DCC0; }
    the empty .ripple-layer overlay span — never on text. */
 .water-wash { position: absolute; border-radius: 9999px; pointer-events: none; will-change: transform, opacity; }
 .water-ring { position: absolute; border-radius: 9999px; border: 2px solid; pointer-events: none; will-change: transform, opacity; }
+
+/* Home QR trigger unified into the emerald family. QRCodeSection.tsx
+   itself is untouched: this scoped override recolors ONLY the trigger
+   button inside the Home wrapper (.qr-home). The modal's store badges
+   keep their brand colors. */
+.qr-home .bg-gradient-to-r {
+  background-image: linear-gradient(to right, #0C7A4E, #053B27);
+}
