@@ -138,6 +138,76 @@ export function playSuccessCue(): void {
   }
 }
 
+// --- Error buzz (Juhani correction flow) ---------------------------
+// Plays at the moment a mistake is detected. Deliberately NOT subject
+// to tapSoundSuppressed() (SelfTest is a suppressed route and the buzz
+// must be audible mid-recitation) nor to the tap-sound setting. It is
+// suppressed ONLY while a correction window is playing. Short and low
+// so the open microphone is unlikely to hear it as speech.
+let corrWindowPlaying = false;
+
+/** SelfTestPage sets this true while a Juhani window plays. */
+export function setCorrWindowPlaying(on: boolean): void {
+  corrWindowPlaying = on;
+}
+
+/** Call inside a user gesture (the mic-start tap) so the context is
+ *  allowed to make sound later from a timer (iOS autoplay policy). */
+export function warmErrorBuzz(): void {
+  try {
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!tapCtx) tapCtx = new AC();
+    if (tapCtx.state !== 'running') void tapCtx.resume().catch(() => {});
+  } catch {
+    // decorative: never break the action
+  }
+}
+
+let lastBuzzAt = 0;
+
+/** Two quick beeps, ~150ms total; distinct from the tap click (triangle
+ *  1500->900Hz) and from playSuccessCue (sine 523/784Hz). */
+export function playErrorBuzz(): void {
+  try {
+    if (corrWindowPlaying) return;
+    const nowMs = Date.now();
+    if (nowMs - lastBuzzAt < 300) return; // a burst of detections must not machine-gun
+    lastBuzzAt = nowMs;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AC) return;
+    if (!tapCtx) tapCtx = new AC();
+    if (tapCtx.state !== 'running') void tapCtx.resume().catch(() => {});
+    const ctx = tapCtx;
+    const t0 = ctx.currentTime;
+    [0, 0.09].forEach((delay) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(330, t0 + delay);
+      gain.gain.setValueAtTime(0.0001, t0 + delay);
+      gain.gain.exponentialRampToValueAtTime(0.06, t0 + delay + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + delay + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0 + delay);
+      osc.stop(t0 + delay + 0.07);
+    });
+    try {
+      // Android only: iPad Safari has no Vibration API (established fact).
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(100);
+    } catch {
+      // ignore
+    }
+  } catch {
+    // decorative: never break detection
+  }
+}
+
 // --- Water: pressing on water. A soft wash + two expanding rings
 // spread outward from the exact touch point over ~650-800ms, so the
 // press is unmistakable at a glance (the old single 450ms circle did

@@ -159,7 +159,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         {/* Resume where the user left off */}
-        <div className="grad-emerald-door glass-door-highlight rounded-2xl polish-card polish-fade-up p-5 mb-4 text-white" style={{ animationDelay: '60ms' }}>
+        <div className="grad-emerald-door glass-door-highlight rounded-2xl polish-card polish-fade-up p-5 mb-4 text-white text-center" style={{ animationDelay: '60ms' }}>
           <p className="text-xl font-bold">الحفظ</p>
           <p className="font-semibold text-lg mt-1">
             {lastPage.visited ? 'أكمل من حيث توقفت' : 'ابدأ من أول المصحف'}

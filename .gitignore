@@ -27,3 +27,7 @@ public/apple-touch-icon.png
 *.sln
 *.sw?
 .env
+
+# Python tooling (tools/juhani-align)
+__pycache__/
+*.pyc

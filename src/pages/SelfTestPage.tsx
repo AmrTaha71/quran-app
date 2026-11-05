@@ -9,6 +9,14 @@ import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
 import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
 import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnits';
+import { cleanToken, expectedWordList } from '../lib/expectedWords';
+import {
+  CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
+  migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
+  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniSurahUrl,
+  type CorrDelayMode, type JuhaniPlayer,
+} from '../lib/juhaniCorr';
+import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
 import { checkMic } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
@@ -63,9 +71,6 @@ type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
 type CorrRate = 'slow' | 'normal' | 'fast' | 'veryFast';
 const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.25, veryFast: 1.5 };
 const CORR_RATE_LABEL: Record<CorrRate, string> = { slow: 'بطيء', normal: 'عادي', fast: 'سريع', veryFast: 'سريع جدًا' };
-const CORR_DELAY_MIN = 2;
-const CORR_DELAY_MAX = 10;
-const CORR_DELAY_DEFAULT = 3;
 // Iteration 2 continuous-prompt audio cache: PERSISTENT (IndexedDB
 // blobs) with a synchronous in-memory mirror for the prompt path.
 // 500 entries, oldest-first eviction — short corrections are tens
@@ -84,21 +89,22 @@ type ReciteMode = 'ayah' | 'continuous';
 // Self-test settings (verification level + recitation mode) persist
 // across visits, so the user picks them once.
 const SETTINGS_KEY = 'quran-test-settings';
-function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: number; corrRate: CorrRate } {
+function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: number; corrDelayMode: CorrDelayMode; corrRate: CorrRate } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const p = JSON.parse(raw);
       const level: VerifyLevel = p.level === 'intermediate' || p.level === 'advanced' ? p.level : 'beginner';
       const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
-      const corrDelay = typeof p.corrDelay === 'number' && Number.isFinite(p.corrDelay)
-        ? Math.min(CORR_DELAY_MAX, Math.max(CORR_DELAY_MIN, Math.round(p.corrDelay)))
-        : CORR_DELAY_DEFAULT;
+      // A stored corrDelayMode wins; otherwise migrate the legacy numeric
+      // corrDelay (1-2 -> 1s, 3 -> 3s, 4+ -> 5s; missing/invalid -> 3s).
+      const corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
+      const corrDelay = corrDelaySeconds(corrDelayMode);
       const corrRate: CorrRate = p.corrRate === 'slow' || p.corrRate === 'fast' || p.corrRate === 'veryFast' ? p.corrRate : 'normal';
-      return { level, mode, corrDelay, corrRate };
+      return { level, mode, corrDelay, corrDelayMode, corrRate };
     }
   } catch {}
-  return { level: 'beginner', mode: 'ayah', corrDelay: CORR_DELAY_DEFAULT, corrRate: 'normal' };
+  return { level: 'beginner', mode: 'ayah', corrDelay: corrDelaySeconds(CORR_DELAY_MODE_DEFAULT), corrDelayMode: CORR_DELAY_MODE_DEFAULT, corrRate: 'normal' };
 }
 
 function loadHistory(): TestRecord[] {
@@ -154,18 +160,6 @@ function saveProgress(p: TestProgress) {
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch {}
 }
 
-// Expected ayah words, keeping the original (diacritized) form for
-// display and the normalized form for comparison. Tokens with no
-// Arabic letter in them (ayah-end markers, digits) are dropped
-// defensively so they can never count as "missed" words.
-function expectedWordList(ayahText: string): { orig: string; norm: string }[] {
-  return ayahText
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => ({ orig: w, norm: cleanToken(normalizeArabic(w)) }))
-    .filter((x) => x.norm.length > 0 && /[\u0621-\u064A]/.test(x.norm));
-}
-
 // Position payload for the server-verified correction mode (v12):
 // one (seeded quran_verses id, word position within the ayah) per
 // missed expected word, in order. The context predecessor is NEVER
@@ -193,12 +187,6 @@ function corrPositionsForRange(
   return out;
 }
 
-// Spoken tokens for comparison: the normalizer strips diacritics but
-// NOT punctuation, so a transcript "والله،" never equaled "والله".
-// Strip every non-Arabic letter from both sides before aligning.
-function cleanToken(t: string): string {
-  return t.replace(/[^\u0621-\u064A]/g, '');
-}
 function spokenTokens(text: string): string[] {
   const out: string[] = [];
   for (const w of normalizeWords(text)) {
@@ -1095,6 +1083,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [verifyLevel, setVerifyLevel] = useState<VerifyLevel>(() => loadTestSettings().level);
   const [reciteMode, setReciteMode] = useState<ReciteMode>(() => loadTestSettings().mode);
   const [corrDelay, setCorrDelay] = useState<number>(() => loadTestSettings().corrDelay);
+  const [corrDelayMode, setCorrDelayMode] = useState<CorrDelayMode>(() => loadTestSettings().corrDelayMode);
   const [corrRate, setCorrRate] = useState<CorrRate>(() => loadTestSettings().corrRate);
   // The mode of the test actually running (resume always runs ayah
   // mode, whatever the setup preference says).
@@ -1131,6 +1120,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // (so it is ready the moment the window expires), keyed by ayah
   // position + words. A newer fetch invalidates older results.
   const corrAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Juhani window player: ONE reusable <audio>, unlocked in the mic-start tap (iOS).
+  const juhaniPlayerRef = useRef<JuhaniPlayer | null>(null);
   // Segmentation pilot (v0, Al-Mulk only): sequential word-file
   // player for the reference 3-word unit. Separate from corrAudio
   // so the current correction path is untouched; stopped whenever
@@ -1320,6 +1311,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const stopCorrAudio = () => {
     try { corrAudioRef.current?.pause(); } catch {}
     corrAudioRef.current = null;
+    // Leaving the ayah / stopping the test must never play a stale window.
+    try { juhaniPlayerRef.current?.stop(); } catch {}
+    setCorrWindowPlaying(false);
   };
   const fetchCorrectionAudio = async (words: string[], token: number, pos?: { shape: 'context' | 'bare'; positions: CorrPosition[] }): Promise<string | null> => {
     if (words.length === 0) return null;
@@ -1527,22 +1521,69 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     stopRefUnit();
     ayahCorrFailedForRef.current = index;
     setAyahAudioFailed(false);
-    playCorrection(wrongByAyah[index] ?? [], correctionAudioByAyah[index] ?? null, () => {
-      if (ayahCorrFailedForRef.current === index) setAyahAudioFailed(true);
-    });
+    const fbReplay = () => {
+      diagPush('corr-source', { label: 'generated-fallback', reason: 'replay' });
+      playCorrection(wrongByAyah[index] ?? [], correctionAudioByAyah[index] ?? null, () => {
+        if (ayahCorrFailedForRef.current === index) setAyahAudioFailed(true);
+      });
+    };
+    const ayReplay = ayahs[index];
+    if (ayReplay && wrongIndices.length > 0 && startJuhaniCorrection(ayReplay, expectedWordList(ayReplay.ayah_text).length, wrongIndices, fbReplay)) return;
+    fbReplay();
   };
 
-  const applySettings = (level: VerifyLevel, mode: ReciteMode, delay: number = corrDelay, rate: CorrRate = corrRate) => {
-    const d = Math.min(CORR_DELAY_MAX, Math.max(CORR_DELAY_MIN, Math.round(delay)));
+  // ---- Juhani correction (retrieval, not generation) -----------------
+  // Enabled only for ayahs in the generated, QA-passed manifest whose
+  // word count equals this app's own word count for the ayah.
+  const juhaniEnabledForCurrent = (): boolean => {
+    const ay = liveRef.current.ayah;
+    if (!ay) return false;
+    return isJuhaniCorrEnabled(ay.surah_no, ay.ayah_no, expectedWordList(ay.ayah_text).length);
+  };
+  // Buzz at the moment the correction window opens (detection).
+  const buzzOnDetection = () => {
+    if (!juhaniEnabledForCurrent()) return;
+    playErrorBuzz();
+    diagPush('juhani-buzz', { label: corrWindowSourceRef.current || 'unknown', reason: `mode=${liveRef.current.corrDelayMode}` });
+  };
+  // Returns true when Juhani took ownership of the correction. On an
+  // audio failure (load/seek/play) onFallback runs the generated path, so
+  // the user is never left without a correction.
+  const startJuhaniCorrection = (ayah: TestAyah, wordCount: number, wrongIdx: number[], onFallback: () => void): boolean => {
+    const plan = planJuhaniWindows(ayah.surah_no, ayah.ayah_no, wordCount, wrongIdx);
+    if (!plan) return false;
+    if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
+    const player = juhaniPlayerRef.current;
+    stopRefUnit();
+    cancelCorrectionSpeech();
+    stopCorrAudio();
+    const rate = CORR_RATE_VALUE[liveRef.current.corrRate];
+    diagPush('corr-source', { label: 'juhani-window', reason: `mode=${liveRef.current.corrDelayMode};rate=${rate};segs=${plan.segments.length}${plan.truncated ? ';truncated' : ''}` });
+    setCorrWindowPlaying(true);
+    player.play({
+      url: juhaniSurahUrl(ayah.surah_no),
+      segments: plan.segments,
+      rate,
+      onStart: () => { diagPush('tts-start', { label: 'juhani-window' }); },
+      onDone: () => { setCorrWindowPlaying(false); diagPush('tts-end', { label: 'juhani-window' }); },
+      onFail: (reason) => { setCorrWindowPlaying(false); diagPush('tts-error', { label: 'juhani-window', reason }); onFallback(); },
+    });
+    return true;
+  };
+
+  const applySettings = (level: VerifyLevel, mode: ReciteMode, delayMode: CorrDelayMode = corrDelayMode, rate: CorrRate = corrRate) => {
+    const d = corrDelaySeconds(delayMode);
     setVerifyLevel(level);
     setReciteMode(mode);
+    setCorrDelayMode(delayMode);
     setCorrDelay(d);
     setCorrRate(rate);
     liveRef.current.level = level;
     liveRef.current.mode = mode;
+    liveRef.current.corrDelayMode = delayMode;
     liveRef.current.corrDelay = d;
     liveRef.current.corrRate = rate;
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ level, mode, corrDelay: d, corrRate: rate })); } catch {}
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ level, mode, corrDelay: d, corrDelayMode: delayMode, corrRate: rate })); } catch {}
   };
 
   // Manual preference survives ayah changes (the old code reset it
@@ -1588,6 +1629,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     level: loadTestSettings().level,
     mode: loadTestSettings().mode,
     corrDelay: loadTestSettings().corrDelay,
+    corrDelayMode: loadTestSettings().corrDelayMode,
     corrRate: loadTestSettings().corrRate,
     // Continuous mode: one recognition session over the whole range.
     contListening: false,
@@ -1632,6 +1674,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { corrAudioRef.current?.pause(); } catch {}
     try { contPromptAudioRef.current?.pause(); } catch {}
     if (contStallTimerRef.current) clearTimeout(contStallTimerRef.current);
+    try { juhaniPlayerRef.current?.dispose(); } catch {}
+    setCorrWindowPlaying(false);
     // N3': the manual-copy layer (diagCopyJson fallback) is
     // imperative DOM, so it must die with the component, not
     // linger across route changes.
@@ -1947,7 +1991,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       liveRef.current.micState = 'done-correct';
       setMicState('done-correct');
     } else {
-      playWrongBuzzer();
+      if (!juhaniEnabledForCurrent()) playWrongBuzzer();
       const expected = expectedWordList(ayah.ayah_text);
       const spoken = spokenTokens(liveRef.current.finals);
       // Strict levels also flag extra spoken words; beginners are
@@ -1977,9 +2021,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // RECORDER: first-class ayah-mode prompt event (never an
       // interrupt: ayah mode has no mid-flow to interrupt).
       recPushPrompt('ayah-mode', wrongWords, expected.map((_, i) => i).filter((i) => !result.matched[i]), index);
-      playCorrection(wrongWords, pending && pending.index === index && pending.wordsKey === wrongWords.join('|') ? pending.url : null, () => {
-        if (ayahCorrFailedForRef.current === index) setAyahAudioFailed(true);
-      });
+      const fallbackCorrection = () => {
+        diagPush('corr-source', { label: 'generated-fallback', reason: `mode=${liveRef.current.corrDelayMode};rate=${CORR_RATE_VALUE[liveRef.current.corrRate]}` });
+        playCorrection(wrongWords, pending && pending.index === index && pending.wordsKey === wrongWords.join('|') ? pending.url : null, () => {
+          if (ayahCorrFailedForRef.current === index) setAyahAudioFailed(true);
+        });
+      };
+      const wrongIdxAll = expected.map((_, i) => i).filter((i) => !result.matched[i]);
+      if (!startJuhaniCorrection(ayah, expected.length, wrongIdxAll, fallbackCorrection)) fallbackCorrection();
       liveRef.current.micState = 'done-wrong';
       setMicState('done-wrong');
     }
@@ -2047,7 +2096,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       corrWindowSourceRef.current = 'finals';
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
-      const windowS = liveRef.current.corrDelay;
+      buzzOnDetection();
+      const windowS = correctionWindowSeconds(liveRef.current.corrDelayMode, liveRef.current.corrDelay, juhaniEnabledForCurrent(), spoken.length >= expected.length);
       setCountdown(windowS);
       if (windowTimerRef.current) clearInterval(windowTimerRef.current);
       let left = windowS;
@@ -2414,7 +2464,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     corrWindowSourceRef.current = 'interim';
     liveRef.current.micState = 'correcting';
     setMicState('correcting');
-    const windowS = liveRef.current.corrDelay;
+    buzzOnDetection();
+    const windowS = correctionWindowSeconds(liveRef.current.corrDelayMode, liveRef.current.corrDelay, juhaniEnabledForCurrent(), false);
     setCountdown(windowS);
     if (windowTimerRef.current) clearInterval(windowTimerRef.current);
     let left = windowS;
@@ -2449,6 +2500,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try {
       const ayah = liveRef.current.ayah;
       if (!ayah || liveRef.current.micState !== 'listening' || liveRef.current.mode !== 'ayah') return;
+      // 'ayah-end': corrections wait for the ayah to complete (Juhani-enabled ayahs only).
+      if (liveRef.current.corrDelayMode === 'ayah-end' && juhaniEnabledForCurrent()) return;
       const expected = expectedWordList(ayah.ayah_text);
       const spokenAll = spokenTokens(`${liveRef.current.finals} ${interimText}`.trim());
       if (spokenAll.length >= expected.length) return;
@@ -2545,6 +2598,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // a real Arabic voice instead of device luck.
     getAudioCtx();
     warmTtsVoices();
+    // Juhani: unlock the reusable <audio> and the buzz context INSIDE this
+    // tap (iOS only lets timer-started playback run if a gesture started
+    // the element), and warm the surah file's metadata.
+    if (juhaniEnabledForCurrent()) {
+      warmErrorBuzz();
+      if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
+      juhaniPlayerRef.current.unlock(juhaniSurahUrl(ayah.surah_no));
+    }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
@@ -3551,12 +3612,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     contStallTimerRef.current = setTimeout(() => {
       contStallTimerRef.current = null;
       if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
+      if (liveRef.current.corrDelayMode === 'ayah-end') return;
       const now = contOwedWords();
       if (now.words.length === 0) return;
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
       speakContPrompt(now.words, now.indices, now.norms, 'stall');
-    }, liveRef.current.corrDelay * 1000);
+    }, Math.max(3, liveRef.current.corrDelay) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
@@ -4165,18 +4227,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </div>
               <div>
                 <p className="text-sm font-medium text-accent-700 mb-2">سرعة التصحيح</p>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm text-accent-700">فترة التريث قبل النطق:</span>
-                  <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay - 1, corrRate)} disabled={corrDelay <= CORR_DELAY_MIN}
-                    className="px-3 py-1.5 bg-white border border-hairline rounded-lg font-bold disabled:opacity-40">-</button>
-                  <span className="text-sm font-bold text-accent-800 min-w-[70px] text-center">{corrDelay.toLocaleString('ar-EG')} ثواني</span>
-                  <button onClick={() => applySettings(verifyLevel, reciteMode, corrDelay + 1, corrRate)} disabled={corrDelay >= CORR_DELAY_MAX}
-                    className="px-3 py-1.5 bg-white border border-hairline rounded-lg font-bold disabled:opacity-40">+</button>
+                <p className="text-sm font-medium text-accent-700 mb-2">توقيت التصحيح:</p>
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {CORR_DELAY_MODES.map((m) => (
+                    <button key={m} onClick={() => applySettings(verifyLevel, reciteMode, m, corrRate)}
+                      className={`py-2.5 rounded-xl font-semibold text-sm ${corrDelayMode === m ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+                      {CORR_DELAY_MODE_LABEL[m]}
+                    </button>
+                  ))}
                 </div>
                 <p className="text-sm font-medium text-accent-700 mb-2">سرعة نطق الكلمة الصحيحة:</p>
                 <div className="grid grid-cols-4 gap-2">
                   {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
-                    <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelay, r)}
+                    <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelayMode, r)}
                       className={`py-2.5 rounded-xl font-semibold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
                       {CORR_RATE_LABEL[r]}
                     </button>
@@ -4708,7 +4771,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       3-word unit containing the first wrong word,
                       alongside — never instead of — the current
                       correction above. */}
-                  {ayahs[index] && isRefUnitEnabled(ayahs[index].surah_no, ayahs[index].ayah_no) && wrongIndices.length > 0 && (
+                  {ayahs[index] && isRefUnitEnabled(ayahs[index].surah_no, ayahs[index].ayah_no) && !isJuhaniCorrEnabled(ayahs[index].surah_no, ayahs[index].ayah_no, expectedWordList(ayahs[index].ayah_text).length) && wrongIndices.length > 0 && (
                     <button onClick={() => playRefUnit()}
                       className="mt-3 mr-2 px-5 py-2.5 bg-amber-50 border border-hairline-amber hover:bg-amber-100 text-amber-800 text-sm font-semibold rounded-xl">
                       {refUnitPlaying ? 'جارٍ تشغيل الوحدة…' : '🔊 اسمع الوحدة المرجعية (تجربة)'}
