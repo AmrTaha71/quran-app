@@ -1,3 +1,20 @@
+// generate-voice — v15 (2026-11-05, Feature 1: tafsir voice variety)
+// ADDS a tafsir mode: {mode:'tafsir', surah, ayah, voice} — the
+// client sends NO text. The server fetches the Al-Muyassar text
+// itself from the free AlQuranCloud endpoint (the same source the
+// Mushaf popup uses), generates it with the existing chain, and
+// caches it ONCE per (voice, surah, ayah) in the shared rana-audio
+// bucket under tafsir/<voice>/<surah>-<ayah>_<engine>.<ext>
+// (immutable). Cache hits return before the cap checks (cost 0);
+// generations log function_name='generate-voice', so the existing
+// per-user (30/min, 500/day) and global (1000/day, $1/day) caps
+// bound tafsir spend exactly like corrections. A 202 lock-waiter,
+// a 429, or any failure makes the client fall back to the natural
+// King Fahd recording — never silence. Text cap 8000 chars (the
+// longest Muyassar entries, e.g. 2:282, run ~2k chars; the 2000
+// free-text cap does not apply here because the text comes from a
+// trusted source, not the caller); over-long text returns 413 and
+// the client falls back to natural.
 // generate-voice — v14 (2026-10-30, Claude-review fixes on the v13 cache)
 // v14 ADDS, corr mode only (free-text mode is UNCHANGED):
 // (a) prompt fingerprint in the cache key: v3_<fp>_<voice>_<shape>_<positions>,
@@ -124,6 +141,16 @@ const CORR_LOCK_TTL_MS = 90 * 1000;
 // empty/truncated response that must never become an immutable entry.
 const CORR_MIN_AUDIO_BYTES = 1000;
 
+// ---- Shared server tafsir cache (v15) ----
+// One immutable file per (voice, surah, ayah) under
+// tafsir/<voice>/, mirroring the corr cache's lock + lookup shape
+// (separate prefix so a tafsir key can never collide with a corr
+// key, and so corr behavior is untouched). The client never sends
+// text: the server fetches the Al-Muyassar text itself, so the
+// mode cannot be abused for free-form generation.
+const TAFSIR_CACHE_PREFIX = "tafsir";
+const TAFSIR_TEXT_MAX_CHARS = 8000;
+
 // Prompt fingerprint: a short deterministic hash of the voice-defining
 // prompt strings for the request's engine+voice. Realtime's voice is
 // defined by REALTIME_VERBATIM + realtimePersona(voice); Azure's by its
@@ -209,6 +236,63 @@ async function tryClaimCorrLock(client: any, key: string): Promise<"claimed" | "
 async function releaseCorrLock(client: any, key: string): Promise<void> {
   try {
     await client.storage.from("rana-audio").remove([corrLockPath(key)]);
+  } catch { /* best-effort: the TTL expires a leaked lock */ }
+}
+
+// Tafsir cache helpers (v15): same shape as the corr helpers,
+// under the tafsir/ prefix. The lock key is the cache key itself
+// (tafsir_<voice>_<surah>-<ayah>); the file name adds the primary
+// engine, so a later engine change never serves the wrong voice.
+function tafsirCacheKey(voice: string, surah: number, ayah: number): string {
+  return `tafsir_${voice}_${surah}-${ayah}`;
+}
+
+function tafsirCacheFileName(voice: string, surah: number, ayah: number, engine: string): string {
+  return `${TAFSIR_CACHE_PREFIX}/${voice}/${surah}-${ayah}_${engine}.${engine === "azure" ? "mp3" : "wav"}`;
+}
+
+function tafsirLockPath(key: string): string {
+  return `${TAFSIR_CACHE_PREFIX}/locks/${key}.json`;
+}
+
+async function findTafsirCachedUrl(
+  client: any,
+  voice: string,
+  surah: number,
+  ayah: number,
+  engine: string,
+): Promise<string | null> {
+  const fileName = tafsirCacheFileName(voice, surah, ayah, engine);
+  const base = fileName.slice(TAFSIR_CACHE_PREFIX.length + 1 + voice.length + 1);
+  const { data } = await client.storage.from("rana-audio").list(`${TAFSIR_CACHE_PREFIX}/${voice}`, { limit: 1, search: base });
+  const hit = (data ?? []).find((f: any) => f.name === base);
+  if (!hit) return null;
+  return client.storage.from("rana-audio").getPublicUrl(fileName).data.publicUrl;
+}
+
+async function tryClaimTafsirLock(client: any, key: string): Promise<"claimed" | "locked"> {
+  const lockName = `${key}.json`;
+  const lockPath = tafsirLockPath(key);
+  const { data } = await client.storage.from("rana-audio").list(`${TAFSIR_CACHE_PREFIX}/locks`, { limit: 1, search: lockName });
+  const existing = (data ?? []).find((f: any) => f.name === lockName);
+  if (existing) {
+    const created = Date.parse(existing.created_at ?? "");
+    const age = Number.isNaN(created) ? Infinity : Date.now() - created;
+    if (age < CORR_LOCK_TTL_MS) return "locked";
+    await client.storage.from("rana-audio").remove([lockPath]);
+  }
+  const { error } = await client.storage.from("rana-audio").upload(
+    lockPath,
+    new Blob([JSON.stringify({ status: "pending", key })], { type: "application/json" }),
+    { contentType: "application/json", upsert: false },
+  );
+  if (error) return "locked";
+  return "claimed";
+}
+
+async function releaseTafsirLock(client: any, key: string): Promise<void> {
+  try {
+    await client.storage.from("rana-audio").remove([tafsirLockPath(key)]);
   } catch { /* best-effort: the TTL expires a leaked lock */ }
 }
 
@@ -494,6 +578,9 @@ Deno.serve(async (req: Request) => {
   // a held lock on any failure path (v14 catch-release).
   let corrKey: string | null = null;
   let corrLockHeld = false;
+  // Tafsir lock state (v15): same catch-release rule as corr.
+  let tafsirKey: string | null = null;
+  let tafsirLockHeld = false;
   let supabaseClient: any = null;
 
   try {
@@ -541,6 +628,34 @@ Deno.serve(async (req: Request) => {
     // Free-text mode (no mode field) is unchanged: admin link
     // generation keeps sending {text, voice} exactly as before.
     const isCorrMode = body.mode === "corr";
+    // Tafsir mode (v15): the client sends a Quran position + voice
+    // only — NO text. The server fetches the Al-Muyassar text
+    // itself below, so the caller cannot inject arbitrary text.
+    const isTafsirMode = body.mode === "tafsir";
+    let tafsirSurah: number | null = null;
+    let tafsirAyah: number | null = null;
+    if (isTafsirMode) {
+      if (voice !== "male" && voice !== "female") {
+        return new Response(
+          JSON.stringify({ error: "صوت التفسير غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!Number.isInteger(body.surah) || body.surah < 1 || body.surah > 114) {
+        return new Response(
+          JSON.stringify({ error: "موضع التفسير غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!Number.isInteger(body.ayah) || body.ayah < 1 || body.ayah > 286) {
+        return new Response(
+          JSON.stringify({ error: "موضع التفسير غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      tafsirSurah = body.surah;
+      tafsirAyah = body.ayah;
+    }
     let corrPositions: { id: number; w: number }[] | null = null;
     let corrShape: "context" | "bare" | null = null;
     let corrSpoken: string | null = null;
@@ -575,7 +690,7 @@ Deno.serve(async (req: Request) => {
       corrPositions = body.positions;
       corrShape = body.shape;
       corrSpoken = body.spoken;
-    } else {
+    } else if (!isTafsirMode) {
       if (!body.text || typeof body.text !== "string") {
         return new Response(
           JSON.stringify({ error: "النص مطلوب" }),
@@ -659,6 +774,48 @@ Deno.serve(async (req: Request) => {
       }
       text = built;
     }
+    // Tafsir mode (v15): fetch the Al-Muyassar text server-side
+    // from the same free AlQuranCloud endpoint the Mushaf popup
+    // uses (no key). A fetch failure or an over-long entry is a
+    // client fallback to the natural recording, never a hang: the
+    // 4xx/5xx here surfaces as a null URL on the client.
+    if (isTafsirMode) {
+      let tafsirText: unknown = null;
+      try {
+        const tRes = await fetch(
+          `https://api.alquran.cloud/v1/ayah/${tafsirSurah}:${tafsirAyah}/ar.muyassar`,
+        );
+        if (!tRes.ok) {
+          return new Response(
+            JSON.stringify({ error: "تعذر تحميل نص التفسير" }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const tJson: any = await tRes.json().catch(() => null);
+        tafsirText = tJson?.data?.text;
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "تعذر تحميل نص التفسير" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (typeof tafsirText !== "string" || !tafsirText) {
+        return new Response(
+          JSON.stringify({ error: "تعذر تحميل نص التفسير" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      // The 2000-char free-text cap does not apply: this text comes
+      // from a trusted source, not the caller. The 8000-char bound
+      // only guards against a pathological upstream entry.
+      if (tafsirText.length > TAFSIR_TEXT_MAX_CHARS) {
+        return new Response(
+          JSON.stringify({ error: "نص التفسير أطول من الحد المسموح" }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      text = tafsirText;
+    }
     if (!text) {
       throw new Error("النص مطلوب");
     }
@@ -681,6 +838,33 @@ Deno.serve(async (req: Request) => {
           await supabaseClient.from("ai_usage_events").insert({
             function_name: "generate-voice-cache-hit",
             model: `cache-hit:${corrKey}`,
+            cost_usd: 0,
+            user_id: null,
+            provider: "cache",
+            chars: text.length,
+          });
+        } catch { /* telemetry must never break a hit */ }
+        return new Response(
+          JSON.stringify({ audioUrl: cachedUrl, voice }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    // v15 shared server cache (tafsir mode only): same before-caps
+    // rule as corr — a hit costs nothing, so caps must not gate it,
+    // and the hit row uses the DISTINCT function_name, so cap
+    // queries exclude it by construction. Lengths only — no text is
+    // ever logged.
+    if (isTafsirMode) {
+      const primaryEngine = azureKey ? "azure" : "realtime";
+      tafsirKey = tafsirCacheKey(voice, tafsirSurah!, tafsirAyah!);
+      const cachedUrl = await findTafsirCachedUrl(supabaseClient, voice, tafsirSurah!, tafsirAyah!, primaryEngine);
+      if (cachedUrl) {
+        try {
+          await supabaseClient.from("ai_usage_events").insert({
+            function_name: "generate-voice-cache-hit",
+            model: `cache-hit:${tafsirKey}`,
             cost_usd: 0,
             user_id: null,
             provider: "cache",
@@ -790,6 +974,22 @@ Deno.serve(async (req: Request) => {
       corrLockHeld = true;
     }
 
+    // v15 atomic reservation (tafsir mode only, claimed AFTER the
+    // cap checks like corr): at most one generation per key. A
+    // waiter gets HTTP 202 with no audioUrl; the client treats that
+    // as null and falls back to the natural recording, and the next
+    // occurrence hits the cache.
+    if (isTafsirMode && tafsirKey) {
+      const claim = await tryClaimTafsirLock(supabaseClient, tafsirKey);
+      if (claim === "locked") {
+        return new Response(
+          JSON.stringify({ pending: true }),
+          { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      tafsirLockHeld = true;
+    }
+
     let audioBuffer: ArrayBuffer;
     let ttsModel = "azure";
     let ttsProvider = "azure";
@@ -837,11 +1037,18 @@ Deno.serve(async (req: Request) => {
     // shared-cache name (upsert:false — the winner wins; a loser
     // whose upload collides takes the winner's file as a hit
     // below). Fallback-engine and free-text audio keep unique
-    // names and are never shared-cache entries.
-    const isSharedCacheWrite = isCorrMode && corrKey !== null && corrCacheable;
-    const fileName = isSharedCacheWrite
-      ? corrCacheFileName(corrKey!, corrEngine)
-      : `synthetic-${Date.now()}.${audioExt}`;
+    // names and are never shared-cache entries. v15: a tafsir-mode
+    // primary-engine win goes to its own deterministic shared-cache
+    // name under tafsir/<voice>/, by the same rule.
+    const isSharedCacheWrite =
+      (isCorrMode && corrKey !== null && corrCacheable) ||
+      (isTafsirMode && tafsirKey !== null && corrCacheable);
+    const fileName =
+      isSharedCacheWrite && isTafsirMode
+        ? tafsirCacheFileName(voice, tafsirSurah!, tafsirAyah!, corrEngine)
+        : isSharedCacheWrite
+          ? corrCacheFileName(corrKey!, corrEngine)
+          : `synthetic-${Date.now()}.${audioExt}`;
 
     // v14 upload guard: never cache an empty/truncated clip as immutable.
     // A failed guard throws to the outer catch (lock released there).
@@ -869,7 +1076,7 @@ Deno.serve(async (req: Request) => {
         try {
           await supabaseClient.from("ai_usage_events").insert({
             function_name: "generate-voice-cache-hit",
-            model: `cache-hit:${corrKey}`,
+            model: `cache-hit:${corrKey ?? tafsirKey}`,
             cost_usd: 0,
             user_id: null,
             provider: "cache",
@@ -877,6 +1084,7 @@ Deno.serve(async (req: Request) => {
           });
         } catch { /* telemetry must never break a hit */ }
         if (corrLockHeld) await releaseCorrLock(supabaseClient, corrKey!);
+        if (tafsirLockHeld) await releaseTafsirLock(supabaseClient, tafsirKey!);
         return new Response(
           JSON.stringify({ audioUrl: urlData.publicUrl, voice }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -910,6 +1118,7 @@ Deno.serve(async (req: Request) => {
     // failure the outer catch returns 500 and releases the lock there
     // (v14); the 90s TTL is only the crashed-process backstop.
     if (corrLockHeld) await releaseCorrLock(supabaseClient, corrKey!);
+    if (tafsirLockHeld) await releaseTafsirLock(supabaseClient, tafsirKey!);
 
     return new Response(
       JSON.stringify({ audioUrl: urlData.publicUrl, voice }),
@@ -921,6 +1130,9 @@ Deno.serve(async (req: Request) => {
     // TTL. Best-effort; never masks the original error.
     if (corrLockHeld && corrKey && supabaseClient) {
       try { await releaseCorrLock(supabaseClient, corrKey); } catch { /* ignore */ }
+    }
+    if (tafsirLockHeld && tafsirKey && supabaseClient) {
+      try { await releaseTafsirLock(supabaseClient, tafsirKey); } catch { /* ignore */ }
     }
     return new Response(
       JSON.stringify({ error: err.message }),

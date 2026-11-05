@@ -9,6 +9,7 @@ import {
   timeInTimezone,
   type AdhanPrayerKey,
 } from '../lib/adhan';
+import { isValidAdhanPrayerKey, prayerLabel } from '../lib/adhanPush';
 
 // App-wide foreground adhan scheduler. Mounted once in App, outside
 // the login gate, so alerts work on any route while the app is open.
@@ -60,6 +61,46 @@ export default function AdhanScheduler() {
       document.removeEventListener('visibilitychange', onVisible);
       audioRef.current?.pause();
     };
+  }, []);
+
+  // Push deep link: tapping an adhan push notification opens the app
+  // at `/?adhan=<Prayer>` (see the service worker's notificationclick
+  // handler), or posts a `{ type: 'adhan-push', prayer }` message to
+  // the already-open tab. Either way the adhan plays here and the
+  // banner shows — the notification itself carries no audio (iOS
+  // cannot auto-play audio from a closed app), the tap is what starts
+  // it. The query param is stripped after handling so a later reload
+  // does not replay the adhan.
+  useEffect(() => {
+    const fireFromPush = (prayer: AdhanPrayerKey) => {
+      const settings = loadAdhanSettings();
+      audioRef.current?.pause();
+      audioRef.current = playAdhanSound(settings.sound);
+      if (settings.alertType === 'both') {
+        setBanner({ prayer, label: prayerLabel(prayer) });
+      }
+    };
+    try {
+      const param = new URLSearchParams(window.location.search).get('adhan');
+      if (isValidAdhanPrayerKey(param)) {
+        fireFromPush(param);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('adhan');
+        window.history.replaceState(null, '', url.toString());
+      }
+    } catch {
+      // Deep-link handling is best-effort.
+    }
+    if (!('serviceWorker' in navigator)) return;
+    const onSwMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: unknown; prayer?: unknown } | null;
+      if (!data || data.type !== 'adhan-push') return;
+      if (typeof data.prayer === 'string' && isValidAdhanPrayerKey(data.prayer)) {
+        fireFromPush(data.prayer);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', onSwMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
   }, []);
 
   if (!banner) return null;

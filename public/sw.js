@@ -21,6 +21,11 @@
      and miss full-download entries (keyed by the plain URL).
    - Everything else (Supabase API, storage audio, third-party): network
      only, never cached — auth and fresh data must not go stale.
+     EXCEPTION: audio the user explicitly downloaded (tafsir clips,
+     Juhani surah files — see the audio branch below) is served
+     cache-first from its download cache, with Range support for
+     media seeking. Streamed audio is never stored there: the
+     branch serves only what the download UI wrote.
    Versioning: SHELL_CACHE is bumped on every SW change (v1 -> v2
    here); activate deletes the old shell cache AND trims the current
    one to the assets the current index.html actually references, so
@@ -53,11 +58,22 @@ const FULL_IMG_CACHE_UNVERIFIED = 'quran-pages-full-unverified';
 const FULL_IMG_CACHE_TAJWEED_UNVERIFIED = 'quran-pages-full-tajweed-unverified';
 const FULL_IMG_CACHE_WARSH_UNVERIFIED = 'quran-pages-full-warsh-unverified';
 const FULL_IMG_CACHE_HAFS_UNVERIFIED = 'quran-pages-full-hafs-unverified';
+// Downloaded-audio caches (Settings "التنزيلات الصوتية", see
+// src/lib/audioDownload.ts): tafsir clips + Juhani surah files the
+// user explicitly downloaded, per surah. Written ONLY by that
+// download UI, never by the fetch handler below, never trimmed —
+// and keep-listed here so an update never wipes them. The fetch
+// handler serves these URLs cache-first (with Range support for
+// media seeking) and NEVER stores a streamed response here, so
+// streaming stays network-only and opt-in is preserved.
+const AUDIO_TAFSIR_CACHE = 'quran-audio-tafsir';
+const AUDIO_JUHANI_CACHE = 'quran-audio-juhani';
 const KEEP_CACHES = new Set([
   SHELL_CACHE, IMG_CACHE,
   FULL_IMG_CACHE, FULL_IMG_CACHE_TAJWEED, FULL_IMG_CACHE_WARSH, FULL_IMG_CACHE_HAFS,
   FULL_IMG_CACHE_UNVERIFIED, FULL_IMG_CACHE_TAJWEED_UNVERIFIED,
   FULL_IMG_CACHE_WARSH_UNVERIFIED, FULL_IMG_CACHE_HAFS_UNVERIFIED,
+  AUDIO_TAFSIR_CACHE, AUDIO_JUHANI_CACHE,
 ]);
 const MAX_IMG_ENTRIES = 150;
 
@@ -171,6 +187,54 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Tafsir clip filenames are distinctive (10-{surah}{ayah}-104.mp3
+// under the Supabase tafsir base) and Juhani files live at one
+// fixed CDN path — both are matched without knowing the tafsir
+// base URL (an env var the SW cannot read).
+function isDownloadedAudioUrl(url) {
+  if (/\/10-\d{6}-104\.mp3$/.test(url.pathname)) return true;
+  return (
+    url.hostname === 'cdn.islamic.network' &&
+    url.pathname.startsWith('/quran/audio-surah/128/ar.abdullahawadaljuhani/')
+  );
+}
+
+async function serveDownloadedAudio(req) {
+  try {
+    const cached = await caches.match(req);
+    if (!cached) return fetch(req);
+    const range = req.headers.get('range');
+    if (!range) return cached;
+    const m = /^bytes=(\d+)-(\d*)$/.exec(range.trim());
+    if (!m) return cached;
+    let buf = null;
+    try {
+      buf = await cached.clone().arrayBuffer();
+    } catch {
+      buf = null;
+    }
+    if (!buf || buf.byteLength === 0) return cached;
+    const total = buf.byteLength;
+    const start = Math.min(parseInt(m[1], 10), total - 1);
+    const end = m[2] === '' ? total - 1 : Math.min(parseInt(m[2], 10), total - 1);
+    if (start > end || start < 0) {
+      return new Response(null, {
+        status: 416,
+        headers: { 'Content-Range': `bytes */${total}` },
+      });
+    }
+    const slice = buf.slice(start, end + 1);
+    const headers = new Headers(cached.headers);
+    if (!headers.has('content-type')) headers.set('Content-Type', 'audio/mpeg');
+    headers.set('Content-Range', `bytes ${start}-${end}/${total}`);
+    headers.set('Content-Length', String(slice.byteLength));
+    headers.set('Accept-Ranges', 'bytes');
+    return new Response(slice, { status: 206, headers });
+  } catch {
+    return fetch(req);
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
@@ -250,5 +314,92 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Downloaded audio (tafsir clips + Juhani surah files): cache-first,
+  // from the download caches ONLY — the page writes these caches on
+  // download; this branch never stores a streamed response, so
+  // listening without a download stays network-only. A cache miss
+  // falls through to a plain network fetch. Range requests (the
+  // media element seeking to a word time in a Juhani file, or to a
+  // tafsir position) are answered with a sliced 206 from the
+  // cached bytes when the body is readable; an opaque entry whose
+  // body cannot be read is returned whole instead (the element
+  // buffers the full file, so seeks inside it stay local).
+  if (isDownloadedAudioUrl(url)) {
+    event.respondWith(serveDownloadedAudio(req));
+    return;
+  }
+
   // Everything else: network only (no caching).
 });
+
+// ------------------------------------------------------------------
+// Web Push: adhan notifications when the app is closed (APPENDED —
+// the fetch/cache code above is untouched; do not edit it here).
+//
+// The server (Edge Function adhan-push, once per minute) sends a
+// push whose payload is { title, body, prayer, url }. The push
+// handler shows the notification; the click handler opens (or
+// focuses) the app and makes the adhan play there.
+//
+// HONEST LIMIT: the notification itself carries NO audio — iOS
+// cannot auto-play audio from a closed app. Tapping the
+// notification opens the app at `/?adhan=<Prayer>` (or, if the app
+// is already open, posts a message to it), and AdhanScheduler plays
+// the adhan then. A push arriving while the app is open is handled
+// the same way (message path), so it never double-plays: the
+// foreground scheduler already fires at the same minute, and the
+// push tap is a deliberate user action.
+// ------------------------------------------------------------------
+
+const ADHAN_ICON_URL = 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png';
+
+self.addEventListener('push', (event) => {
+  let data = { title: '🕌 حان الآن وقت الصلاة', body: 'اضغط لفتح التطبيق وسماع الأذان', prayer: '', url: '/' };
+  try {
+    if (event.data) {
+      const p = event.data.json();
+      if (p && typeof p === 'object') {
+        if (typeof p.title === 'string' && p.title) data.title = p.title;
+        if (typeof p.body === 'string' && p.body) data.body = p.body;
+        if (typeof p.prayer === 'string') data.prayer = p.prayer;
+        if (typeof p.url === 'string' && p.url) data.url = p.url;
+      }
+    }
+  } catch {}
+  // Tag: one notification per prayer per day — a redelivered push
+  // replaces the earlier one instead of stacking duplicates.
+  const tag = data.prayer ? `adhan-${data.prayer}-${new Date().toISOString().slice(0, 10)}` : 'adhan';
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: ADHAN_ICON_URL,
+      badge: ADHAN_ICON_URL,
+      tag,
+      requireInteraction: true,
+      data: { url: data.url, prayer: data.prayer },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  const prayer = (event.notification.data && event.notification.data.prayer) || '';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        try {
+          if (new URL(client.url).origin === self.location.origin) {
+            // App already open: wake it with a message so it plays
+            // the adhan (works in Safari, where Client.navigate is
+            // not available), then bring it to the front.
+            client.postMessage({ type: 'adhan-push', prayer });
+            return client.focus();
+          }
+        } catch {}
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+

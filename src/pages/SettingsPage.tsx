@@ -1,11 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
-import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, EDITION_DOWNLOADS } from '../lib/pageDownload';
+import { pageDownloadSupported, countCachedPages, clearCachedPages, downloadAllPages, checkDownloadSpace, requestPersistentStorage, estimateDownloadStorage, EDITION_DOWNLOADS } from '../lib/pageDownload';
+import { SURAHS } from '../lib/surahs';
+import { tafsirConfigured } from '../lib/threeModeListen';
+import {
+  AUDIO_DOWNLOAD_FAILED_MESSAGE, AUDIO_QUOTA_MESSAGE,
+  audioDownloadSupported, audioDownloadsHaveUnknownSize, audioDownloadsTotalBytes,
+  checkAudioDownloadSpace, deleteAudioDownload, downloadJuhaniSurah, downloadTafsirSurah,
+  estimateJuhaniSurah, estimateTafsirSurah, formatAudioSize, isAudioDownloaded,
+  listAudioDownloads,
+  type AudioDownloadKind, type AudioDownloadMeta, type AudioSizeEstimate,
+} from '../lib/audioDownload';
+import {
+  deleteDownloadedSurah, formatApproxSize, listDownloadedSurahs,
+  type DownloadedSurah,
+} from '../lib/listenOffline';
 import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
@@ -236,6 +250,89 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     await clearCachedPages(id);
     patchOpt(id, { cached: 0, done: 0, failed: [], unverified: [] });
   };
+  // Audio downloads manager (2026-11-05): tafsir clips + Juhani
+  // surah files, per surah, Cache API (src/lib/audioDownload.ts)
+  // — plus the khatma surah downloads (IndexedDB, downloaded
+  // from ListenPage) listed here with their sizes, so everything
+  // downloaded lives in one place. One job at a time: every start
+  // goes through a size estimate + space preflight first (confirm
+  // flag) — nothing here ever downloads without the user choosing
+  // that surah. 'low' refuses with the quota message instead of
+  // opening the confirm box.
+  const audioSurahName = (n: number) => SURAHS.find((s) => s.no === n)?.name ?? String(n);
+  const [audioSupported] = useState(audioDownloadSupported);
+  const [audioList, setAudioList] = useState<AudioDownloadMeta[]>(() => listAudioDownloads());
+  const [khatmaList, setKhatmaList] = useState<DownloadedSurah[]>(() => listDownloadedSurahs());
+  const [audioStorage, setAudioStorage] = useState<{ freeMB: number | null; persisted: boolean | null } | null>(null);
+  const [tafsirPick, setTafsirPick] = useState(1);
+  const [juhaniPick, setJuhaniPick] = useState(114);
+  type AudioJob = {
+    kind: AudioDownloadKind; surah: number;
+    phase: 'estimating' | 'confirm' | 'running' | 'done';
+    estimate: AudioSizeEstimate | null;
+    space: { neededMB: number; freeMB: number | null } | null;
+    progress: { done: number; total: number } | null;
+    error: string; quota: boolean;
+  };
+  const [audioJob, setAudioJob] = useState<AudioJob | null>(null);
+  const audioAbortRef = useRef<AbortController | null>(null);
+  const refreshAudioLists = () => {
+    setAudioList(listAudioDownloads());
+    setKhatmaList(listDownloadedSurahs());
+  };
+  useEffect(() => {
+    if (openDoor !== 'audio') return;
+    refreshAudioLists();
+    void estimateDownloadStorage().then((est) => setAudioStorage({ freeMB: est.freeMB, persisted: est.persisted }));
+  }, [openDoor]);
+  const askAudioDownload = async (kind: AudioDownloadKind, surah: number) => {
+    if (audioJob?.phase === 'running' || audioJob?.phase === 'estimating') return;
+    setAudioJob({ kind, surah, phase: 'estimating', estimate: null, space: null, progress: null, error: '', quota: false });
+    try {
+      const est = kind === 'tafsir' ? await estimateTafsirSurah(surah) : await estimateJuhaniSurah(surah);
+      const space = await checkAudioDownloadSpace(est.bytes);
+      const persisted = await requestPersistentStorage();
+      setAudioStorage({ freeMB: space.freeMB, persisted: persisted ?? space.persisted });
+      if (space.status === 'low') {
+        setAudioJob({ kind, surah, phase: 'done', estimate: est, space: { neededMB: space.neededMB, freeMB: space.freeMB }, progress: null, error: `مساحة جهازك لا تكفي — التحميل يحتاج حوالي ${space.neededMB.toLocaleString('ar-EG')} ميجابايت (بهامش أمان) والمتاح حوالي ${(space.freeMB ?? 0).toFixed(0)} ميجابايت. فضّي مساحة وحاول تاني.`, quota: true });
+        return;
+      }
+      setAudioJob({ kind, surah, phase: 'confirm', estimate: est, space: { neededMB: space.neededMB, freeMB: space.freeMB }, progress: null, error: '', quota: false });
+    } catch {
+      setAudioJob({ kind, surah, phase: 'done', estimate: null, space: null, progress: null, error: AUDIO_DOWNLOAD_FAILED_MESSAGE, quota: false });
+    }
+  };
+  const startAudioDownload = async () => {
+    const job = audioJob;
+    if (!job || job.phase !== 'confirm') return;
+    audioAbortRef.current = new AbortController();
+    setAudioJob({ ...job, phase: 'running', progress: { done: 0, total: job.estimate?.count ?? 1 }, error: '', quota: false });
+    try {
+      if (job.kind === 'tafsir') {
+        await downloadTafsirSurah(job.surah, (p) => setAudioJob((prev) => prev ? { ...prev, progress: p } : prev), { signal: audioAbortRef.current.signal });
+      } else {
+        await downloadJuhaniSurah(job.surah, (p) => setAudioJob((prev) => prev ? { ...prev, progress: p } : prev), { signal: audioAbortRef.current.signal });
+      }
+      refreshAudioLists();
+      setAudioJob({ ...job, phase: 'done', progress: null, error: '' });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : AUDIO_DOWNLOAD_FAILED_MESSAGE;
+      setAudioJob({ ...job, phase: 'done', progress: null, error: msg, quota: msg === AUDIO_QUOTA_MESSAGE });
+    } finally {
+      audioAbortRef.current = null;
+    }
+  };
+  const stopAudioDownload = () => {
+    audioAbortRef.current?.abort();
+  };
+  const clearAudioDownload = async (kind: AudioDownloadKind, surah: number) => {
+    await deleteAudioDownload(kind, surah);
+    refreshAudioLists();
+  };
+  const clearKhatmaDownload = async (reciter: string, surah: number) => {
+    await deleteDownloadedSurah(reciter, surah);
+    refreshAudioLists();
+  };
   // Installed-app (PWA standalone) detection for the install card:
   // standalone means no Safari chrome, no link bar, no fullscreen
   // banner — the app already opens like a native app.
@@ -462,6 +559,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: 'الموقع والتنبيهات والصوت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'download', icon: Download, title: 'صفحات المصحف على جهازك', sub: 'تحميل الصفحات للقراءة دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير والجهني دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -469,6 +567,137 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
   ];
+
+  // One download card per audio kind (tafsir / Juhani): surah
+  // picker + estimate → confirm → progress, then the list of
+  // downloaded surahs of that kind with delete. Pure render
+  // helper (no hooks) — state lives in the component above.
+  const audioKindCard = (kind: AudioDownloadKind) => {
+    const isTafsir = kind === 'tafsir';
+    const pick = isTafsir ? tafsirPick : juhaniPick;
+    const setPick = isTafsir ? setTafsirPick : setJuhaniPick;
+    const downloaded = audioList.filter((e) => e.kind === kind);
+    const job = audioJob?.kind === kind ? audioJob : null;
+    const pickDownloaded = isAudioDownloaded(kind, pick);
+    return (
+      <div className="border-t border-hairline mt-5 pt-4">
+        <p className="font-semibold text-accent-800 mb-1">{isTafsir ? 'تفسير الآيات (صوت)' : 'ملفات الجهني (حدر)'}</p>
+        <p className="text-sm text-accent-600 mb-3">
+          {isTafsir
+            ? 'مقاطع تفسير الميسر — تسجيل مجمع الملك فهد، مقطع لكل آية. المقطع الواحد حوالي ٢٥٠ كيلوبايت — سورة الفاتحة حوالي ٢ ميجابايت، والبقرة حوالي ٧٠ ميجابايت.'
+            : 'ملف السورة كامل بصوت الجهني — للاستماع الحدر، ولتصحيحات التسميع (من جهازك بدل النت فتبقى أسرع). سور جزء عم (٧٨–١١٤) هي اللي التصحيح بيستخدمها دلوقتي، بس أي سورة تنفع للحدر. ملف البقرة حوالي ٩٦ ميجابايت.'}
+        </p>
+        {isTafsir && !tafsirConfigured() ? (
+          <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
+            مقاطع التفسير لم تُرفع بعد — سيُتاح التحميل هنا بعد رفع المقاطع.
+          </p>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <select
+                value={pick}
+                disabled={job?.phase === 'running' || job?.phase === 'estimating'}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (Number.isInteger(n) && n >= 1 && n <= 114) setPick(n);
+                }}
+                className="flex-1 py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
+              >
+                {SURAHS.map((s) => (
+                  <option key={s.no} value={s.no}>
+                    {s.no} — {s.name}
+                  </option>
+                ))}
+              </select>
+              {pickDownloaded ? (
+                <span className="px-4 py-3 bg-emerald-100 text-emerald-800 font-semibold rounded-xl whitespace-nowrap">
+                  محملة ✓
+                </span>
+              ) : job?.phase === 'estimating' ? (
+                <span className="px-4 py-3 bg-gray-100 text-accent-700 font-semibold rounded-xl whitespace-nowrap">
+                  جارٍ تقدير الحجم…
+                </span>
+              ) : job?.phase === 'running' ? (
+                <button
+                  onClick={stopAudioDownload}
+                  className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 font-semibold rounded-xl whitespace-nowrap"
+                >
+                  إيقاف التحميل
+                </button>
+              ) : (
+                <button
+                  onClick={() => void askAudioDownload(kind, pick)}
+                  className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl whitespace-nowrap"
+                >
+                  حمّل السورة
+                </button>
+              )}
+            </div>
+            {job?.phase === 'running' && job.progress && (
+              <div className="mt-3">
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(job.progress.done / Math.max(1, job.progress.total)) * 100}%` }} />
+                </div>
+                <p className="text-sm text-accent-600 mt-1">
+                  جارٍ التحميل… {job.progress.done.toLocaleString('ar-EG')} من {job.progress.total.toLocaleString('ar-EG')}
+                  {isTafsir ? ' مقطع' : ''}
+                </p>
+              </div>
+            )}
+            {job?.phase === 'running' && !job.progress && (
+              <p className="text-sm text-accent-600 mt-3">جارٍ التحميل…</p>
+            )}
+            {job?.phase === 'confirm' && job.estimate && (
+              <div className="mt-3 rounded-xl bg-amber-50 border border-hairline-amber p-3">
+                <p className="text-sm font-medium text-amber-800">
+                  سورة {audioSurahName(job.surah)} حجمها {formatAudioSize(job.estimate.bytes)}
+                  {job.estimate.count > 1 ? ` — ${job.estimate.count.toLocaleString('ar-EG')} مقطع` : ''}
+                  {job.space && job.space.freeMB !== null && ` — المتاح على جهازك حوالي ${job.space.freeMB.toFixed(0)} ميجابايت.`}
+                  {' '}متأكد عايز تحمّلها على جهازك؟
+                </p>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => void startAudioDownload()}
+                    className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
+                    أيوه، حمّل
+                  </button>
+                  <button onClick={() => setAudioJob(null)}
+                    className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
+                    إلغاء
+                  </button>
+                </div>
+              </div>
+            )}
+            {job?.phase === 'done' && job.error && (
+              <p className={`text-sm mt-3 ${job.quota ? 'text-red-600 font-medium' : 'text-red-600'}`}>{job.error}</p>
+            )}
+            {job?.phase === 'done' && !job.error && (
+              <p className="text-sm font-semibold text-emerald-700 mt-3">تم التحميل ✓ — سورة {audioSurahName(job.surah)} متاحة دون اتصال.</p>
+            )}
+          </>
+        )}
+        {downloaded.length > 0 && (
+          <div className="grid gap-2 mt-3">
+            {downloaded.map((e) => (
+              <div key={`${e.kind}-${e.surah}`} className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                <div>
+                  <p className="font-semibold text-accent-800">سورة {audioSurahName(e.surah)}</p>
+                  <p className="text-sm text-accent-600">
+                    {formatAudioSize(e.bytes)}{e.count > 1 ? ` • ${e.count.toLocaleString('ar-EG')} مقطع` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => void clearAudioDownload(e.kind, e.surah)}
+                  className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl"
+                >
+                  مسح
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
@@ -841,6 +1070,76 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   })}
                 </div>
               </div>
+            </>
+          )}
+        </section>
+            </>)}
+            {openDoor === 'audio' && (<>
+        {/* Audio downloads manager — tafsir clips + Juhani surah
+            files, per surah, Cache API; the khatma surah downloads
+            (IndexedDB) are listed here too with delete, so every
+            downloaded sound lives in one place. Nothing downloads
+            on its own: every start is a user tap on a surah, after
+            a size estimate + space preflight. Offline playback
+            needs no code change: the SW serves these URLs
+            cache-first, so the players keep asking for the same
+            URLs and get the cached file when offline. */}
+        <section id="sec-audio" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
+            <Headphones className="w-5 h-5 text-emerald-600" /> التنزيلات الصوتية
+          </h2>
+          <p className="text-sm text-accent-600 mb-4">
+            حمّل الصوت على جهازك واسمعه من غير نت — سورة سورة، مش كله مرة واحدة. اللي تحمّله هنا بيشتغل من جهازك حتى لو النت مقطوع، واللي ما تحمّلش بيفضل يشتغل من النت زي قبل كده. مفيش حاجة بتتحمل لوحدها.
+          </p>
+          {!audioSupported ? (
+            <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
+              جهازك مش بيدعم التحميل على الجهاز — الصوت هيفضل يشتغل من النت زي قبل كده.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-accent-700 mb-2">
+                {audioStorage === null
+                  ? 'جارٍ فحص المساحة…'
+                  : audioStorage.freeMB !== null
+                    ? `المتاح على جهازك حوالي ${audioStorage.freeMB.toFixed(0)} ميجابايت`
+                    : 'المساحة المتاحة غير معروفة على جهازك'}
+                {' • '}الصوت المحمل هنا: {formatAudioSize(audioDownloadsTotalBytes())}
+                {audioDownloadsHaveUnknownSize() ? ' (بعض الأحجام غير معروفة)' : ''}
+              </p>
+              {audioKindCard('tafsir')}
+              {audioKindCard('juhani')}
+              <div className="border-t border-hairline mt-5 pt-4">
+                <p className="font-semibold text-accent-800 mb-1">سور الختمة المحملة</p>
+                <p className="text-sm text-accent-600 mb-3">دي السور اللي حمّلتها من صفحة «استمع للقرآن» — تقدر تمسحها من هنا، والتحميل نفسه من هناك.</p>
+                {khatmaList.length === 0 ? (
+                  <p className="text-sm text-accent-600">مفيش سور ختمة محملة لسه.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {khatmaList.map((e) => (
+                      <div key={`${e.reciter}-${e.surah}`} className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div>
+                          <p className="font-semibold text-accent-800">سورة {audioSurahName(e.surah)} — {RECITERS.find((r) => r.id === e.reciter)?.name ?? e.reciter}</p>
+                          <p className="text-sm text-accent-600">{formatApproxSize(e.bytes)} • {e.count.toLocaleString('ar-EG')} مقطع</p>
+                        </div>
+                        <button
+                          onClick={() => void clearKhatmaDownload(e.reciter, e.surah)}
+                          className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl"
+                        >
+                          مسح
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-accent-600 mt-5 leading-relaxed">
+                ملحوظة: التسميع بالميكروفون نفسه بيحتاج نت — دي حدود المتصفح، مش التطبيق. اللي بيشتغل دون نت هنا هو الاستماع (الختمة والتفسير والحدر)، وملفات الجهني المحملة بتخلي تصحيحات التسميع أسرع لأنها من جهازك بدل النت.
+              </p>
+              <p className="text-xs text-accent-600 mt-2 leading-relaxed">
+                {audioStorage?.persisted === true
+                  ? 'التخزين محمي من المسح التلقائي على جهازك ✓ — والقوائم هنا هتبين الناقص لو حصل أي مسح، وتحميله تاني بيرجّعه.'
+                  : 'ملحوظة: المتصفح ممكن يمسح الصوت لو مساحة الجهاز ضاقت — ارجع هنا وحمّل اللي ناقص.'}
+              </p>
             </>
           )}
         </section>

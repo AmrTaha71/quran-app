@@ -117,6 +117,25 @@ export interface JourneyEngineOptions {
   // not part of the position — resuming applies the current pick).
   playbackRate?: number;
   resolveAyahUrl?: (reciterId: string, surah: number, ayah: number) => Promise<string>;
+  /**
+   * Tadabbur only: resolve a tafsir clip's playable URL. Default is
+   * the natural King Fahd recording (tafsirClipUrl). A generated-voice
+   * resolver (see tafsirVoice.ts) returns the generated clip's URL
+   * and falls back to the natural URL on any failure — so a tafsir
+   * item never plays silence. The engine itself falls back to the
+   * natural clip when the resolver returns null or throws.
+   * NOTE: interstitial SIZING still uses the natural clips'
+   * durations (probeTafsirDuration, unchanged): the generated clip
+   * says the same fixed text at a similar pace, and probing a
+   * generated clip would mean generating it just to measure it.
+   */
+  resolveTafsirUrl?: (surah: number, ayah: number) => Promise<string | null>;
+  /**
+   * Tadabbur only: warm (prefetch) a tafsir clip's generated audio
+   * while its quarter plays, so the quarter boundary rarely waits
+   * on a fetch. Fire-and-forget; the warmer swallows its failures.
+   */
+  warmTafsirAudio?: (surah: number, ayah: number) => void;
   /** Injected in tests; default probes clip metadata in the browser. */
   probeTafsirDuration?: (surah: number, ayah: number) => Promise<number | null>;
   /**
@@ -231,6 +250,11 @@ export class JourneyEngine {
     surah: number,
     ayah: number,
   ) => Promise<number | null>;
+  private readonly resolveTafsirUrlOpt?: (
+    surah: number,
+    ayah: number,
+  ) => Promise<string | null>;
+  private readonly warmTafsirAudioOpt?: (surah: number, ayah: number) => void;
   private readonly tafsirOrder: TadabburTafsirOrder;
   private readonly onItemChange?: (item: JourneyPlayable) => void;
   private readonly onEnded?: () => void;
@@ -427,6 +451,8 @@ export class JourneyEngine {
     this.resolveAyahUrl = opts.resolveAyahUrl ?? defaultResolveAyahUrl;
     this.probeTafsirDuration = opts.probeTafsirDuration ?? defaultProbeTafsirDuration;
     this.probeAyahDurationOpt = opts.probeAyahDuration;
+    this.resolveTafsirUrlOpt = opts.resolveTafsirUrl;
+    this.warmTafsirAudioOpt = opts.warmTafsirAudio;
     this.onItemChange = opts.onItemChange;
     this.onEnded = opts.onEnded;
     this.onError = opts.onError;
@@ -678,6 +704,23 @@ export class JourneyEngine {
     this.trackedAyahs.push({ surah: cur.surah, ayah: cur.ayah });
     this.trackedSeconds += played ?? 0;
     this.currentAyahDuration = null;
+  }
+
+  // Tafsir clip URL: the injected resolver (generated voice) wins;
+  // a null return or a throw falls back to the natural King Fahd
+  // clip, so a tafsir item never plays silence. Null only when the
+  // natural base is unconfigured too (the page disables tadabbur
+  // then, so in-app this is only a defensive path).
+  private async resolveTafsirItemUrl(surah: number, ayah: number): Promise<string | null> {
+    try {
+      if (this.resolveTafsirUrlOpt) {
+        const url = await this.resolveTafsirUrlOpt(surah, ayah);
+        if (url) return url;
+      }
+    } catch {
+      // Fall through to the natural clip.
+    }
+    return tafsirClipUrl(surah, ayah);
   }
 
   private kickProbe(surah: number, ayah: number): void {
@@ -1162,7 +1205,7 @@ export class JourneyEngine {
           const url =
             item.kind === 'ayah'
               ? await this.resolveAyahUrl(item.reciterId, item.surah, item.ayah)
-              : tafsirClipUrl(item.surah, item.ayah);
+              : await this.resolveTafsirItemUrl(item.surah, item.ayah);
           if (url === null) continue;
           this.nextItem = item;
           this.nextUrl = url;
@@ -1198,7 +1241,7 @@ export class JourneyEngine {
     const url =
       item.kind === 'ayah'
         ? await this.resolveAyahUrl(item.reciterId, item.surah, item.ayah)
-        : tafsirClipUrl(item.surah, item.ayah);
+        : await this.resolveTafsirItemUrl(item.surah, item.ayah);
     if (url === null) {
       this.playingFlag = false;
       this.callError(ERROR_MESSAGE);
@@ -1237,7 +1280,14 @@ export class JourneyEngine {
       this.currentInterstitial = null;
       // Start background probing for this ayah's tafsir clip, so
       // the quarter boundary usually finds durations already known.
-      if (this.mode === 'tadabbur') this.kickProbe(item.surah, item.ayah);
+      if (this.mode === 'tadabbur') {
+        this.kickProbe(item.surah, item.ayah);
+        // Warm the generated tafsir audio (if the live voice
+        // setting needs it) while the quarter plays, so the
+        // boundary rarely waits on a generation fetch.
+        // Fire-and-forget; the warmer swallows its failures.
+        this.warmTafsirAudioOpt?.(item.surah, item.ayah);
+      }
     }
     try {
       this.audio.src = url;

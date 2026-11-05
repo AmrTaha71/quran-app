@@ -13,6 +13,14 @@ import {
   type AdhanDay,
   type AdhanSettings,
 } from '../lib/adhan';
+import {
+  getPushStatus,
+  isIOSDevice,
+  isStandaloneApp,
+  subscribeAdhanPush,
+  unsubscribeAdhanPush,
+  type PushStatus,
+} from '../lib/adhanPush';
 
 // Settings section: prayer-time location + alerts. Location order is
 // country FIRST, then city, as the user asked. The only adhan audio
@@ -29,6 +37,49 @@ export default function AdhanSettingsSection() {
   const [gpsError, setGpsError] = useState('');
   const [testing, setTesting] = useState(false);
   const testAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Web Push (closed-app adhan notification): status is read on
+  // mount; subscribing happens only from the button below (a user
+  // gesture, which iOS needs for the permission prompt).
+  const [pushStatus, setPushStatus] = useState<PushStatus | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState('');
+
+  const refreshPushStatus = async () => {
+    setPushStatus(await getPushStatus());
+  };
+
+  useEffect(() => {
+    void refreshPushStatus();
+  }, []);
+
+  const togglePush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    setPushError('');
+    try {
+      if (pushStatus?.subscribed) {
+        await unsubscribeAdhanPush();
+      } else {
+        const res = await subscribeAdhanPush();
+        if (!res.ok) {
+          setPushError(
+            res.reason === 'unsupported'
+              ? 'جهازك أو متصفحك لا يدعم الإشعارات — على آيفون/آيباد لازم التطبيق يكون مضافًا للشاشة الرئيسية، ونظام iOS 16.4 أو أحدث.'
+              : res.reason === 'denied'
+                ? 'تم رفض إذن الإشعارات — فعّله من إعدادات المتصفح/النظام، ثم حاول مرة أخرى.'
+                : res.reason === 'no-vapid-key'
+                  ? 'إعداد الإشعارات على الخادم لم يكتمل بعد — جرّب لاحقًا.'
+                  : res.reason === 'save-failed'
+                    ? 'تعذّر حفظ الاشتراك على الخادم — تأكد من الاتصال، وجرّب مرة أخرى.'
+                    : 'تعذّر تفعيل الإشعارات — جرّب مرة أخرى.',
+          );
+        }
+      }
+    } finally {
+      await refreshPushStatus();
+      setPushBusy(false);
+    }
+  };
 
   const refreshDay = async (loc: AdhanSettings['location']) => {
     if (!loc) {
@@ -313,6 +364,62 @@ export default function AdhanSettingsSection() {
         <p className="text-xs text-accent-600 mt-1">
           ملحوظة: آيفون/آيباد ممكن يمنع تشغيل الصوت قبل ما تلمس أي حاجة في التطبيق — زرار «جرّب الصوت» بيفتح الصوت، وأي ضغطة بعد فتح التطبيق تكفي للتنبيهات اللي بعدها.
         </p>
+      </div>
+
+      {/* Web Push — adhan notification even when the app is closed.
+          The notification itself carries no audio (iOS cannot
+          auto-play audio from a closed app): tapping it opens the
+          app and the adhan plays. iOS needs the app added to the
+          Home Screen + iOS 16.4 or newer. */}
+      <div className="mt-4">
+        <p className="font-semibold text-accent-800 mb-2 flex items-center gap-2">
+          <Bell className="w-5 h-5 text-emerald-600" /> تنبيه الأذان والتطبيق مقفول
+        </p>
+        <p className="text-sm text-accent-600 mb-3">
+          إشعار يوصلك وقت كل صلاة حتى لو التطبيق مقفول — تضغط عليه فيفتح التطبيق ويشتغل الأذان. الصوت نفسه لا يشتغل من التطبيق المقفول (نظام آيفون يمنع ذلك)، الإشعار هو اللي يوصلك والضغطة هي اللي تشغّل الأذان.
+        </p>
+        {isIOSDevice() && !isStandaloneApp() && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
+            على آيفون/آيباد: الإشعارات لا تعمل إلا إذا أضفت التطبيق إلى الشاشة الرئيسية — من متصفح سفاري اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من الأيقونة المضافة، ثم فعّل التنبيهات من هنا.
+          </p>
+        )}
+        {!settings.enabled || !settings.location ? (
+          <p className="text-sm text-accent-600 bg-gray-50 border border-hairline rounded-xl p-3">
+            فعّل تنبيهات الأذان وحدّد الموقع أولًا من الأقسام اللي فوق، وبعدها تقدر تفعّل الإشعار هنا.
+          </p>
+        ) : pushStatus && !pushStatus.supported ? (
+          <p className="text-sm text-accent-600 bg-gray-50 border border-hairline rounded-xl p-3">
+            جهازك أو متصفحك لا يدعم إشعارات الويب — على آيفون/آيباد لازم التطبيق يكون مضافًا للشاشة الرئيسية، ونظام iOS 16.4 أو أحدث.
+          </p>
+        ) : (
+          <>
+            <button
+              onClick={() => void togglePush()}
+              disabled={pushBusy}
+              className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald disabled:opacity-60"
+            >
+              <span className="text-right">
+                <span className="block font-medium text-accent-800">تفعيل إشعار الأذان والتطبيق مقفول</span>
+                <span className="block text-sm text-accent-600">
+                  {pushStatus?.subscribed
+                    ? 'مفعّلة — هيوصلك إشعار وقت كل صلاة حتى لو التطبيق مقفول'
+                    : pushStatus?.permission === 'denied'
+                      ? 'مرفوضة — إذن الإشعارات مرفوض من إعدادات المتصفح/النظام'
+                      : 'متوقفة — اضغط للتفعيل والسماح بالإشعارات'}
+                </span>
+              </span>
+              <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${pushStatus?.subscribed ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+                <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${pushStatus?.subscribed ? 'mr-auto' : ''}`} />
+              </span>
+            </button>
+            {pushError && <p className="text-sm text-red-600 mt-2">{pushError}</p>}
+            {pushStatus?.subscribed && (
+              <p className="text-xs text-accent-600 mt-2">
+                لو غيّرت الموقع من القسم اللي فوق، الاشتراك بيتحدّث تلقائيًا مع فتح التطبيق — من غير ما تعيد التفعيل.
+              </p>
+            )}
+          </>
+        )}
       </div>
     </section>
   );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
+import { normalizeDigits } from '../lib/numerals';
 import { supabase } from '../lib/supabase';
 import type { QuranVerse } from '../lib/types';
 import { X, Save, Edit3 } from 'lucide-react';
@@ -85,11 +86,11 @@ export default function EditVerseModal({
               <div>
                 <label className="block text-xs font-semibold text-accent-600 mb-1">رقم السورة</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={114}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9٠-٩۰-۹]*"
                   value={surahNo}
-                  onChange={(e) => setSurahNo(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setSurahNo(parseInt(normalizeDigits(e.target.value)) || 1)}
                   className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>
@@ -105,10 +106,11 @@ export default function EditVerseModal({
               <div>
                 <label className="block text-xs font-semibold text-accent-600 mb-1">رقم الآية</label>
                 <input
-                  type="number"
-                  min={1}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9٠-٩۰-۹]*"
                   value={ayahNo}
-                  onChange={(e) => setAyahNo(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setAyahNo(parseInt(normalizeDigits(e.target.value)) || 1)}
                   className="w-full px-3 py-2 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth"
                 />
               </div>

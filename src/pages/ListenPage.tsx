@@ -48,6 +48,17 @@ import {
 import type { TadabburTafsirOrder, ThreeMode, ThreeModePosition } from '../lib/threeModeListen';
 import { JourneyEngine as JourneyEngineClass } from '../lib/threeModePlayback';
 import type { JourneyEngine, JourneyPlayable } from '../lib/threeModePlayback';
+// Tafsir voice variety (Feature 1, 2026-11-05): natural King Fahd
+// recording (default), generated voice, or alternation by quarter.
+import {
+  TAFSIR_VOICES,
+  readTafsirVoice,
+  resolveTafsirAudio,
+  tafsirVoiceLabelForAyah,
+  warmTafsirAudio,
+  writeTafsirVoice,
+} from '../lib/tafsirVoice';
+import type { TafsirVoice } from '../lib/tafsirVoice';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import type { CachedTextRow } from '../lib/quranTextCache';
 import {
@@ -65,6 +76,20 @@ import {
   isSurahDownloaded,
   resolveListenUrl,
 } from '../lib/listenOffline';
+import {
+  AUDIO_DOWNLOAD_FAILED_MESSAGE,
+  AUDIO_QUOTA_MESSAGE,
+  checkAudioDownloadSpace,
+  deleteAudioDownload,
+  downloadJuhaniSurah,
+  downloadTafsirSurah,
+  estimateJuhaniSurah,
+  estimateTafsirSurah,
+  formatAudioSize,
+  isAudioDownloaded,
+  type AudioDownloadKind,
+  type AudioSizeEstimate,
+} from '../lib/audioDownload';
 import { getSharedAudio, registerResume, unregisterResume, clearResumeStack, currentAudioOwner, hasWaitingResumes, releaseAudio } from '../lib/sharedAudio';
 
 type Route =
@@ -253,6 +278,12 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // keeps the order it started with (see startJourney).
   const [tadabburTafsirOrder, setTadabburTafsirOrder] =
     useState<TadabburTafsirOrder>(readTadabburTafsirOrder);
+  // Tadabbur tafsir voice (Feature 1, 2026-11-05): persisted,
+  // default 'natural' (the King Fahd recording). Unlike the order
+  // toggle, this is a LIVE preference: the engine's resolver reads
+  // the stored setting on every clip, so a change takes effect at
+  // the next tafsir clip — including inside a resumed journey.
+  const [tafsirVoice, setTafsirVoice] = useState<TafsirVoice>(readTafsirVoice);
   const [savedJourneys, setSavedJourneys] = useState<
     Partial<Record<ThreeMode, ThreeModePosition>>
   >(() => {
@@ -288,6 +319,23 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [offlineError, setOfflineError] = useState<string | null>(null);
+  // In-context audio downloads (2026-11-05, offline feature):
+  // ONE shared job state for the two spots that offer a download
+  // here — the Juhani surah file in hadr mode, and the tafsir
+  // clips in the tadabbur detail. The two spots never show at
+  // once (hubView is either 'free' or a mode), so one job is
+  // enough; the full manager lives in Settings ('التنزيلات الصوتية').
+  type CtxAudioJob = {
+    kind: AudioDownloadKind; surah: number;
+    downloaded: boolean; checking: boolean;
+    estimating: boolean; estimate: AudioSizeEstimate | null;
+    space: { neededMB: number; freeMB: number | null } | null;
+    confirm: boolean; running: boolean;
+    progress: { done: number; total: number } | null;
+    error: string; quota: boolean;
+  };
+  const [ctxAudio, setCtxAudio] = useState<CtxAudioJob | null>(null);
+  const ctxAudioAbortRef = useRef<AbortController | null>(null);
   // Black-screen mode: a fullscreen black overlay that hides the UI
   // while audio keeps playing untouched. It never touches the audio
   // engine, Media Session, or Wake Lock (none is used here). Exit is
@@ -722,6 +770,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             ? (fromSaved.tafsirOrder ?? 'after')
             : tadabburTafsirOrder
           : undefined,
+      // Tafsir voice (Feature 1): the resolver reads the live
+      // setting per clip (natural / generated / alternate by
+      // quarter) and falls back to the natural recording on any
+      // failure; the warmer prefetches generated audio while the
+      // quarter plays. Both are no-ops outside tadabbur (the
+      // engine only calls them for tafsir items / tadabbur ayahs).
+      resolveTafsirUrl: (s, a) => resolveTafsirAudio(s, a),
+      warmTafsirAudio: (s, a) => warmTafsirAudio(s, a),
       startItem: fromSaved
         ? { kind: fromSaved.kind, surah: fromSaved.surah, ayah: fromSaved.ayah }
         : undefined,
@@ -1435,6 +1491,96 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     };
   }, [surah, reciterId]);
 
+  // In-context audio download status: which kind applies here —
+  // Juhani file in hadr mode, tafsir clips in the tadabbur
+  // detail — and whether this surah is already downloaded. A
+  // running/estimating job is never orphaned by a surah change.
+  useEffect(() => {
+    const kind: AudioDownloadKind | null =
+      hadrOn && hubView === 'free'
+        ? 'juhani'
+        : hubView === 'tadabbur' && tafsirConfigured()
+          ? 'tafsir'
+          : null;
+    if (kind === null) {
+      setCtxAudio(null);
+      return;
+    }
+    setCtxAudio((prev) => {
+      if (prev && prev.kind === kind && prev.surah === surah) return prev;
+      if (prev && (prev.running || prev.estimating)) return prev;
+      return {
+        kind, surah,
+        downloaded: isAudioDownloaded(kind, surah), checking: false,
+        estimating: false, estimate: null, space: null,
+        confirm: false, running: false, progress: null,
+        error: '', quota: false,
+      };
+    });
+  }, [surah, hadrOn, hubView]);
+
+  const ctxAskAudio = async () => {
+    const job = ctxAudio;
+    if (!job || job.running || job.estimating) return;
+    setCtxAudio({ ...job, estimating: true, error: '', quota: false });
+    try {
+      const est = job.kind === 'tafsir'
+        ? await estimateTafsirSurah(job.surah)
+        : await estimateJuhaniSurah(job.surah);
+      const space = await checkAudioDownloadSpace(est.bytes);
+      if (space.status === 'low') {
+        setCtxAudio({
+          ...job, estimating: false, estimate: est,
+          space: { neededMB: space.neededMB, freeMB: space.freeMB },
+          error: `مساحة جهازك لا تكفي — التحميل يحتاج حوالي ${space.neededMB.toLocaleString('ar-EG')} ميجابايت (بهامش أمان) والمتاح حوالي ${(space.freeMB ?? 0).toFixed(0)} ميجابايت. فضّي مساحة وحاول تاني.`,
+          quota: true,
+        });
+        return;
+      }
+      setCtxAudio({
+        ...job, estimating: false, estimate: est,
+        space: { neededMB: space.neededMB, freeMB: space.freeMB }, confirm: true,
+      });
+    } catch {
+      setCtxAudio({ ...job, estimating: false, error: AUDIO_DOWNLOAD_FAILED_MESSAGE });
+    }
+  };
+
+  const ctxStartAudio = async () => {
+    const job = ctxAudio;
+    if (!job || !job.confirm || job.running) return;
+    ctxAudioAbortRef.current = new AbortController();
+    setCtxAudio({ ...job, confirm: false, running: true, progress: { done: 0, total: job.estimate?.count ?? 1 }, error: '', quota: false });
+    try {
+      const onP = (p: { done: number; total: number }) =>
+        setCtxAudio((prev) => prev && prev.kind === job.kind && prev.surah === job.surah ? { ...prev, progress: p } : prev);
+      if (job.kind === 'tafsir') {
+        await downloadTafsirSurah(job.surah, onP, { signal: ctxAudioAbortRef.current.signal });
+      } else {
+        await downloadJuhaniSurah(job.surah, onP, { signal: ctxAudioAbortRef.current.signal });
+      }
+      setCtxAudio((prev) => prev && prev.kind === job.kind && prev.surah === job.surah
+        ? { ...prev, running: false, progress: null, downloaded: true, error: '' } : prev);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : AUDIO_DOWNLOAD_FAILED_MESSAGE;
+      setCtxAudio((prev) => prev && prev.kind === job.kind && prev.surah === job.surah
+        ? { ...prev, running: false, progress: null, error: msg, quota: msg === AUDIO_QUOTA_MESSAGE } : prev);
+    } finally {
+      ctxAudioAbortRef.current = null;
+    }
+  };
+
+  const ctxStopAudio = () => {
+    ctxAudioAbortRef.current?.abort();
+  };
+
+  const ctxDeleteAudio = async () => {
+    const job = ctxAudio;
+    if (!job || job.running) return;
+    await deleteAudioDownload(job.kind, job.surah);
+    setCtxAudio({ ...job, downloaded: false, estimate: null, error: '' });
+  };
+
   // Engine destroyed on unmount (and on Stop, via stopPlayback).
   // Continuity: if playback is LIVE at unmount (the user opened
   // another in-app page mid-listen), record a one-time
@@ -1739,7 +1885,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             ))}
           </div>
           <p className="text-sm text-accent-600 mt-3">
-            وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة.
+            وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة (أما صوت الحدر — الجهني — فملف سورته قابل للتحميل من قسم «الاستماع دون اتصال» تحت).
           </p>
 
           {/* Pace area: electronic speed chips (persisted) +
@@ -1972,6 +2118,41 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
             </div>
           )}
+          {/* Tadabbur tafsir voice (Feature 1, 2026-11-05): the
+              King Fahd recording is the default; the generated voice
+              matches the user's gender and each clip is generated
+              once and cached for everyone; 'alternate' flips by
+              quarter. A change applies at the next tafsir clip, and
+              any generation failure plays the natural recording
+              instead — never silence. */}
+          {hubView === 'tadabbur' && (
+            <div className="mt-4">
+              <p className="font-semibold text-accent-800 mb-2">صوت التفسير</p>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="صوت التفسير">
+                {TAFSIR_VOICES.map((v) => (
+                  <button
+                    key={v.id}
+                    disabled={locked}
+                    onClick={() => {
+                      setTafsirVoice(v.id);
+                      writeTafsirVoice(v.id);
+                    }}
+                    className={`py-3 px-2 font-semibold rounded-xl disabled:opacity-50 ${
+                      tafsirVoice === v.id
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-white border border-hairline-emerald text-accent-800'
+                    }`}
+                  >
+                    {v.name}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-accent-600 mt-2">
+                {TAFSIR_VOICES.find((v) => v.id === tafsirVoice)?.description}
+                {' '}يسري التغيير من وقفة التفسير التالية.
+              </p>
+            </div>
+          )}
           {/* Explicit start control: the mode card below also starts
               playback on tap, but it reads as an info card (same
               name as the hub card just tapped), so first-time
@@ -2020,6 +2201,77 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                         ? TAFSIR_ATTRIBUTION
                         : 'مقاطع التفسير لم تُرفع بعد — سيُتاح هذا النمط بعد رفع المقاطع.'}
                     </p>
+                  )}
+                  {/* Tafsir download (offline feature): per-surah
+                      clips for the journey's start surah, so the
+                      tafsir parts play offline too. Full manager in
+                      Settings ('التنزيلات الصوتية'). */}
+                  {m.id === 'tadabbur' && tafsirConfigured() && ctxAudio?.kind === 'tafsir' && (
+                    <div className="mt-3 rounded-xl border border-hairline-emerald bg-emerald-50/50 p-3">
+                      {ctxAudio.checking ? (
+                        <p className="text-sm text-accent-600">جارٍ التحقق…</p>
+                      ) : ctxAudio.downloaded ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-emerald-800">
+                            تفسير سورة {surahName(surah)} محمل على جهازك ✓
+                          </p>
+                          <button
+                            onClick={() => void ctxDeleteAudio()}
+                            className="px-3 py-1.5 bg-white border border-red-200 text-red-700 text-sm font-semibold rounded-lg"
+                          >
+                            مسح
+                          </button>
+                        </div>
+                      ) : ctxAudio.confirm && ctxAudio.estimate ? (
+                        <div>
+                          <p className="text-sm font-semibold text-accent-800">
+                            تفسير سورة {surahName(surah)} — {formatAudioSize(ctxAudio.estimate.bytes)}
+                            {ctxAudio.estimate.count > 1 ? ` — ${ctxAudio.estimate.count.toLocaleString('ar-EG')} مقطع` : ''}
+                          </p>
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={() => void ctxStartAudio()}
+                              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl"
+                            >
+                              تأكيد التحميل
+                            </button>
+                            <button
+                              onClick={() => setCtxAudio((prev) => prev ? { ...prev, confirm: false, estimate: null } : prev)}
+                              className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 text-sm font-semibold rounded-xl"
+                            >
+                              إلغاء
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <button
+                            disabled={ctxAudio.estimating || ctxAudio.running}
+                            onClick={() => void ctxAskAudio()}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                          >
+                            <Download className="w-4 h-4" />
+                            {ctxAudio.estimating
+                              ? 'جارٍ تقدير الحجم…'
+                              : `حمّل تفسير سورة ${surahName(surah)} دون نت`}
+                          </button>
+                          {ctxAudio.running && ctxAudio.progress && (
+                            <p className="text-xs text-accent-600 mt-2">
+                              جارٍ التحميل… {ctxAudio.progress.done.toLocaleString('ar-EG')} من {ctxAudio.progress.total.toLocaleString('ar-EG')} مقطع
+                            </p>
+                          )}
+                          {ctxAudio.running && (
+                            <button
+                              onClick={ctxStopAudio}
+                              className="mt-2 w-full py-2 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-xl"
+                            >
+                              إيقاف التحميل
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {ctxAudio.error && <p className={`text-xs mt-2 ${ctxAudio.quota ? 'text-red-600 font-medium' : 'text-red-600'}`}>{ctxAudio.error}</p>}
+                    </div>
                   )}
                 </div>
               );
@@ -2079,6 +2331,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 starts). */}
             {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
               <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
+            )}
+            {/* Which tafsir voice is actually playing now (Feature 1):
+                the label reads the live setting for this ayah, the
+                same mapping the engine's resolver used for the clip. */}
+            {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
+              <p className="text-xs text-accent-600 mt-1">
+                {tafsirVoiceLabelForAyah(journeyItem.surah, journeyItem.ayah)}
+              </p>
             )}
             {engineError && <p className="text-sm text-red-600 font-medium mt-2">{engineError}</p>}
             {/* Redirect B: interruption resume — prominent, tap-only */}
@@ -2205,7 +2465,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             highlight and resume above never wait on any download
             state; deleting this block leaves the page fully working) */}
         {/* Offline section: this surah + reciter only, never whole-Quran.
-            Hafs only in v1 — riwaya and hadr modes have no offline downloads. */}
+            Hafs per-surah; hadr (Juhani file) has its own block
+            below; riwaya modes have no offline downloads. */}
         {riwayaId === null && !hadrOn && hubView === 'free' && (
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
           <p className="font-semibold text-accent-800">الاستماع دون اتصال</p>
@@ -2268,6 +2529,80 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               )}
               {downloading && !progress && (
                 <p className="text-sm text-accent-600 mt-3">جارٍ تحميل السورة…</p>
+              )}
+            </div>
+          )}
+        </div>)}
+
+        {/* Offline section: Juhani surah file (hadr mode). The
+            same file is the self-test correction voice, so a
+            download here also makes corrections faster (local
+            instead of streamed). Riwaya modes still have no
+            offline download — only Hafs (above) and hadr. */}
+        {hadrOn && hubView === 'free' && ctxAudio?.kind === 'juhani' && (
+        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
+          <p className="font-semibold text-accent-800">الاستماع دون اتصال — ملف الجهني</p>
+          <p className="text-sm text-accent-600 mt-1">
+            سورة {surahName(surah)} — حدر (الجهني)، ملف السورة كامل. بعد التحميل بيشتغل من جهازك من غير نت، وتصحيحات التسميع بتبقى أسرع.
+          </p>
+          {ctxAudio.error && <p className={`text-sm mt-2 ${ctxAudio.quota ? 'text-red-600 font-medium' : 'text-red-600'}`}>{ctxAudio.error}</p>}
+          {ctxAudio.checking ? (
+            <p className="text-accent-600 mt-3">جارٍ التحقق…</p>
+          ) : ctxAudio.downloaded ? (
+            <div className="mt-3">
+              <p className="inline-block px-3 py-1.5 bg-emerald-100 text-emerald-800 font-medium rounded-xl">
+                متاح دون اتصال
+              </p>
+              <button
+                onClick={() => void ctxDeleteAudio()}
+                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-5 h-5" /> حذف التحميل
+              </button>
+            </div>
+          ) : ctxAudio.confirm && ctxAudio.estimate ? (
+            <div className="mt-3">
+              <p className="font-semibold text-accent-800">
+                حجم التحميل: {formatAudioSize(ctxAudio.estimate.bytes)}
+              </p>
+              {ctxAudio.space && ctxAudio.space.freeMB !== null && (
+                <p className="text-sm text-accent-600 mt-1">المتاح على جهازك حوالي {ctxAudio.space.freeMB.toFixed(0)} ميجابايت.</p>
+              )}
+              <div className="flex gap-3 mt-3">
+                <button
+                  onClick={() => void ctxStartAudio()}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                >
+                  تأكيد التحميل
+                </button>
+                <button
+                  onClick={() => setCtxAudio((prev) => prev ? { ...prev, confirm: false, estimate: null } : prev)}
+                  className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <button
+                disabled={ctxAudio.estimating || ctxAudio.running}
+                onClick={() => void ctxAskAudio()}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Download className="w-5 h-5" />
+                {ctxAudio.estimating ? 'جارٍ تقدير الحجم…' : 'تحميل ملف السورة للاستماع دون اتصال'}
+              </button>
+              {ctxAudio.running && (
+                <p className="text-sm text-accent-600 mt-3">جارٍ تحميل ملف السورة…</p>
+              )}
+              {ctxAudio.running && (
+                <button
+                  onClick={ctxStopAudio}
+                  className="mt-2 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-semibold rounded-xl"
+                >
+                  إيقاف التحميل
+                </button>
               )}
             </div>
           )}

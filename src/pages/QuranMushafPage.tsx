@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { getQuranTextCache } from '../lib/quranTextCache';
-import { formatAr } from '../lib/numerals';
+import { formatAr, normalizeDigits } from '../lib/numerals';
 import { RECITERS, DEFAULT_RECITER_ID, type Reciter } from '../lib/reciters';
 import { useLang, currentSpeechLocale } from '../lib/LanguageContext';
 import { LANGUAGES } from '../lib/translations';
@@ -1267,7 +1267,7 @@ export default function QuranMushafPage({
   };
 
   const visibleVerses = ayahFilter.trim()
-    ? surahVerses.filter((v) => String(v.ayah_no) === ayahFilter.trim())
+    ? surahVerses.filter((v) => String(v.ayah_no) === normalizeDigits(ayahFilter.trim()))
     : surahVerses;
 
   // Best-effort native fullscreen (iPad Safari supports it for elements
@@ -3356,9 +3356,9 @@ export default function QuranMushafPage({
                 <ChevronRight className="w-5 h-5" />
               </button>
               <span className="flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-0.5 border border-gray-200">
-                <input type="number" value={pageInput || currentPage}
+                <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={pageInput || currentPage}
                   onChange={(e) => setPageInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(pageInput); if (!isNaN(n)) goToPage(n); setPageInput(''); } }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(normalizeDigits(pageInput)); if (!isNaN(n)) goToPage(n); setPageInput(''); } }}
                   className="w-14 text-center text-sm font-semibold text-accent-700 bg-transparent focus:outline-none"
                   placeholder={formatAr(currentPage)} />
                 <span className="text-xs text-accent-600">/ {formatAr(TOTAL_PAGES)}</span>
@@ -3488,7 +3488,7 @@ export default function QuranMushafPage({
                   <label htmlFor="ayah-filter" className="text-sm font-semibold text-accent-600 whitespace-nowrap">
                     رقم الآية:
                   </label>
-                  <input id="ayah-filter" type="number" min={1} inputMode="numeric"
+                  <input id="ayah-filter" type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*"
                     value={ayahFilter} placeholder="مثال: 255"
                     onChange={(e) => setAyahFilter(e.target.value)}
                     className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-base font-semibold text-accent-700 focus:outline-none focus:border-emerald-400" />

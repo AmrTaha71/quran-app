@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.generate-voice]
 verify_jwt = false
+
+[functions.adhan-push]
+verify_jwt = false

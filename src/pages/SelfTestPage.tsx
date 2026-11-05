@@ -21,7 +21,7 @@ import { checkMic } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
-import { formatAr } from '../lib/numerals';
+import { formatAr, normalizeDigits } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
@@ -654,7 +654,7 @@ function pickArabicTtsVoice(): SpeechSynthesisVoice | null {
 // default, so behaviour without a listener is exactly unchanged.
 type DiagTtsFn = (kind: 'tts-start' | 'tts-end' | 'tts-error', label: string) => void;
 let diagTtsListener: DiagTtsFn | null = null;
-function speakCorrection(words: string[], rate = 1.0, onFailed?: () => void) {
+function speakCorrection(words: string[], rate = 1.0, onFailed?: () => void, onEnd?: () => void) {
   if (words.length === 0) return;
   try {
     // D2: no TTS engine at all used to be a silent return — the
@@ -673,7 +673,7 @@ function speakCorrection(words: string[], rate = 1.0, onFailed?: () => void) {
         u.rate = rate;
         if (voice) u.voice = voice;
         u.onstart = () => { try { diagTtsListener?.('tts-start', 'tts-correction'); } catch {} };
-        u.onend = () => { try { diagTtsListener?.('tts-end', 'tts-correction'); } catch {} };
+        u.onend = () => { try { diagTtsListener?.('tts-end', 'tts-correction'); } catch {} try { onEnd?.(); } catch {} };
         u.onerror = () => { try { diagTtsListener?.('tts-error', 'tts-correction'); } catch {} if (voice) speakOnce(null); else { try { onFailed?.(); } catch {} } };
         window.speechSynthesis.speak(u);
       } catch { try { onFailed?.(); } catch {} }
@@ -1080,6 +1080,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [interim, setInterim] = useState('');
   const [countdown, setCountdown] = useState(() => loadTestSettings().corrDelay);
   const [wrongIndices, setWrongIndices] = useState<number[]>([]);
+  // FEAT5-B: shown while the post-correction resume is listening —
+  // tells the user the words he said during the correction were not
+  // heard, so he says the rest of the ayah again.
+  const [postCorrHint, setPostCorrHint] = useState(false);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
   const [micError, setMicError] = useState('');
@@ -1507,7 +1511,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // stopRec, so no audio ever plays while a recognizer is alive
   // (321436 discipline); the next mic start is always a fresh
   // instance, never the discarded one.
-  const playCorrection = (words: string[], audioUrl?: string | null, onFailed?: () => void) => {
+  const playCorrection = (words: string[], audioUrl?: string | null, onFailed?: () => void, onDone?: () => void) => {
     cancelCorrectionSpeech();
     stopCorrAudio();
     const rate = CORR_RATE_VALUE[liveRef.current.corrRate];
@@ -1527,8 +1531,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       a.onloadedmetadata = applyCorrRate;
       corrAudioRef.current = a;
       a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction' }); };
-      a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); };
-      a.onerror = () => { diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed); };
+      a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); try { onDone?.(); } catch {} };
+      a.onerror = () => { diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed, onDone); };
       // DIAG (2026-11-04, logging only): a refused play() used to
       // fall back to TTS silently — the rejection (e.g.
       // NotAllowedError) is the prime suspect for random silence,
@@ -1537,14 +1541,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // never started is the iOS timer-gating corner.
       a.play().then(
         () => { diagPush('tts-play-accepted', { label: 'audio-correction', reason: 'server-audio' }); },
-        (err) => { diagPush('tts-play-rejected', { label: 'audio-correction', code: err?.name || 'error', reason: 'server-audio' }); speakCorrection(words, rate, onFailed); },
+        (err) => { diagPush('tts-play-rejected', { label: 'audio-correction', code: err?.name || 'error', reason: 'server-audio' }); speakCorrection(words, rate, onFailed, onDone); },
       );
-    } else speakCorrection(words, rate, onFailed);
+    } else speakCorrection(words, rate, onFailed, onDone);
   };
   // Ayah-mode replay with the R5 visible fallback: the button is the
   // tappable "hear the correction" control, and the failure note
   // names the red words already on screen.
   const replayAyahCorrection = () => {
+    // FEAT5-B: never replay a correction over a live recognizer
+    // (the post-correction resume may already be listening).
+    if (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting') return;
     stopRefUnit();
     ayahCorrFailedForRef.current = index;
     setAyahAudioFailed(false);
@@ -1576,7 +1583,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Returns true when Juhani took ownership of the correction. On an
   // audio failure (load/seek/play) onFallback runs the generated path, so
   // the user is never left without a correction.
-  const startJuhaniCorrection = (ayah: TestAyah, wordCount: number, wrongIdx: number[], onFallback: () => void): boolean => {
+  const startJuhaniCorrection = (ayah: TestAyah, wordCount: number, wrongIdx: number[], onFallback: () => void, onDone?: () => void): boolean => {
     const plan = planJuhaniWindows(ayah.surah_no, ayah.ayah_no, wordCount, wrongIdx);
     if (!plan) return false;
     if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
@@ -1592,10 +1599,29 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       segments: plan.segments,
       rate,
       onStart: () => { diagPush('tts-start', { label: 'juhani-window' }); },
-      onDone: () => { setCorrWindowPlaying(false); diagPush('tts-end', { label: 'juhani-window' }); },
+      onDone: () => { setCorrWindowPlaying(false); diagPush('tts-end', { label: 'juhani-window' }); try { onDone?.(); } catch {} },
       onFail: (reason) => { setCorrWindowPlaying(false); diagPush('tts-error', { label: 'juhani-window', reason }); onFallback(); },
     });
     return true;
+  };
+
+  // FEAT5-B: restart listening after a correction finished, so the
+  // user can complete the words he spoke while it played. Guards:
+  // only for the armed ayah, only while the screen still shows
+  // done-wrong for it (a tap on next / retry / leaving the ayah
+  // clears the arm in resetMicState, and the micState check stops a
+  // stale timer from restarting into a new ayah). The transcript is
+  // preserved (resumeMic = startMic(true)), so the new speech is
+  // judged only from resumeStartLen onward (see evaluateNow).
+  const resumeAfterCorrection = () => {
+    const armed = postCorrRef.current;
+    if (!armed) return;
+    const ayah = liveRef.current.ayah;
+    if (!ayah || ayah.id !== armed.ayahId) return;
+    if (liveRef.current.micState !== 'done-wrong') return;
+    diagPush('corr-resume', { label: 'started' });
+    setPostCorrHint(true);
+    resumeMic();
   };
 
   const applySettings = (level: VerifyLevel, mode: ReciteMode, delayMode: CorrDelayMode = corrDelayMode, rate: CorrRate = corrRate) => {
@@ -1631,6 +1657,24 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // user moves on; a revising interim (ريب→ريبة) changes it and
   // resets the count, so a revision can never trigger the window.
   const interimMissRef = useRef<{ key: string; count: number; firstSeenAt: number }>({ key: '', count: 0, firstSeenAt: 0 });
+  // FEAT5-B (2026-11-05, diag 23:34): post-correction resume.
+  // gradeMic stops the recognizer BEFORE the correction plays
+  // (321436 discipline: speaker audio must never be recognized as
+  // the user's speech), so words the user says DURING the ~6s
+  // Juhani playback are never captured — the diag shows ZERO
+  // result events between tts-start and tts-end, and the ayah was
+  // already graded false with the unheard remainder marked wrong.
+  // Option (2): when the ayah was INCOMPLETE at grade time, arm a
+  // resume — after the correction finishes, the mic restarts on
+  // the SAME ayah with the transcript preserved, and only the
+  // still-unheard words are judged from the new speech. Option
+  // (1) (listen during playback) is rejected: the correction audio
+  // through the speaker would be recognized as correct recitation
+  // (false passes), and web SpeechRecognition offers no echo
+  // cancellation. Option (3) (make the user wait) is rejected: he
+  // recites continuously. The provisional false grade is replaced
+  // by a pass only if he then says every remaining word correctly.
+  const postCorrRef = useRef<{ ayahId: number; index: number; resumeStartLen: number; remaining: string[]; remainingIdx: number[] } | null>(null);
   // Batch 3 (reviewer verdicts): which path opened the current
   // correction window — 'finals' (evaluateNow mismatch) or
   // 'interim' (early window). The heal diag records it, because
@@ -1725,6 +1769,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setCountdown(liveRef.current.corrDelay);
     setWrongIndices([]);
     setWrongExtras([]);
+    // FEAT5-B: leaving the ayah cancels any armed post-correction resume.
+    postCorrRef.current = null;
+    setPostCorrHint(false);
     setMicError('');
     setAyahAudioFailed(false);
     ayahCorrFailedForRef.current = -1;
@@ -1759,6 +1806,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setShowFullHeard(false);
     setContMatchedWords(0);
     setContHeardWords(0);
+    // FEAT5-B: a new test cancels any armed post-correction resume
+    // from the previous run (same-ayah restart must not inherit it).
+    postCorrRef.current = null;
+    setPostCorrHint(false);
     // DIAG: tap + fresh-test log reset. A restore keeps appending:
     // a resumed test continues the same session's log.
     if (!restore) diagClear();
@@ -1967,6 +2018,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const finishTest = (finalGrades: boolean[]) => {
     stopRec();
     clearTimers();
+    // FEAT5-B: ending the test cancels any armed post-correction
+    // resume — the last ayah reaches here without resetMicState,
+    // so without this a late correction-end could restart the mic
+    // onto the done screen.
+    postCorrRef.current = null;
+    setPostCorrHint(false);
     const correct = finalGrades.filter(Boolean).length;
     const skippedCount = liveRef.current.skipped.filter(Boolean).length;
     const attempted = Math.max(0, ayahs.length - skippedCount);
@@ -1998,6 +2055,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!ayah) return;
     stopRec();
     clearTimers();
+    // FEAT5-B: a new grade supersedes any armed post-correction resume.
+    postCorrRef.current = null;
+    setPostCorrHint(false);
     setMicStalled(false);
     const next = [...liveRef.current.grades];
     next[index] = ok;
@@ -2032,6 +2092,24 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setWrongByAyah((prev) => ({ ...prev, [index]: wrongWords }));
       setWrongExtras(result.extras);
       if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
+      // FEAT5-B: arm the post-correction resume when the ayah was
+      // still incomplete at grade time — the words below are the
+      // ones he may have spoken while the correction plays, so they
+      // must not stay wrong without a chance to say them after it.
+      // A complete ayah needs no resume (nothing was left unheard);
+      // continuous mode never arms (its grading is range-wide, not
+      // per-ayah).
+      const heardLen = spoken.length;
+      if (liveRef.current.mode === 'ayah' && heardLen < expected.length) {
+        postCorrRef.current = {
+          ayahId: ayah.id,
+          index,
+          resumeStartLen: heardLen,
+          remaining: expected.filter((_, i) => !result.matched[i]).map((w) => w.norm),
+          remainingIdx: expected.map((_, i) => i).filter((i) => !result.matched[i]),
+        };
+        diagPush('corr-resume', { label: 'armed', reason: `${heardLen}/${expected.length}` });
+      }
       // The app corrects him aloud: after the 3s window expires, or
       // when he taps "show me the mistake", the correct words are
       // spoken in his gender's voice (prefetched gendered audio when
@@ -2052,10 +2130,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         diagPush('corr-source', { label: 'generated-fallback', reason: `mode=${liveRef.current.corrDelayMode};rate=${CORR_RATE_VALUE[liveRef.current.corrRate]}` });
         playCorrection(wrongWords, pending && pending.index === index && pending.wordsKey === wrongWords.join('|') ? pending.url : null, () => {
           if (ayahCorrFailedForRef.current === index) setAyahAudioFailed(true);
-        });
+        }, resumeAfterCorrection);
       };
       const wrongIdxAll = expected.map((_, i) => i).filter((i) => !result.matched[i]);
-      if (!startJuhaniCorrection(ayah, expected.length, wrongIdxAll, fallbackCorrection)) fallbackCorrection();
+      if (!startJuhaniCorrection(ayah, expected.length, wrongIdxAll, fallbackCorrection, resumeAfterCorrection)) fallbackCorrection();
       liveRef.current.micState = 'done-wrong';
       setMicState('done-wrong');
     }
@@ -2096,21 +2174,62 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       gradeMic(true);
       return;
     }
+    // FEAT5-B: post-correction resume. The arm (set in gradeMic
+    // when the ayah was incomplete) means the user is completing
+    // the words he spoke while the correction played. Judge ONLY
+    // the new speech against ONLY those words: the old mistake is
+    // still in finals, so the whole-transcript check above can
+    // never pass on a correct completion. If every remaining word
+    // was said correctly after the correction, the provisional
+    // false grade flips to a pass and the stale red words clear.
+    // A whole-ayah re-recitation in the resume also passes here
+    // (the aligner finds the remainder in order later in the new
+    // speech; beginner extras are ignored, strict extras are not —
+    // a strict user who re-says the whole ayah must instead pass
+    // the window's clean re-recitation, like today's strict
+    // correction window). If the remainder is not complete, the
+    // mismatch branch below targets the remainder's unmatched
+    // words only — the already-corrected words are never
+    // re-targeted.
+    const armedResume = postCorrRef.current && liveRef.current.ayah?.id === postCorrRef.current.ayahId && postCorrRef.current.remaining.length > 0 ? postCorrRef.current : null;
+    let remMissIdx: number[] | null = null;
+    if (armedResume && liveRef.current.micState === 'listening') {
+      const remSpoken = spoken.slice(armedResume.resumeStartLen);
+      const remResult = strict
+        ? alignWordsStrict(armedResume.remaining, remSpoken)
+        : { ...alignWords(armedResume.remaining, remSpoken), extras: [] as string[] };
+      if (remResult.allMatched && remResult.extras.length === 0) {
+        diagPush('corr-resume', { label: 'completed' });
+        postCorrRef.current = null;
+        setPostCorrHint(false);
+        setWrongIndices([]);
+        setWrongByAyah((prev) => { const n = { ...prev }; delete n[armedResume.index]; return n; });
+        setWrongExtras([]);
+        gradeMic(true);
+        return;
+      }
+      remMissIdx = armedResume.remainingIdx.filter((_, j) => !remResult.matched[j]);
+    }
     // Mismatch: open the correction window (still listening).
     // Record what was wrong and where the transcript stood, so the
     // window judges only the correction, not the old speech.
     // Prefetch the gendered correction audio NOW, during the 3s
     // window, so it is ready the moment the window expires.
     if (liveRef.current.micState === 'listening') {
-      liveRef.current.correctingTargets = expected.filter((_, i) => !result.matched[i]).map((w) => w.norm);
-      const wrongOrig = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
+      // FEAT5-B: while a post-correction resume is armed, the
+      // mismatch targets are the remainder's unmatched words
+      // (remMissIdx), not the whole ayah's — the pre-correction
+      // mistake was already corrected aloud.
+      const missIdx = remMissIdx ?? expected.map((_, i) => i).filter((i) => !result.matched[i]);
+      liveRef.current.correctingTargets = missIdx.map((i) => expected[i].norm);
+      const wrongOrig = missIdx.map((i) => expected[i].orig);
       const token = ++corrFetchTokenRef.current;
       corrPendingRef.current = { index, wordsKey: wrongOrig.join('|'), url: null };
       // Position mode (v12): wrong-word indices into this ayah's
       // expected list + the ayah's seeded id. Bare shape: ayah-mode
       // corrections never prepend a context word. Missing ayah ref
       // falls back to free text (never a crash).
-      const wrongIdx = expected.map((_, i) => i).filter((i) => !result.matched[i]);
+      const wrongIdx = missIdx;
       const ayahId = liveRef.current.ayah?.id;
       const corrPos = ayahId ? { shape: 'bare' as const, positions: wrongIdx.map((w) => ({ id: ayahId, w })) } : undefined;
       void fetchCorrectionAudio(wrongOrig, token, corrPos).then((url) => {
@@ -2523,6 +2642,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // inclusive spoken length below expected length. The window
   // still judges finals at expiry, and the strict heal above
   // protects the grade.
+  // FEAT5-A fast path: (d)+(e) are waived when TWO words after m
+  // already matched in this same interim event and the candidate is
+  // not a word fragment — the 2-event wait cost ~4.8s on Safari's
+  // sparse interims (diag 2026-11-05, rel 6216 -> 11029). See the
+  // note at the fast path below.
   const maybeInterimCorrectionWindow = (interimText: string) => {
     try {
       const ayah = liveRef.current.ayah;
@@ -2546,6 +2670,35 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const twoAnchored = later.length >= 2 && later[0] && later[1];
       const longLater = later.some((v, i) => v && laterNorms[i].length >= 4);
       if (!twoAnchored && !longLater) { resetMiss(); return; }
+      // FEAT5-A FAST PATH (2026-11-05, diag 23:34): the old rule
+      // waited for the SAME miss on a SECOND interim event + 600ms,
+      // but Safari interim is sparse (~1 event per 1-2s of speech),
+      // so the buzz landed ~4.8s after the first wrong-word interim
+      // (rel 6216 -> 11029) — the user hears "3-4s late". When the
+      // CURRENT interim already proves the user moved past the
+      // mistake — TWO expected words after m matched in this same
+      // event — the miss is settled now: fire at once, no second
+      // event, no 600ms wait. The candidate must not look like a
+      // still-growing word (a strict prefix of the expected word, or
+      // vice versa) — that is the revision class the 2-event rule
+      // was built for (ملك -> مالك); a 1-letter candidate never
+      // fires fast either. Residual risk (a whole-word revision
+      // after 2 downstream matches) is covered by the strict heal:
+      // a false alarm still heals to a pass at expiry, and the
+      // grade itself stays finals-based. Thin evidence (one matched
+      // word downstream, longLater-only) keeps the old 2-event /
+      // 600ms path below, unchanged.
+      const matchedDownstream = later.filter(Boolean).length;
+      const fastCandidate = spokenAll[m];
+      const expectedNorm = expected[m].norm;
+      const isFragment =
+        fastCandidate.length < 2 ||
+        (expectedNorm.startsWith(fastCandidate) && expectedNorm !== fastCandidate) ||
+        (fastCandidate.startsWith(expectedNorm) && fastCandidate !== expectedNorm);
+      if (!isFragment && matchedDownstream >= 2) {
+        openCorrectionWindowFromInterim(expected, result);
+        return;
+      }
       // Candidate stability: the spoken token at position m must
       // be the same normalized word across events, not just the
       // same unmatched index.
@@ -4495,8 +4648,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </label>
                       <label className="block">
                         <span className="text-xs font-semibold text-accent-700">الآية</span>
-                        <input type="number" min={1} max={SURAH_AYAH_COUNTS[plDraft.surah - 1] || 1} value={plDraft.ayah}
-                          onChange={(e) => setPlDraft((d) => ({ ...d, ayah: Math.max(1, Math.min(SURAH_AYAH_COUNTS[d.surah - 1] || 1, Number(e.target.value) || 1)) }))}
+                        <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={plDraft.ayah}
+                          onChange={(e) => setPlDraft((d) => ({ ...d, ayah: Math.max(1, Math.min(SURAH_AYAH_COUNTS[d.surah - 1] || 1, Number(normalizeDigits(e.target.value)) || 1)) }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" />
                       </label>
                       <label className="block">
@@ -4561,8 +4714,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                     </select>
                   ) : (
-                    <input type="number" min={1} max={unitMax(startKind)} value={startNum}
-                      onChange={(e) => setStartNum(Math.max(1, Math.min(unitMax(startKind), Number(e.target.value) || 1)))}
+                    <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={startNum}
+                      onChange={(e) => setStartNum(Math.max(1, Math.min(unitMax(startKind), Number(normalizeDigits(e.target.value)) || 1)))}
                       className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                   )}
                 </label>
@@ -4595,8 +4748,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                       </select>
                     ) : (
-                      <input type="number" min={1} max={unitMax(endKind)} value={endNum}
-                        onChange={(e) => setEndNum(Math.max(1, Math.min(unitMax(endKind), Number(e.target.value) || 1)))}
+                      <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={endNum}
+                        onChange={(e) => setEndNum(Math.max(1, Math.min(unitMax(endKind), Number(normalizeDigits(e.target.value)) || 1)))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                     )}
                   </label>
@@ -4634,14 +4787,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="text-sm font-medium text-accent-700">من آية</span>
-                  <input type="number" min={1} max={surahCount} value={from}
-                    onChange={(e) => setFrom(Number(e.target.value) || 1)}
+                  <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={from}
+                    onChange={(e) => setFrom(Number(normalizeDigits(e.target.value)) || 1)}
                     className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                 </label>
                 <label className="block">
                   <span className="text-sm font-medium text-accent-700">إلى آية</span>
-                  <input type="number" min={1} max={surahCount} value={to}
-                    onChange={(e) => setTo(Number(e.target.value) || 1)}
+                  <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={to}
+                    onChange={(e) => setTo(Number(normalizeDigits(e.target.value)) || 1)}
                     className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
                 </label>
               </div>
@@ -5020,6 +5173,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         );
                       })()}
                       <p className="text-xs text-accent-500 mb-3">الاستماع المباشر محتاج إنترنت</p>
+                      {postCorrHint && (
+                        <p className="text-sm font-semibold text-emerald-700 mb-3">التصحيح خلص — كمّل باقي الآية بصوتك؛ اللي قلته أثناء التصحيح ما اتسمعش، فقولوه تاني</p>
+                      )}
                       {micState === 'correcting' && (
                         <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4 polish-correction-window">
                           <p className="text-base font-bold text-amber-800">

@@ -26,3 +26,21 @@ export function formatNum(value: number, lang?: string): string {
     ? formatAr(value)
     : value.toLocaleString('en-US');
 }
+
+/**
+ * Convert Arabic-Indic digits (٠-٩, U+0660–U+0669) and Eastern Arabic digits
+ * (۰-۹, U+06F0–U+06F9) in a string to Western digits (0-9).
+ *
+ * The app DISPLAYS Arabic-Indic digits everywhere, but `type="number"`
+ * inputs reject non-ASCII digits at the browser level (the HTML value
+ * sanitization algorithm only accepts ASCII floating-point numbers), so
+ * typing ٣٦ into a number input yields an empty value and parseInt/Number
+ * return NaN. Typed inputs therefore use `type="text" inputMode="numeric"`
+ * and run their value through this function before every numeric parse.
+ * Display formatting (toArabicIndic / formatAr) is untouched.
+ */
+export function normalizeDigits(value: string): string {
+  return value
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x6f0));
+}
