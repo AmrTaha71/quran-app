@@ -183,40 +183,84 @@ def nun_or_lam_boundary(prev: str, nxt: str) -> bool:
     return False
 
 
+# ONNX alignment model (ctc-forced-aligner >= 1.0, ONNX build): ~1.26 GB download
+# on first use. Kept OUTSIDE the repo at the package's own default location
+# (same as AlignmentSingleton), so no gitignore change is needed.
+MODEL_PATH = Path.home() / "ctc_forced_aligner" / "model.onnx"
+
+_SESSION_CACHE: dict = {}
+
+
+def _load_session():
+    """Load (once per process) the ONNX alignment session + tokenizer."""
+    if "session" not in _SESSION_CACHE:
+        from ctc_forced_aligner import MODEL_URL, Tokenizer, ensure_onnx_model  # type: ignore
+        import onnxruntime  # type: ignore
+
+        ensure_onnx_model(str(MODEL_PATH), MODEL_URL)
+        opts = onnxruntime.SessionOptions()
+        opts.intra_op_num_threads = 2  # tight-RAM VM: uncapped threads spiked peak RSS past 2.3 GB
+        opts.inter_op_num_threads = 1
+        _SESSION_CACHE["session"] = onnxruntime.InferenceSession(
+            str(MODEL_PATH), opts, providers=["CPUExecutionProvider"]
+        )
+        _SESSION_CACHE["tokenizer"] = Tokenizer()
+    return _SESSION_CACHE["session"], _SESSION_CACHE["tokenizer"]
+
+
 def backend_align(audio_path: Path, words: list[str]) -> list[dict]:
     """Return [{'start': sec, 'end': sec, 'score': float|None}, ...] aligned 1:1 to `words`.
 
-    ctc-forced-aligner sketch (VERIFY against the installed version):
-        from ctc_forced_aligner import (load_audio, load_alignment_model,
-            generate_emissions, preprocess_text, get_alignments, get_spans,
-            postprocess_results)
-        model, tokenizer = load_alignment_model(device, dtype=...)
-        wav = load_audio(str(audio_path), model.dtype, model.device)
-        emissions, stride = generate_emissions(model, wav, batch_size=4)
-        tokens_starred, text_starred = preprocess_text(" ".join(words), romanize=True, language="ara")
-        segments, scores, blank = get_alignments(emissions, tokens_starred, tokenizer)
-        spans = get_spans(tokens_starred, segments, blank)
-        results = postprocess_results(text_starred, spans, stride, scores)
-    Then drop '<star>' entries and ASSERT len(results) == len(words).
+    VERIFIED 2026-11-05 against installed ctc-forced-aligner 1.0.2 (ONNX build),
+    onnxruntime 1.31.1, unidecode 1.4.0 (torch 2.15.0+cpu installed but NOT used
+    by this path). Smoke test: surah 114 (basmalah + 6 ayahs, 24 words) aligned
+    end-to-end, 24/24 words, monotonic, ~21 s warm / ~40 s cold on this 4-CPU VM,
+    peak RSS ~2.3 GB.
+
+    Real API (differs from the from-memory sketch this replaced):
+      * NO `load_alignment_model` exists in 1.0.2. The model is ONNX:
+        `ensure_onnx_model(path, MODEL_URL)` downloads model.onnx (~1.26 GB,
+        huggingface.co/deskpai/ctc_forced_aligner) once, then
+        `onnxruntime.InferenceSession(path)` + `Tokenizer()`.
+      * `load_audio(path)` takes NO dtype/device args; default returns a 1-D
+        float32 numpy array at 16 kHz. (The old call passed model.dtype/device
+        and would have produced a 2-D torch tensor that generate_emissions
+        rejects with `audio_waveform must be a 1D array`.)
+      * `generate_emissions(session, wav, batch_size=4)` — first arg is the
+        ONNX session, not a torch model. Returns (emissions, stride_ms).
+      * `preprocess_text(text, romanize=True, language="ara")` — signature as
+        sketched. romanize=True is REQUIRED for Arabic: the vocab is Latin-only,
+        so Arabic goes through `unidecode` — which is NOT a declared dependency
+        of ctc-forced-aligner 1.0.2 and must be installed separately
+        (`pip install unidecode`; same for `audioread`, needed by librosa for mp3).
+      * `get_alignments(emissions, tokens, tokenizer)` -> (segments, scores, blank),
+        `get_spans(tokens, segments, blank)`, and
+        `postprocess_results(text_starred, spans, stride, scores)` — all as sketched,
+        except postprocess_results ALREADY drops '<star>' entries itself, so the
+        extra filter below is belt-and-braces only.
+    Scores are sums of per-frame log-probs (negative, duration-dependent), NOT
+    calibrated per-word confidences — that is why MIN_BACKEND_SCORE stays None.
+    A partial/corrupt model.onnx (e.g. after a killed download) is NOT detected
+    by ensure_onnx_model; delete it and re-run if session load fails.
     """
     try:
         from ctc_forced_aligner import (  # type: ignore
-            generate_emissions, get_alignments, get_spans, load_alignment_model,
-            load_audio, postprocess_results, preprocess_text,
+            MODEL_URL, Tokenizer, ensure_onnx_model, generate_emissions,
+            get_alignments, get_spans, load_audio, postprocess_results,
+            preprocess_text,
         )
-        import torch  # type: ignore
+        import onnxruntime  # type: ignore
     except ImportError as e:  # noqa: BLE001
-        raise SystemExit("install: pip install ctc-forced-aligner torch  (" + str(e) + ")")
+        raise SystemExit("install: pip install ctc-forced-aligner onnxruntime unidecode audioread  (" + str(e) + ")")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model, tokenizer = load_alignment_model(device, dtype=torch.float16 if device == "cuda" else torch.float32)
-    wav = load_audio(str(audio_path), model.dtype, model.device)
-    emissions, stride = generate_emissions(model, wav, batch_size=4)
+    session, tokenizer = _load_session()
+    wav = load_audio(str(audio_path))
+    emissions, stride = generate_emissions(session, wav, batch_size=4)
     tokens_starred, text_starred = preprocess_text(" ".join(words), romanize=True, language="ara")
     segments, scores, blank = get_alignments(emissions, tokens_starred, tokenizer)
     spans = get_spans(tokens_starred, segments, blank)
     results = postprocess_results(text_starred, spans, stride, scores)
-    results = [r for r in results if r.get("text") != "<star>"]
+    results = [r for r in results if r.get("text") != "<star>"]  # already dropped upstream; defensive
     if len(results) != len(words):
         raise RuntimeError(f"aligner returned {len(results)} words for {len(words)} inputs")
     return [{"start": float(r["start"]), "end": float(r["end"]), "score": r.get("score")} for r in results]
@@ -463,9 +507,15 @@ Inputs (tools/juhani-align/work/):
     aligned/{surah:03d}.json   from subcommand align
     range_probe.json           from subcommand fetch
     qa_approved.json           HUMAN-written:  {"juz30": {"approved": true, "by": "Amr", "date": "YYYY-MM-DD",
-                                                          "exclude_ayahs": ["78:7", ...]}}
+                                                          "exclude_ayahs": ["78:7", ...],
+                                                          "adjustments": [{"ayah": "78:3", "word_index": 0,
+                                                                           "start_delta": -0.25, "old_start": 9.12,
+                                                                           "new_start": 8.87, ...}]}}
                                The juz is emitted ONLY if approved is true. exclude_ayahs = ayahs
-                               that failed the ear sample or were pulled afterwards.
+                               that failed the ear sample or were pulled afterwards. adjustments =
+                               ear-QA start shifts, applied to the aligned timing after the gate;
+                               each one asserts old_start matches the aligned value and aborts on
+                               any mismatch (never silently applied to the wrong word).
 Rules (all blocking, none overridable by flags):
   * only ayahs with ok == true and not excluded;
   * only surahs whose range probe returned 206;
@@ -489,6 +539,7 @@ def gen_main(ns: argparse.Namespace) -> None:
     qa = json.loads(qa_path.read_text()).get("juz30", {}) if qa_path.exists() else {}
     approved = bool(qa.get("approved"))
     exclude = set(qa.get("exclude_ayahs", []))
+    adjustments = qa.get("adjustments", [])
     probes = json.loads((WORK / "range_probe.json").read_text()) if (WORK / "range_probe.json").exists() else {}
 
     timings: dict[str, list[float]] = {}
@@ -514,9 +565,34 @@ def gen_main(ns: argparse.Namespace) -> None:
             if kept:
                 range_ok.append(s)
 
+    # Ear-QA start adjustments (qa_approved.json "adjustments"): shift the
+    # named word's start by start_delta. Applied AFTER the gate, so only
+    # shipped ayahs are touched; each adjustment asserts the recorded
+    # old_start matches the aligned value and aborts on ANY mismatch —
+    # never silently applied to the wrong word. Needed for every juz,
+    # not just Juz 30 (future ear-QA rounds will add more).
+    applied = 0
+    if approved:
+        for adj in adjustments:
+            k = adj["ayah"]
+            wi = int(adj["word_index"])
+            row = adj.get("row", "-")
+            if k not in timings:
+                sys.exit(f"gen: adjustment {k} word {wi} ({row}) targets an ayah not in the manifest — aborting")
+            flat = timings[k]
+            if wi < 0 or 2 * wi + 1 >= len(flat):
+                sys.exit(f"gen: adjustment {k} word {wi} ({row}) out of range ({len(flat) // 2} words) — aborting")
+            cur = flat[2 * wi]
+            if abs(cur - adj["old_start"]) > 0.001:
+                sys.exit(f"gen: adjustment {k} word {wi} ({row}): aligned start {cur} != recorded old_start {adj['old_start']} — aborting")
+            if abs((adj["old_start"] + adj["start_delta"]) - adj["new_start"]) > 0.001:
+                sys.exit(f"gen: adjustment {k} word {wi} ({row}): old_start + start_delta != new_start — aborting")
+            flat[2 * wi] = adj["new_start"]
+            applied += 1
+
     lines = [
         "// GENERATED by tools/juhani-align/juhani_align.py (subcommand gen) — do not hand-edit.",
-        f"// QA approved: {approved} (by {qa.get('by', '-')}, {qa.get('date', '-')}). Ayahs: {len(timings)}. Repair queue (not shipped): {repair_total}.",
+        f"// QA approved: {approved} (by {qa.get('by', '-')}, {qa.get('date', '-')}). Ayahs: {len(timings)}. Start adjustments applied: {applied}. Repair queue (not shipped): {repair_total}.",
         f"// Hashes: words {sha(WORK / 'words.json')}, qa_approved {sha(qa_path)}, range_probe {sha(WORK / 'range_probe.json')}.",
         "// Per-word [start,end] seconds in the hadr surah file, flat. Only QA-passed ayahs appear.",
         "// KILL SWITCH: delete an ayah key (or a surah below) and push.",
@@ -529,7 +605,7 @@ def gen_main(ns: argparse.Namespace) -> None:
     lines.append(f"export const JUHANI_RANGE_OK_SURAHS_JUZ30: number[] = [{', '.join(str(s) for s in range_ok)}];")
     lines.append("")
     OUT.write_text("\n".join(lines))
-    print(f"wrote {OUT} ({len(timings)} ayahs, {len(range_ok)} surahs, approved={approved})")
+    print(f"wrote {OUT} ({len(timings)} ayahs, {len(range_ok)} surahs, approved={approved}, adjustments={applied})")
 
 
 # ------------------------------------------------------------------
