@@ -141,6 +141,15 @@ export function juhaniSurahUrl(surah: number): string {
   return hadrAudioUrl(surah);
 }
 
+/** Start time (seconds in the surah file) of an ayah's first word,
+ *  or null when the ayah has no manifest timings. Warm-up only:
+ *  callers must still gate playback on isJuhaniCorrEnabled. */
+export function juhaniAyahStartTime(surah: number, ayah: number): number | null {
+  const t = timingsFor(surah, ayah);
+  if (!t || t.length === 0) return null;
+  return t[0];
+}
+
 // ------------------------------------------------------------------
 // Window planning (pure).
 // ------------------------------------------------------------------
@@ -225,6 +234,12 @@ const END_LEAD_PER_RATE_S = 0.01;
 const LOAD_TIMEOUT_MS = 8000;
 const SEEK_TIMEOUT_MS = 6000;
 const SEGMENT_SLACK_MS = 6000;
+/** Silence between two correction segments in one plan. Segments in
+ *  a plan are non-adjacent by construction (mergedWordSpans merges
+ *  touching windows), so without a gap two far-apart corrections
+ *  sound like one continuous phrase. 800ms is unmistakably a break
+ *  (a hadr inter-word gap is ~100-200ms) yet short. FIX B. */
+const SEGMENT_GAP_MS = 800;
 
 export interface JuhaniPlayArgs {
   url: string;
@@ -240,9 +255,10 @@ export interface JuhaniPlayArgs {
 export interface JuhaniPlayer {
   /** Call inside a user gesture (the mic-start tap): iOS only lets an
    *  element play later from a timer if it was started by a gesture.
-   *  Optionally warms the surah file's metadata afterwards. */
-  unlock: (prewarmUrl?: string) => void;
-  prewarm: (url: string) => void;
+   *  Optionally warms the surah file's audio at `warmTime` (the ayah's
+   *  first-word time) afterwards, so the first correction seek is fast. */
+  unlock: (prewarmUrl?: string, warmTime?: number) => void;
+  prewarm: (url: string, warmTime?: number) => void;
   play: (args: JuhaniPlayArgs) => void;
   stop: () => void;
   dispose: () => void;
@@ -316,23 +332,42 @@ export function createJuhaniPlayer(): JuhaniPlayer {
     }
   };
 
-  const prewarm = (url: string) => {
+  const prewarm = (url: string, warmTime?: number) => {
     try {
       if (busy) return;
       const a = ensure();
       if (a.src !== url) {
         a.src = url;
-        a.preload = 'metadata';
+        a.preload = 'auto';
         a.load();
+      }
+      // Warm the buffer at the ayah: once metadata is ready, seek the
+      // paused element to the ayah's first word so the bytes around the
+      // correction windows are fetched during the recitation, not at
+      // expiry. One-shot; cleared by stop()/detach() (a.onloadedmetadata).
+      if (warmTime != null && Number.isFinite(warmTime) && warmTime >= 0) {
+        const seekWarm = () => {
+          try {
+            if (busy) return;
+            if (a.src !== url) return;
+            if (Math.abs(a.currentTime - warmTime) < 0.005) return;
+            a.currentTime = warmTime;
+          } catch { /* ignore */ }
+        };
+        if (a.readyState >= 1) {
+          seekWarm();
+        } else {
+          a.onloadedmetadata = () => { a.onloadedmetadata = null; seekWarm(); };
+        }
       }
     } catch { /* ignore */ }
   };
 
-  const unlock = (prewarmUrl?: string) => {
+  const unlock = (prewarmUrl?: string, warmTime?: number) => {
     try {
       if (busy) return;
       const a = ensure();
-      if (unlocked) { if (prewarmUrl) prewarm(prewarmUrl); return; }
+      if (unlocked) { if (prewarmUrl) prewarm(prewarmUrl, warmTime); return; }
       if (!silentUrl) silentUrl = silentWavUrl();
       a.muted = true;
       a.src = silentUrl;
@@ -342,7 +377,7 @@ export function createJuhaniPlayer(): JuhaniPlayer {
           try { a.pause(); } catch { /* ignore */ }
           a.muted = false;
           unlocked = true;
-          if (prewarmUrl) prewarm(prewarmUrl);
+          if (prewarmUrl) prewarm(prewarmUrl, warmTime);
         }).catch(() => { a.muted = false; });
       }
     } catch { /* ignore */ }
@@ -406,7 +441,8 @@ export function createJuhaniPlayer(): JuhaniPlayer {
               if (guard) { clearTimeout(guard); timers.delete(guard); guard = null; }
               try { a.pause(); } catch { /* ignore */ }
               i++;
-              playSegment();
+              if (i >= segs.length) finish();
+              else later(playSegment, SEGMENT_GAP_MS);
             }
           }, POLL_MS);
           // Whole-segment guard: media time / rate + slack.

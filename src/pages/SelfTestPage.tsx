@@ -13,7 +13,7 @@ import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
-  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniSurahUrl,
+  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniSurahUrl, juhaniAyahStartTime,
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
@@ -81,6 +81,20 @@ const CORR_RATE_LABEL: Record<CorrRate, string> = { slow: 'بطيء', normal: '�
 // engine to fire onstart, far below the 18s prompt watchdog.
 const CONT_AUDIO_CACHE_CAP = 500;
 const CONT_TTS_ONSTART_WATCHDOG_MS = 3000;
+// FIX A: delay after cancel() before speak() when the TTS engine
+// was actually busy. The old 50ms defer did not save the
+// cancel-then-speak drop the 2026-11-05 diag caught (speak()
+// called, neither onstart nor onerror in 3000ms); 200ms is the
+// commonly effective gap, and the onstart watchdog retries once
+// more if even that is swallowed.
+const CONT_TTS_CANCEL_DELAY_MS = 200;
+// FIX A: a few silent samples (mono 8kHz 16-bit WAV, 8 zero
+// samples — inaudible) played inside the mic-start tap to unlock
+// the shared continuous-prompt <audio> element (see
+// warmTtsVoices). Safari gates timer-triggered play() on a fresh
+// element once the tap is long past (NotAllowedError); an element
+// that has played inside a gesture stays playable.
+const CONT_SILENT_WAV = 'data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YRAAAAAAAAAAAAAAAAAAAAAAAAAA';
 // Recitation mode: 'ayah' grades one ayah at a time (the original
 // flow); 'continuous' lets the user recite the whole range without
 // stopping at each ayah, and reports missed words per ayah at the end.
@@ -1191,6 +1205,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const contStallTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contPromptingRef = useRef(false);
   const contPromptAudioRef = useRef<HTMLAudioElement | null>(null);
+  // FIX A: one reusable <audio> element for continuous prompts,
+  // unlocked inside the mic-start tap (see warmTtsVoices). Safari
+  // gates timer-triggered play() on a fresh element (NotAllowedError,
+  // last gesture long past — 2026-11-05 diag, gen 2); an element
+  // that played inside a gesture stays playable, so playUrl reuses
+  // this one instead of `new Audio()` per prompt. Null until
+  // warmed — playUrl falls back to a fresh element. Reuse is safe:
+  // prompts are serialized by contPromptingRef, and resume/cancel
+  // pause the element before the next prompt re-points it.
+  const contSharedAudioRef = useRef<HTMLAudioElement | null>(null);
   // Iteration 2: the single-slot prefetch is replaced by a
   // PERSISTENT content-addressed cache (see corrAudioStore):
   // IndexedDB blobs + this synchronous mirror for the prompt path.
@@ -1199,11 +1223,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // context-word audio could play for a bare-word stall prompt with
   // the same indices. The cache key is (version, voice, rate,
   // spoken words, indices), so neither cross-play can happen.
-  // A pending stall fetch is tracked separately so it is not
-  // fetched twice. The persistent cache SURVIVES test resets by
-  // design (a repeat error in a later round must still hit).
+  // A pending stall fetch is tracked per cache key so it is not
+  // fetched twice. FIX A: a Set, not a single slot — the stall
+  // prefetch now fetches BOTH spoken forms (bare + one-context-word,
+  // see scheduleContStallPrompt), so two keys can be in flight at
+  // once. The persistent cache SURVIVES test resets by design (a
+  // repeat error in a later round must still hit).
   const contAudioCacheRef = useRef(new AudioUrlCache(CONT_AUDIO_CACHE_CAP));
-  const contPrefetchPendingRef = useRef<string | null>(null);
+  const contPrefetchPendingRef = useRef<Set<string>>(new Set());
   const corrAudioBackendRef = useRef<CorrAudioBackend | null>(null);
   const corrAudioHydratedRef = useRef(false);
   // Iteration 2 diag counters (session-scoped): prompt-lookup hits
@@ -1827,7 +1854,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         // cleared here — it survives resets by design (repeat
         // errors in later rounds must still hit). Only the
         // in-flight prefetch marker resets.
-        contPrefetchPendingRef.current = null;
+        contPrefetchPendingRef.current.clear();
         // D2: a new range starts with a clean interrupt-silence
         // slate — no carried-over no-match state, audio-failure
         // note, retry marker, or match baseline.
@@ -2576,6 +2603,28 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const once = () => { try { window.speechSynthesis.getVoices(); } catch {} };
       try { window.speechSynthesis.addEventListener('voiceschanged', once, { once: true }); } catch {}
     } catch {}
+    // FIX A: unlock the shared continuous-prompt <audio> element
+    // inside this gesture (mic-start tap — both modes call this).
+    // Timer-triggered play() on a fresh element is rejected on
+    // Safari once the tap is long past (NotAllowedError, 2026-11-05
+    // diag gen 2); an element that has played inside a gesture
+    // stays playable, so playUrl reuses this one. The clip is a few
+    // silent samples, never audible. Any failure is swallowed: an
+    // unwarmable element just means playUrl falls back to a fresh
+    // element + the (now reliable) TTS fallback. A stale prompt clip
+    // still loaded on the element is paused first so the unlock
+    // never blurts it.
+    try {
+      let a = contSharedAudioRef.current;
+      if (!a) {
+        a = new Audio();
+        a.preload = 'auto';
+        contSharedAudioRef.current = a;
+      }
+      try { a.pause(); } catch {}
+      a.src = CONT_SILENT_WAV;
+      void a.play().catch(() => {});
+    } catch {}
   };
   const startMic = (preserveArg?: boolean) => {
     // Batch 1: a new listening session resets interim-miss
@@ -2600,11 +2649,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     warmTtsVoices();
     // Juhani: unlock the reusable <audio> and the buzz context INSIDE this
     // tap (iOS only lets timer-started playback run if a gesture started
-    // the element), and warm the surah file's metadata.
+    // the element), and warm the surah file's audio at this ayah.
     if (juhaniEnabledForCurrent()) {
       warmErrorBuzz();
       if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
-      juhaniPlayerRef.current.unlock(juhaniSurahUrl(ayah.surah_no));
+      juhaniPlayerRef.current.unlock(
+        juhaniSurahUrl(ayah.surah_no),
+        juhaniAyahStartTime(ayah.surah_no, ayah.ayah_no) ?? undefined,
+      );
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
@@ -3357,9 +3409,42 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // rejection here, which would corrupt the delay.
     const playTtsFallback = (watchdogMs?: number) => {
         try {
-          if ('speechSynthesis' in window) {
-            if (ttsFallbackUsed) return;
-            ttsFallbackUsed = true;
+          if (!('speechSynthesis' in window)) { noteContPromptAudioFailed(key); resumeAfterPrompt(); return; }
+          if (ttsFallbackUsed) return;
+          ttsFallbackUsed = true;
+          // FIX A: the 2026-11-05 diag caught this fallback silently
+          // dropped TWICE on Safari — speak() called, neither onstart
+          // nor onerror in 3000ms. Root cause is the WebKit
+          // cancel-then-speak drop: the prompt start cancels speech
+          // and speak() right after cancel() is swallowed, even with
+          // the old 50ms defer. Fixed in three layers:
+          // (1) never cancel an idle engine — if nothing is speaking
+          // or queued, speak immediately with no cancel and no defer,
+          // so there is no cancel-then-speak hazard at all (the
+          // prompt-start cancel below is conditional for the same
+          // reason); (2) when something IS speaking/queued, cancel
+          // and wait CONT_TTS_CANCEL_DELAY_MS (200ms) before
+          // speaking; resume() first, in case the engine is stuck
+          // paused; (3) if onstart still never fires, retry ONCE
+          // with a fresh utterance instead of declaring the prompt
+          // unheard. Only a second silent watchdog notes the failure
+          // + resumes. A retired (superseded-by-retry) utterance's
+          // late events stay silent and never cancel the retry.
+          // Iteration 2: iOS TTS onstart watchdog. speak() outside
+          // a gesture may delay or block on iOS, firing neither
+          // onstart nor onerror — without this, a blocked TTS
+          // would strand the prompt until the 18s watchdog. A
+          // dedicated flag (not promptAudioStarted, which playUrl
+          // may already have set) proves THIS utterance started.
+          let ttsStarted = false;
+          let ttsAttempts = 0;
+          let ttsRetiredUtterance: SpeechSynthesisUtterance | null = null;
+          const clearTtsWatchdog = () => { if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; } };
+          const wd = watchdogMs ?? CONT_TTS_ONSTART_WATCHDOG_MS;
+          const speakUtterance = () => {
+            if (promptSettledRef.current || speakGenRef.current !== gen || !contPromptingRef.current || ttsStarted) return;
+            if (ttsCurrentUtterance) ttsRetiredUtterance = ttsCurrentUtterance;
+            ttsAttempts++;
             const u = new SpeechSynthesisUtterance(correctionSpeechText(words));
             ttsCurrentUtterance = u;
             u.lang = 'ar-SA';
@@ -3368,40 +3453,63 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             const v = pickArabicTtsVoice();
             if (v) u.voice = v;
             u.rate = CORR_RATE_VALUE[liveRef.current.corrRate];
-            // Iteration 2: iOS TTS onstart watchdog. speak() outside
-            // a gesture may delay or block on iOS, firing neither
-            // onstart nor onerror — without this, a blocked TTS
-            // would strand the prompt until the 18s watchdog. A
-            // dedicated flag (not promptAudioStarted, which playUrl
-            // may already have set) proves THIS utterance started.
-            let ttsStarted = false;
-            const clearTtsWatchdog = () => { if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; } };
             // Batch 3 (Claude hole 1): a cancelled utterance can
             // still fire onstart in the same tick it was
             // cancelled — cancel AGAIN so no blip overlaps the
-            // human audio, and never set the started flags.
-            u.onstart = () => { if (ttsCancelledUtterance === u) { try { window.speechSynthesis.cancel(); } catch {} return; } if (speakGenRef.current !== gen) return; ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
-            u.onend = () => { if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
-            u.onerror = () => { if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
-            // Batch 3 (Claude hole 2): on WebKit, speak() right
-            // after cancel() can be silently dropped — defer
-            // 50ms, and never speak into a settled or superseded
-            // prompt (a settle inside the 50ms window must win).
-            const wd = watchdogMs ?? CONT_TTS_ONSTART_WATCHDOG_MS;
-            setTimeout(() => {
-              if (promptSettledRef.current || speakGenRef.current !== gen || !contPromptingRef.current) return;
+            // human audio, and never set the started flags. A
+            // retired utterance (superseded by the one retry) just
+            // stays silent — its late onstart must NOT cancel the
+            // retry that replaced it.
+            u.onstart = () => { if (ttsRetiredUtterance === u) return; if (ttsCancelledUtterance === u) { try { window.speechSynthesis.cancel(); } catch {} return; } if (speakGenRef.current !== gen) return; ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
+            u.onend = () => { if (ttsRetiredUtterance === u) return; if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
+            u.onerror = () => { if (ttsRetiredUtterance === u) return; if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
+            const doSpeak = () => {
+              if (promptSettledRef.current || speakGenRef.current !== gen || !contPromptingRef.current || ttsStarted) return;
+              try { window.speechSynthesis.resume(); } catch {}
               window.speechSynthesis.speak(u);
               ttsOnstartTimer = setTimeout(() => {
                 ttsOnstartTimer = null;
                 if (speakGenRef.current !== gen) return;
-                if (!ttsStarted && ttsCancelledUtterance !== u) { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
+                if (!ttsStarted && ttsCancelledUtterance !== u && ttsRetiredUtterance !== u) {
+                  if (ttsAttempts < 2) {
+                    // One retry with a fresh utterance: speakUtterance
+                    // re-checks the engine state, so the stuck
+                    // utterance is cancelled first and the retry is
+                    // deferred 200ms after that cancel.
+                    diagPush('tts-error', { label: 'cont-prompt-tts-retry' });
+                    speakUtterance();
+                  } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
+                }
               }, wd);
-            }, 50);
-          } else { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
+            };
+            // Cancel-then-speak only when the engine is actually
+            // busy; an idle engine speaks at once. A settle inside
+            // the 200ms window must win (doSpeak re-checks).
+            let busy = false;
+            try { busy = window.speechSynthesis.speaking || window.speechSynthesis.pending; } catch {}
+            if (busy) {
+              try { window.speechSynthesis.cancel(); } catch {}
+              setTimeout(doSpeak, CONT_TTS_CANCEL_DELAY_MS);
+            } else {
+              doSpeak();
+            }
+          };
+          speakUtterance();
         } catch { noteContPromptAudioFailed(key); resumeAfterPrompt(); }
       };
     const playUrl = (url: string, cacheKey?: string, src?: 'cache' | 'fetch') => {
-      const a = new Audio(url);
+      // FIX A: reuse the gesture-unlocked element (see
+      // warmTtsVoices) so a timer-triggered prompt is not refused
+      // with NotAllowedError on Safari once the mic-start tap is
+      // long past (2026-11-05 diag, gen 2). A fresh element is the
+      // fallback when the shared one was never warmed. A refused
+      // play() still falls back to TTS below, exactly as before.
+      const shared = contSharedAudioRef.current;
+      const a = shared ?? new Audio(url);
+      if (shared) {
+        try { shared.pause(); } catch {}
+        shared.src = url;
+      }
       // v13: the file is neutral-speed; the user's corrRate applies
       // here, pitch-preserved.
       // v14 (Claude review): Safari resets playbackRate when the src
@@ -3478,7 +3586,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const misses = corrCacheMissesRef.current;
       diagPush('cont-prompt-cache-lookup', { label: 'cont-prompt-audio', hit: url !== null, hits, misses, hitRatio: hits + misses > 0 ? Math.round((hits / (hits + misses)) * 100) / 100 : 0, entries: contAudioCacheRef.current.size, storageBytes: corrStorageBytesRef.current, gen });
     }
-    cancelCorrectionSpeech();
+    // FIX A: never cancel an idle engine here — the unconditional
+    // cancel() immediately before the TTS fallback's speak() is the
+    // WebKit cancel-then-speak drop the 2026-11-05 diag caught
+    // (speak() called, neither onstart nor onerror in 3000ms).
+    // Cancel only when something is actually speaking or queued;
+    // playTtsFallback re-checks the engine state before it speaks,
+    // and resume/cancel paths already cancelled any prompt speech
+    // at settle time, so the engine is idle here in the common case.
+    try {
+      const ss = (window as unknown as { speechSynthesis?: SpeechSynthesis }).speechSynthesis;
+      if (ss && (ss.speaking || ss.pending)) cancelCorrectionSpeech();
+    } catch {}
     clearContPromptTimer();
     // Iteration 2 verified: this watchdog arms at PROMPT START
     // (before either playback branch below) and is never cleared on
@@ -3593,22 +3712,46 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // hit; unifying the key also fixes that (stall prompts now
     // actually play prefetched audio). A prefetch win persists too,
     // so the next identical stall is instant even across visits.
-    const prefetchKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, owed.words, owed.indices);
-    if (!contAudioCacheRef.current.get(prefetchKey) && contPrefetchPendingRef.current !== prefetchKey) {
-      const token = ++corrFetchTokenRef.current;
-      contPrefetchPendingRef.current = prefetchKey;
-      // Position mode (v12): stall prompts speak bare owed words
-      // (no context prepend on this path), so shape is always bare.
-      const stallPos = corrPositionsForRange(owed.indices, liveRef.current.contExpected, ayahsRef.current);
-      void fetchCorrectionAudio(owed.words, token, stallPos ? { shape: 'bare', positions: stallPos } : undefined).then((url) => {
-        if (url && token === corrFetchTokenRef.current && contPrefetchPendingRef.current === prefetchKey) {
-          contAudioCacheRef.current.set(prefetchKey, url);
+    // FIX A: prefetch BOTH spoken forms of the owed words — the
+    // bare form the stall prompt speaks AND the context form (one
+    // preceding word, same missed indices) an interrupt prompt
+    // speaks. The old code prefetched bare only, so an interrupt
+    // prompt's lookup (context key) could never hit a stall
+    // prefetch (2026-11-05 diag: cache-key mismatch). The context
+    // form is fetched only when a same-ayah predecessor exists
+    // (withPrecedingContextWord returns the bare words otherwise,
+    // so no second generation is spent). Positions are the owed
+    // indices in both cases — the server derives the predecessor
+    // from the first position for shape 'context', exactly the
+    // interrupt path's derivation in speakContPrompt.
+    // The fetch bypasses fetchCorrectionAudio's token guard on
+    // purpose: that guard drops a URL whenever any later caller
+    // bumps corrFetchTokenRef (ayah-mode prefetch, a newer stall
+    // re-arm, …) — during live recitation a 6–12s generation
+    // almost always lost that race, so prefetches almost never
+    // landed. A prefetch only WRITES a content-addressed cache
+    // entry and never plays, so caching a superseded generation
+    // is safe: its key still names exactly the words it speaks.
+    // requestCorrectionAudio's own contract (null on the 202 lock /
+    // failure, URL on 200) is unchanged, and fetchCorrectionAudio
+    // keeps its token guard for its ayah-mode callers.
+    const stallPos = corrPositionsForRange(owed.indices, liveRef.current.contExpected, ayahsRef.current);
+    const prefetchContAudio = (pWords: string[], shape: 'context' | 'bare') => {
+      const pKey = corrAudioCacheKey(CORR_AUDIO_CACHE_VERSION, corrGender, pWords, owed.indices);
+      if (contAudioCacheRef.current.get(pKey) || contPrefetchPendingRef.current.has(pKey)) return;
+      contPrefetchPendingRef.current.add(pKey);
+      void requestCorrectionAudio(pWords, stallPos ? { shape, positions: stallPos } : undefined).then((url) => {
+        contPrefetchPendingRef.current.delete(pKey);
+        if (url) {
+          contAudioCacheRef.current.set(pKey, url);
           // v3: base-rate metadata (1.0) — file is neutral-speed.
-          persistCorrAudio(prefetchKey, url, corrGender, owed.words, owed.indices, 1.0);
+          persistCorrAudio(pKey, url, corrGender, pWords, owed.indices, 1.0);
         }
-        if (contPrefetchPendingRef.current === prefetchKey) contPrefetchPendingRef.current = null;
       });
-    }
+    };
+    prefetchContAudio(owed.words, 'bare');
+    const ctxWords = withPrecedingContextWord(owed.words, owed.indices, liveRef.current.contExpected);
+    if (ctxWords.length > owed.words.length) prefetchContAudio(ctxWords, 'context');
     contStallTimerRef.current = setTimeout(() => {
       contStallTimerRef.current = null;
       if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
