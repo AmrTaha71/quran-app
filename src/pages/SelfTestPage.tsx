@@ -837,7 +837,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `rel` is ms since the current test started (performance.now);
   // `t` is the wall-clock epoch ms. Timestamps come from the same
   // clock the watchdog uses, so log order matches engine order.
-  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; errBody?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number };
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; errBody?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number; playbackRate?: number; corrRate?: string };
   const DIAG_EVENT_CAP = 2000;
   const DIAG_DISPLAY_CAP = 500;
   const diagEventsRef = useRef<DiagEvent[]>([]);
@@ -1569,7 +1569,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       applyCorrRate();
       a.onloadedmetadata = applyCorrRate;
       corrAudioRef.current = a;
-      a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction' }); };
+      a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction', playbackRate: a.playbackRate, corrRate: liveRef.current.corrRate }); };
       a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); try { onDone?.(); } catch {} };
       a.onerror = () => { diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed, onDone); };
       // DIAG (2026-11-04, logging only): a refused play() used to
@@ -1622,7 +1622,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Returns true when Juhani took ownership of the correction. On an
   // audio failure (load/seek/play) onFallback runs the generated path, so
   // the user is never left without a correction.
-  const startJuhaniCorrection = (ayah: TestAyah, wordCount: number, wrongIdx: number[], onFallback: () => void, onDone?: () => void): boolean => {
+  // maxRate caps the Juhani playback rate (continuous mode passes
+  // 1.25: 1.5x hadr is hard to hear). Ayah mode passes nothing, so
+  // its rate is unchanged.
+  const startJuhaniCorrection = (ayah: TestAyah, wordCount: number, wrongIdx: number[], onFallback: () => void, onDone?: () => void, maxRate?: number): boolean => {
     const plan = planJuhaniWindows(ayah.surah_no, ayah.ayah_no, wordCount, wrongIdx);
     if (!plan) return false;
     if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
@@ -1630,7 +1633,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     stopRefUnit();
     cancelCorrectionSpeech();
     stopCorrAudio();
-    const rate = CORR_RATE_VALUE[liveRef.current.corrRate];
+    const rate = maxRate != null ? Math.min(CORR_RATE_VALUE[liveRef.current.corrRate], maxRate) : CORR_RATE_VALUE[liveRef.current.corrRate];
     diagPush('corr-source', { label: 'juhani-window', reason: `mode=${liveRef.current.corrDelayMode};rate=${rate};segs=${plan.segments.length}${plan.truncated ? ';truncated' : ''}` });
     setCorrWindowPlaying(true);
     player.play({
@@ -3652,7 +3655,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             // retired utterance (superseded by the one retry) just
             // stays silent — its late onstart must NOT cancel the
             // retry that replaced it.
-            u.onstart = () => { if (ttsRetiredUtterance === u) return; if (ttsCancelledUtterance === u) { try { window.speechSynthesis.cancel(); } catch {} return; } if (speakGenRef.current !== gen) return; ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt }); };
+            u.onstart = () => { if (ttsRetiredUtterance === u) return; if (ttsCancelledUtterance === u) { try { window.speechSynthesis.cancel(); } catch {} return; } if (speakGenRef.current !== gen) return; ttsStarted = true; promptAudioStarted = true; clearTtsWatchdog(); diagPush('tts-start', { label: 'cont-prompt-tts', msFromPrompt: Date.now() - promptStartedAt, playbackRate: u.rate, corrRate: liveRef.current.corrRate }); };
             u.onend = () => { if (ttsRetiredUtterance === u) return; if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-end', { label: 'cont-prompt-tts' }); resumeAfterPrompt(); };
             u.onerror = () => { if (ttsRetiredUtterance === u) return; if (speakGenRef.current !== gen) return; if (ttsCancelledUtterance === u) return; clearTtsWatchdog(); diagPush('tts-error', { label: 'cont-prompt-tts' }); noteContPromptAudioFailed(key); resumeAfterPrompt(); };
             const doSpeak = () => {
@@ -3727,7 +3730,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // failed settles (no re-speak over a partial play),
       // never-started falls back to TTS.
       let audioStarted = false;
-      a.onplaying = () => { if (speakGenRef.current !== gen) return; audioStarted = true; promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt }); };
+      a.onplaying = () => { if (speakGenRef.current !== gen) return; audioStarted = true; promptAudioStarted = true; diagPush('tts-start', { label: 'cont-prompt-audio', msFromPrompt: Date.now() - promptStartedAt, playbackRate: a.playbackRate, corrRate: liveRef.current.corrRate }); };
       a.onended = () => { if (speakGenRef.current !== gen) return; diagPush('tts-end', { label: 'cont-prompt-audio' }); resumeAfterPrompt(); };
       a.onstalled = () => {
         if (speakGenRef.current !== gen) return;
@@ -3816,6 +3819,37 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (!promptAudioStarted) noteContPromptAudioFailed(key);
       resumeAfterPrompt();
     }, NO_RESULT_WATCHDOG_MS);
+    // Juhani continuous (Claude step 2, 2026-11-06): retrieval, not
+    // generation. When the wrong words all sit in ONE ayah that is in
+    // the Juz-30 manifest, play Juhani's hadr windows for them —
+    // instant (local file, no fetch, no 202 lock) — instead of the
+    // generated path below. Fix-credit stays on the WRONG INDICES
+    // (contAwaitingRef, set above), never on the window. Anything
+    // Juhani cannot serve — ayah not in the manifest, indices
+    // spanning two ayahs, no plan — falls through to the generated
+    // path below, exactly as before. A Juhani audio failure falls
+    // back to browser TTS for this prompt (same "never silence"
+    // rule as the generated path's own fallback).
+    {
+      const expected = liveRef.current.contExpected;
+      const contCorrPos = corrPositionsForRange(audioIndices, expected, ayahsRef.current);
+      const firstIdx = audioIndices[0];
+      const firstEntry = firstIdx != null ? expected[firstIdx] : undefined;
+      const ayah = firstEntry ? ayahsRef.current[firstEntry.ayahIdx] : undefined;
+      const singleAyah = !!ayah && !!firstEntry && !!contCorrPos && audioIndices.every((i) => expected[i] && expected[i].ayahIdx === firstEntry.ayahIdx);
+      if (ayah && singleAyah && contCorrPos) {
+        // Hadr at 1.5x is hard to hear: cap Juhani at 1.25.
+        const JUHANI_HADR_MAX_RATE = 1.25;
+        if (startJuhaniCorrection(
+          ayah,
+          expectedWordList(ayah.ayah_text).length,
+          contCorrPos.map((p) => p.w),
+          () => { playTtsFallback(); },
+          resumeAfterPrompt,
+          JUHANI_HADR_MAX_RATE,
+        )) return;
+      }
+    }
     if (url) {
       playUrl(url, audioKey, 'cache');
     } else {
@@ -4213,6 +4247,25 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Iteration 2: hydrate the persistent correction-audio cache
     // (no-op after the first call) so repeat prompts can hit it.
     hydrateCorrAudioCache();
+    // Juhani continuous (Claude step 2): unlock the reusable <audio>
+    // INSIDE this tap (iOS only lets timer-started playback run if a
+    // gesture started the element), and warm the surah file's audio
+    // at the range's first ayah so the first correction seek is
+    // fast. The range may span surahs; only the first ayah is
+    // warmed — later ayahs seek on demand (still a local file, no
+    // fetch). unlock() is a no-op once unlocked, so the resume
+    // calls via resumeAfterPrompt are safe.
+    {
+      const firstAyah = ayahsRef.current[0];
+      if (firstAyah && isJuhaniCorrEnabled(firstAyah.surah_no, firstAyah.ayah_no, expectedWordList(firstAyah.ayah_text).length)) {
+        warmErrorBuzz();
+        if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
+        juhaniPlayerRef.current.unlock(
+          juhaniSurahUrl(firstAyah.surah_no),
+          juhaniAyahStartTime(firstAyah.surah_no, firstAyah.ayah_no) ?? undefined,
+        );
+      }
+    }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
