@@ -61,6 +61,16 @@ function resumeHifz(onNavigate: (r: Route) => void): void {
   onNavigate('mushaf');
 }
 
+// Self-test range choice: SelfTestPage consumes the stored choice on
+// mount (opens that range door's small detail page). Same mechanism as
+// the Mushaf target / fullscreen flags above.
+function openTestRange(choice: 'surah' | 'juz' | 'page' | 'passage', onNavigate: (r: Route) => void): void {
+  try {
+    sessionStorage.setItem('quran-test-range-choice', choice);
+  } catch { /* ignore */ }
+  onNavigate('test');
+}
+
 type LinkOfDay = { surah: number; surahName: string; ayah: number; title: string | null; text: string };
 const LOD_KEY = 'quran-link-of-day-v1';
 function lodDate(): string {
@@ -118,6 +128,10 @@ export default function HomeStartPage({ session, onNavigate }: {
   // the beginning). Collapsed by default — the door looks exactly like
   // the other Home doors.
   const [hifzOpen, setHifzOpen] = useState(false);
+  // سمّع لنفسك door: expands to 4 range choices (by surah / by juz /
+  // by page / a passage). Collapsed by default — same pattern as the
+  // الحفظ door above; the door itself never navigates.
+  const [testOpen, setTestOpen] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   // "ابدأ من مكان معين" picker: chosen surah + ayah. The surah number
   // input and the name dropdown stay in sync through this state.
@@ -345,10 +359,14 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن. */}
+        {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن.
+            Tap to expand 4 range choices below it; tap again to collapse.
+            Only a choice tap navigates (to 'test', with the chosen range
+            stored for SelfTestPage to open on mount). */}
         <button
           onPointerDown={pressFeedback}
-          onClick={() => onNavigate('test')}
+          onClick={() => setTestOpen(!testOpen)}
+          aria-expanded={testOpen}
           className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
           style={{ animationDelay: '120ms' }}
         >
@@ -356,7 +374,41 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Headphones className="w-5 h-5 text-white" />
           </span>
           سمّع لنفسك
+          <ChevronDown className={`w-5 h-5 text-white transition-transform ${testOpen ? 'rotate-180' : ''}`} />
         </button>
+
+        {testOpen && (
+          <div className="px-4 mb-4">
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => openTestRange('surah', onNavigate)}
+              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+            >
+              بالسورة
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => openTestRange('juz', onNavigate)}
+              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+            >
+              بالجزء
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => openTestRange('page', onNavigate)}
+              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+            >
+              بالصفحة
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => openTestRange('passage', onNavigate)}
+              className="w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+            >
+              فقرة معينة
+            </button>
+          </div>
+        )}
 
         {/* الحق الإمام: directly under سمّع لنفسك (user order 2026-11-04). */}
         <button

@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
-import { UnitKind, EndKind, RangePoint, unitMax, unitLabel, containingUnit, unitStartGlobal, resolveRange, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
+import { RangePoint, unitStartGlobal, unitEndGlobal, unitStartPoint, unitEndPoint, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
+import { resolvePageRange, TOTAL_MUSHAF_PAGES } from '../lib/mushafPageRange';
 import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
 import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
@@ -746,16 +747,68 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (manualSurahMatches.some((s) => s.no === surah)) return manualSurahMatches;
     return [...manualSurahMatches, ...SURAHS.filter((s) => s.no === surah)].sort((a, b) => a.no - b.no);
   }, [manualSurahMatches, surah]);
-  // Unit mode: start at the beginning of a surah/juz/hizb/quarter and
-  // end at the end of that unit, or at the end of a juz/hizb/surah.
-  const [startKind, setStartKind] = useState<UnitKind>('surah');
-  const [startNum, setStartNum] = useState(2);
-  const [endKind, setEndKind] = useState<EndKind>('same');
-  const [endNum, setEndNum] = useState(2);
+  // Range picker (2026-11-06): four Quranic choices — بالسورة /
+  // بالجزء / بالصفحة / فقرة معينة — each a small detail view.
+  // The حزب/ربع starts and cross-unit ends are gone from the UI
+  // (the user asked for four choices only); the range logic
+  // (startTestGlobal / startTest) is unchanged.
+  type RangeChoice = 'surah' | 'juz' | 'page' | 'passage';
+  const [rangeChoice, setRangeChoice] = useState<RangeChoice | null>(null);
+  const [juzNum, setJuzNum] = useState(1);
+  const [pageNum, setPageNum] = useState(1);
+  const [pageRange, setPageRange] = useState<{ start: RangePoint; end: RangePoint } | null>(null);
+  const [pageRangeState, setPageRangeState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [pageRetry, setPageRetry] = useState(0);
   const [rangeStart, setRangeStart] = useState<RangePoint | null>(null);
   const [rangeEnd, setRangeEnd] = useState<RangePoint | null>(null);
-  const unitPreview = resolveRange(startKind, startNum, endKind, endNum);
-  const unitPreviewValid = unitPreview.end.global >= unitPreview.start.global;
+  // Whole-surah / whole-juz ranges (derived, no extra state).
+  const surahRange = { start: unitStartPoint('surah', surah), end: unitEndPoint('surah', surah) };
+  const juzRange = { start: unitStartPoint('juz', juzNum), end: unitEndPoint('juz', juzNum) };
+  // The manual passage range (also the hub start button's range).
+  // NOTE: SURAH_AYAH_COUNTS inline here, not surahCount — that const
+  // is declared later in this render (TDZ).
+  const passageCount = SURAH_AYAH_COUNTS[surah - 1] || 1;
+  const passageLo = Math.max(1, Math.min(from, to, passageCount));
+  const passageHi = Math.min(Math.max(from, to), passageCount);
+  const passageRange = {
+    start: globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + passageLo - 1),
+    end: globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + passageHi - 1),
+  };
+  // The range the recording warning sees: the open detail's range,
+  // else the passage range (null while a page is still resolving).
+  const chosenRange = rangeChoice === 'surah' ? surahRange
+    : rangeChoice === 'juz' ? juzRange
+    : rangeChoice === 'page' ? pageRange
+    : passageRange;
+  // بالصفحة: resolve the page to its first/last ayah whenever the
+  // detail is open and the page number changes (AlQuranCloud page
+  // endpoint, cached per page — see mushafPageRange.ts). The start
+  // button stays disabled until the range resolves.
+  useEffect(() => {
+    if (rangeChoice !== 'page') return;
+    let cancelled = false;
+    setPageRange(null);
+    setPageRangeState('loading');
+    resolvePageRange(pageNum)
+      .then((r) => { if (cancelled) return; setPageRange(r); setPageRangeState(r ? 'ready' : 'error'); })
+      .catch(() => { if (cancelled) return; setPageRange(null); setPageRangeState('error'); });
+    return () => { cancelled = true; };
+  }, [rangeChoice, pageNum, pageRetry]);
+  // Home door deep-link (2026-11-06): Home sets sessionStorage
+  // 'quran-test-range-choice' before navigating to 'test'; open the
+  // range door straight onto that choice's detail, then clear the
+  // flag so later visits show the four choices as usual.
+  useEffect(() => {
+    try {
+      const flag = sessionStorage.getItem('quran-test-range-choice');
+      if (flag === 'surah' || flag === 'juz' || flag === 'page' || flag === 'passage') {
+        setLobbyDoor('range');
+        setRangeChoice(flag);
+      }
+      sessionStorage.removeItem('quran-test-range-choice');
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [ayahs, setAyahs] = useState<TestAyah[]>([]);
   // Ref mirror of ayahs (v12): position-mode call sites run from
   // timeouts and listeners that must see the current range, not a
@@ -4587,6 +4640,43 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     onNavigate('mushaf');
   };
 
+  // Surah picker shared by the بالسورة and فقرة معينة details:
+  // name search (push 198, normSurahSearch) + the 114-surah dropdown.
+  // Choosing a surah resets the passage to its first 5 ayahs (the
+  // manual picker's old behaviour) and clears the search.
+  const surahPicker = (
+    <label className="block">
+      <span className="text-sm font-medium text-accent-700">السورة</span>
+      <div className="relative mt-1">
+        <input type="text" value={surahSearch} dir="rtl"
+          onChange={(e) => setSurahSearch(e.target.value)}
+          placeholder="اكتب اسم السورة… مثال: الشمس"
+          className="w-full px-3 py-2.5 pl-10 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        <Search className="w-5 h-5 text-accent-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+      </div>
+      {surahSearch.trim() !== '' && (
+        <p className="text-xs text-accent-600 mt-1">
+          {manualSurahMatches.length === 0
+            ? 'مفيش سورة بالاسم ده — جرّب كلمة تانية (السورة المختارة حاليًا لسه ظاهرة في القائمة)'
+            : `${manualSurahMatches.length.toLocaleString('ar-EG')} سورة مطابقة`}
+        </p>
+      )}
+      <select value={surah}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          setSurah(n);
+          setFrom(1);
+          setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
+          setSurahSearch('');
+        }}
+        className="mt-2 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+        {manualSurahOptions.map((s) => (
+          <option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>
+        ))}
+      </select>
+    </label>
+  );
+
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <header className="sticky top-0 z-40 app-header">
@@ -4880,8 +4970,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       setPlDraft((d) => ({ ...d, spoken: '', expected: '' }));
                     }} className="mt-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة إلى الخطة</button>
                   </div>
-                  {(unitPreview.start.surah !== unitPreview.end.surah || (savedProgress?.endSurah && savedProgress.endSurah !== savedProgress.surah)) && (
-                    <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — النطاق المختار (بالوحدة/الاستكمال) يمتد لأكثر من سورة، فزر البدء معطل حتى تختار نطاقًا داخل سورة واحدة أو توقف التسجيل.</p>
+                  {((chosenRange && chosenRange.start.surah !== chosenRange.end.surah) || (savedProgress?.endSurah && savedProgress.endSurah !== savedProgress.surah)) && (
+                    <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — النطاق المختار (أو الاستكمال) يمتد لأكثر من سورة، فزر البدء معطل حتى تختار نطاقًا داخل سورة واحدة أو توقف التسجيل.</p>
                   )}
                 </>
               )}
@@ -4891,158 +4981,130 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
             {lobbyDoor === 'range' && (
               <>
-                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                <button onClick={() => { setRangeChoice(null); setLobbyDoor(null); }} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
                   ← عودة إلى التسميع
                 </button>
-            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
-              <h2 className="font-semibold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
-              <p className="text-sm text-accent-600 leading-relaxed">
-                ابدأ من أول سورة أو جزء أو حزب أو ربع، واخلص عند نهاية نفس الوحدة، أو عند نهاية حزب أو جزء أو سورة.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-accent-700">يبدأ من أول</span>
-                  <select value={startKind}
-                    onChange={(e) => {
-                      const k = e.target.value as UnitKind;
-                      const n = k === 'surah' ? 2 : 1;
-                      setStartKind(k);
-                      setStartNum(n);
-                      if (endKind !== 'same') setEndNum(containingUnit(endKind, unitStartGlobal(k, n)));
-                    }}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                    <option value="surah">سورة</option>
-                    <option value="juz">جزء</option>
-                    <option value="hizb">حزب</option>
-                    <option value="quarter">ربع</option>
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-accent-700">{startKind === 'surah' ? 'السورة' : startKind === 'juz' ? 'رقم الجزء' : startKind === 'hizb' ? 'رقم الحزب' : 'رقم الربع'}</span>
-                  {startKind === 'surah' ? (
-                    <select value={startNum} onChange={(e) => setStartNum(Number(e.target.value))}
-                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                      {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
-                    </select>
-                  ) : (
-                    <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={startNum}
-                      onChange={(e) => setStartNum(Math.max(1, Math.min(unitMax(startKind), Number(normalizeDigits(e.target.value)) || 1)))}
-                      className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-                  )}
-                </label>
-              </div>
-              <p className="text-sm text-accent-600">
-                يبدأ من: سورة {SURAHS.find((s) => s.no === unitPreview.start.surah)?.name || ''} آية {unitPreview.start.ayah.toLocaleString('ar-EG')} ({unitLabel(startKind, startNum)})
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-accent-700">لغاية نهاية</span>
-                  <select value={endKind}
-                    onChange={(e) => {
-                      const k = e.target.value as EndKind;
-                      setEndKind(k);
-                      if (k !== 'same') setEndNum(containingUnit(k, unitStartGlobal(startKind, startNum)));
-                    }}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                    <option value="same">نفس الوحدة</option>
-                    <option value="hizb">حزب</option>
-                    <option value="juz">جزء</option>
-                    <option value="surah">سورة</option>
-                  </select>
-                </label>
-                {endKind !== 'same' && (
-                  <label className="block">
-                    <span className="text-sm font-medium text-accent-700">{endKind === 'surah' ? 'السورة' : endKind === 'juz' ? 'رقم الجزء' : 'رقم الحزب'}</span>
-                    {endKind === 'surah' ? (
-                      <select value={endNum} onChange={(e) => setEndNum(Number(e.target.value))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
-                      </select>
-                    ) : (
-                      <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={endNum}
-                        onChange={(e) => setEndNum(Math.max(1, Math.min(unitMax(endKind), Number(normalizeDigits(e.target.value)) || 1)))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                {rangeChoice === null ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => setRangeChoice('surah')}
+                      className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                      <span className="block text-base font-semibold text-ink">بالسورة</span>
+                      <span className="block text-xs text-ink-2 mt-1">سورة {surahName}</span>
+                    </button>
+                    <button onClick={() => setRangeChoice('juz')}
+                      className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                      <span className="block text-base font-semibold text-ink">بالجزء</span>
+                      <span className="block text-xs text-ink-2 mt-1">الجزء {juzNum.toLocaleString('ar-EG')}</span>
+                    </button>
+                    <button onClick={() => setRangeChoice('page')}
+                      className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                      <span className="block text-base font-semibold text-ink">بالصفحة</span>
+                      <span className="block text-xs text-ink-2 mt-1">صفحة {pageNum.toLocaleString('ar-EG')}</span>
+                    </button>
+                    <button onClick={() => setRangeChoice('passage')}
+                      className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                      <span className="block text-base font-semibold text-ink">فقرة معينة</span>
+                      <span className="block text-xs text-ink-2 mt-1">سورة {surahName} — من آية {passageLo.toLocaleString('ar-EG')} إلى آية {passageHi.toLocaleString('ar-EG')}</span>
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button onClick={() => setRangeChoice(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                      ← عودة لاختيار المدى
+                    </button>
+                    {rangeChoice === 'surah' && (
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                        <h2 className="font-semibold text-accent-800">بالسورة</h2>
+                        {surahPicker}
+                        <p className="text-sm text-accent-600">
+                          سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية
+                        </p>
+                        {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                        <button onClick={() => void startTestGlobal(surahRange.start.global, surahRange.end.global)} disabled={loading}
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
+                        </button>
+                      </div>
                     )}
-                  </label>
+                    {rangeChoice === 'juz' && (
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                        <h2 className="font-semibold text-accent-800">بالجزء</h2>
+                        <label className="block">
+                          <span className="text-sm font-medium text-accent-700">رقم الجزء (١–٣٠)</span>
+                          <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={juzNum}
+                            onChange={(e) => setJuzNum(Math.max(1, Math.min(30, Number(normalizeDigits(e.target.value)) || 1)))}
+                            className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                        </label>
+                        <p className="text-sm font-medium text-emerald-700">الجزء {juzNum.toLocaleString('ar-EG')} — {rangeSummary(juzRange.start, juzRange.end)}</p>
+                        {recording && juzRange.start.surah !== juzRange.end.surah && (
+                          <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — الجزء يمتد لأكثر من سورة، فزر البدء معطل حتى توقف التسجيل.</p>
+                        )}
+                        {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                        <button onClick={() => void startTestGlobal(juzRange.start.global, juzRange.end.global)} disabled={loading || (recording && juzRange.start.surah !== juzRange.end.surah)}
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
+                        </button>
+                      </div>
+                    )}
+                    {rangeChoice === 'page' && (
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                        <h2 className="font-semibold text-accent-800">بالصفحة</h2>
+                        <label className="block">
+                          <span className="text-sm font-medium text-accent-700">رقم الصفحة (١–٦٠٤)</span>
+                          <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={pageNum}
+                            onChange={(e) => setPageNum(Math.max(1, Math.min(TOTAL_MUSHAF_PAGES, Number(normalizeDigits(e.target.value)) || 1)))}
+                            className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                        </label>
+                        {pageRangeState === 'loading' && (
+                          <p className="text-sm text-accent-600">جارٍ تحميل حدود الصفحة…</p>
+                        )}
+                        {pageRangeState === 'ready' && pageRange && (
+                          <p className="text-sm font-medium text-emerald-700">صفحة {pageNum.toLocaleString('ar-EG')} — {rangeSummary(pageRange.start, pageRange.end)}</p>
+                        )}
+                        {pageRangeState === 'error' && (
+                          <p className="text-sm text-red-600 font-semibold">تعذّر تحميل حدود الصفحة — تأكد من الاتصال بالإنترنت ثم <button onClick={() => setPageRetry((r) => r + 1)} className="underline font-bold">أعد المحاولة</button>.</p>
+                        )}
+                        {recording && pageRange && pageRange.start.surah !== pageRange.end.surah && (
+                          <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — الصفحة تمتد لأكثر من سورة، فزر البدء معطل حتى توقف التسجيل.</p>
+                        )}
+                        {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                        <button onClick={() => pageRange && void startTestGlobal(pageRange.start.global, pageRange.end.global)} disabled={loading || pageRangeState !== 'ready' || !pageRange || (recording && pageRange.start.surah !== pageRange.end.surah)}
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
+                        </button>
+                      </div>
+                    )}
+                    {rangeChoice === 'passage' && (
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                        <h2 className="font-semibold text-accent-800">فقرة معينة</h2>
+                        {surahPicker}
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="block">
+                            <span className="text-sm font-medium text-accent-700">من آية</span>
+                            <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={from}
+                              onChange={(e) => setFrom(Number(normalizeDigits(e.target.value)) || 1)}
+                              className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                          </label>
+                          <label className="block">
+                            <span className="text-sm font-medium text-accent-700">إلى آية</span>
+                            <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={to}
+                              onChange={(e) => setTo(Number(normalizeDigits(e.target.value)) || 1)}
+                              className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                          </label>
+                        </div>
+                        <p className="text-sm text-accent-600">
+                          سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية — النطاق المختار: {passageLo.toLocaleString('ar-EG')} إلى {passageHi.toLocaleString('ar-EG')}
+                        </p>
+                        <p className="text-xs text-accent-600 leading-relaxed">اختار السورة وحدّد الآيات اللي عايز تسمّعها.</p>
+                        {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                        <button onClick={() => void startTest()} disabled={loading}
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
-              </div>
-              {unitPreviewValid ? (
-                <p className="text-sm font-medium text-emerald-700">{rangeSummary(unitPreview.start, unitPreview.end)}</p>
-              ) : (
-                <p className="text-sm text-red-600 font-semibold">نهاية النطاق قبل بدايته — اختر نهاية أبعد (جزء/حزب/سورة أكبر)</p>
-              )}
-              {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-              <button onClick={() => void startTestGlobal(unitPreview.start.global, unitPreview.end.global)} disabled={loading || !unitPreviewValid || (recording && unitPreview.start.surah !== unitPreview.end.surah)}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
-                {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع من الوحدة'}
-              </button>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
-              <h2 className="font-semibold text-accent-800">أو يدوي: سورة وآيات</h2>
-              <label className="block">
-                <span className="text-sm font-medium text-accent-700">السورة</span>
-                {/* Surah-name search (2026-11-06): type part of the name
-                    and the dropdown filters to the matching surahs —
-                    partial matches, «ال» tolerated, diacritics stripped
-                    (see normSurahSearch). An extra way in; the number
-                    and the full dropdown stay as they were. */}
-                <div className="relative mt-1">
-                  <input type="text" value={surahSearch} dir="rtl"
-                    onChange={(e) => setSurahSearch(e.target.value)}
-                    placeholder="اكتب اسم السورة… مثال: الشمس"
-                    className="w-full px-3 py-2.5 pl-10 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-                  <Search className="w-5 h-5 text-accent-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-                {surahSearch.trim() !== '' && (
-                  <p className="text-xs text-accent-600 mt-1">
-                    {manualSurahMatches.length === 0
-                      ? 'مفيش سورة بالاسم ده — جرّب كلمة تانية (السورة المختارة حاليًا لسه ظاهرة في القائمة)'
-                      : `${manualSurahMatches.length.toLocaleString('ar-EG')} سورة مطابقة`}
-                  </p>
-                )}
-                <select value={surah}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    setSurah(n);
-                    setFrom(1);
-                    setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
-                    setSurahSearch('');
-                  }}
-                  className="mt-2 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                  {manualSurahOptions.map((s) => (
-                    <option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>
-                  ))}
-                </select>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="block">
-                  <span className="text-sm font-medium text-accent-700">من آية</span>
-                  <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={from}
-                    onChange={(e) => setFrom(Number(normalizeDigits(e.target.value)) || 1)}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-                </label>
-                <label className="block">
-                  <span className="text-sm font-medium text-accent-700">إلى آية</span>
-                  <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={to}
-                    onChange={(e) => setTo(Number(normalizeDigits(e.target.value)) || 1)}
-                    className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-                </label>
-              </div>
-              <p className="text-sm text-accent-600">
-                سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية — النطاق المختار: {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}
-              </p>
-              {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-              <button onClick={() => void startTest()} disabled={loading}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
-                {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
-              </button>
-              <p className="text-xs text-accent-600 leading-relaxed">
-                {micSupported
-                  ? 'الآية بتفضل مخفية. اضغط الميكروفون وسمّعها من حفظك: لو صحّت تنزل لك بالأخضر، ولو غلطت تاخد ' + corrDelay.toLocaleString('ar-EG') + ' ثواني تصلحها، وبعدها يظهر لك الجزء الغلط بالأحمر وينطقه لك البرنامج بصوت رجالي أو نسائي حسب حسابك. لو المتصفح مش بيدعم الميكروفون، هتقيّم نفسك يدوي زي قبل كده.'
-                  : 'المتصفح ده مش بيدعم التسميع بالميكروفون — نص الآية لا يظهر إلا بعد أن تسمّعها وتضغط "أظهر الآية"، ثم تقيّم نفسك: صح أو خطأ.'}
-              </p>
-            </div>
               </>
             )}
 
