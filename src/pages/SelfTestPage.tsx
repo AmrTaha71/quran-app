@@ -25,7 +25,7 @@ import { formatAr, normalizeDigits } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
-  Mic, Square, Award, Home,
+  Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
@@ -55,6 +55,19 @@ interface TestRecord {
 
 const HISTORY_KEY = 'quran-test-history';
 const TARGET_KEY = 'quran-mushaf-target';
+
+// Surah-name search (lobby manual picker, 2026-11-06): normalize
+// both the query and the surah name — strip tashkeel/diacritics,
+// unify alef/yeh/teh forms, drop the definite article «ال» — then
+// match as a substring, so plain typing finds the surah:
+// «شمس» → «الشمس»، «نازع» → «النازعات».
+const normSurahSearch = (s: string) =>
+  normalizeArabic(s)
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/^ال/, '')
+    .trim();
 // Quiet gap after the last heard word before the reading is judged:
 // the user has paused, so the utterance is (probably) complete.
 const QUIET_GAP_MS = 1500;
@@ -710,9 +723,29 @@ type MicState = 'idle' | 'listening' | 'correcting' | 'done-correct' | 'done-wro
 
 export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [phase, setPhase] = useState<'setup' | 'testing' | 'done'>('setup');
+  // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
+  // the open door. All setup state lives here; doors only hide/show
+  // the existing cards, they never change a setting.
+  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results';
+  const [lobbyDoor, setLobbyDoor] = useState<LobbyDoor | null>(null);
   const [surah, setSurah] = useState(2);
   const [from, setFrom] = useState(1);
   const [to, setTo] = useState(5);
+  // Surah-name search for the manual picker: plain typing filters
+  // the 114-surah dropdown (see normSurahSearch above). Declared
+  // after surah — the memos read it (TDZ: no use before declare).
+  const [surahSearch, setSurahSearch] = useState('');
+  const manualSurahMatches = useMemo(() => {
+    const q = normSurahSearch(surahSearch);
+    if (!q) return SURAHS;
+    return SURAHS.filter((s) => normSurahSearch(s.name).includes(q));
+  }, [surahSearch]);
+  // The select never goes blank mid-typing: the currently chosen
+  // surah stays visible even while it doesn't match the query.
+  const manualSurahOptions = useMemo(() => {
+    if (manualSurahMatches.some((s) => s.no === surah)) return manualSurahMatches;
+    return [...manualSurahMatches, ...SURAHS.filter((s) => s.no === surah)].sort((a, b) => a.no - b.no);
+  }, [manualSurahMatches, surah]);
   // Unit mode: start at the beginning of a surah/juz/hizb/quarter and
   // end at the end of that unit, or at the end of a juz/hizb/surah.
   const [startKind, setStartKind] = useState<UnitKind>('surah');
@@ -4553,6 +4586,62 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </div>
             )}
+            {/* Lobby hub (2026-11-06): the setup page is doors now —
+                a short hub of main doors + the start button on the hub.
+                Each door opens its existing card(s) below; nothing was
+                removed or renamed, only hidden behind a door. */}
+            {lobbyDoor === null && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setLobbyDoor('range')}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <ListOrdered className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">اختر المدى</span>
+                    <span className="block text-xs text-ink-2 mt-1">سورة {surahName} — من آية {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى آية {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}</span>
+                  </button>
+                  <button onClick={() => setLobbyDoor('settings')}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <SlidersHorizontal className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">إعدادات التسميع</span>
+                    <span className="block text-xs text-ink-2 mt-1">{verifyLevel === 'beginner' ? 'مبتدئ' : verifyLevel === 'intermediate' ? 'متوسط' : 'متقدم'} • {reciteMode === 'ayah' ? 'آية آية' : 'متصل'} • تصحيح {CORR_DELAY_MODE_LABEL[corrDelayMode]} • {CORR_RATE_LABEL[corrRate]}</span>
+                  </button>
+                  <button onClick={() => setLobbyDoor('mic')}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <Mic className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">فحص الميكروفون</span>
+                    <span className="block text-xs text-ink-2 mt-1">تأكد إن الميكروفون شغال وسامعك قبل ما تبدأ</span>
+                  </button>
+                  {history.length > 0 && (
+                    <button onClick={() => setLobbyDoor('results')}
+                      className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                      <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                        <Award className="w-6 h-6 text-emerald-800" />
+                      </span>
+                      <span className="block text-base font-semibold text-ink">نتائجك السابقة</span>
+                      <span className="block text-xs text-ink-2 mt-1">شوف درجات اختباراتك اللي فاتت</span>
+                    </button>
+                  )}
+                </div>
+                <button onClick={() => void startTest()} disabled={loading}
+                  className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                  {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
+                </button>
+                <p className="text-sm text-accent-600 text-center">
+                  سورة {surahName} — من آية {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى آية {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}
+                </p>
+              </>
+            )}
+            {lobbyDoor === 'settings' && (
+              <>
+                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                  ← عودة إلى التسميع
+                </button>
             <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4">
               <h2 className="font-semibold text-accent-800">إعدادات التسميع</h2>
               <div>
@@ -4628,7 +4717,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 ملحوظة بأمانة: التدقيق كله على مستوى الكلمات — البرنامج بيسمع الكلمات مش الأصوات، فما بيقيس أحكام التجويد (اللحن الخفي).
               </p>
             </div>
+              </>
+            )}
 
+            {lobbyDoor === 'settings' && (
+              <>
             {/*
               RECORDER (Phase 0): recording-mode toggle + voice tags
               + planting plan. Setup only; when OFF it is just the
@@ -4740,7 +4833,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </>
               )}
             </div>
+              </>
+            )}
 
+            {lobbyDoor === 'range' && (
+              <>
+                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                  ← عودة إلى التسميع
+                </button>
             <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
               <h2 className="font-semibold text-accent-800">بالوحدة: من أول … إلى نهاية …</h2>
               <p className="text-sm text-accent-600 leading-relaxed">
@@ -4829,15 +4929,35 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <h2 className="font-semibold text-accent-800">أو يدوي: سورة وآيات</h2>
               <label className="block">
                 <span className="text-sm font-medium text-accent-700">السورة</span>
+                {/* Surah-name search (2026-11-06): type part of the name
+                    and the dropdown filters to the matching surahs —
+                    partial matches, «ال» tolerated, diacritics stripped
+                    (see normSurahSearch). An extra way in; the number
+                    and the full dropdown stay as they were. */}
+                <div className="relative mt-1">
+                  <input type="text" value={surahSearch} dir="rtl"
+                    onChange={(e) => setSurahSearch(e.target.value)}
+                    placeholder="اكتب اسم السورة… مثال: الشمس"
+                    className="w-full px-3 py-2.5 pl-10 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                  <Search className="w-5 h-5 text-accent-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+                {surahSearch.trim() !== '' && (
+                  <p className="text-xs text-accent-600 mt-1">
+                    {manualSurahMatches.length === 0
+                      ? 'مفيش سورة بالاسم ده — جرّب كلمة تانية (السورة المختارة حاليًا لسه ظاهرة في القائمة)'
+                      : `${manualSurahMatches.length.toLocaleString('ar-EG')} سورة مطابقة`}
+                  </p>
+                )}
                 <select value={surah}
                   onChange={(e) => {
                     const n = Number(e.target.value);
                     setSurah(n);
                     setFrom(1);
                     setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
+                    setSurahSearch('');
                   }}
-                  className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                  {SURAHS.map((s) => (
+                  className="mt-2 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                  {manualSurahOptions.map((s) => (
                     <option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>
                   ))}
                 </select>
@@ -4870,7 +4990,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   : 'المتصفح ده مش بيدعم التسميع بالميكروفون — نص الآية لا يظهر إلا بعد أن تسمّعها وتضغط "أظهر الآية"، ثم تقيّم نفسك: صح أو خطأ.'}
               </p>
             </div>
+              </>
+            )}
 
+            {lobbyDoor === 'mic' && (
+              <>
+                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                  ← عودة إلى التسميع
+                </button>
             {/* Batch 2: lobby mic check — a real mic opens, samples,
             and closes BEFORE the session, so a dead mic or a denied
             permission is caught in the lobby instead of mid-test. */}
@@ -4903,7 +5030,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 )
               )}
             </div>
+              </>
+            )}
 
+            {lobbyDoor === 'results' && (
+              <>
+                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                  ← عودة إلى التسميع
+                </button>
             {history.length > 0 && (
               <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5">
                 <h2 className="font-semibold text-accent-800 mb-3">نتائجك السابقة</h2>
@@ -4917,6 +5051,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   ))}
                 </ul>
               </div>
+            )}
+              </>
             )}
           </div>
         )}
