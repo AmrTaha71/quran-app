@@ -292,15 +292,6 @@ export default function HomeStartPage({ session, onNavigate }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
-        {/* 2026-11-07: «اختبر نفسك» — mutashabihat quiz door at the top. */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => setMutOpen(true)}
-          className="w-full mb-4 py-4 px-4 grad-emerald-door text-white font-bold rounded-2xl text-xl flex items-center justify-center gap-3 polish-press polish-focus"
-        >
-          اختبر نفسك بالمتشابهات
-        </button>
-
         {/* App mark: the artwork itself, sized so the greeting and
             the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">
@@ -529,6 +520,15 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Mic className="w-5 h-5 text-white" />
           </span>
           الحق الإمام
+        </button>
+
+        {/* 2026-11-07: «اختبر نفسك» — mutashabihat quiz door, directly under سمّع لنفسك (2026-11-07). */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => setMutOpen(true)}
+          className="w-full mb-4 py-4 px-4 grad-emerald-door text-white font-bold rounded-2xl text-xl flex items-center justify-center gap-3 polish-press polish-focus"
+        >
+          اختبر نفسك بالمتشابهات
         </button>
 
         {/* استمع للقرآن: full door, same size as الحق الإمام. */}
