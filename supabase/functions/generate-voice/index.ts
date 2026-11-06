@@ -1,3 +1,23 @@
+// generate-voice — v16 (2026-11-06, dialogue mode)
+// ADDS a dialogue mode: {mode:'dialogue', surah, ayah} — the client
+// sends NO text and NO voice. The server fetches the Al-Muyassar
+// text itself (same AlQuranCloud endpoint as tafsir mode), asks the
+// cheap gpt-4o-mini text model to write exactly 2 short host lines
+// grounded ONLY in that tafsir text (JSON {"host1","host2"}), then
+// speaks them via the existing Realtime path — Host 1 = cedar/male,
+// Host 2 = marin/female, speed 1.0 — and caches BOTH files ONCE per
+// (surah, ayah) under tafsir/dialogue/<surah>-<ayah>_host<N>_realtime.wav
+// (immutable). Azure is IGNORED for dialogue: its Hamed/Zariyah
+// voices cannot give the two distinct cedar/marin hosts, so dialogue
+// REQUIRES an OpenAI key (503 without one). Cache hits return before
+// the cap checks (cost 0); a generation logs ONE 'generate-voice'
+// row whose cost_usd is the TOTAL (LLM + both TTS costs), so the
+// existing per-user (30/min, 500/day) and global (1000/day, $1/day)
+// caps bound dialogue spend exactly like tafsir. A 202 lock-waiter,
+// a 429, or any failure makes the client fall back to the natural
+// King Fahd recording alone — never a partial dialogue, never
+// silence. If only one host file exists the pair is treated as a
+// miss and both are regenerated. Text cap 8000 chars, same as tafsir.
 // generate-voice — v15 (2026-11-05, Feature 1: tafsir voice variety)
 // ADDS a tafsir mode: {mode:'tafsir', surah, ayah, voice} — the
 // client sends NO text. The server fetches the Al-Muyassar text
@@ -296,6 +316,130 @@ async function releaseTafsirLock(client: any, key: string): Promise<void> {
   } catch { /* best-effort: the TTL expires a leaked lock */ }
 }
 
+// ---- Dialogue mode helpers (v16) ----
+// Cache key: dialogue_<surah>-<ayah>. Files live under
+// tafsir/dialogue/ so they share the tafsir prefix (and its lock
+// helpers) but can never collide with a single-voice tafsir file.
+// The engine suffix is ALWAYS "realtime": dialogue requires the
+// OpenAI Realtime path (cedar/marin are the two distinct hosts),
+// so Azure is ignored even when configured.
+const DIALOGUE_MODEL = "gpt-4o-mini";
+const DIALOGUE_PRIMARY_ENGINE = "realtime";
+
+function dialogueCacheKey(surah: number, ayah: number): string {
+  return `dialogue_${surah}-${ayah}`;
+}
+
+function dialogueCacheFileName(
+  surah: number,
+  ayah: number,
+  host: "host1" | "host2",
+  engine: string,
+): string {
+  return `${TAFSIR_CACHE_PREFIX}/dialogue/${surah}-${ayah}_${host}_${engine}.wav`;
+}
+
+// Both host files must exist for a hit; a single file is a miss
+// (never serve a half dialogue). Metadata only — no audio bytes.
+async function findDialogueCachedUrls(
+  client: any,
+  surah: number,
+  ayah: number,
+  engine: string,
+): Promise<{ host1Url: string; host2Url: string } | null> {
+  const folder = `${TAFSIR_CACHE_PREFIX}/dialogue`;
+  const urls: Record<string, string> = {};
+  for (const host of ["host1", "host2"] as const) {
+    const base = `${surah}-${ayah}_${host}_${engine}.wav`;
+    const { data } = await client.storage.from("rana-audio").list(folder, { limit: 1, search: base });
+    const hit = (data ?? []).find((f: any) => f.name === base);
+    if (!hit) return null;
+    urls[host] = client.storage.from("rana-audio")
+      .getPublicUrl(`${folder}/${base}`).data.publicUrl;
+  }
+  return { host1Url: urls.host1, host2Url: urls.host2 };
+}
+
+// Write the two host lines with the CHEAP text model (never the
+// Realtime model — it is for speech, not text). The prompt is
+// Arabic and grounds both lines ONLY in the tafsir text: no
+// invented meanings, no new rulings, nothing quoted from outside
+// the tafsir. Throws on any LLM failure, invalid JSON, or a line
+// that is empty or over 400 chars — the caller turns that into a
+// 502 so the client falls back to the natural clip.
+// Cost: gpt-4o-mini ≈ $0.15/1M input + $0.60/1M output tokens,
+// from the response usage when present, else estimated from chars
+// (≈4 chars/token). Lengths only are logged — never the lines.
+async function writeDialogueLines(
+  tafsirText: string,
+  apiKey: string,
+): Promise<{ host1: string; host2: string; costUsd: number }> {
+  const prompt =
+    "اكتب حوارًا قصيرًا بين مقدّمَين عن آية قرآنية، اعتمادًا فقط على نص التفسير الميسّر التالي. " +
+    "أعد سطرين قصيرين فقط (جملة أو جملتان لكل سطر) بصيغة JSON فقط، بهذا الشكل تمامًا: " +
+    "{\"host1\": \"...\", \"host2\": \"...\"}. " +
+    "المقدّم الأول (رجل) يقدّم سؤالًا أو تمهيدًا قصيرًا عن الآية. " +
+    "المقدّمة الثانية (امرأة) تردّ بتعليق أو متابعة قصيرة. " +
+    "التزم بنص التفسير فقط: لا تخترع معاني جديدة، ولا تضف أحكامًا جديدة، ولا تقتبس شيئًا من خارج التفسير.\n\n" +
+    "نص التفسير:\n" + tafsirText;
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: DIALOGUE_MODEL,
+      temperature: 0.3,
+      max_tokens: 400,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "أنت تكتب حوارات قصيرة مبنية على نص تفسير معطى، ولا تضيف شيئًا من عندك.",
+        },
+        { role: "user", content: prompt },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`dialogue script failed: ${res.status}`);
+  }
+  const json: any = await res.json().catch(() => null);
+  const content = json?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || !content) {
+    throw new Error("dialogue script empty");
+  }
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const m = content.match(/\{[\s\S]*\}/);
+    if (m) {
+      try { parsed = JSON.parse(m[0]); } catch { /* stays null */ }
+    }
+  }
+  const host1 = typeof parsed?.host1 === "string" ? parsed.host1.trim() : "";
+  const host2 = typeof parsed?.host2 === "string" ? parsed.host2.trim() : "";
+  if (!host1 || host1.length > 400 || !host2 || host2.length > 400) {
+    throw new Error("dialogue script invalid");
+  }
+  const usage = json?.usage;
+  let costUsd: number;
+  if (
+    usage && Number.isFinite(Number(usage.prompt_tokens)) &&
+    Number.isFinite(Number(usage.completion_tokens))
+  ) {
+    costUsd = (Number(usage.prompt_tokens) * 0.15 +
+      Number(usage.completion_tokens) * 0.6) / 1_000_000;
+  } else {
+    const inTokens = Math.ceil(prompt.length / 4);
+    const outTokens = Math.ceil((host1.length + host2.length) / 4);
+    costUsd = (inTokens * 0.15 + outTokens * 0.6) / 1_000_000;
+  }
+  return { host1, host2, costUsd };
+}
+
 async function generateAzureTTS(text: string, voice: "male" | "female", apiKey: string, region: string): Promise<ArrayBuffer> {
   const v = AZURE_VOICES[voice] || AZURE_VOICES.male;
   const ssml = `<speak version='1.0' xml:lang='${v.locale}'><voice xml:lang='${v.locale}' name='${v.name}'><prosody rate='-10%'>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</prosody></voice></speak>`;
@@ -581,6 +725,11 @@ Deno.serve(async (req: Request) => {
   // Tafsir lock state (v15): same catch-release rule as corr.
   let tafsirKey: string | null = null;
   let tafsirLockHeld = false;
+  // Dialogue lock state (v16): same catch-release rule; the lock
+  // key is dialogue_<surah>-<ayah>, claimed via the tafsir lock
+  // helpers under tafsir/locks/.
+  let dialogueKey: string | null = null;
+  let dialogueLockHeld = false;
   let supabaseClient: any = null;
 
   try {
@@ -656,6 +805,28 @@ Deno.serve(async (req: Request) => {
       tafsirSurah = body.surah;
       tafsirAyah = body.ayah;
     }
+    // Dialogue mode (v16): the client sends a Quran position only —
+    // NO text and NO voice (hosts are fixed: Host 1 = cedar/male,
+    // Host 2 = marin/female). Same surah/ayah bounds as tafsir.
+    const isDialogueMode = body.mode === "dialogue";
+    let dialogueSurah: number | null = null;
+    let dialogueAyah: number | null = null;
+    if (isDialogueMode) {
+      if (!Number.isInteger(body.surah) || body.surah < 1 || body.surah > 114) {
+        return new Response(
+          JSON.stringify({ error: "موضع الحوار غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (!Number.isInteger(body.ayah) || body.ayah < 1 || body.ayah > 286) {
+        return new Response(
+          JSON.stringify({ error: "موضع الحوار غير صالح" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      dialogueSurah = body.surah;
+      dialogueAyah = body.ayah;
+    }
     let corrPositions: { id: number; w: number }[] | null = null;
     let corrShape: "context" | "bare" | null = null;
     let corrSpoken: string | null = null;
@@ -690,7 +861,7 @@ Deno.serve(async (req: Request) => {
       corrPositions = body.positions;
       corrShape = body.shape;
       corrSpoken = body.spoken;
-    } else if (!isTafsirMode) {
+    } else if (!isTafsirMode && !isDialogueMode) {
       if (!body.text || typeof body.text !== "string") {
         return new Response(
           JSON.stringify({ error: "النص مطلوب" }),
@@ -731,6 +902,21 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           error: "استخدم زر التشغيل بالمتصفح — لم يتم تكوين خدمة الصوت الصناعي بعد.",
+          browserFallback: true,
+        }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Dialogue (v16) REQUIRES the OpenAI Realtime path (cedar/marin
+    // are the two distinct hosts): Azure alone cannot serve it, so
+    // an Azure-only deployment gets a 503 here and the client falls
+    // back to the natural recording. Checked before any spend, lock,
+    // or cap consumption.
+    if (isDialogueMode && !openaiKey) {
+      return new Response(
+        JSON.stringify({
+          error: "الحوار غير متاح — لم يتم تكوين خدمة الصوت الصناعي بعد.",
           browserFallback: true,
         }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -816,6 +1002,47 @@ Deno.serve(async (req: Request) => {
       }
       text = tafsirText;
     }
+    // Dialogue mode (v16): fetch the Al-Muyassar text server-side
+    // from the same free AlQuranCloud endpoint as tafsir mode (no
+    // key). This block intentionally mirrors the tafsir fetch above
+    // instead of refactoring it, so the tafsir code path is left
+    // byte-for-byte untouched. Same failure contract: 502 on a fetch
+    // failure, 413 over 8000 chars — the client falls back to the
+    // natural recording in both cases.
+    if (isDialogueMode) {
+      let dialogueText: unknown = null;
+      try {
+        const dRes = await fetch(
+          `https://api.alquran.cloud/v1/ayah/${dialogueSurah}:${dialogueAyah}/ar.muyassar`,
+        );
+        if (!dRes.ok) {
+          return new Response(
+            JSON.stringify({ error: "تعذر تحميل نص التفسير" }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const dJson: any = await dRes.json().catch(() => null);
+        dialogueText = dJson?.data?.text;
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "تعذر تحميل نص التفسير" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (typeof dialogueText !== "string" || !dialogueText) {
+        return new Response(
+          JSON.stringify({ error: "تعذر تحميل نص التفسير" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (dialogueText.length > TAFSIR_TEXT_MAX_CHARS) {
+        return new Response(
+          JSON.stringify({ error: "نص التفسير أطول من الحد المسموح" }),
+          { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      text = dialogueText;
+    }
     if (!text) {
       throw new Error("النص مطلوب");
     }
@@ -873,6 +1100,38 @@ Deno.serve(async (req: Request) => {
         } catch { /* telemetry must never break a hit */ }
         return new Response(
           JSON.stringify({ audioUrl: cachedUrl, voice }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
+    // v16 shared server cache (dialogue mode only): same before-caps
+    // rule as corr/tafsir — a hit costs nothing, so caps must not
+    // gate it, and the hit row uses the DISTINCT function_name, so
+    // cap queries exclude it by construction. BOTH host files must
+    // exist; a single file is a miss and both are regenerated.
+    // Lengths only — no text is ever logged.
+    if (isDialogueMode) {
+      dialogueKey = dialogueCacheKey(dialogueSurah!, dialogueAyah!);
+      const cached = await findDialogueCachedUrls(
+        supabaseClient,
+        dialogueSurah!,
+        dialogueAyah!,
+        DIALOGUE_PRIMARY_ENGINE,
+      );
+      if (cached) {
+        try {
+          await supabaseClient.from("ai_usage_events").insert({
+            function_name: "generate-voice-cache-hit",
+            model: `cache-hit:${dialogueKey}`,
+            cost_usd: 0,
+            user_id: null,
+            provider: "cache",
+            chars: text.length,
+          });
+        } catch { /* telemetry must never break a hit */ }
+        return new Response(
+          JSON.stringify({ host1Url: cached.host1Url, host2Url: cached.host2Url }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -988,6 +1247,153 @@ Deno.serve(async (req: Request) => {
         );
       }
       tafsirLockHeld = true;
+    }
+
+    // v16 atomic reservation (dialogue mode only, claimed AFTER the
+    // cap checks like corr/tafsir, reusing the tafsir lock helpers
+    // under tafsir/locks/ with key dialogue_<surah>-<ayah>): at most
+    // one dialogue generation per key. A waiter gets HTTP 202; the
+    // client treats that as null and falls back to the natural
+    // recording, and the next occurrence hits the cache.
+    if (isDialogueMode && dialogueKey) {
+      const claim = await tryClaimTafsirLock(supabaseClient, dialogueKey);
+      if (claim === "locked") {
+        return new Response(
+          JSON.stringify({ pending: true }),
+          { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      dialogueLockHeld = true;
+    }
+
+    // ---- Dialogue generation (v16): self-contained early-return
+    // branch. Runs AFTER the shared cap checks and the lock claim,
+    // like the tafsir generation below, and returns before the
+    // single-audio path — the single-audio path is untouched.
+    // Order: cheap LLM script -> Realtime both hosts (speed 1.0) ->
+    // upload both -> ONE usage row with the TOTAL cost. A script
+    // failure is a direct 502 (lock released first); a Realtime
+    // throw propagates to the outer catch (500, lock released
+    // there). Either way the client falls back to the natural clip
+    // alone — never one host alone.
+    if (isDialogueMode) {
+      let lines: { host1: string; host2: string; costUsd: number };
+      try {
+        lines = await writeDialogueLines(text, openaiKey!);
+      } catch (scriptErr) {
+        console.warn(
+          `dialogue script failed for ${dialogueSurah}:${dialogueAyah}: ${String((scriptErr as Error)?.message || scriptErr).slice(0, 200)}`,
+        );
+        if (dialogueLockHeld) {
+          await releaseTafsirLock(supabaseClient, dialogueKey!);
+          dialogueLockHeld = false;
+        }
+        return new Response(
+          JSON.stringify({ error: "تعذر كتابة حوار التفسير" }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const host1Audio = await generateViaRealtime(lines.host1, "male", openaiKey!, 1.0);
+      const host2Audio = await generateViaRealtime(lines.host2, "female", openaiKey!, 1.0);
+
+      // Upload guard (same 1000-byte bound as the shared caches):
+      // never cache an empty/truncated clip as immutable. A throw
+      // goes to the outer catch (500, lock released there).
+      if (
+        host1Audio.wav.byteLength < CORR_MIN_AUDIO_BYTES ||
+        host2Audio.wav.byteLength < CORR_MIN_AUDIO_BYTES
+      ) {
+        throw new Error("صوت الحوار المولّد أصغر من الحد الأدنى — لم يُحفظ في الذاكرة المشتركة");
+      }
+
+      const host1File = dialogueCacheFileName(dialogueSurah!, dialogueAyah!, "host1", DIALOGUE_PRIMARY_ENGINE);
+      const host2File = dialogueCacheFileName(dialogueSurah!, dialogueAyah!, "host2", DIALOGUE_PRIMARY_ENGINE);
+      const upload1 = await supabaseClient.storage.from("rana-audio").upload(
+        host1File,
+        new Blob([host1Audio.wav], { type: "audio/wav" }),
+        { contentType: "audio/wav", upsert: false, cacheControl: "public, max-age=31536000, immutable" },
+      );
+      const upload2 = await supabaseClient.storage.from("rana-audio").upload(
+        host2File,
+        new Blob([host2Audio.wav], { type: "audio/wav" }),
+        { contentType: "audio/wav", upsert: false, cacheControl: "public, max-age=31536000, immutable" },
+      );
+      if (upload1.error || upload2.error) {
+        const raced = [upload1.error, upload2.error].some(
+          (e) => e && e.message && e.message.includes("already exists"),
+        );
+        if (raced) {
+          // Lost a race to another winner for the same key: if both
+          // files are now present, serve them as a cache hit. If the
+          // winner has not finished its second upload yet, tell the
+          // client to retry later (202) rather than serve a half
+          // dialogue.
+          const racedUrls = await findDialogueCachedUrls(
+            supabaseClient,
+            dialogueSurah!,
+            dialogueAyah!,
+            DIALOGUE_PRIMARY_ENGINE,
+          );
+          if (dialogueLockHeld) {
+            await releaseTafsirLock(supabaseClient, dialogueKey!);
+            dialogueLockHeld = false;
+          }
+          if (racedUrls) {
+            try {
+              await supabaseClient.from("ai_usage_events").insert({
+                function_name: "generate-voice-cache-hit",
+                model: `cache-hit:${dialogueKey}`,
+                cost_usd: 0,
+                user_id: null,
+                provider: "cache",
+                chars: text.length,
+              });
+            } catch { /* telemetry must never break a hit */ }
+            return new Response(
+              JSON.stringify({ host1Url: racedUrls.host1Url, host2Url: racedUrls.host2Url }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+          return new Response(
+            JSON.stringify({ pending: true }),
+            { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        throw new Error(
+          "فشل رفع صوت الحوار: " + (upload1.error?.message ?? upload2.error?.message ?? ""),
+        );
+      }
+
+      const host1Url = supabaseClient.storage.from("rana-audio").getPublicUrl(host1File).data.publicUrl;
+      const host2Url = supabaseClient.storage.from("rana-audio").getPublicUrl(host2File).data.publicUrl;
+
+      // ONE usage row for the whole dialogue (one call against the
+      // per-user/global CALLS caps); cost_usd is the TOTAL spend
+      // (LLM script + both Realtime generations). A null Realtime
+      // cost (usage unreported) contributes 0 rather than voiding
+      // the row — the LLM cost is always a number.
+      const dialogueCost = lines.costUsd +
+        (host1Audio.costUsd ?? 0) + (host2Audio.costUsd ?? 0);
+      try {
+        await supabaseClient.from("ai_usage_events").insert({
+          function_name: "generate-voice",
+          model: `${DIALOGUE_MODEL}+${REALTIME_MODEL}`,
+          cost_usd: dialogueCost,
+          user_id: userId,
+          provider: "realtime",
+          chars: text.length,
+        });
+      } catch { /* ignore logging errors */ }
+
+      if (dialogueLockHeld) {
+        await releaseTafsirLock(supabaseClient, dialogueKey!);
+        dialogueLockHeld = false;
+      }
+      return new Response(
+        JSON.stringify({ host1Url, host2Url }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     let audioBuffer: ArrayBuffer;
@@ -1125,6 +1531,12 @@ Deno.serve(async (req: Request) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
+    // DIAG HARDENING (2026-11-06, logging only): surface the 500 in the
+    // function logs. Previously the outer catch returned err.message
+    // with no console.error, so a server-side failure was invisible
+    // in the logs. Only the error message is logged — never any
+    // transcript, text, or audio content. Response contract unchanged.
+    console.error("[generate-voice] outer catch:", err instanceof Error ? err.message : String(err));
     // v14 catch-release: a lock held at failure time (generation or upload
     // threw after claim) is released here. Previously it leaked until the
     // TTL. Best-effort; never masks the original error.
@@ -1133,6 +1545,9 @@ Deno.serve(async (req: Request) => {
     }
     if (tafsirLockHeld && tafsirKey && supabaseClient) {
       try { await releaseTafsirLock(supabaseClient, tafsirKey); } catch { /* ignore */ }
+    }
+    if (dialogueLockHeld && dialogueKey && supabaseClient) {
+      try { await releaseTafsirLock(supabaseClient, dialogueKey); } catch { /* ignore */ }
     }
     return new Response(
       JSON.stringify({ error: err.message }),

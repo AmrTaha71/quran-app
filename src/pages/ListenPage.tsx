@@ -53,8 +53,10 @@ import type { JourneyEngine, JourneyPlayable } from '../lib/threeModePlayback';
 import {
   TAFSIR_VOICES,
   readTafsirVoice,
+  resolveDialogueAudio,
   resolveTafsirAudio,
   tafsirVoiceLabelForAyah,
+  warmDialogueAudio,
   warmTafsirAudio,
   writeTafsirVoice,
 } from '../lib/tafsirVoice';
@@ -893,10 +895,18 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       // setting per clip (natural / generated / alternate by
       // quarter) and falls back to the natural recording on any
       // failure; the warmer prefetches generated audio while the
-      // quarter plays. Both are no-ops outside tadabbur (the
-      // engine only calls them for tafsir items / tadabbur ayahs).
+      // quarter plays. Dialogue mode ('حوار التفسير') plays each
+      // tafsir clip as a 3-part sequence — generated male host,
+      // natural recording as guest, generated female host — via
+      // the dialogue resolver/warmer below; any dialogue failure
+      // plays the natural clip alone. All are no-ops outside
+      // tadabbur (the engine only calls them for tafsir items /
+      // tadabbur ayahs).
       resolveTafsirUrl: (s, a) => resolveTafsirAudio(s, a),
       warmTafsirAudio: (s, a) => warmTafsirAudio(s, a),
+      resolveDialogueAudio: (s, a) => resolveDialogueAudio(s, a),
+      warmDialogueAudio: (s, a) => warmDialogueAudio(s, a),
+      isDialogueTafsir: () => readTafsirVoice() === 'dialogue',
       startItem: fromSaved
         ? { kind: fromSaved.kind, surah: fromSaved.surah, ayah: fromSaved.ayah }
         : undefined,
@@ -2358,13 +2368,15 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               King Fahd recording is the default; the generated voice
               matches the user's gender and each clip is generated
               once and cached for everyone; 'alternate' flips by
-              quarter. A change applies at the next tafsir clip, and
-              any generation failure plays the natural recording
-              instead — never silence. */}
+              quarter; 'حوار التفسير' plays each clip as a dialogue
+              — generated male host, the recording as guest,
+              generated female host. A change applies at the next
+              tafsir clip, and any generation failure plays the
+              natural recording instead — never silence. */}
           {hubView === 'tadabbur' && (
             <div className="mt-4">
               <p className="font-semibold text-accent-800 mb-2">صوت التفسير</p>
-              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="صوت التفسير">
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="صوت التفسير">
                 {TAFSIR_VOICES.map((v) => (
                   <button
                     key={v.id}

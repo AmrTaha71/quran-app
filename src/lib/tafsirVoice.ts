@@ -22,6 +22,13 @@
 //                  quarters natural, even generated). Deterministic
 //                  from the quarter number, so a resume re-plans the
 //                  same voices — no saved voice state to go stale.
+//   'dialogue'  — a 3-part dialogue per tafsir clip: a generated
+//                  male host (cedar) opens, the natural King Fahd
+//                  recording plays as the guest, then a generated
+//                  female host (marin) closes. The dialogue audio
+//                  comes from generate-voice mode 'dialogue'
+//                  ({host1Url, host2Url}); ANY failure falls back
+//                  to the natural clip alone — never silence.
 //
 // COST GUARD (the global cap is $1/day / ~$30/month, shared):
 //   - ONE generated voice per gender at most (2 server voices total),
@@ -63,7 +70,7 @@ import type { LinkGender } from './linkAudio';
 import { quarterContaining } from './quarters';
 import { tafsirClipUrl } from './threeModeListen';
 
-export type TafsirVoice = 'natural' | 'generated' | 'alternate';
+export type TafsirVoice = 'natural' | 'generated' | 'alternate' | 'dialogue';
 
 export const TAFSIR_VOICE_KEY = 'quran-tafsir-voice';
 
@@ -83,12 +90,17 @@ export const TAFSIR_VOICES: { id: TafsirVoice; name: string; description: string
     name: 'تناوب بينهما',
     description: 'ربع بالتسجيل الأصلي وربع بالصوت المولّد — حتى لا يملّ السامع.',
   },
+  {
+    id: 'dialogue',
+    name: 'حوار التفسير',
+    description: 'مضيف ومضيفة مولّدان يتحاوران حول التسجيل الأصلي لمجمع الملك فهد — التسجيل يبقى هو الضيف.',
+  },
 ];
 
 export function readTafsirVoice(): TafsirVoice {
   try {
     const raw = localStorage.getItem(TAFSIR_VOICE_KEY);
-    if (raw === 'natural' || raw === 'generated' || raw === 'alternate') return raw;
+    if (raw === 'natural' || raw === 'generated' || raw === 'alternate' || raw === 'dialogue') return raw;
   } catch {
     // Swallow: fall through to the default.
   }
@@ -109,7 +121,7 @@ export function generatedTafsirVoice(): LinkGender {
   return getStoredLinkGender(null);
 }
 
-export type TafsirSource = 'natural' | 'generated';
+export type TafsirSource = 'natural' | 'generated' | 'dialogue';
 
 // Effective source for one ayah under a setting. 'alternate' flips
 // by quarter (odd = natural, even = generated); the quarter is
@@ -122,6 +134,7 @@ export function tafsirSourceForAyah(
   ayah: number,
   voice: TafsirVoice = readTafsirVoice(),
 ): TafsirSource {
+  if (voice === 'dialogue') return 'dialogue';
   if (voice === 'generated') return 'generated';
   if (voice === 'alternate') {
     const qu = quarterContaining(surah, ayah);
@@ -136,6 +149,7 @@ export function tafsirSourceForAyah(
 // rule: 'صوت مولّد' for synthetic, like links).
 export function tafsirVoiceLabelForAyah(surah: number, ayah: number): string {
   const src = tafsirSourceForAyah(surah, ayah);
+  if (src === 'dialogue') return 'صوت التفسير: حوار التفسير';
   if (src === 'natural') return 'صوت التفسير: التسجيل الأصلي';
   const gender = generatedTafsirVoice();
   return `صوت التفسير: صوت مولّد (${gender === 'male' ? 'صوت رجالي' : 'صوت نسائي'})`;
@@ -197,7 +211,11 @@ async function getTafsirToken(): Promise<string> {
 // the same, so this function is doubly safe. Never throws.
 export async function resolveTafsirAudio(surah: number, ayah: number): Promise<string | null> {
   const natural = tafsirClipUrl(surah, ayah);
-  if (tafsirSourceForAyah(surah, ayah) === 'natural') return natural;
+  // Only the 'generated' source needs a server fetch: 'natural'
+  // is the clip itself, and 'dialogue' is resolved as a 3-part
+  // sequence by resolveDialogueAudio (this single-URL path is
+  // its fallback, so it must never spend a generation here).
+  if (tafsirSourceForAyah(surah, ayah) !== 'generated') return natural;
   const gender = generatedTafsirVoice();
   const key = cacheKey(surah, ayah, gender);
   const hit = memGet(key);
@@ -256,8 +274,103 @@ export async function resolveTafsirAudio(surah: number, ayah: number): Promise<s
 // boundary path re-resolves (and falls back to natural) anyway.
 export function warmTafsirAudio(surah: number, ayah: number): void {
   try {
-    if (tafsirSourceForAyah(surah, ayah) === 'natural') return;
+    if (tafsirSourceForAyah(surah, ayah) !== 'generated') return;
     void resolveTafsirAudio(surah, ayah);
+  } catch {
+    // Swallow: warming must never break playback.
+  }
+}
+
+// ---- Dialogue audio (mode 'dialogue') ---------------------------
+// One dialogue per ayah: host 1 (cedar, male) opens, the natural
+// King Fahd clip plays as the guest, host 2 (marin, female)
+// closes. The server returns {host1Url, host2Url}; the natural
+// URL comes from tafsirClipUrl, never from the server. ANY failure
+// (no session, 429 cap, 202 pending, network, server error,
+// missing/invalid URLs) returns null — the engine then plays the
+// natural clip alone. Never throws. Own mem cache + inflight
+// dedup, same 200-entry cap shape as the single-URL cache above.
+
+export type DialogueAudio = { host1Url: string; host2Url: string };
+
+const dialogueMemCache = new Map<string, DialogueAudio>();
+const dialogueInflight = new Map<string, Promise<DialogueAudio | null>>();
+
+function dialogueCacheKey(surah: number, ayah: number): string {
+  return `dialogue|${surah}:${ayah}`;
+}
+
+function dialogueMemGet(key: string): DialogueAudio | null {
+  const hit = dialogueMemCache.get(key);
+  return hit === undefined ? null : hit;
+}
+
+function dialogueMemSet(key: string, value: DialogueAudio): void {
+  if (dialogueMemCache.has(key)) dialogueMemCache.delete(key);
+  while (dialogueMemCache.size >= MEM_CACHE_CAP) {
+    const oldest = dialogueMemCache.keys().next();
+    if (oldest.done) break;
+    dialogueMemCache.delete(oldest.value);
+  }
+  dialogueMemCache.set(key, value);
+}
+
+export async function resolveDialogueAudio(
+  surah: number,
+  ayah: number,
+): Promise<DialogueAudio | null> {
+  const key = dialogueCacheKey(surah, ayah);
+  const hit = dialogueMemGet(key);
+  if (hit) return hit;
+  const pending = dialogueInflight.get(key);
+  if (pending) return pending;
+  const job: Promise<DialogueAudio | null> = (async (): Promise<DialogueAudio | null> => {
+    try {
+      const base = (import.meta as unknown as { env?: Record<string, unknown> }).env
+        ?.VITE_SUPABASE_URL;
+      if (typeof base !== 'string' || base.length === 0) return null;
+      const doFetch = (token: string) =>
+        fetch(`${base}/functions/v1/generate-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ mode: 'dialogue', surah, ayah }),
+        });
+      let res = await doFetch(await getTafsirToken());
+      if (res.status === 401) {
+        cachedToken = null;
+        res = await doFetch(await getTafsirToken());
+      }
+      // 202 means the dialogue is still generating (pending) —
+      // a failure for this call, not a playable reply.
+      if (res.status === 202) return null;
+      if (!res.ok) return null;
+      const data: unknown = await res.json().catch(() => ({}));
+      if (typeof data !== 'object' || data === null) return null;
+      const { host1Url, host2Url } = data as { host1Url?: unknown; host2Url?: unknown };
+      if (typeof host1Url !== 'string' || host1Url.length === 0) return null;
+      if (typeof host2Url !== 'string' || host2Url.length === 0) return null;
+      const value: DialogueAudio = { host1Url, host2Url };
+      dialogueMemSet(key, value);
+      return value;
+    } catch {
+      return null;
+    } finally {
+      dialogueInflight.delete(key);
+    }
+  })();
+  dialogueInflight.set(key, job);
+  return job;
+}
+
+// Warm (prefetch) one ayah's dialogue audio in the background,
+// while its quarter plays. No-op unless the live setting is
+// 'dialogue'. Fire-and-forget: failures are swallowed inside
+// resolveDialogueAudio, and the boundary path re-resolves (and
+// falls back to the natural clip alone) anyway.
+export function warmDialogueAudio(surah: number, ayah: number): void {
+  try {
+    if (readTafsirVoice() !== 'dialogue') return;
+    void resolveDialogueAudio(surah, ayah);
   } catch {
     // Swallow: warming must never break playback.
   }
