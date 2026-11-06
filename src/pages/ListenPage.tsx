@@ -19,7 +19,8 @@ import {
   handleInterruptionHidden,
   recLog,
 } from '../lib/listenRecovery';
-import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber } from '../lib/surahs';
+import { JUZ_STARTS, HIZB_STARTS } from '../lib/quranBoundaries';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
 import type { RiwayaPosition } from '../lib/riwayat';
@@ -448,6 +449,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const [playing, setPlaying] = useState(false);
   // Sleep timer (#10): remaining ms, synced from the shared lib
   // (its 1s tick re-renders the countdown). Null = no timer.
+  // 2026-11-07: khatma timer stop-at-unit (juz / hizb / surah end) and clock time.
+  const [unitTarget, setUnitTarget] = useState<number | null>(null);
+  const [unitLabel, setUnitLabel] = useState('');
+  const [clockAt, setClockAt] = useState('');
   const [sleepRemainingMs, setSleepRemainingMs] = useState<number | null>(() =>
     getSleepTimerRemainingMs(),
   );
@@ -2149,49 +2154,115 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       ? ayahs?.find((r) => r.surah_no === surah && r.ayah_no === currentAyah) ?? null
       : null;
 
+  // 2026-11-07: stop at a unit boundary (end of juz / hizb / surah).
+  useEffect(() => {
+    if (unitTarget === null) return;
+    if (getGlobalAyahNumber(surah, currentAyah) >= unitTarget) {
+      stopPlayback();
+      setUnitTarget(null);
+      setUnitLabel('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [surah, currentAyah, unitTarget]);
+
+  function armTimerMinutes(m: number) {
+    setUnitTarget(null);
+    setUnitLabel('');
+    setSleepTimer(m);
+  }
+  function armTimerAtClock(hhmm: string) {
+    const [hh, mm] = hhmm.split(':').map(Number);
+    if (Number.isNaN(hh) || Number.isNaN(mm)) return;
+    const now = new Date();
+    const target = new Date(now);
+    target.setHours(hh, mm, 0, 0);
+    if (target.getTime() <= now.getTime()) target.setDate(target.getDate() + 1);
+    armTimerMinutes((target.getTime() - now.getTime()) / 60000);
+  }
+  function armTimerAtUnit(kind: 'juz' | 'hizb' | 'surah') {
+    const cur = getGlobalAyahNumber(surah, currentAyah);
+    if (kind === 'surah') {
+      const next = surah >= 114 ? 6237 : getGlobalAyahNumber(surah + 1, 1);
+      setUnitTarget(next);
+      setUnitLabel('نهاية السورة');
+    } else {
+      const list = kind === 'juz' ? JUZ_STARTS : HIZB_STARTS;
+      const nextStart = list.find((x) => x.global > cur);
+      setUnitTarget(nextStart ? nextStart.global : 6237);
+      setUnitLabel(kind === 'juz' ? 'نهاية الجزء' : 'نهاية الحزب');
+    }
+    clearSleepTimer(); // one timer at a time: the unit stop replaces a timed one
+  }
+  function cancelAllTimers() {
+    setUnitTarget(null);
+    setUnitLabel('');
+    clearSleepTimer();
+  }
+
   // Sleep timer (#10): the setter + live countdown + cancel. Always
   // rendered (not only while playing) so the user can arm it before
   // starting, and so a timer running after playback stopped stays
   // visible and cancellable. Emerald/gold only — no new hue.
+  const KHATMA_MINUTE_CHIPS: [number, string][] = [[15, 'ربع ساعة'], [30, 'نص ساعة'], [45, '٤٥ دقيقة']];
+  const KHATMA_HOUR_CHIPS: [number, string][] = [[60, 'ساعة'], [120, 'ساعتين'], [180, '٣ ساعات']];
   const sleepTimerBlock = (
     <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
       <p className="font-semibold text-accent-800 flex items-center gap-2">
         <Timer className="w-5 h-5 text-emerald-700" />
         مؤقت النوم
       </p>
-      {sleepRemainingMs !== null ? (
+      {sleepRemainingMs !== null || unitTarget !== null ? (
         <div>
-          <p className="text-sm text-accent-800 mt-2">
-            سيتوقف التشغيل بعد{' '}
-            <span className="font-bold">{formatSleepRemaining(sleepRemainingMs)}</span>
-          </p>
+          {sleepRemainingMs !== null && (
+            <p className="text-sm text-accent-800 mt-2">
+              سيتوقف التشغيل بعد{' '}
+              <span className="font-bold">{formatSleepRemaining(sleepRemainingMs)}</span>
+            </p>
+          )}
+          {unitTarget !== null && (
+            <p className="text-sm text-accent-800 mt-2">سيتوقف التشغيل عند <span className="font-bold">{unitLabel}</span></p>
+          )}
           <p className="text-xs text-accent-600 mt-1">
             يعمل حتى لو انتقلت لصفحة تانية — لكنه لا يعمل بعد إغلاق التطبيق.
           </p>
           <button
-            onClick={() => clearSleepTimer()}
+            onClick={cancelAllTimers}
             className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
           >
             إلغاء المؤقت
           </button>
         </div>
       ) : (
-        <div>
-          <p className="text-sm text-accent-600 mt-2">اختار بعد قد إيه يتوقف التشغيل لوحده:</p>
-          <div className="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="مؤقت النوم">
-            {SLEEP_TIMER_OPTIONS.map((m) => (
-              <button
-                key={m}
-                onClick={() => setSleepTimer(m)}
-                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-              >
-                {SLEEP_TIMER_LABELS[m]}
-              </button>
+        <div className="space-y-3">
+          <p className="text-sm text-accent-600 mt-2">اختار إمتى يتوقف التشغيل:</p>
+          <p className="text-xs font-semibold text-accent-700">بالدقايق</p>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالدقايق">
+            {KHATMA_MINUTE_CHIPS.map(([m, label]) => (
+              <button key={m} onClick={() => armTimerMinutes(m)}
+                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">{label}</button>
             ))}
           </div>
-          <p className="text-xs text-accent-600 mt-2">
-            مؤقت واحد مشترك لكل أنواع الاستماع؛ لو ظبطت واحد جديد يلغي القديم.
-          </p>
+          <p className="text-xs font-semibold text-accent-700">بالساعات</p>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالساعات">
+            {KHATMA_HOUR_CHIPS.map(([m, label]) => (
+              <button key={m} onClick={() => armTimerMinutes(m)}
+                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">{label}</button>
+            ))}
+          </div>
+          <p className="text-xs font-semibold text-accent-700">بالساعة</p>
+          <div className="flex gap-2">
+            <input type="time" value={clockAt} onChange={(e) => setClockAt(e.target.value)}
+              className="flex-1 min-h-[44px] rounded-xl border border-hairline-emerald px-2 bg-white" />
+            <button disabled={!clockAt} onClick={() => armTimerAtClock(clockAt)}
+              className="px-4 min-h-[44px] bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press disabled:opacity-50">ابدأ</button>
+          </div>
+          <p className="text-xs font-semibold text-accent-700">بالجزء أو الحزب أو السورة</p>
+          <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالوحدة">
+            <button onClick={() => armTimerAtUnit('juz')} className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">الجزء</button>
+            <button onClick={() => armTimerAtUnit('hizb')} className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">الحزب</button>
+            <button onClick={() => armTimerAtUnit('surah')} className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">السورة</button>
+          </div>
+          <p className="text-xs text-accent-600">مؤقت واحد بس في كل مرة؛ لو ظبطت واحد جديد يلغي القديم.</p>
         </div>
       )}
     </div>
@@ -3052,7 +3123,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         {/* Sleep timer (#10): always visible (see sleepTimerBlock
             above) — arm it before starting, or cancel a running
             timer after playback stopped. */}
-        {sleepTimerBlock}
+        {journeyMode !== null && sleepTimerBlock}
 
         {/* Read-along text — Hafs only: riwaya mode is
             listening-only (the Hafs text does not match a non-Hafs

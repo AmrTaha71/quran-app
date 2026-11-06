@@ -51,7 +51,8 @@
 //   // cancel button: onClick={() => clearSleepTimer()}
 // Hook-free, React-free, Supabase-free, same as the other engines.
 
-export type SleepTimerMinutes = 30 | 60 | 120;
+// 2026-11-07: widened to any positive minute count (khatma timers use 15/45/180 too).
+export type SleepTimerMinutes = number;
 
 /** The three durations the UI offers, in minutes. */
 export const SLEEP_TIMER_OPTIONS: SleepTimerMinutes[] = [30, 60, 120];
