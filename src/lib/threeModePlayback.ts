@@ -72,11 +72,14 @@ import { RECITERS, DEFAULT_RECITER_ID } from './reciters';
 import { SURAHS } from './surahs';
 import { quarterContaining } from './quarters';
 import {
+  JUHANI_RECITER_ID,
+  JUHANI_RECITER_NAME,
   planJourney,
   selectInterstitial,
   tafsirClipUrl,
   writeThreeModeResume,
 } from './threeModeListen';
+import { hadrAudioUrl } from './hadr';
 import type {
   JourneyItem,
   TadabburTafsirOrder,
@@ -196,6 +199,13 @@ function defaultResolveAyahUrl(
   surah: number,
   ayah: number,
 ): Promise<string> {
+  // Juhani single khatma: the surah-file hadr audio — the SAME
+  // URL the hadr engine and the offline Juhani download use
+  // (hadrAudioUrl), so the SW serves the downloaded file
+  // cache-first when offline and streams it when online. No
+  // offline code change needed: the audio element keeps asking
+  // for the same URL either way.
+  if (reciterId === JUHANI_RECITER_ID) return Promise.resolve(hadrAudioUrl(surah));
   const reciter =
     RECITERS.find((r) => r.id === reciterId) ??
     RECITERS.find((r) => r.id === DEFAULT_RECITER_ID) ??
@@ -521,9 +531,11 @@ export class JourneyEngine {
       Number.isInteger(opts.startSurah) && opts.startSurah >= 1 && opts.startSurah <= 114
         ? opts.startSurah
         : 1;
-    this.startReciterId = RECITERS.some((r) => r.id === opts.startReciterId)
-      ? opts.startReciterId
-      : DEFAULT_RECITER_ID;
+    this.startReciterId =
+      RECITERS.some((r) => r.id === opts.startReciterId) ||
+      (opts.mode === 'single' && opts.startReciterId === JUHANI_RECITER_ID)
+        ? opts.startReciterId
+        : DEFAULT_RECITER_ID;
     this.startAyah = opts.startAyah ?? 1;
     this.tafsirOrder = opts.tafsirOrder === 'before' ? 'before' : 'after';
     this.resolveAyahUrl = opts.resolveAyahUrl ?? defaultResolveAyahUrl;
@@ -542,7 +554,13 @@ export class JourneyEngine {
       typeof opts.startTime === 'number' && Number.isFinite(opts.startTime) && opts.startTime >= 0
         ? opts.startTime
         : null;
+    // Juhani is hadr: natural pace, never an electronic rate
+    // stacked on top (same rule as the hadr engine, see hadr.ts).
+    // A Juhani single journey always plays at rate 1, whatever
+    // the page's current speed pick is.
+    const isJuhaniSingle = opts.mode === 'single' && this.startReciterId === JUHANI_RECITER_ID;
     this.playbackRate =
+      !isJuhaniSingle &&
       typeof opts.playbackRate === 'number' &&
       Number.isFinite(opts.playbackRate) &&
       opts.playbackRate > 0
@@ -1644,10 +1662,15 @@ export class JourneyEngine {
       if (cur === null) return;
       const surahName = SURAHS[cur.surah - 1]?.name ?? String(cur.surah);
       if (cur.kind === 'ayah') {
-        const reciterName =
-          RECITERS.find((r) => r.id === cur.reciterId)?.name ?? cur.reciterId;
+        // A Juhani item is a whole surah file, not one ayah — the
+        // title names the surah, never a fake ayah number, and the
+        // artist is the hadr label (not the raw id 'juhani').
+        const isJuhani = cur.reciterId === JUHANI_RECITER_ID;
+        const reciterName = isJuhani
+          ? JUHANI_RECITER_NAME
+          : RECITERS.find((r) => r.id === cur.reciterId)?.name ?? cur.reciterId;
         ms.metadata = new MediaMetadataCtor({
-          title: `سورة ${surahName} — آية ${cur.ayah}`,
+          title: isJuhani ? `سورة ${surahName} — حدر (الجهني)` : `سورة ${surahName} — آية ${cur.ayah}`,
           artist: reciterName,
           album: 'روابط الذكر الحكيم',
         });

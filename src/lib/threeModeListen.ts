@@ -134,6 +134,20 @@ export function threeModeName(mode: ThreeMode): string {
 }
 
 // ------------------------------------------------------------------
+// Juhani as a single-khatma reciter (2026-11-06, Amr Test 2).
+// The Juhani hadr surah files are usable as the voice of a
+// ختمة بقارئ واحد ONLY. Juhani is deliberately NOT in RECITERS:
+// the varied/tadabbur rotation is % 8 over the original 8
+// reciters, and the 8-chip picker must stay 8. The single
+// khatma offers Juhani as a separate 9th option in its own
+// detail view (see ListenPage), and the planner + engine below
+// special-case it there — never in the rotation.
+// ------------------------------------------------------------------
+
+export const JUHANI_RECITER_ID = 'juhani';
+export const JUHANI_RECITER_NAME = 'الجهني (حدر)';
+
+// ------------------------------------------------------------------
 // Rotation
 // ------------------------------------------------------------------
 
@@ -155,6 +169,11 @@ export function reciterIdForQuarter(
   startReciterId: string,
   quarter: number,
 ): string {
+  // Juhani single khatma: one voice for every quarter — the
+  // surah-file hadr voice, not a rotation member. Varied and
+  // tadabbur never pass Juhani (the picker gates it), so the
+  // % 8 rotation below is untouched for them.
+  if (mode === 'single' && startReciterId === JUHANI_RECITER_ID) return JUHANI_RECITER_ID;
   const idx = RECITERS.findIndex((r) => r.id === startReciterId);
   const r0 = idx >= 0 ? idx : 0;
   return RECITERS[reciterIndexForQuarter(mode, startQuarter, r0, quarter)].id;
@@ -228,6 +247,14 @@ export function* planJourney(
   // origin, so this value — and therefore every quarter's reciter
   // — is identical on first play and on every resume.
   const startQuarter = quarterContaining(s0, a0)?.q ?? 1;
+  // Juhani single khatma: surah-file playback — the file carries
+  // the whole surah, so the journey yields ONE item per surah
+  // (its first ayah; a0 for the start surah, 1 elsewhere). The
+  // engine plays that file to its end and moves to the next surah.
+  // QuarterEnd markers still fire on quarter crossings (prevQuarter
+  // tracks EVERY ayah, yielded or not) so the boundary bookkeeping
+  // stays correct, and resume still re-plans from this same origin.
+  const juhaniSingle = mode === 'single' && startReciterId === JUHANI_RECITER_ID;
   let prevQuarter: Quarter | null = null;
   for (let surah = s0; surah <= 114; surah += 1) {
     const count = SURAH_AYAH_COUNTS[surah - 1];
@@ -238,12 +265,14 @@ export function* planJourney(
         // Crossed into a new quarter: the previous one just completed.
         yield { kind: 'quarterEnd', quarter: prevQuarter.q };
       }
-      yield {
-        kind: 'ayah',
-        surah,
-        ayah,
-        reciterId: reciterIdForQuarter(mode, startQuarter, startReciterId, qu?.q ?? startQuarter),
-      };
+      if (!juhaniSingle || ayah === fromAyah) {
+        yield {
+          kind: 'ayah',
+          surah,
+          ayah,
+          reciterId: reciterIdForQuarter(mode, startQuarter, startReciterId, qu?.q ?? startQuarter),
+        };
+      }
       if (qu !== null) prevQuarter = qu;
     }
   }
@@ -354,7 +383,16 @@ function cleanPosition(mode: ThreeMode, raw: unknown): ThreeModePosition | null 
   };
   if (!Number.isInteger(startSurah) || (startSurah as number) < 1 || (startSurah as number) > 114)
     return null;
-  if (typeof startReciterId !== 'string' || !RECITERS.some((r) => r.id === startReciterId))
+  // Juhani is a valid start reciter for the single khatma only —
+  // the varied/tadabbur modes never save it (the picker gates it),
+  // so a Juhani startReciterId there is still rejected.
+  if (
+    typeof startReciterId !== 'string' ||
+    !(
+      RECITERS.some((r) => r.id === startReciterId) ||
+      (mode === 'single' && startReciterId === JUHANI_RECITER_ID)
+    )
+  )
     return null;
   if (kind !== 'ayah' && kind !== 'tafsir') return null;
   if (!Number.isInteger(surah) || (surah as number) < 1 || (surah as number) > 114) return null;

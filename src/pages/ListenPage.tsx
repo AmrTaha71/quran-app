@@ -38,6 +38,8 @@ import type { RiwayaEngine } from '../lib/riwayatPlayback';
 import {
   THREE_MODES,
   TAFSIR_ATTRIBUTION,
+  JUHANI_RECITER_ID,
+  JUHANI_RECITER_NAME,
   clearThreeModeResume,
   readAllThreeModeResumes,
   readTadabburTafsirOrder,
@@ -183,7 +185,10 @@ function readIntentFromKey(key: string): AutoResumeIntent | null {
       const pos = p.position as Record<string, unknown>;
       const inter = pos.interstitial;
       const interOk = inter === undefined || (Array.isArray(inter) && inter.every((it) => typeof it === 'object' && it !== null && validResumeSurah((it as Record<string, unknown>).surah) && typeof (it as Record<string, unknown>).ayah === 'number' && Number.isInteger((it as Record<string, unknown>).ayah) && ((it as Record<string, unknown>).ayah as number) >= 1));
-      if (THREE_MODES.some((m) => m.id === pos.mode) && validResumeSurah(pos.startSurah) && typeof pos.startReciterId === 'string' && RECITERS.some((r) => r.id === pos.startReciterId) && (pos.kind === 'ayah' || pos.kind === 'tafsir') && validResumeSurah(pos.surah) && typeof pos.ayah === 'number' && Number.isInteger(pos.ayah) && (pos.ayah as number) >= 1 && validResumeTime(pos.time) && interOk) {
+      // Juhani is a valid journey start reciter for the single
+      // khatma only — a Juhani intent for varied/tadabbur is
+      // still rejected (the picker never saves one there).
+      if (THREE_MODES.some((m) => m.id === pos.mode) && validResumeSurah(pos.startSurah) && typeof pos.startReciterId === 'string' && (RECITERS.some((r) => r.id === pos.startReciterId) || (pos.mode === 'single' && pos.startReciterId === JUHANI_RECITER_ID)) && (pos.kind === 'ayah' || pos.kind === 'tafsir') && validResumeSurah(pos.surah) && typeof pos.ayah === 'number' && Number.isInteger(pos.ayah) && (pos.ayah as number) >= 1 && validResumeTime(pos.time) && interOk) {
         return { kind: 'journey', position: pos as unknown as ThreeModePosition, at };
       }
     }
@@ -300,6 +305,29 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // resume per mode (hidden per mode after resume/dismiss).
   const [journeyMode, setJourneyMode] = useState<ThreeMode | null>(null);
   const [journeyItem, setJourneyItem] = useState<JourneyPlayable | null>(null);
+  // Journey start reciter (2026-11-06, Juhani single khatma):
+  // SEPARATE from the global listen-preference reciter (reciterId,
+  // persisted as 'quran-reciter'). Juhani is a journey-only voice —
+  // it must never leak into the global preference: the free Hafs
+  // engine's resolveListenUrl THROWS on an unknown reciter id and
+  // the offline download throws too, so a shared 'juhani' state
+  // would break free listening and its download. Picking one of
+  // the 8 here also updates the global preference (the old shared
+  // behaviour, via changeJourneyReciter); picking Juhani updates
+  // only this state, and is never persisted.
+  const [journeyReciterId, setJourneyReciterId] = useState<string>(readPersistedReciter);
+  // The reciter a fresh journey actually starts with: Juhani is
+  // single-mode only — a varied/tadabbur detail never offers it,
+  // and a stale 'juhani' pick falls back to the global reciter
+  // there instead of showing a blank select.
+  const journeyReciterForMode = (): string => {
+    if (hubView === 'single') return journeyReciterId;
+    return journeyReciterId === JUHANI_RECITER_ID ? reciterId : journeyReciterId;
+  };
+  const journeyReciterName = (id: string): string =>
+    id === JUHANI_RECITER_ID
+      ? JUHANI_RECITER_NAME
+      : RECITERS.find((r) => r.id === id)?.name || '';
   // Tadabbur tafsir order (user toggle, 2026-10-31): persisted,
   // default 'after'. Applies to fresh journeys; a resumed journey
   // keeps the order it started with (see startJourney).
@@ -869,12 +897,20 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     destroyEngine();
     activeHadrRef.current = false;
     const startSurah = fromSaved ? fromSaved.startSurah : surah;
-    const startReciter = fromSaved ? fromSaved.startReciterId : reciterId;
+    // A fresh journey starts with the detail view's journey
+    // reciter (Juhani included, single mode only); a resume uses
+    // the saved position's start reciter.
+    const startReciter = fromSaved ? fromSaved.startReciterId : journeyReciterForMode();
     setJourneyMode(journey);
     setJourneyItem(null);
     setPreselectedMode(null);
     setSurah(startSurah);
-    setReciterId(startReciter);
+    // The journey's start reciter lives in its own state: Juhani
+    // must never reach the global preference (see the state
+    // comment above). The 8 keep the old behaviour — the global
+    // state follows the journey's reciter.
+    setJourneyReciterId(startReciter);
+    if (startReciter !== JUHANI_RECITER_ID) setReciterId(startReciter);
     const engine = new JourneyEngineClass({
       mode: journey,
       startSurah,
@@ -919,8 +955,15 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           // Hafs reciters); the surah text effect loads the new
           // surah, and the playing ayah highlights as usual.
           setSurah(item.surah);
-          setCurrent(item.ayah);
-          scrollToAyah(item.ayah);
+          if (item.reciterId === JUHANI_RECITER_ID) {
+            // Juhani is a surah file: no per-ayah read-along (the
+            // item's ayah is always 1, the file's first ayah).
+            // The surah text still loads; nothing is highlighted.
+            setCurrent(-1);
+          } else {
+            setCurrent(item.ayah);
+            scrollToAyah(item.ayah);
+          }
         } else {
           // Interstitial: no ayah highlight (nothing matches -1).
           setCurrent(-1);
@@ -1113,6 +1156,25 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     try {
       localStorage.setItem('quran-reciter', id);
     } catch {}
+  };
+
+  // Journey detail reciter pick (2026-11-06): Juhani is offered
+  // in the single-khatma detail only, and sets the journey
+  // reciter state WITHOUT touching the global preference (never
+  // persisted — 'quran-reciter' keeps holding one of the 8).
+  // Picking one of the 8 keeps the old shared behaviour: the
+  // journey pick also becomes the global listen preference.
+  const changeJourneyReciter = (id: string) => {
+    if (id === JUHANI_RECITER_ID) {
+      // Single-khatma only: the option is rendered only there,
+      // and this guard keeps a stray value out of the other modes.
+      if (hubView !== 'single') return;
+      setJourneyReciterId(JUHANI_RECITER_ID);
+      return;
+    }
+    if (!RECITERS.some((r) => r.id === id)) return;
+    setJourneyReciterId(id);
+    changeReciter(id);
   };
 
   const changeRiwaya = (id: string | null) => {
@@ -1975,7 +2037,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   استئناف — {m.name}:{' '}
                   {saved.kind === 'tafsir'
                     ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
-                    : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
+                    : saved.startReciterId === JUHANI_RECITER_ID
+                      // A Juhani position is a surah file: its ayah
+                      // is always 1, so no ayah number is shown.
+                      ? `سورة ${surahName(saved.surah)} — حدر (الجهني)`
+                      : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
                 </p>
                 <div className="flex gap-3 mt-3">
                   <button
@@ -2275,7 +2341,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           <p className="font-bold text-accent-800 text-lg">{threeModeName(hubView as ThreeMode)}</p>
           <p className="text-sm text-accent-600 mt-1">
             رحلة متواصلة من سورة {surahName(surah)} بصوت{' '}
-            {RECITERS.find((r) => r.id === reciterId)?.name || ''} حتى نهاية المصحف — التوقف
+            {journeyReciterName(journeyReciterForMode())} حتى نهاية المصحف — التوقف
             يحفظ موضعك في كل نمط على حدة.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-4">
@@ -2309,9 +2375,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </label>
               <select
                 id="journey-reciter"
-                value={reciterId}
+                value={journeyReciterForMode()}
                 disabled={locked}
-                onChange={(e) => changeReciter(e.target.value)}
+                onChange={(e) => changeJourneyReciter(e.target.value)}
                 className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
               >
                 {RECITERS.map((r) => (
@@ -2319,7 +2385,21 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     {r.name}
                   </option>
                 ))}
+                {/* Juhani (hadr) is a single-khatma voice ONLY: the
+                    varied/tadabbur rotation is % 8 over the
+                    original 8, so this option never renders there. */}
+                {hubView === 'single' && (
+                  <option key={JUHANI_RECITER_ID} value={JUHANI_RECITER_ID}>
+                    {JUHANI_RECITER_NAME}
+                  </option>
+                )}
               </select>
+              {hubView === 'single' && journeyReciterForMode() === JUHANI_RECITER_ID && (
+                <p className="text-xs text-accent-600 mt-2">
+                  صوت الجهني حدر — ملف السورة كامل بسرعته الطبيعية؛ السرعة الإلكترونية لا تنطبق
+                  عليه، ولو حمّلت السورة من «التنزيلات الصوتية» بتشتغل من غير نت.
+                </p>
+              )}
             </div>
           </div>
           {/* Tadabbur tafsir order (user toggle, 2026-10-31):
@@ -2535,7 +2615,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   استئناف — {m.name}:{' '}
                   {saved.kind === 'tafsir'
                     ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
-                    : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
+                    : saved.startReciterId === JUHANI_RECITER_ID
+                      // A Juhani position is a surah file: its ayah
+                      // is always 1, so no ayah number is shown.
+                      ? `سورة ${surahName(saved.surah)} — حدر (الجهني)`
+                      : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
                 </p>
                 <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بهذا النمط.</p>
                 <div className="flex gap-3 mt-3">
