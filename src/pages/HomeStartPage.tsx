@@ -252,6 +252,8 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
 
         {hifzOpen && (
+          // Sub-doors use grad-amber-door (gold): the level below the
+          // emerald main doors, so the two levels read apart at a glance.
           <div className="px-4 mb-4">
             {/* (a) resume from the saved position — hidden when the user
                 never opened the Mushaf (nothing to resume from). */}
@@ -259,13 +261,13 @@ export default function HomeStartPage({ session, onNavigate }: {
               <button
                 onPointerDown={pressFeedback}
                 onClick={() => resumeHifz(onNavigate)}
-                className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white rounded-xl flex flex-col items-center justify-center polish-press polish-press-depth polish-focus"
+                className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white rounded-xl flex flex-col items-center justify-center polish-press polish-press-depth polish-focus"
               >
                 <span className="font-semibold text-base flex items-center gap-2">
                   <Play className="w-5 h-5 text-white" />
                   أكمل من حيث توقفت
                 </span>
-                <span className="text-xs text-emerald-100 mt-0.5">
+                <span className="text-xs text-amber-100 mt-0.5">
                   صفحة {lastPage.page.toLocaleString('ar-EG')} — سورة {pageSurah(lastPage.page)} — جزء {juz.number.toLocaleString('ar-EG')}
                 </span>
               </button>
@@ -275,7 +277,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               onPointerDown={pressFeedback}
               onClick={() => setShowPicker(!showPicker)}
               aria-expanded={showPicker}
-              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
               <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
                 <MapPin className="w-4 h-4 text-white" />
@@ -335,7 +337,7 @@ export default function HomeStartPage({ session, onNavigate }: {
                   <button
                     onPointerDown={pressFeedback}
                     onClick={startFromPicker}
-                    className="flex-1 py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl polish-press polish-press-depth polish-focus"
+                    className="flex-1 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl polish-press polish-press-depth polish-focus"
                   >
                     ابدأ من هنا
                   </button>
@@ -349,7 +351,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <button
               onPointerDown={pressFeedback}
               onClick={() => jumpToAyah(1, 1, onNavigate)}
-              className="w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
               <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
                 <BookOpen className="w-4 h-4 text-white" />
@@ -378,32 +380,34 @@ export default function HomeStartPage({ session, onNavigate }: {
         </button>
 
         {testOpen && (
+          // Sub-doors use grad-amber-door (gold): the level below the
+          // emerald main doors, so the two levels read apart at a glance.
           <div className="px-4 mb-4">
             <button
               onPointerDown={pressFeedback}
               onClick={() => openTestRange('surah', onNavigate)}
-              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
               بالسورة
             </button>
             <button
               onPointerDown={pressFeedback}
               onClick={() => openTestRange('juz', onNavigate)}
-              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
               بالجزء
             </button>
             <button
               onPointerDown={pressFeedback}
               onClick={() => openTestRange('page', onNavigate)}
-              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
               بالصفحة
             </button>
             <button
               onPointerDown={pressFeedback}
               onClick={() => openTestRange('passage', onNavigate)}
-              className="w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
               فقرة معينة
             </button>

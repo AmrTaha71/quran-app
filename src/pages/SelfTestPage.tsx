@@ -759,6 +759,22 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [pageRange, setPageRange] = useState<{ start: RangePoint; end: RangePoint } | null>(null);
   const [pageRangeState, setPageRangeState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [pageRetry, setPageRetry] = useState(0);
+  // Per-test settings override (2026-11-06): the range detail cards
+  // let the user adjust mode / correction timing / correction speed
+  // for THIS test only. null = use the saved defaults (the lobby
+  // state, which mirrors 'quran-test-settings'). savePerTestAsDefault
+  // is deliberately NOT persisted — it defaults to unchecked every
+  // time a detail card opens, so saving is a conscious opt-in.
+  const [perTest, setPerTest] = useState<{ mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null>(null);
+  const [savePerTestAsDefault, setSavePerTestAsDefault] = useState(false);
+  // The override is scoped to the open detail card: opening a card,
+  // switching cards, or leaving the range door clears it (and the
+  // checkbox), so a stale override can never leak into a later test.
+  // It is also consumed at test start (see takePerTestSettings).
+  useEffect(() => {
+    setPerTest(null);
+    setSavePerTestAsDefault(false);
+  }, [rangeChoice, lobbyDoor]);
   const [rangeStart, setRangeStart] = useState<RangePoint | null>(null);
   const [rangeEnd, setRangeEnd] = useState<RangePoint | null>(null);
   // Whole-surah / whole-juz ranges (derived, no extra state).
@@ -1734,6 +1750,25 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ level, mode, corrDelay: d, corrDelayMode: delayMode, corrRate: rate })); } catch {}
   };
 
+  // Per-test settings (2026-11-06): the range detail cards' start
+  // buttons run through here. It returns the effective settings for
+  // THIS test (the card's override, or the saved defaults when the
+  // user changed nothing) and consumes the override: perTest +
+  // checkbox reset, so coming back to the card shows the defaults
+  // again. Save-as-default persists via applySettings (same key +
+  // field names the lobby door uses); a one-off override touches
+  // neither state nor disk — it reaches the test only through the
+  // settingsOverride param of startTestGlobal (see there).
+  const takePerTestSettings = () => {
+    const eff = perTest ?? { mode: reciteMode, corrDelayMode, corrRate };
+    if (savePerTestAsDefault) {
+      applySettings(verifyLevel, eff.mode, eff.corrDelayMode, eff.corrRate);
+    }
+    setPerTest(null);
+    setSavePerTestAsDefault(false);
+    return eff;
+  };
+
   // Manual preference survives ayah changes (the old code reset it
   // every ayah, so a manual user had to re-tap it each time).
   const manualPreferredRef = useRef(false);
@@ -1894,7 +1929,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   // Global-range test (unit mode + resume): verse ids are sequential
   // 1..6236 in surah order, so id range = global ayah range.
-  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode) => {
+  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null) => {
     // D1: a new test starts with a clean honesty state (a previous
     // no-match panel must never leak into the next run's done screen).
     setContZeroMatch(false);
@@ -1910,10 +1945,25 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!restore) diagClear();
     diagPush('tap', { label: 'start-test' });
     diagPermRefresh();
+    // Per-test settings (2026-11-06): every test start re-syncs the
+    // live session settings from ONE place. A range detail card
+    // passes its effective settings (its override, or the saved
+    // defaults); every other start passes nothing, so liveRef is
+    // re-synced from the saved defaults in state — a one-off
+    // override from an earlier test can never leak into the next
+    // test through liveRef (state and disk are never touched by a
+    // one-off override in the first place). The test session reads
+    // liveRef, never the setup state, so this sync must happen
+    // before anything below reads it.
+    const effSettings = settingsOverride ?? { mode: reciteMode, corrDelayMode, corrRate };
+    liveRef.current.mode = effSettings.mode;
+    liveRef.current.corrDelayMode = effSettings.corrDelayMode;
+    liveRef.current.corrDelay = corrDelaySeconds(effSettings.corrDelayMode);
+    liveRef.current.corrRate = effSettings.corrRate;
     // Capture the mode up front: the setup chips stay tappable while
     // ayahs load, and a mid-load switch must not hijack this test.
     // Resume forces ayah mode; fresh starts use the setup choice.
-    const modeAtStart = forceMode ?? reciteMode;
+    const modeAtStart = forceMode ?? effSettings.mode;
     const lo = Math.max(1, Math.min(startGlobal, endGlobal, 6236));
     const hi = Math.min(Math.max(startGlobal, endGlobal), 6236);
     const startPt = globalToPoint(lo);
@@ -2061,12 +2111,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   // Manual mode wrapper: single-surah ayah range -> global range.
-  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode) => {
+  const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null) => {
     const count = SURAH_AYAH_COUNTS[surahNo - 1] || 1;
     const lo = Math.max(1, Math.min(fromNo, toNo, count));
     const hi = Math.min(Math.max(fromNo, toNo), count);
     const base = SURAH_START_GLOBAL[surahNo - 1] || 1;
-    return startTestGlobal(base + lo - 1, base + hi - 1, restore, forceMode);
+    return startTestGlobal(base + lo - 1, base + hi - 1, restore, forceMode, settingsOverride);
   };
 
   const resumeTest = () => {
@@ -4677,6 +4727,60 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     </label>
   );
 
+  // Per-test settings (2026-11-06): one compact section, shared by
+  // all four range detail cards, shown right before «ابدأ التسميع».
+  // It displays the CURRENT saved defaults (the lobby state, which
+  // mirrors 'quran-test-settings'); tapping a chip edits the
+  // override for THIS test only. The checkbox is never persisted —
+  // unchecked on every open — and only with it checked does the
+  // start button save the new values as the defaults.
+  const perTestEff = perTest ?? { mode: reciteMode, corrDelayMode, corrRate };
+  const perTestSettings = (
+    <div className="rounded-xl border border-hairline-emerald bg-emerald-50 p-3 space-y-3">
+      <p className="text-sm font-semibold text-accent-800">إعدادات هذا التسميع</p>
+      <div>
+        <p className="text-xs font-medium text-accent-700 mb-1.5">طريقة التسميع</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setPerTest({ ...perTestEff, mode: 'ayah' })}
+            className={`py-2 rounded-xl font-semibold text-sm ${perTestEff.mode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+            آية آية
+          </button>
+          <button type="button" onClick={() => setPerTest({ ...perTestEff, mode: 'continuous' })} disabled={!micSupported}
+            className={`py-2 rounded-xl font-semibold text-sm disabled:opacity-40 ${perTestEff.mode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+            متصل
+          </button>
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-accent-700 mb-1.5">توقيت التصحيح</p>
+        <div className="grid grid-cols-4 gap-2">
+          {CORR_DELAY_MODES.map((m) => (
+            <button type="button" key={m} onClick={() => setPerTest({ ...perTestEff, corrDelayMode: m })}
+              className={`py-2 rounded-xl font-semibold text-xs ${perTestEff.corrDelayMode === m ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+              {CORR_DELAY_MODE_LABEL[m]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-xs font-medium text-accent-700 mb-1.5">سرعة التصحيح</p>
+        <div className="grid grid-cols-4 gap-2">
+          {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
+            <button type="button" key={r} onClick={() => setPerTest({ ...perTestEff, corrRate: r })}
+              className={`py-2 rounded-xl font-semibold text-sm ${perTestEff.corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
+              {CORR_RATE_LABEL[r]}
+            </button>
+          ))}
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-sm font-medium text-accent-700">
+        <input type="checkbox" checked={savePerTestAsDefault} onChange={(e) => setSavePerTestAsDefault(e.target.checked)} className="w-5 h-5 accent-emerald-600" />
+        احفظ كافتراضي
+      </label>
+      <p className="text-xs text-accent-600 leading-relaxed">من غير العلامة، التغيير للاختبار ده بس — والاختبار اللي بعده يرجع للإعدادات المحفوظة.</p>
+    </div>
+  );
+
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <header className="sticky top-0 z-40 app-header">
@@ -5020,7 +5124,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية
                         </p>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-                        <button onClick={() => void startTestGlobal(surahRange.start.global, surahRange.end.global)} disabled={loading}
+                        {perTestSettings}
+                        <button onClick={() => { const eff = takePerTestSettings(); void startTestGlobal(surahRange.start.global, surahRange.end.global, null, eff.mode, eff); }} disabled={loading}
                           className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
@@ -5040,7 +5145,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — الجزء يمتد لأكثر من سورة، فزر البدء معطل حتى توقف التسجيل.</p>
                         )}
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-                        <button onClick={() => void startTestGlobal(juzRange.start.global, juzRange.end.global)} disabled={loading || (recording && juzRange.start.surah !== juzRange.end.surah)}
+                        {perTestSettings}
+                        <button onClick={() => { const eff = takePerTestSettings(); void startTestGlobal(juzRange.start.global, juzRange.end.global, null, eff.mode, eff); }} disabled={loading || (recording && juzRange.start.surah !== juzRange.end.surah)}
                           className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
@@ -5068,7 +5174,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — الصفحة تمتد لأكثر من سورة، فزر البدء معطل حتى توقف التسجيل.</p>
                         )}
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-                        <button onClick={() => pageRange && void startTestGlobal(pageRange.start.global, pageRange.end.global)} disabled={loading || pageRangeState !== 'ready' || !pageRange || (recording && pageRange.start.surah !== pageRange.end.surah)}
+                        {perTestSettings}
+                        <button onClick={() => { const eff = takePerTestSettings(); if (pageRange) void startTestGlobal(pageRange.start.global, pageRange.end.global, null, eff.mode, eff); }} disabled={loading || pageRangeState !== 'ready' || !pageRange || (recording && pageRange.start.surah !== pageRange.end.surah)}
                           className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
@@ -5097,7 +5204,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </p>
                         <p className="text-xs text-accent-600 leading-relaxed">اختار السورة وحدّد الآيات اللي عايز تسمّعها.</p>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
-                        <button onClick={() => void startTest()} disabled={loading}
+                        {perTestSettings}
+                        <button onClick={() => { const eff = takePerTestSettings(); void startTest(surah, from, to, null, eff.mode, eff); }} disabled={loading}
                           className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>

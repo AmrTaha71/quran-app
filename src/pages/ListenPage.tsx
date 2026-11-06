@@ -2021,7 +2021,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
 
         {/* Listening hub (Amr 2026-10-30): four big cards; entering a
             card shows its details below. Cards are disabled while an
-            engine plays (locked), like every other mode switch here. */}
+            engine plays (locked), like every other mode switch here.
+            Cards use grad-amber-door (gold sub-door treatment, same
+            as the Home sub-doors — Amr 2026-11-06), so the hub reads
+            as the level below the emerald main doors. */}
         {hubView === 'hub' && (
         <div className="mb-4">
           <p className="font-semibold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
@@ -2073,12 +2076,12 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     changeRiwaya(null);
                     setHubView(m.id);
                   }}
-                  className="w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
+                  className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
                 >
                   <span className="block text-lg">{m.name}</span>
-                  <span className="block text-sm font-normal text-accent-600 mt-1">{m.description}</span>
+                  <span className="block text-sm font-normal text-amber-100 mt-1">{m.description}</span>
                   {m.id === 'tadabbur' && !tafsirConfigured() && (
-                    <span className="block text-xs font-normal text-accent-600 mt-2">مقاطع التفسير لم تُرفع بعد — سيُتاح هذا النمط بعد رفع المقاطع.</span>
+                    <span className="block text-xs font-normal text-amber-100 mt-2">مقاطع التفسير لم تُرفع بعد — سيُتاح هذا النمط بعد رفع المقاطع.</span>
                   )}
                 </button>
               );
@@ -2086,10 +2089,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <button
               disabled={locked}
               onClick={() => setHubView('free')}
-              className="w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
+              className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
             >
               <span className="block text-lg">سماع حر</span>
-              <span className="block text-sm font-normal text-accent-600 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
+              <span className="block text-sm font-normal text-amber-100 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
             </button>
           </div>
         </div>
