@@ -66,8 +66,8 @@ export default function VoiceSelector({ text }: { text: string }) {
         onClick={playTTS}
         className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold rounded-lg transition-smooth ${
           isPlaying
-            ? 'bg-emerald-600 text-white'
-            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            ? 'grad-emerald-door text-white polish-press'
+            : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 polish-press'
         }`}
       >
         {isPlaying ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -117,7 +117,7 @@ export default function VoiceSelector({ text }: { text: string }) {
           </div>
           <button
             onClick={savePreference}
-            className="w-full mt-2 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-smooth"
+            className="w-full mt-2 py-1.5 text-xs font-semibold text-white grad-emerald-door rounded-lg transition-smooth polish-press"
           >
             {savedPref ? 'تم الحفظ!' : 'حفظ التفضيل'}
           </button>

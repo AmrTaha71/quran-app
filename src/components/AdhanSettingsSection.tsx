@@ -188,7 +188,7 @@ export default function AdhanSettingsSection() {
       {/* Master switch */}
       <button
         onClick={() => update({ enabled: !settings.enabled })}
-        className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald"
+        className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald polish-press"
       >
         <span className="text-right">
           <span className="block font-medium text-accent-800">تفعيل تنبيهات الأذان</span>
@@ -221,7 +221,7 @@ export default function AdhanSettingsSection() {
             <button
               onClick={detectGps}
               disabled={gpsBusy}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-base font-bold rounded-xl transition-smooth"
+              className="w-full py-3 grad-emerald-door disabled:opacity-50 text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus"
             >
               {gpsBusy ? 'جارٍ تحديد موقعك…' : '📍 اكتشف موقعي تلقائيًا (GPS)'}
             </button>
@@ -254,7 +254,7 @@ export default function AdhanSettingsSection() {
               <button
                 onClick={saveManual}
                 disabled={!city.trim()}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-base font-bold rounded-xl transition-smooth"
+                className="w-full py-3 grad-emerald-door disabled:opacity-50 text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus"
               >
                 حفظ الموقع
               </button>
@@ -310,14 +310,14 @@ export default function AdhanSettingsSection() {
         <div className="grid gap-2">
           <button
             onClick={() => update({ alertType: 'both' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.alertType === 'both' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.alertType === 'both' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-medium text-accent-800">صوتي + على الشاشة</span>
             <span className="block text-sm text-accent-600">الأذان يُسمَع وتظهر رسالة وقت الصلاة</span>
           </button>
           <button
             onClick={() => update({ alertType: 'audio' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.alertType === 'audio' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.alertType === 'audio' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-medium text-accent-800">صوتي فقط</span>
             <span className="block text-sm text-accent-600">الأذان يُسمَع من غير رسالة على الشاشة</span>
@@ -333,14 +333,14 @@ export default function AdhanSettingsSection() {
         <div className="grid gap-2">
           <button
             onClick={() => update({ sound: 'full' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-medium text-accent-800">أذان كامل — المسجد الحرام</span>
             <span className="block text-sm text-accent-600">المصدر الوحيد المفتوح الترخيص في القايمة</span>
           </button>
           <button
             onClick={() => update({ sound: 'beep' })}
-            className={`text-right p-3 rounded-xl border-2 ${settings.sound === 'beep' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'beep' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-medium text-accent-800">تنبيه صوتي قصير</span>
             <span className="block text-sm text-accent-600">نغمة تنبيه مولّدة من الجهاز — من غير ملف صوتي</span>
@@ -356,7 +356,7 @@ export default function AdhanSettingsSection() {
         </div>
         <button
           onClick={toggleTest}
-          className="w-full mt-3 py-3 bg-white border-2 border-emerald-500 text-emerald-700 text-base font-bold rounded-xl transition-smooth"
+          className="w-full mt-3 py-3 bg-white border-2 border-emerald-500 text-emerald-700 text-base font-bold rounded-xl transition-smooth polish-press"
         >
           {testing ? '⏹ إيقاف التجربة' : '▶ جرّب الصوت المختار'}
         </button>
@@ -396,7 +396,7 @@ export default function AdhanSettingsSection() {
             <button
               onClick={() => void togglePush()}
               disabled={pushBusy}
-              className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald disabled:opacity-60"
+              className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald polish-press disabled:opacity-60"
             >
               <span className="text-right">
                 <span className="block font-medium text-accent-800">تفعيل إشعار الأذان والتطبيق مقفول</span>

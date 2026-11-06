@@ -789,7 +789,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           </p>
           <button
             onClick={() => clearSleepTimer()}
-            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
           >
             إلغاء المؤقت
           </button>
@@ -802,7 +802,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
               <button
                 key={m}
                 onClick={() => setSleepTimer(m)}
-                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
               >
                 {SLEEP_TIMER_LABELS[m]}
               </button>
@@ -819,10 +819,6 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   return (
     <main className="min-h-screen page-bg pb-24 px-4 pt-6" dir="rtl">
       <div className="max-w-2xl mx-auto">
-        <button onClick={() => onNavigate('home')} className="text-sm text-emerald-700 font-semibold underline">
-          → الرئيسية
-        </button>
-
         <div className="flex items-center gap-2 mt-3">
           <SunMoon className="w-6 h-6 text-emerald-700" />
           <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">أذكار الصباح والمساء</h1>
@@ -833,13 +829,13 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="grid grid-cols-2 gap-2 mt-4">
           <button
             onClick={() => switchWird('morning')}
-            className={`py-3 font-semibold rounded-xl ${wird === 'morning' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-3 font-semibold rounded-xl polish-press ${wird === 'morning' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار الصباح
           </button>
           <button
             onClick={() => switchWird('evening')}
-            className={`py-3 font-semibold rounded-xl ${wird === 'evening' ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-3 font-semibold rounded-xl polish-press ${wird === 'evening' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار المساء
           </button>
@@ -849,26 +845,27 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button
             onClick={() => switchVoice('male')}
-            className={`py-2 font-semibold rounded-xl text-sm ${voice === 'male' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-2 font-semibold rounded-xl text-sm polish-press ${voice === 'male' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت رجالي
           </button>
           <button
             onClick={() => switchVoice('female')}
-            className={`py-2 font-semibold rounded-xl text-sm ${voice === 'female' ? 'bg-teal-700 text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-2 font-semibold rounded-xl text-sm polish-press ${voice === 'female' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت نسائي
           </button>
         </div>
 
-        {/* Now playing */}
-        {sleepTimerBlock}
+        {/* Now playing — first: the play control is the primary
+            action on this page, so the sleep timer sits below it
+            (2026-11-06 beauty pass), not above it. */}
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mt-4 polish-listen-card sticky top-0 z-30">
           {completed ? (
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">تم وردك ✓</p>
               <p className="text-sm text-accent-600 mt-1">أذكار {wird === 'morning' ? 'الصباح' : 'المساء'} كاملة — تقبّل الله.</p>
-              <button onClick={restart} className="mt-4 px-5 py-3 bg-emerald-700 text-white font-bold rounded-xl">
+              <button onClick={restart} className="mt-4 px-5 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus">
                 إعادة من الأول
               </button>
             </div>
@@ -897,38 +894,40 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
                 <button
                   onClick={() => jumpTo(index - 1, playing)}
                   disabled={index === 0}
-                  className="p-3 bg-white border border-hairline rounded-full disabled:opacity-40"
+                  className="p-3 bg-white border border-hairline rounded-full disabled:opacity-40 polish-press"
                   aria-label="الذكر السابق"
                 >
                   <SkipBack className="w-5 h-5" />
                 </button>
                 {playing ? (
-                  <button onClick={pause} className="p-4 bg-emerald-700 text-white rounded-full" aria-label="إيقاف">
+                  <button onClick={pause} className="p-4 grad-emerald-door text-white rounded-full polish-press" aria-label="إيقاف">
                     <Pause className="w-6 h-6" />
                   </button>
                 ) : (
-                  <button onClick={play} className="p-4 bg-emerald-700 text-white rounded-full" aria-label="تشغيل">
+                  <button onClick={play} className="p-4 grad-emerald-door text-white rounded-full polish-press" aria-label="تشغيل">
                     <Play className="w-6 h-6" />
                   </button>
                 )}
                 <button
                   onClick={() => jumpTo(index + 1, playing)}
                   disabled={index >= list.length - 1}
-                  className="p-3 bg-white border border-hairline rounded-full disabled:opacity-40"
+                  className="p-3 bg-white border border-hairline rounded-full disabled:opacity-40 polish-press"
                   aria-label="الذكر التالي"
                 >
                   <SkipForward className="w-5 h-5" />
                 </button>
-                <button onClick={restart} className="p-3 bg-white border border-hairline rounded-full" aria-label="من الأول">
+                <button onClick={restart} className="p-3 bg-white border border-hairline rounded-full polish-press" aria-label="من الأول">
                   <RotateCcw className="w-5 h-5" />
                 </button>
-                <button onClick={() => setBlackScreen(true)} className="p-3 bg-white border border-hairline rounded-full" aria-label="شاشة سوداء">
+                <button onClick={() => setBlackScreen(true)} className="p-3 bg-white border border-hairline rounded-full polish-press" aria-label="شاشة سوداء">
                   <SunMoon className="w-5 h-5" />
                 </button>
               </div>
             </>
           )}
         </div>
+
+        {sleepTimerBlock}
 
         {/* List: tap to jump */}
         <div className="bg-white rounded-2xl border border-hairline shadow-sm p-3 mt-4">

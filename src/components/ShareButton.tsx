@@ -151,7 +151,7 @@ export default function ShareButton({
     {
       icon: copied ? <Check className="w-8 h-8" /> : <Copy className="w-8 h-8" />,
       label: copied ? 'تم النسخ' : 'نسخ الرابط',
-      color: copied ? 'bg-emerald-600' : 'bg-teal-600 hover:bg-teal-700',
+      color: copied ? 'grad-emerald-door' : 'grad-emerald-door',
       url: '#copy',
       action: handleCopy,
     },
@@ -167,7 +167,7 @@ export default function ShareButton({
       <button
         ref={buttonRef}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-base font-bold rounded-xl shadow-lg hover:shadow-xl transition-smooth active:scale-95"
+        className="flex items-center gap-2 px-6 py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus"
       >
         <Share2 className="w-6 h-6" />
         مشاركة
@@ -208,7 +208,7 @@ export default function ShareButton({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={s.label}
-                  className={`icon-action flex-col p-3 rounded-xl text-white text-xs font-semibold transition-smooth ${s.color}`}
+                  className={`icon-action flex-col p-3 rounded-xl text-white text-xs font-semibold transition-smooth polish-press ${s.color}`}
                 >
                   {s.icon}
                   {s.label}
@@ -223,7 +223,7 @@ export default function ShareButton({
               </p>
               <button
                 onClick={() => void handleCopy()}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-smooth bg-teal-600 hover:bg-teal-700"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm font-bold transition-smooth grad-emerald-door polish-press polish-focus"
               >
                 <Link2 className="w-5 h-5" />
                 {copied ? 'تم نسخ رابط الويب' : 'نسخ رابط الويب'}

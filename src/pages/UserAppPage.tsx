@@ -466,7 +466,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowLangMenu(!showLangMenu)}
-                className="flex items-center gap-1.5 px-2.5 py-2.5 text-sm text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth">
+                className="flex items-center gap-1.5 px-2.5 py-2.5 text-sm text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth polish-press">
                 <Globe className="w-5 h-5" />
                 {LANGUAGES.find((l) => l.code === lang)?.flag}
               </button>
@@ -486,16 +486,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </div>
             {session && (
               <button onClick={async () => { await signOut(); onNavigate('home'); }}
-                className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth font-semibold">
+                className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth font-semibold polish-press">
                 <LogOut className="w-5 h-5" /> خروج
               </button>
             )}
             <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 rounded-xl transition-smooth font-semibold border border-hairline-emerald">
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 rounded-xl transition-smooth font-semibold border border-hairline-emerald polish-press">
               <BookMarked className="w-5 h-5" /> المصحف
             </button>
             <button onClick={() => onNavigate('home')}
-              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth">
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth polish-press">
               <Home className="w-5 h-5" />
             </button>
           </div>
@@ -525,7 +525,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     setProfileRepairError(res.error || 'تعذرت إعادة المحاولة — حاول مرة أخرى.');
                   }
                 }}
-                className="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl disabled:opacity-50">
+                className="px-3 py-2 grad-amber-door text-white text-sm font-bold rounded-xl disabled:opacity-50 polish-press">
                 {profileRepairBusy ? '...' : 'إعادة المحاولة'}
               </button>
               <button onClick={() => setProfileRepairNeeded(false)}
@@ -556,7 +556,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
                 placeholder="اكتب كنيتك (مثال: أبو …)"
                 className="flex-1 px-3 py-2 rounded-xl text-sm text-ink bg-white/95 border border-hairline-input focus:outline-none" />
-              <button onClick={savePreferredName} className="px-3 py-2 bg-white text-emerald-700 text-sm font-bold rounded-xl">حفظ</button>
+              <button onClick={savePreferredName} className="px-3 py-2 bg-white text-emerald-700 text-sm font-bold rounded-xl polish-press">حفظ</button>
               <button onClick={() => setEditingName(false)} className="px-3 py-2 text-sm text-emerald-100">إلغاء</button>
             </div>
           )}
@@ -615,7 +615,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               <h2 className="font-semibold text-ink">سمّع لنفسك</h2>
             </div>
             <button onClick={() => onNavigate('test')}
-              className="mt-4 md:mt-auto w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl">
+              className="mt-4 md:mt-auto w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus">
               ابدأ التسميع
             </button>
           </div>
@@ -690,14 +690,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto p-1">
                   <button onClick={() => { setSurahFilter(''); setPage(0); }}
                     className={`p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                      surahFilter === '' ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald'
+                      surahFilter === '' ? 'grad-emerald-door text-white border-emerald-700 polish-press' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald polish-press'
                     }`}>
                     كل السور
                   </button>
                   {SURAHS.map((s) => (
                     <button key={s.no} onClick={() => { setSurahFilter(String(s.no)); setPage(0); }}
                       className={`flex items-center gap-1.5 p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                        surahFilter === String(s.no) ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald'
+                        surahFilter === String(s.no) ? 'grad-emerald-door text-white border-emerald-700 polish-press' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald polish-press'
                       }`}>
                       <span className="text-xs opacity-60">{s.no}.</span>
                       <span>{s.name}</span>
@@ -714,7 +714,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setLinkTypeFilter([]); setPage(0); }}
                     className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                      linkTypeFilter.length === 0 ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald'
+                      linkTypeFilter.length === 0 ? 'grad-emerald-door text-white border-emerald-700 polish-press' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald polish-press'
                     }`}>
                     كل الأنواع
                   </button>
@@ -722,7 +722,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   {orderedLinkTypes.filter((lt) => lt.value !== 'wajih').map((lt) => (
                     <button key={lt.value} onClick={() => { setLinkTypeFilter((prev) => (prev.includes(lt.value) ? prev.filter((v) => v !== lt.value) : [...prev, lt.value])); setPage(0); }}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold transition-smooth border ${
-                        linkTypeFilter.includes(lt.value) ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald'
+                        linkTypeFilter.includes(lt.value) ? 'grad-emerald-door text-white border-emerald-700 polish-press' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald polish-press'
                       }`}>
                       {lt.label}
                     </button>
@@ -765,7 +765,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               }
               return groups.map((g) => (
                 <button key={g.no} onClick={() => { setSurahFilter(String(g.no)); setPage(0); }}
-                  className="w-full flex items-center justify-between bg-white rounded-2xl border border-hairline-emerald shadow-sm p-4 hover:shadow-md transition-smooth">
+                  className="w-full flex items-center justify-between bg-white rounded-2xl border border-hairline-emerald shadow-sm p-4 hover:shadow-md transition-smooth polish-press">
                   <span className="flex items-center gap-2">
                     <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-sm font-bold rounded-lg">{g.no.toLocaleString('ar-EG')}</span>
                     <span className="text-base font-semibold text-ink">سورة {g.name}</span>
@@ -819,7 +819,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                             }
                           }}
                           className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth ${
-                            showLinksFor === verse.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-50 text-ink-2 hover:bg-gray-100'
+                            showLinksFor === verse.id ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-50 text-ink-2 hover:bg-gray-100 polish-press'
                           }`}
                         >
                           <Bookmark className="w-5 h-5" />
@@ -834,7 +834,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                             } catch { /* storage unavailable: still navigate to the Mushaf */ }
                             onNavigate('mushaf');
                           }}
-                          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-hairline-emerald"
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-smooth bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-hairline-emerald polish-press"
                         >
                           <BookMarked className="w-5 h-5" />
                           فتح في المصحف
@@ -880,7 +880,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                       onTouchEnd={(e) => e.stopPropagation()}
                                       aria-label={t('readLater')}
                                       className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-smooth ${
-                                        linkLists.read_later.has(`${verse.id}:${link.id}`) ? 'bg-emerald-700 text-white' : 'bg-white text-ink-2 border border-hairline hover:border-hairline-emerald'
+                                        linkLists.read_later.has(`${verse.id}:${link.id}`) ? 'grad-emerald-door text-white' : 'bg-white text-ink-2 border border-hairline hover:border-hairline-emerald polish-press'
                                       }`}>
                                       <Bookmark className="w-4 h-4" /> {t('readLater')}
                                     </button>
@@ -890,7 +890,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                       onTouchEnd={(e) => e.stopPropagation()}
                                       aria-label={t('difficult')}
                                       className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-smooth ${
-                                        linkLists.difficult.has(`${verse.id}:${link.id}`) ? 'bg-emerald-700 text-white' : 'bg-white text-ink-2 border border-hairline hover:border-hairline-emerald'
+                                        linkLists.difficult.has(`${verse.id}:${link.id}`) ? 'grad-emerald-door text-white' : 'bg-white text-ink-2 border border-hairline hover:border-hairline-emerald polish-press'
                                       }`}>
                                       <AlertTriangle className="w-4 h-4" /> {t('difficult')}
                                     </button>
@@ -918,11 +918,11 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </p>
             <div className="flex items-center gap-1">
               <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
-                className="p-2 text-ink-2 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
+                className="p-2 text-ink-2 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth polish-press">
                 <ChevronRight className="w-5 h-5" />
               </button>
               <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
-                className="p-2 text-ink-2 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth">
+                className="p-2 text-ink-2 hover:bg-gray-100 rounded-lg disabled:opacity-30 transition-smooth polish-press">
                 <ChevronLeft className="w-5 h-5" />
               </button>
             </div>
@@ -965,8 +965,8 @@ function ListFilterTab({ active, onClick, label, icon, count }: { active: boolea
       onClick={onClick}
       className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-smooth ${
         active
-          ? 'bg-emerald-700 text-white shadow-md [&>svg]:text-white'
-          : 'bg-white text-ink-2 hover:bg-gray-50 border border-hairline [&>svg]:text-emerald-700'
+          ? 'grad-emerald-door text-white [&>svg]:text-white polish-press'
+          : 'bg-white text-ink-2 hover:bg-gray-50 border border-hairline [&>svg]:text-emerald-700 polish-press'
       }`}
     >
       {icon}

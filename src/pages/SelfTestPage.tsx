@@ -22,6 +22,7 @@ import { checkMic } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
+import { setBackTarget } from '../lib/backTarget';
 import { formatAr, normalizeDigits } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
 import {
@@ -815,6 +816,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setPerTest(null);
     setSavePerTestAsDefault(false);
   }, [rangeChoice, lobbyDoor]);
+  // Shell back button (2026-11-06): the App shell renders ONE back
+  // button; SelfTest registers its internal target while a lobby
+  // sub-view is open, and clears it at the top level so the shell
+  // falls back to the route parent (home). Detail card → back to
+  // the range choices; any other lobby door → back to the lobby
+  // hub. Testing/done phases register nothing (their own flows own
+  // the screen). Cleanup clears on exit/unmount so no stale target
+  // can leak into another page.
+  useEffect(() => {
+    if (phase !== 'setup') { setBackTarget(null); return () => setBackTarget(null); }
+    if (lobbyDoor === 'range' && rangeChoice !== null) {
+      setBackTarget({ label: 'عودة لاختيار المدى', onBack: () => setRangeChoice(null) });
+      return () => setBackTarget(null);
+    }
+    if (lobbyDoor !== null) {
+      setBackTarget({ label: 'عودة إلى التسميع', onBack: () => { setRangeChoice(null); setLobbyDoor(null); } });
+      return () => setBackTarget(null);
+    }
+    setBackTarget(null);
+    return () => setBackTarget(null);
+  }, [phase, lobbyDoor, rangeChoice]);
   const [rangeStart, setRangeStart] = useState<RangePoint | null>(null);
   const [rangeEnd, setRangeEnd] = useState<RangePoint | null>(null);
   // Whole-surah / whole-juz ranges (derived, no extra state).
@@ -4910,57 +4932,66 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     </label>
   );
 
-  // Per-test settings (2026-11-06): one compact section, shared by
-  // all four range detail cards, shown right before «ابدأ التسميع».
+  // Per-test settings (2026-11-06, compact 2026-11-06): one tight
+  // section, shared by all four range detail cards, shown right
+  // before «ابدأ التسميع». Compact grid — mode + speed side by
+  // side, timing full-width, «احفظ كافتراضي» inline in the header
+  // row — so the whole detail card stays near one iPad screen.
   // It displays the CURRENT saved defaults (the lobby state, which
   // mirrors 'quran-test-settings'); tapping a chip edits the
   // override for THIS test only. The checkbox is never persisted —
   // unchecked on every open — and only with it checked does the
-  // start button save the new values as the defaults.
+  // start button save the new values as the defaults. Selected
+  // chips use the gold door gradient (grad-amber-door); every chip
+  // stays ≥44px tall (min-h-[44px]) so it is still tappable.
   const perTestEff = perTest ?? { mode: reciteMode, corrDelayMode, corrRate };
   const perTestSettings = (
-    <div className="rounded-xl border border-hairline-emerald bg-emerald-50 p-3 space-y-3">
-      <p className="text-sm font-semibold text-accent-800">إعدادات هذا التسميع</p>
-      <div>
-        <p className="text-xs font-medium text-accent-700 mb-1.5">طريقة التسميع</p>
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setPerTest({ ...perTestEff, mode: 'ayah' })}
-            className={`py-2 rounded-xl font-semibold text-sm ${perTestEff.mode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-            آية آية
-          </button>
-          <button type="button" onClick={() => setPerTest({ ...perTestEff, mode: 'continuous' })} disabled={!micSupported}
-            className={`py-2 rounded-xl font-semibold text-sm disabled:opacity-40 ${perTestEff.mode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-            متصل
-          </button>
-        </div>
+    <div className="rounded-xl border border-hairline-emerald bg-emerald-50 p-2.5 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-accent-800">إعدادات هذا التسميع</p>
+        <label className="flex items-center gap-1.5 text-xs font-semibold text-accent-700">
+          <input type="checkbox" checked={savePerTestAsDefault} onChange={(e) => setSavePerTestAsDefault(e.target.checked)} className="w-5 h-5 accent-emerald-600" />
+          احفظ كافتراضي
+        </label>
       </div>
-      <div>
-        <p className="text-xs font-medium text-accent-700 mb-1.5">توقيت التصحيح</p>
-        <div className="grid grid-cols-4 gap-2">
-          {CORR_DELAY_MODES.map((m) => (
-            <button type="button" key={m} onClick={() => setPerTest({ ...perTestEff, corrDelayMode: m })}
-              className={`py-2 rounded-xl font-semibold text-xs ${perTestEff.corrDelayMode === m ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-              {CORR_DELAY_MODE_LABEL[m]}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <p className="text-xs font-medium text-accent-700 mb-1">طريقة التسميع</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button type="button" onClick={() => setPerTest({ ...perTestEff, mode: 'ayah' })}
+              className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${perTestEff.mode === 'ayah' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+              آية آية
             </button>
-          ))}
-        </div>
-      </div>
-      <div>
-        <p className="text-xs font-medium text-accent-700 mb-1.5">سرعة التصحيح</p>
-        <div className="grid grid-cols-4 gap-2">
-          {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
-            <button type="button" key={r} onClick={() => setPerTest({ ...perTestEff, corrRate: r })}
-              className={`py-2 rounded-xl font-semibold text-sm ${perTestEff.corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-              {CORR_RATE_LABEL[r]}
+            <button type="button" onClick={() => setPerTest({ ...perTestEff, mode: 'continuous' })} disabled={!micSupported}
+              className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press disabled:opacity-40 ${perTestEff.mode === 'continuous' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+              متصل
             </button>
-          ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-accent-700 mb-1">سرعة التصحيح</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
+              <button type="button" key={r} onClick={() => setPerTest({ ...perTestEff, corrRate: r })}
+                className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${perTestEff.corrRate === r ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                {CORR_RATE_LABEL[r]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="col-span-2">
+          <p className="text-xs font-medium text-accent-700 mb-1">توقيت التصحيح</p>
+          <div className="grid grid-cols-4 gap-1.5">
+            {CORR_DELAY_MODES.map((m) => (
+              <button type="button" key={m} onClick={() => setPerTest({ ...perTestEff, corrDelayMode: m })}
+                className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${perTestEff.corrDelayMode === m ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                {CORR_DELAY_MODE_LABEL[m]}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-      <label className="flex items-center gap-2 text-sm font-medium text-accent-700">
-        <input type="checkbox" checked={savePerTestAsDefault} onChange={(e) => setSavePerTestAsDefault(e.target.checked)} className="w-5 h-5 accent-emerald-600" />
-        احفظ كافتراضي
-      </label>
-      <p className="text-xs text-accent-600 leading-relaxed">من غير العلامة، التغيير للاختبار ده بس — والاختبار اللي بعده يرجع للإعدادات المحفوظة.</p>
+      <p className="text-xs text-accent-600 leading-snug">من غير العلامة، التغيير للاختبار ده بس — والاختبار اللي بعده يرجع للإعدادات المحفوظة.</p>
     </div>
   );
 
@@ -4984,7 +5015,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
           <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"
-            className="mr-auto icon-action flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg">
+            className="mr-auto icon-action flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg polish-press">
             <Home className="w-5 h-5" /> لوحتي
           </button>
         </div>
@@ -5016,11 +5047,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </p>
                 <div className="flex gap-3">
                   <button onClick={resumeTest} disabled={recording && !!savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah}
-                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
+                    className="flex-1 py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl polish-press polish-focus">
                     استكمال الاختبار
                   </button>
                   <button onClick={() => { try { localStorage.removeItem(PROGRESS_KEY); } catch {} setSavedProgress(null); }}
-                    className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
+                    className="px-5 py-2.5 bg-white border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                     تجاهل
                   </button>
                 </div>
@@ -5081,7 +5112,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                 </div>
                 <button onClick={() => void startTest()} disabled={loading}
-                  className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                  className="w-full py-3.5 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                   {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                 </button>
                 <p className="text-sm text-accent-600 text-center">
@@ -5090,86 +5121,93 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </>
             )}
             {lobbyDoor === 'settings' && (
-              <>
-                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
-                  ← عودة إلى التسميع
-                </button>
-            <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4">
+            <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-3 space-y-2">
               <h2 className="font-semibold text-accent-800">إعدادات التسميع</h2>
-              <div>
-                <p className="text-sm font-medium text-accent-700 mb-2">مستوى التدقيق</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <button onClick={() => applySettings('beginner', reciteMode)}
-                    className={`py-2.5 rounded-xl font-semibold ${verifyLevel === 'beginner' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                    مبتدئ
-                  </button>
-                  <button onClick={() => applySettings('intermediate', reciteMode)}
-                    className={`py-2.5 rounded-xl font-semibold ${verifyLevel === 'intermediate' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                    متوسط
-                  </button>
-                  <button onClick={() => applySettings('advanced', reciteMode)}
-                    className={`py-2.5 rounded-xl font-semibold ${verifyLevel === 'advanced' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                    متقدم
-                  </button>
+              {/* Compact 2026-11-06: two-column grid — verify + mode
+                  side by side, timing + speed full-width — with the
+                  explainers kept verbatim but at text-xs, so the
+                  whole panel fits one iPad screen. The stray
+                  duplicate «سرعة التصحيح» heading above the timing
+                  chips is gone (the timing label stays). All
+                  settings, keys and applySettings calls unchanged;
+                  selected chips use the gold door gradient
+                  (grad-amber-door), every chip ≥44px tall. */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-xs font-medium text-accent-700 mb-1">مستوى التدقيق</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button onClick={() => applySettings('beginner', reciteMode)}
+                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${verifyLevel === 'beginner' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                      مبتدئ
+                    </button>
+                    <button onClick={() => applySettings('intermediate', reciteMode)}
+                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${verifyLevel === 'intermediate' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                      متوسط
+                    </button>
+                    <button onClick={() => applySettings('advanced', reciteMode)}
+                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${verifyLevel === 'advanced' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                      متقدم
+                    </button>
+                  </div>
                 </div>
-                <p className="text-sm text-accent-600 mt-2 leading-relaxed">
+                <div>
+                  <p className="text-xs font-medium text-accent-700 mb-1">طريقة التسميع</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button onClick={() => applySettings(verifyLevel, 'ayah')}
+                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${reciteMode === 'ayah' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                      آية آية
+                    </button>
+                    <button onClick={() => applySettings(verifyLevel, 'continuous')} disabled={!micSupported}
+                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press disabled:opacity-40 ${reciteMode === 'continuous' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                      متصل
+                    </button>
+                  </div>
+                </div>
+                <p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {verifyLevel === 'beginner'
                     ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه.'
                     : verifyLevel === 'intermediate'
                     ? 'يوقف عند أي خطأ في الكلمات: ناقصة أو مختلفة أو زائدة.'
                     : 'نفس تدقيق المتوسط — والسرعة دلوقتي بتتظبط من فترة التريث وسرعة النطق تحت.'}
                 </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-accent-700 mb-2">سرعة التصحيح</p>
-                <p className="text-sm font-medium text-accent-700 mb-2">توقيت التصحيح:</p>
-                <div className="grid grid-cols-4 gap-2 mb-3">
-                  {CORR_DELAY_MODES.map((m) => (
-                    <button key={m} onClick={() => applySettings(verifyLevel, reciteMode, m, corrRate)}
-                      className={`py-2.5 rounded-xl font-semibold text-sm ${corrDelayMode === m ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                      {CORR_DELAY_MODE_LABEL[m]}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-sm font-medium text-accent-700 mb-2">سرعة نطق الكلمة الصحيحة:</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
-                    <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelayMode, r)}
-                      className={`py-2.5 rounded-xl font-semibold ${corrRate === r ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                      {CORR_RATE_LABEL[r]}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-sm text-accent-600 mt-2 leading-relaxed">
-                  فترة التريث هي المهلة اللي بتاخدها تصلح لنفسك قبل ما البرنامج ينطق التصحيح (في آية آية)، أو مدة سكوتك قبل ما ينبهك (في المتصل). أما المقاطعة الفورية للغلطة المؤكدة وانت ماشي فبتفضل فورية — دي الرد التلقائي.
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-accent-700 mb-2">طريقة التسميع</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => applySettings(verifyLevel, 'ayah')}
-                    className={`py-2.5 rounded-xl font-semibold ${reciteMode === 'ayah' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                    آية آية
-                  </button>
-                  <button onClick={() => applySettings(verifyLevel, 'continuous')} disabled={!micSupported}
-                    className={`py-2.5 rounded-xl font-semibold disabled:opacity-40 ${reciteMode === 'continuous' ? 'bg-amber-600 text-white shadow' : 'bg-white border border-hairline text-accent-700'}`}>
-                    متصل
-                  </button>
-                </div>
-                <p className="text-sm text-accent-600 mt-2 leading-relaxed">
+                <p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p>
                 {!micSupported && (
-                  <p className="text-sm text-amber-link mt-1">{micAbsentSetupNote}</p>
+                  <p className="col-span-2 text-xs text-amber-link leading-snug">{micAbsentSetupNote}</p>
                 )}
+                <div className="col-span-2">
+                  <p className="text-xs font-medium text-accent-700 mb-1">توقيت التصحيح</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {CORR_DELAY_MODES.map((m) => (
+                      <button key={m} onClick={() => applySettings(verifyLevel, reciteMode, m, corrRate)}
+                        className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${corrDelayMode === m ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                        {CORR_DELAY_MODE_LABEL[m]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs font-medium text-accent-700 mb-1">سرعة نطق الكلمة الصحيحة</p>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
+                      <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelayMode, r)}
+                        className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${corrRate === r ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                        {CORR_RATE_LABEL[r]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="col-span-2 text-xs text-accent-600 leading-snug">
+                  فترة التريث هي المهلة اللي بتاخدها تصلح لنفسك قبل ما البرنامج ينطق التصحيح (في آية آية)، أو مدة سكوتك قبل ما ينبهك (في المتصل). أما المقاطعة الفورية للغلطة المؤكدة وانت ماشي فبتفضل فورية — دي الرد التلقائي.
+                </p>
               </div>
-              <p className="text-xs text-accent-600 leading-relaxed">
+              <p className="text-xs text-accent-600 leading-snug">
                 ملحوظة بأمانة: التدقيق كله على مستوى الكلمات — البرنامج بيسمع الكلمات مش الأصوات، فما بيقيس أحكام التجويد (اللحن الخفي).
               </p>
             </div>
-              </>
             )}
 
             {lobbyDoor === 'settings' && (
@@ -5290,9 +5328,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
             {lobbyDoor === 'range' && (
               <>
-                <button onClick={() => { setRangeChoice(null); setLobbyDoor(null); }} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
-                  ← عودة إلى التسميع
-                </button>
                 {rangeChoice === null ? (
                   <div className="grid grid-cols-2 gap-3 alive-choices">
                     <button onClick={() => setRangeChoice('surah')}
@@ -5318,9 +5353,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                 ) : (
                   <>
-                    <button onClick={() => setRangeChoice(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
-                      ← عودة لاختيار المدى
-                    </button>
                     {rangeChoice === 'surah' && (
                       <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
                         <h2 className="font-semibold text-accent-800">بالسورة</h2>
@@ -5331,7 +5363,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); void startTestGlobal(surahRange.start.global, surahRange.end.global, null, eff.mode, eff); }} disabled={loading}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                          className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
@@ -5352,7 +5384,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); void startTestGlobal(juzRange.start.global, juzRange.end.global, null, eff.mode, eff); }} disabled={loading || (recording && juzRange.start.surah !== juzRange.end.surah)}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                          className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
@@ -5381,7 +5413,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); if (pageRange) void startTestGlobal(pageRange.start.global, pageRange.end.global, null, eff.mode, eff); }} disabled={loading || pageRangeState !== 'ready' || !pageRange || (recording && pageRange.start.surah !== pageRange.end.surah)}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                          className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
@@ -5411,7 +5443,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); void startTest(surah, from, to, null, eff.mode, eff); }} disabled={loading}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                          className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
@@ -5423,9 +5455,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
             {lobbyDoor === 'mic' && (
               <>
-                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
-                  ← عودة إلى التسميع
-                </button>
             {/* Batch 2: lobby mic check — a real mic opens, samples,
             and closes BEFORE the session, so a dead mic or a denied
             permission is caught in the lobby instead of mid-test. */}
@@ -5435,7 +5464,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال، ومفيش أي تسجيل بيتحفظ أو بيترفع.
               </p>
               <button onClick={runMicCheck} disabled={micCheckState === 'checking'}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                className="w-full py-3 grad-emerald-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                 {micCheckState === 'checking' ? 'جارٍ فحص الميكروفون…' : '🎤 جرّب الميكروفون'}
               </button>
               {micCheckState === 'checking' && (
@@ -5463,9 +5492,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
             {lobbyDoor === 'results' && (
               <>
-                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
-                  ← عودة إلى التسميع
-                </button>
             {history.length > 0 && (
               <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5">
                 <h2 className="font-semibold text-accent-800 mb-3">نتائجك السابقة</h2>
@@ -5488,9 +5514,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 an error: no weak ayahs yet means he is doing well. */}
             {lobbyDoor === 'weak' && (
               <>
-                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
-                  ← عودة إلى التسميع
-                </button>
                 <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
                   <h2 className="font-semibold text-accent-800">سمّعني آياتي الضعيفة</h2>
                   {weakLoading ? (
@@ -5518,7 +5541,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </div>
                       {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                       <button onClick={() => void startWeakTest()} disabled={loading}
-                        className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                        className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                         {loading ? 'جارٍ تحميل الآيات…' : `ابدأ تسميع الآيات الضعيفة (${weakAyahs.length.toLocaleString('ar-EG')} آية)`}
                       </button>
                       <p className="text-xs text-accent-600 leading-relaxed">التسميع بنفس إعداداتك المحفوظة — ولو وقفت في النص، تقدر تكمل من مكانك بعدين.</p>
@@ -5583,7 +5606,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </p>
                   <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
                   <button onClick={startContinuousMic}
-                    className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto btn-3d">
+                    className="mt-5 px-8 py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 mx-auto polish-press polish-focus">
                     <Mic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
                   </button>
                 </>
@@ -5614,7 +5637,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   {contLastPrompt.length > 0 && !contPrompting && (
                     <button onClick={() => speakContPrompt(contLastPrompt)}
-                      className="mb-4 px-5 py-2.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl">
+                      className="mb-4 px-5 py-2.5 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-sm font-semibold rounded-xl polish-press">
                       🔊 أعد سماع التصحيح: {contPromptHasContext && contLastPrompt.length > 0 ? (<><span className="opacity-50">{contLastPrompt[0]}</span>{' '}{contLastPrompt.slice(1).join(' ')}</>) : contLastPrompt.join(' ')}
                     </button>
                   )}
@@ -5625,11 +5648,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   <div className="flex gap-3 justify-center">
                     <button onClick={finishContinuousPressed}
-                      className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
+                      className="px-6 py-3 grad-emerald-door text-white text-base font-bold rounded-xl polish-press polish-focus">
                       أنهيت التسميع
                     </button>
                     <button onClick={() => { diagPush('tap', { label: 'stop-cont' }); stopContinuousMic(); }}
-                      className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2">
+                      className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2 polish-press">
                       <Square className="w-4 h-4" /> قف
                     </button>
                   </div>
@@ -5679,7 +5702,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </p>
                       <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — عندما تنتهي اضغط الزر</p>
                       <button onClick={() => setRevealed(true)}
-                        className="mt-5 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white text-lg font-bold rounded-xl shadow">
+                        className="mt-5 px-6 py-3 grad-amber-door text-white text-lg font-bold rounded-xl polish-press polish-focus">
                         أظهر الآية
                       </button>
                       {micSupported && (
@@ -5695,11 +5718,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <p className="text-sm text-accent-600 mt-4">طابق ما سمّعته بالنص — ثم قيّم نفسك بصدق:</p>
                       <div className="flex gap-3 mt-4">
                         <button onClick={() => grade(true)}
-                          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2">
+                          className="flex-1 py-3 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
                           <Check className="w-6 h-6" /> صح
                         </button>
                         <button onClick={() => grade(false)}
-                          className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2">
+                          className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press">
                           <X className="w-6 h-6" /> خطأ
                         </button>
                       </div>
@@ -5711,7 +5734,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <p className="text-lg font-bold text-emerald-700 mb-3">ما شاء الله — صح!</p>
                   <p className="text-2xl leading-[2.2] font-bold text-emerald-700" dir="rtl">{ayahs[index].ayah_text}</p>
                   <button onClick={nextAfterMic}
-                    className="mt-5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow">
+                    className="mt-5 px-6 py-3 grad-emerald-door text-white text-lg font-bold rounded-xl polish-press polish-focus">
                     {index + 1 < ayahs.length ? 'الآية اللي بعدها' : 'إنهاء التسميع'}
                   </button>
                 </>
@@ -5729,7 +5752,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   {(wrongByAyah[index]?.length ?? 0) > 0 && (
                     <button onClick={() => replayAyahCorrection()}
-                      className="mt-3 px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-sm font-semibold rounded-xl">
+                      className="mt-3 px-5 py-2.5 bg-white border border-red-200 hover:bg-red-50 text-red-700 text-sm font-semibold rounded-xl polish-press">
                       🔊 أعد سماع التصحيح
                     </button>
                   )}
@@ -5758,11 +5781,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       resets the mic state; a fresh pass overwrites
                       the grade (and the wrong words) for this ayah. */}
                   <button onClick={() => { stopRefUnit(); goToAyah(index); }}
-                    className="mt-5 ml-2 px-6 py-3 bg-white border border-hairline-emerald hover:bg-emerald-50 text-emerald-700 text-lg font-bold rounded-xl shadow">
+                    className="mt-5 ml-2 px-6 py-3 bg-white border border-hairline-emerald hover:bg-emerald-50 text-emerald-700 text-lg font-bold rounded-xl shadow polish-press">
                     🔁 سمّع الآية دي تاني
                   </button>
                   <button onClick={nextAfterMic}
-                    className="mt-5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow">
+                    className="mt-5 px-6 py-3 grad-emerald-door text-white text-lg font-bold rounded-xl polish-press polish-focus">
                     {index + 1 < ayahs.length ? 'الآية اللي بعدها' : 'إنهاء التسميع'}
                   </button>
                 </>
@@ -5782,17 +5805,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           )}
                           <div className="flex gap-2 justify-center mt-3">
                             <button onClick={resumeMic}
-                              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
+                              className="px-6 py-2.5 grad-emerald-door text-white text-base font-bold rounded-xl polish-press polish-focus">
                               كمّل
                             </button>
                             {spokenTokens(liveRef.current.finals).length > 0 && (
                               <button onClick={evaluateStalled}
-                                className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl">
+                                className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl polish-press">
                                 قيّم اللي اتسمع
                               </button>
                             )}
                             <button onClick={() => startMic()}
-                              className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl">
+                              className="px-5 py-2.5 bg-white border border-hairline hover:bg-gray-50 text-accent-700 text-base font-semibold rounded-xl polish-press">
                               ابدأ من جديد
                             </button>
                           </div>
@@ -5806,7 +5829,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </p>
                       <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ بصوتك</p>
                       <button onClick={() => startMic()}
-                        className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto btn-3d">
+                        className="mt-5 px-8 py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 mx-auto polish-press polish-focus">
                         <Mic className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
                       <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}
@@ -5865,11 +5888,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       )}
                       <div className="flex gap-3 justify-center">
                         <button onClick={() => evaluatePressed()}
-                          className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow">
+                          className="px-6 py-3 grad-emerald-door text-white text-base font-bold rounded-xl polish-press polish-focus">
                           خلصت، قيّمها
                         </button>
                         <button onClick={() => resetMicState()}
-                          className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2">
+                          className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2 polish-press">
                           <Square className="w-4 h-4" /> قف
                         </button>
                       </div>
@@ -5892,11 +5915,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <div className="flex justify-between">
               <button onClick={() => goToAyah(index - 1)}
                 disabled={index === 0}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30">
+                className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 polish-press">
                 <ChevronRight className="w-5 h-5" /> الآية السابقة
               </button>
               <button onClick={skipAyah}
-                className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg">
+                className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg polish-press">
                 {index + 1 < ayahs.length ? (<>تخطي الآية <ChevronLeft className="w-5 h-5" /></>) : 'إنهاء التسميع'}
               </button>
             </div>
@@ -5960,11 +5983,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                               finished score above — it is practice
                               for the weak ayah. */}
                           <button onClick={() => { void startTest(a.surah_no, a.ayah_no, a.ayah_no, null, 'ayah'); }}
-                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-bold text-white grad-emerald-door rounded-lg polish-press">
                             🔁 سمّعها تاني
                           </button>
                           <button onClick={() => openInMushaf(a.surah_no, a.ayah_no)}
-                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-emerald-700 bg-emerald-50 rounded-lg">
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm font-semibold text-emerald-700 bg-emerald-50 rounded-lg polish-press">
                             <BookOpen className="w-4 h-4" /> افتح في المصحف
                           </button>
                         </div>
@@ -6189,11 +6212,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
             <div className="flex gap-3">
               <button onClick={() => { setContZeroMatch(false); setShowFullHeard(false); setRecPlan([]); setRecActual({}); setRecConsent(false); setRecCaseCopied(''); setPhase('setup'); }}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2">
+                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>
               <button onClick={() => onNavigate('app')}
-                className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-semibold rounded-xl">
+                className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                 العودة إلى لوحتي
               </button>
             </div>

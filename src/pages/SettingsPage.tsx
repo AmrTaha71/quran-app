@@ -28,6 +28,7 @@ import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
 import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
+import { setBackTarget } from '../lib/backTarget';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
@@ -53,6 +54,17 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // the id of the open door. All section state lives in this
   // component, so switching hub<->detail never loses a control.
   const [openDoor, setOpenDoor] = useState<string | null>(null);
+  // Shared back button (2026-11-06): while a Settings door is open,
+  // the shell BackButton goes back to the hub instead of الرئيسية.
+  // Cleanup on close/unmount clears it, so no stale target survives.
+  useEffect(() => {
+    if (openDoor === null) {
+      setBackTarget(null);
+      return;
+    }
+    setBackTarget({ label: 'عودة إلى الإعدادات', onBack: () => setOpenDoor(null) });
+    return () => setBackTarget(null);
+  }, [openDoor]);
   const [editionIdx, setEditionIdx] = useState(() =>
     readStored('quran-mushaf-edition', 0, (raw) => {
       const n = Number(raw);
@@ -630,14 +642,14 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               ) : job?.phase === 'running' ? (
                 <button
                   onClick={stopAudioDownload}
-                  className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 font-semibold rounded-xl whitespace-nowrap"
+                  className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 font-semibold rounded-xl whitespace-nowrap polish-press"
                 >
                   إيقاف التحميل
                 </button>
               ) : (
                 <button
                   onClick={() => void askAudioDownload(kind, pick)}
-                  className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl whitespace-nowrap"
+                  className="px-4 py-3 grad-emerald-door text-white font-bold rounded-xl whitespace-nowrap polish-press polish-focus"
                 >
                   حمّل السورة
                 </button>
@@ -667,11 +679,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </p>
                 <div className="flex gap-2 mt-2">
                   <button onClick={() => void startAudioDownload()}
-                    className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
+                    className="flex-1 py-2 grad-amber-door text-white font-bold rounded-xl polish-press polish-focus">
                     أيوه، حمّل
                   </button>
                   <button onClick={() => setAudioJob(null)}
-                    className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
+                    className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                     إلغاء
                   </button>
                 </div>
@@ -697,7 +709,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
                 <button
                   onClick={() => void clearAudioDownload(e.kind, e.surah)}
-                  className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl"
+                  className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
                 >
                   مسح
                 </button>
@@ -745,10 +757,6 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </div>
         ) : (
           <div key={openDoor} className="polish-fade-up space-y-6 md:space-y-8">
-            <button onPointerDown={pressFeedback} onClick={() => setOpenDoor(null)}
-              className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 glass-card rounded-xl text-base md:text-lg font-semibold text-accent-700">
-              ← عودة إلى الإعدادات
-            </button>
             {openDoor === 'wird' && (<>
         {/* Daily wird — FIRST section by request: the user sets all
             THREE parts in this one window (pages per part, 0 = skip
@@ -765,10 +773,10 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <p className="text-sm font-semibold text-accent-700">{WIRD_TYPE_LABEL[k]}</p>
               <div className="flex items-center gap-3">
                 <button onClick={() => updateDraftWird({ parts: { ...draftWird.parts, [k]: Math.max(0, draftWird.parts[k] - 1) } })}
-                  className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">−</button>
+                  className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full polish-press">−</button>
                 <span className="text-lg font-bold text-accent-800 w-8 text-center">{draftWird.parts[k].toLocaleString('ar-EG')}</span>
                 <button onClick={() => updateDraftWird({ parts: { ...draftWird.parts, [k]: Math.min(10, draftWird.parts[k] + 1) } })}
-                  className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full">+</button>
+                  className="w-9 h-9 text-lg font-bold bg-gray-100 hover:bg-gray-200 rounded-full polish-press">+</button>
               </div>
             </div>
           ))}
@@ -776,7 +784,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             المجموع: {formatPages(wirdTotal(draftWird.parts))} يوميًا
           </p>
           <button onClick={saveWirdChoice} disabled={wirdTotal(draftWird.parts) === 0}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-base font-bold rounded-xl transition-smooth">
+            className="w-full py-3 grad-emerald-door disabled:opacity-50 text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
             حفظ
           </button>
           {wirdTotal(draftWird.parts) === 0 && (
@@ -903,7 +911,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               {installPrompt ? (
                 <>
                   <button onClick={runInstallPrompt}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl transition-smooth">
+                    className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
                     ثبّت التطبيق الآن
                   </button>
                   {installOutcome && <p className="text-sm text-accent-500 mt-2">{installOutcome}</p>}
@@ -974,11 +982,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </p>
                   <div className="flex gap-2 mt-2">
                     <button onClick={startDownload}
-                      className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
+                      className="flex-1 py-2 grad-amber-door text-white font-bold rounded-xl polish-press polish-focus">
                       أيوه، حمّل
                     </button>
                     <button onClick={() => setDlConfirm(false)}
-                      className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
+                      className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                       إلغاء
                     </button>
                   </div>
@@ -987,18 +995,18 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <div className="flex gap-3">
                   {!dlRunning ? (
                     <button onClick={askDownload} disabled={dlCached !== null && dlCached >= 604}
-                      className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
+                      className="flex-1 py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl polish-press polish-focus">
                       {dlCached !== null && dlCached > 0 && dlCached < 604 ? 'كمّل تحميل الناقص' : 'حمّل كل الصفحات'}
                     </button>
                   ) : (
                     <button onClick={stopDownload} disabled={dlStopping}
-                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-semibold rounded-xl">
+                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-semibold rounded-xl polish-press">
                       {dlStopping ? 'جارٍ الإيقاف…' : 'إيقاف التحميل'}
                     </button>
                   )}
                   {dlCached !== null && dlCached > 0 && !dlRunning && (
                     <button onClick={clearDownload}
-                      className="px-5 py-2.5 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
+                      className="px-5 py-2.5 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                       مسح المحمل
                     </button>
                   )}
@@ -1055,11 +1063,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                             </p>
                             <div className="flex gap-2 mt-2">
                               <button onClick={() => startOptDownload(ed.id)}
-                                className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
+                                className="flex-1 py-2 grad-amber-door text-white font-bold rounded-xl polish-press polish-focus">
                                 أيوه، حمّل
                               </button>
                               <button onClick={() => patchOpt(ed.id, { confirm: false })}
-                                className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
+                                className="px-5 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                                 إلغاء
                               </button>
                             </div>
@@ -1068,18 +1076,18 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <div className="flex gap-2 mt-3">
                             {!st.running ? (
                               <button onClick={() => askOptDownload(ed.id)} disabled={full}
-                                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl">
+                                className="flex-1 py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl polish-press polish-focus">
                                 {full ? 'محمل بالكامل ✓' : st.cached !== null && st.cached > 0 ? 'كمّل تحميل الناقص' : 'حمّل المصحف'}
                               </button>
                             ) : (
                               <button onClick={() => stopOptDownload(ed.id)} disabled={st.stopping}
-                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-semibold rounded-xl">
+                                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-accent-700 font-semibold rounded-xl polish-press">
                                 {st.stopping ? 'جارٍ الإيقاف…' : 'إيقاف التحميل'}
                               </button>
                             )}
                             {st.cached !== null && st.cached > 0 && !st.running && (
                               <button onClick={() => clearOptDownload(ed.id)}
-                                className="px-5 py-2.5 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl">
+                                className="px-5 py-2.5 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                                 مسح المحمل
                               </button>
                             )}
@@ -1143,7 +1151,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </div>
                         <button
                           onClick={() => void clearKhatmaDownload(e.reciter, e.surah)}
-                          className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl"
+                          className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
                         >
                           مسح
                         </button>
@@ -1175,7 +1183,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div className="flex flex-wrap gap-2 mb-5">
             {RECITERS.map((r) => (
               <button key={r.id} onClick={() => pickReciter(r.id)}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-smooth ${reciterId === r.id ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-smooth ${reciterId === r.id ? 'grad-emerald-door text-white border-emerald-600 polish-press' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100 polish-press'}`}>
                 {r.name}
               </button>
             ))}
@@ -1184,11 +1192,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <p className="text-xs text-accent-600 mb-3">للرجال: الصوت الرجالي المولّد دائماً. للنساء: الصوت النسائي.</p>
           <div className="flex gap-2">
             <button onClick={() => pickGender('female')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${linkGender === 'female' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${linkGender === 'female' ? 'grad-emerald-door text-white border-emerald-600 polish-press' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100 polish-press'}`}>
               امرأة
             </button>
             <button onClick={() => pickGender('male')}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${linkGender === 'male' ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${linkGender === 'male' ? 'grad-emerald-door text-white border-emerald-600 polish-press' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100 polish-press'}`}>
               رجل
             </button>
           </div>
@@ -1216,7 +1224,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div className="flex flex-wrap gap-2">
             {LANGUAGES.map((l) => (
               <button key={l.code} onClick={() => { setLang(l.code); saved(); }}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-smooth ${lang === l.code ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100'}`}>
+                className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-smooth ${lang === l.code ? 'grad-emerald-door text-white border-emerald-600 polish-press' : 'bg-gray-50 text-accent-600 border-hairline hover:bg-gray-100 polish-press'}`}>
                 {l.flag} {l.nativeName}
               </button>
             ))}
@@ -1241,7 +1249,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               onNavigate('home');
             }}
             onPointerDown={pressFeedback}
-            className="btn-3d w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl transition-smooth">
+            className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
             إعادة الجولة التعريفية
           </button>
         </section>
@@ -1264,7 +1272,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </div>
           {passwordMsg && <p className="text-xs text-accent-600 mt-2">{passwordMsg}</p>}
           <button onClick={changePassword}
-            className="mt-3 w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition-smooth">
+            className="mt-3 w-full py-2.5 grad-emerald-door text-white text-sm font-bold rounded-xl transition-smooth polish-press polish-focus">
             حفظ كلمة السر الجديدة
           </button>
         </section>
@@ -1277,7 +1285,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </h2>
             <p className="text-sm text-accent-500 mb-4">تعذّر التأكد من صلاحية الإدارة — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
             <button onClick={() => setAdminGateAttempt((a) => a + 1)}
-              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+              className="w-full py-2.5 grad-emerald-door text-white text-sm font-bold rounded-xl transition-smooth polish-press polish-focus">
               إعادة المحاولة
             </button>
           </section>
@@ -1290,7 +1298,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </h2>
             <p className="text-sm text-accent-600 mb-4">القسم ده بيظهر للأدمن بس — المستخدم العادي مش بيشوفه.</p>
             <button onClick={() => onNavigate('admin')}
-              className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition-smooth">
+              className="w-full py-2.5 grad-emerald-door text-white text-sm font-bold rounded-xl transition-smooth polish-press polish-focus">
               افتح لوحة الإدارة
             </button>
           </section>
@@ -1301,7 +1309,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'reset' && (<>
         <button onClick={resetDefaults} disabled={resetting}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-cream hover:bg-cream-deep text-accent-600 text-sm font-semibold rounded-xl border border-hairline transition-smooth disabled:opacity-50">
+          className="w-full flex items-center justify-center gap-2 py-3 bg-cream hover:bg-cream-deep text-accent-600 text-sm font-semibold rounded-xl border border-hairline transition-smooth disabled:opacity-50 polish-press">
           <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
         </button>
         <p className="text-xs text-accent-400 leading-relaxed -mt-2">
@@ -1316,7 +1324,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             آخر ٣٠ حدثًا لتشخيص مشكلة الرجوع للرئيسية بعد قفل الشاشة — بعد ما تحصل المشكلة، افتح القسم ده وخد لقطة شاشة وأرسلها. لا يحتوي على أي رموز أو بيانات حساب.
           </p>
           <button onClick={() => setRecoveryLog(readRecoveryLog())}
-            className="mb-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-smooth">
+            className="mb-3 px-4 py-2 grad-emerald-door text-white text-sm font-bold rounded-xl transition-smooth polish-press">
             تحديث السجل
           </button>
           {recoveryLog.length === 0 ? (

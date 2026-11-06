@@ -82,6 +82,7 @@ import {
 } from '../lib/sleepTimer';
 import type { SleepTimerMinutes } from '../lib/sleepTimer';
 import { clearNowPlaying, setNowPlaying } from '../lib/nowPlaying';
+import { setBackTarget } from '../lib/backTarget';
 import type { ListenEngine, ListenMode, ListenPosition } from '../lib/listenPlayback';
 import { ListenEngine as ListenEngineClass } from '../lib/listenPlayback';
 import {
@@ -2105,6 +2106,35 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const count = surahCount(surah);
   const locked = active;
 
+  // Shared back button (2026-11-06): while a detail view is open
+  // (free listening or a journey), the shell BackButton returns to
+  // the hub cards instead of الرئيسية. This page stays mounted when
+  // hidden, so it registers ONLY while visible — a hidden page must
+  // never hijack the shell button. Cleanup on view change, on hide,
+  // and on unmount clears the target.
+  //
+  // LOCKED GATING (2026-11-06, part 3): `locked` IS a navigation
+  // guard for the hub-back path, not just a playback guard. The old
+  // per-page «عودة إلى الكروت» buttons were disabled={locked}, and
+  // for a reason: the hub view exposes «استئناف» resume cards whose
+  // buttons are NOT locked, so reaching the hub mid-session could
+  // start a second journey while an engine is still live. The
+  // target is therefore registered ONLY while not locked; while a
+  // session is live the shell button falls back to «الرئيسية»
+  // (route-leave, the established BottomNav behavior: audio pauses
+  // on hide, resume on return). This effect lives HERE, after
+  // `locked` is declared — its deps array evaluates eagerly during
+  // render, so referencing `locked` from the old position (above
+  // its declaration) would throw a TDZ ReferenceError.
+  useEffect(() => {
+    if (!visible || hubView === 'hub' || locked) {
+      setBackTarget(null);
+      return;
+    }
+    setBackTarget({ label: 'عودة إلى الكروت', onBack: () => setHubView('hub') });
+    return () => setBackTarget(null);
+  }, [visible, hubView, locked]);
+
   // Follow-along (#4): the ayah row for the now-playing bar — the
   // row must belong to the CURRENT surah (during a journey the
   // surah state changes before the new surah's text loads, so a
@@ -2137,7 +2167,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           </p>
           <button
             onClick={() => clearSleepTimer()}
-            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
           >
             إلغاء المؤقت
           </button>
@@ -2150,7 +2180,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <button
                 key={m}
                 onClick={() => setSleepTimer(m)}
-                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
               >
                 {SLEEP_TIMER_LABELS[m]}
               </button>
@@ -2170,7 +2200,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <button
             onClick={() => onNavigate('home')}
-            className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+            className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
           >
             الرئيسية
           </button>
@@ -2198,13 +2228,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex gap-3 mt-4">
               <button
                 onClick={resumeSaved}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
+                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
               >
                 استئناف
               </button>
               <button
                 onClick={dismissResume}
-                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
               >
                 ابدأ من الأول
               </button>
@@ -2225,13 +2255,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex gap-3 mt-4">
               <button
                 onClick={resumeRiwayatSaved}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
+                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
               >
                 استئناف
               </button>
               <button
                 onClick={dismissRiwayatResume}
-                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
               >
                 ابدأ من الأول
               </button>
@@ -2251,13 +2281,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex gap-3 mt-4">
               <button
                 onClick={resumeHadrSaved}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
+                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
               >
                 استئناف
               </button>
               <button
                 onClick={dismissHadrResume}
-                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
               >
                 ابدأ من الأول
               </button>
@@ -2295,13 +2325,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <div className="flex gap-3 mt-3">
                   <button
                     onClick={() => { resumeJourneySaved(m.id); setHubView(m.id); }}
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
+                    className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
                   >
                     استئناف
                   </button>
                   <button
                     onClick={() => dismissJourneyResume(m.id)}
-                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
                   >
                     ابدأ من الأول
                   </button>
@@ -2349,13 +2379,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             card is entered (hubView 'free'). */}
         {hubView === 'free' && (
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
-          <button
-            disabled={locked}
-            onClick={() => setHubView('hub')}
-            className="mb-4 py-2 px-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl disabled:opacity-50"
-          >
-            ← عودة إلى الكروت
-          </button>
           <label className="block font-medium text-accent-800 mb-2" htmlFor="listen-surah">
             اختر السورة
           </label>
@@ -2370,7 +2393,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 setCurrent(1);
               }
             }}
-            className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
+            className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50 polish-press"
           >
             {SURAHS.map((s) => (
               <option key={s.no} value={s.no}>
@@ -2392,8 +2415,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             onClick={selectHafs}
             className={`w-full p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
               riwayaId === null && !hadrOn
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-hairline-emerald text-accent-800'
+                ? 'grad-emerald-door text-white polish-press'
+                : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
             }`}
           >
             حفص — القراء الثمانية
@@ -2413,8 +2436,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 onClick={() => changeReciter(r.id)}
                 className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
                   reciterId === r.id
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-hairline-emerald text-accent-800'
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                 }`}
               >
                 {r.name}
@@ -2436,8 +2459,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 onClick={() => selectRiwaya(r.id)}
                 className={`w-full p-3.5 rounded-xl font-semibold text-right disabled:opacity-50 flex items-center justify-between gap-2 ${
                   riwayaId === r.id
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-hairline-emerald text-accent-800'
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                 }`}
               >
                 {r.name}
@@ -2466,8 +2489,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 onClick={() => changeRate(rate)}
                 className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
                   playbackRate === rate
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white border border-hairline-emerald text-accent-800'
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                 }`}
               >
                 {PLAYBACK_RATE_LABELS[rate]}
@@ -2492,8 +2515,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             onClick={selectHadr}
             className={`w-full p-4 rounded-xl font-semibold text-right mt-5 disabled:opacity-50 ${
               hadrOn
-                ? 'bg-emerald-600 text-white'
-                : 'bg-white border border-hairline-emerald text-accent-800'
+                ? 'grad-emerald-door text-white polish-press'
+                : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
             }`}
           >
             {HADR_FULL_LABEL}
@@ -2511,8 +2534,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               onClick={() => setMode('free')}
               className={`p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                 mode === 'free'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white border border-hairline-emerald text-accent-800'
+                  ? 'grad-emerald-door text-white polish-press'
+                  : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
               }`}
             >
               استماع حر
@@ -2525,8 +2548,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               onClick={() => setMode('wird')}
               className={`p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                 mode === 'wird'
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white border border-hairline-emerald text-accent-800'
+                  ? 'grad-emerald-door text-white polish-press'
+                  : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
               }`}
             >
               ورد استماع
@@ -2556,7 +2579,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     ? void startRiwayaPlayback(surah, riwayaId, 0)
                     : void startPlayback(surah, reciterId, mode, 1)
               }
-              className="mt-5 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 btn-3d"
+              className="mt-5 w-full py-3.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus"
             >
               <Play className="w-5 h-5" />
               ابدأ الاستماع
@@ -2580,13 +2603,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             hidden in detail views. */}
         {riwayaId === null && !hadrOn && hubView !== 'hub' && hubView !== 'free' && (
         <div id="three-mode-section" className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
-          <button
-            disabled={locked}
-            onClick={() => setHubView('hub')}
-            className="mb-4 py-2 px-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl disabled:opacity-50"
-          >
-            ← عودة إلى الكروت
-          </button>
           <p className="font-bold text-accent-800 text-lg">{threeModeName(hubView as ThreeMode)}</p>
           <p className="text-sm text-accent-600 mt-1">
             رحلة متواصلة من سورة {surahName(surah)} بصوت{' '}
@@ -2609,7 +2625,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     setCurrent(1);
                   }
                 }}
-                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
+                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50 polish-press"
               >
                 {SURAHS.map((s) => (
                   <option key={s.no} value={s.no}>
@@ -2627,7 +2643,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 value={journeyReciterForMode()}
                 disabled={locked}
                 onChange={(e) => changeJourneyReciter(e.target.value)}
-                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
+                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50 polish-press"
               >
                 {RECITERS.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -2667,8 +2683,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   }}
                   className={`py-3 px-3 font-semibold rounded-xl disabled:opacity-50 ${
                     tadabburTafsirOrder === 'before'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white border border-hairline-emerald text-accent-800'
+                      ? 'grad-emerald-door text-white polish-press'
+                      : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                   }`}
                 >
                   التفسير قبل الربع
@@ -2681,8 +2697,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   }}
                   className={`py-3 px-3 font-semibold rounded-xl disabled:opacity-50 ${
                     tadabburTafsirOrder === 'after'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white border border-hairline-emerald text-accent-800'
+                      ? 'grad-emerald-door text-white polish-press'
+                      : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                   }`}
                 >
                   التفسير بعد الربع
@@ -2716,8 +2732,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     }}
                     className={`py-3 px-2 font-semibold rounded-xl disabled:opacity-50 ${
                       tafsirVoice === v.id
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-white border border-hairline-emerald text-accent-800'
+                        ? 'grad-emerald-door text-white polish-press'
+                        : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                     }`}
                   >
                     {v.name}
@@ -2742,7 +2758,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 key={`start-${m.id}`}
                 disabled={disabled}
                 onClick={() => void startJourney(m.id)}
-                className="w-full mt-4 py-4 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-50 btn-3d"
+                className="w-full mt-4 py-4 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50 polish-press polish-focus"
               >
                 ▶ ابدأ الاستماع
               </button>
@@ -2758,8 +2774,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     onClick={() => void startJourney(m.id)}
                     className={`w-full p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                       journeyMode === m.id
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-white border border-hairline-emerald text-accent-800'
+                        ? 'grad-emerald-door text-white polish-press'
+                        : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
                     }${preselectedMode === m.id && journeyMode !== m.id ? ' ring-2 ring-emerald-500' : ''}`}
                   >
                     {m.name}
@@ -2794,7 +2810,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                           </p>
                           <button
                             onClick={() => void ctxDeleteAudio()}
-                            className="px-3 py-1.5 bg-white border border-red-200 text-red-700 text-sm font-semibold rounded-lg"
+                            className="px-3 py-1.5 bg-white border border-red-200 text-red-700 text-sm font-semibold rounded-lg polish-press"
                           >
                             مسح
                           </button>
@@ -2808,13 +2824,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                           <div className="flex gap-2 mt-2">
                             <button
                               onClick={() => void ctxStartAudio()}
-                              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl"
+                              className="flex-1 py-2 grad-emerald-door text-white text-sm font-bold rounded-xl polish-press"
                             >
                               تأكيد التحميل
                             </button>
                             <button
                               onClick={() => setCtxAudio((prev) => prev ? { ...prev, confirm: false, estimate: null } : prev)}
-                              className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 text-sm font-semibold rounded-xl"
+                              className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 text-sm font-semibold rounded-xl polish-press"
                             >
                               إلغاء
                             </button>
@@ -2825,7 +2841,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                           <button
                             disabled={ctxAudio.estimating || ctxAudio.running}
                             onClick={() => void ctxAskAudio()}
-                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                            className="w-full py-2.5 grad-emerald-door text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 polish-press"
                           >
                             <Download className="w-4 h-4" />
                             {ctxAudio.estimating
@@ -2840,7 +2856,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                           {ctxAudio.running && (
                             <button
                               onClick={ctxStopAudio}
-                              className="mt-2 w-full py-2 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-xl"
+                              className="mt-2 w-full py-2 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-xl polish-press"
                             >
                               إيقاف التحميل
                             </button>
@@ -2874,13 +2890,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <div className="flex gap-3 mt-3">
                   <button
                     onClick={() => resumeJourneySaved(m.id)}
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
+                    className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
                   >
                     استئناف
                   </button>
                   <button
                     onClick={() => dismissJourneyResume(m.id)}
-                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
                   >
                     ابدأ من الأول
                   </button>
@@ -2956,7 +2972,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <p className="text-sm text-accent-600 mt-1">اضغط استئناف للمتابعة من حيث توقفت.</p>
                 <button
                   onClick={() => void resumeAfterInterruption()}
-                  className="mt-3 w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl"
+                  className="mt-3 w-full py-3.5 grad-amber-door text-white font-bold rounded-xl polish-press polish-focus"
                 >
                   استئناف
                 </button>
@@ -2965,7 +2981,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex flex-wrap gap-2 mt-4">
               <button
                 onClick={() => void togglePlayPause()}
-                className="flex-1 min-w-[120px] py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+                className="flex-1 min-w-[120px] py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus"
               >
                 {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                 {playing ? 'إيقاف مؤقت' : 'تشغيل'}
@@ -2977,13 +2993,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <>
               <button
                 onClick={() => void engineRef.current?.prev()}
-                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2 polish-press"
               >
                 <SkipBack className="w-5 h-5" /> الآية السابقة
               </button>
               <button
                 onClick={() => void engineRef.current?.next()}
-                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2 polish-press"
               >
                 الآية التالية <SkipForward className="w-5 h-5" />
               </button>
@@ -3010,20 +3026,20 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     void engineRef.current?.restart();
                   }
                 }}
-                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2 polish-press"
               >
                 <RotateCcw className="w-5 h-5" /> {journeyMode !== null ? 'من أول الرحلة' : 'من أول السورة'}
               </button>
               <button
                 onClick={stopPlayback}
-                className="px-4 py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center gap-2"
+                className="px-4 py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center gap-2 polish-press"
               >
                 <Square className="w-5 h-5" /> إيقاف
               </button>
             </div>
             <button
               onClick={() => setBlackScreen(true)}
-              className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-xl flex items-center justify-center gap-2"
+              className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press"
               aria-label="شاشة سوداء"
             >
               <Moon className="w-5 h-5" />
@@ -3096,7 +3112,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
               <button
                 onClick={() => void handleDeleteDownload()}
-                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center justify-center gap-2"
+                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center justify-center gap-2 polish-press"
               >
                 <Trash2 className="w-5 h-5" /> حذف التحميل
               </button>
@@ -3112,14 +3128,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     <button
                       disabled={downloading}
                       onClick={() => void handleDownload()}
-                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl disabled:opacity-50"
+                      className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50 polish-press polish-focus"
                     >
                       تأكيد التحميل
                     </button>
                     <button
                       disabled={downloading}
                       onClick={() => setEstimate(null)}
-                      className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl disabled:opacity-50"
+                      className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press disabled:opacity-50"
                     >
                       إلغاء
                     </button>
@@ -3134,7 +3150,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <button
                   disabled={estimating || downloading}
                   onClick={() => void handleEstimate()}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 polish-press polish-focus"
                 >
                   <Download className="w-5 h-5" />
                   {estimating ? 'جارٍ تقدير الحجم…' : 'تحميل السورة للاستماع دون اتصال'}
@@ -3168,7 +3184,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
               <button
                 onClick={() => void ctxDeleteAudio()}
-                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center justify-center gap-2"
+                className="mt-3 w-full py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center justify-center gap-2 polish-press"
               >
                 <Trash2 className="w-5 h-5" /> حذف التحميل
               </button>
@@ -3184,13 +3200,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <div className="flex gap-3 mt-3">
                 <button
                   onClick={() => void ctxStartAudio()}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                  className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
                 >
                   تأكيد التحميل
                 </button>
                 <button
                   onClick={() => setCtxAudio((prev) => prev ? { ...prev, confirm: false, estimate: null } : prev)}
-                  className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                  className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
                 >
                   إلغاء
                 </button>
@@ -3201,7 +3217,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <button
                 disabled={ctxAudio.estimating || ctxAudio.running}
                 onClick={() => void ctxAskAudio()}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 polish-press polish-focus"
               >
                 <Download className="w-5 h-5" />
                 {ctxAudio.estimating ? 'جارٍ تقدير الحجم…' : 'تحميل ملف السورة للاستماع دون اتصال'}
@@ -3212,7 +3228,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               {ctxAudio.running && (
                 <button
                   onClick={ctxStopAudio}
-                  className="mt-2 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-semibold rounded-xl"
+                  className="mt-2 w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 font-semibold rounded-xl polish-press"
                 >
                   إيقاف التحميل
                 </button>

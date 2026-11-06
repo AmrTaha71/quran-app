@@ -94,7 +94,7 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
       <div className="flex gap-2">
         {!doneToday && (
           <button onClick={markDone}
-            className="flex-1 py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2">
+            className="flex-1 py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
             <Check className="w-5 h-5" /> أنجزت ورد اليوم
           </button>
         )}

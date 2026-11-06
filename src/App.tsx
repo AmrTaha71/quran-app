@@ -33,6 +33,8 @@ import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
 import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardingDone } from './components/Onboarding';
 import OfflineBanner from './components/OfflineBanner';
+import { BackButton, useBackTarget } from './components/BackButton';
+import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar';
@@ -41,6 +43,13 @@ type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow
 // "session expired" message. Logged-out routes (home/landing/auth) are
 // excluded: a SIGNED_OUT there is normal, not an expiry.
 const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar'];
+
+// Routes that show the shell back button (2026-11-06, back-button
+// part 1): every tab route goes back to الرئيسية unless the page
+// registered an internal target (open Settings door, Listen detail
+// view, SelfTest sub-view). Home, landing, auth, admin and splash
+// never show it.
+const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow'];
 
 function getRouteFromHash(): Route {
   const rawHash = window.location.hash;
@@ -156,6 +165,10 @@ function AppContent() {
   );
   const routeRef = useRef<Route>(route);
   const recoveryRef = useRef<boolean>(recoveryMode);
+  // Shared back button (2026-11-06): the page-registered internal
+  // target, if any — otherwise the shell button falls back to the
+  // route-level parent (home).
+  const backTarget = useBackTarget();
   // Fix 1 (2026-10-30): identity of the last SIGNED_IN/INITIAL_SESSION
   // user. A refocus SIGNED_IN with the SAME user must never route —
   // only a real transition (first sign-in, or a different user) may.
@@ -381,6 +394,10 @@ function AppContent() {
       if (recoveryRef.current) return;
       const next = getRouteFromHash();
       if (pendingRouteRef.current === next) return;
+      // Shared back button: same pre-commit clear as navigate() —
+      // a browser-back / deep-link route change also retires the
+      // previous route's internal target.
+      setBackTarget(null);
       switchRoute(routeRef.current, next, () => setRoute(next));
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -404,6 +421,13 @@ function AppContent() {
   }, []);
 
   const navigate = (r: Route) => {
+    // Shared back button: a route change retires any internal target
+    // the previous route registered — cleared HERE, pre-commit, not
+    // in a [route] effect, because a parent effect runs AFTER the
+    // child pages' effects and would wipe a target the newly-mounted
+    // (or newly-visible) page legitimately registers on this commit
+    // (e.g. returning to an open Listen detail view).
+    setBackTarget(null);
     // Leaving #/auth abandons any recovery in progress and clears the
     // expiry notice, so neither can resurface on the next visit.
     if (r !== 'auth') {
@@ -511,6 +535,23 @@ function AppContent() {
   }
   return (
     <>
+      {/* Shared back button (2026-11-06): in flow BEFORE the
+          always-mounted Listen/Adhkar wrappers — never fixed/absolute,
+          so it can never overlap the Mushaf image, the Mushaf header,
+          or the BottomNav. It used to render inside the route wrapper
+          below, which sits AFTER those wrappers in DOM order, so on
+          listen/adhkar routes it appeared at the BOTTOM of the page.
+          Up here it is visually at the top on ALL routes. The
+          registered internal target wins when present; otherwise
+          every tab route goes back to الرئيسية. */}
+      {BACK_BUTTON_ROUTES.includes(route) && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-4 md:pt-5">
+          <BackButton
+            label={backTarget?.label ?? 'الرئيسية'}
+            onBack={backTarget?.onBack ?? (() => navigate('home'))}
+          />
+        </div>
+      )}
       {session ? (
         <>
           <div style={{ display: route === 'listen' ? undefined : 'none' }}>

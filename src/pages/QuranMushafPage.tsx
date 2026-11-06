@@ -22,6 +22,7 @@ import { useElderlyMode } from '../lib/elderlyMode';
 import { getNowPlaying, subscribeNowPlaying, type NowPlayingAyah } from '../lib/nowPlaying';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
+import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
@@ -3448,11 +3449,11 @@ export default function QuranMushafPage({
               الحق الإمام شغال
             </span>
             <button onClick={() => { setShowFullscreen(true); requestNativeFullscreen(); }}
-              className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg">
+              className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg polish-press">
               العودة للمتابعة
             </button>
             <button onClick={stopFollow}
-              className="px-3 py-1.5 text-sm font-bold text-white bg-emerald-700 rounded-lg">
+              className="px-3 py-1.5 text-sm font-bold text-white grad-emerald-door rounded-lg polish-press">
               إيقاف
             </button>
           </div>
@@ -3498,7 +3499,7 @@ export default function QuranMushafPage({
                     <p className="text-sm text-accent-600 mb-3">قد يكون الخادم غير متاح حالياً</p>
                   )}
                   <button onClick={() => { setImageError(false); setImageLoading(true); }}
-                    className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-semibold rounded-lg transition-smooth">
+                    className="px-4 py-2 grad-amber-door text-white text-sm font-semibold rounded-lg transition-smooth polish-press">
                     إعادة المحاولة
                   </button>
                 </div>
@@ -3639,7 +3640,7 @@ export default function QuranMushafPage({
                                       return (
                                         <div className="flex gap-2 mt-2">
                                           <button onClick={(e) => { e.stopPropagation(); playLinkAudio(ra.url); }}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg">
+                                            className="flex items-center gap-1.5 px-3 py-1.5 grad-emerald-door text-white text-sm font-semibold rounded-lg polish-press">
                                             <Volume2 className="w-4 h-4" /> {ra.label}
                                           </button>
                                         </div>
@@ -3820,12 +3821,12 @@ export default function QuranMushafPage({
                         fresh entry (it only resets an empty state). */}
                     <button onClick={() => startFollowFromLobby('live')}
                       disabled={followIndexLoading || followMicWaiting}
-                      className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                      className="mt-4 w-full py-3.5 grad-amber-door disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press polish-focus">
                       <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
                     <button onClick={() => startFollowFromLobby('whisper')}
                       disabled={followIndexLoading || followMicWaiting}
-                      className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2">
+                      className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press">
                       <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
@@ -3938,7 +3939,7 @@ export default function QuranMushafPage({
                   نافذة النظام ما ظهرتش أو اترفضت. لو كنت رفضت الإذن، سفاري مش هيعرض النافذة تاني من نفسه — اسمح بالميكروفون من إعدادات الموقع (علامة AA في شريط العنوان ← Website Settings ← Microphone ← Allow) وبعدين ارجع ودوس «ابدأ الاستماع» من جديد. ولو قفلت النافذة بالغلط، دوس «ابدأ» من جديد وهتظهر تاني.
                 </p>
                 <button onClick={() => setFollowMicDenied(false)}
-                  className="mt-4 w-full py-3.5 bg-amber-500 hover:bg-amber-400 text-white text-base font-bold rounded-xl transition-smooth">
+                  className="mt-4 w-full py-3.5 grad-amber-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
                   فهمت
                 </button>
               </div>
@@ -3959,13 +3960,18 @@ export default function QuranMushafPage({
                   with text so the way back is findable. Shares the
                   X's visibility (always visible in fullscreen except
                   clean mode / intro, where a margin tap restores
-                  controls). Glassy like the top chips (bg-black/60
-                  + backdrop-blur). */}
-              <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
-                title="عودة إلى التبويبات الرئيسية" aria-label="عودة إلى التبويبات الرئيسية"
-                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[5.75rem] px-3 py-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg flex items-center gap-1.5 text-sm font-bold mushaf-chrome-enter">
-                <ChevronRight className="w-5 h-5" /> عودة
-              </button>
+                  controls). 2026-11-06: the shared <BackButton>
+                  component (same styling/behaviour as the shell
+                  button) — the shell button sits in normal flow
+                  above the page and is hidden behind this overlay,
+                  so fullscreen keeps its own instance here. The
+                  wrapper carries the old button's absolute position
+                  and enter animation; its click stops propagation
+                  so the tap never turns a page underneath. */}
+              <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[5.75rem] z-30 mushaf-chrome-enter"
+                onClick={(e) => e.stopPropagation()}>
+                <BackButton label="عودة" onBack={() => { if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
+              </div>
               <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
                 title="إغلاق" aria-label="إغلاق"
                 className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg mushaf-chrome-enter">
@@ -4019,7 +4025,7 @@ export default function QuranMushafPage({
                 <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                 جارٍ تحميل الصفحة…
                 <button onClick={(e) => { e.stopPropagation(); setGateNonce((n) => n + 1); }}
-                  className="pointer-events-auto px-2.5 py-1 bg-amber-500 hover:bg-amber-400 rounded-full text-white">
+                  className="pointer-events-auto px-2.5 py-1 grad-amber-door rounded-full text-white polish-press">
                   إعادة المحاولة
                 </button>
               </div>
@@ -4286,7 +4292,7 @@ export default function QuranMushafPage({
                   <BookOpen className="w-14 h-14 text-white/30 mx-auto mb-3" />
                   <p className="text-white/50 text-base">تعذر تحميل الصفحة</p>
                   <button onClick={(e) => { e.stopPropagation(); setImageError(false); setImageLoading(true); }}
-                    className="mt-3 px-4 py-2 bg-amber-700 text-white text-sm rounded-lg">إعادة المحاولة</button>
+                    className="mt-3 px-4 py-2 grad-amber-door text-white text-sm rounded-lg polish-press">إعادة المحاولة</button>
                 </div>
               )}
 
@@ -4449,7 +4455,7 @@ export default function QuranMushafPage({
                           <p className="text-sm font-bold text-amber-800">الآية مخفية في وضع الحفظ — سمّعها من حفظك الأول</p>
                           <p className="text-xs text-accent-600 mt-1">روابطها ظاهرة تحت، والنص يظهر لما تضغط الزر</p>
                           <button onClick={() => setHifzRevealed(true)}
-                            className="mt-3 px-5 py-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-bold rounded-xl">
+                            className="mt-3 px-5 py-2 grad-amber-door text-white text-sm font-bold rounded-xl polish-press">
                             أظهر الآية
                           </button>
                         </div>
@@ -4461,7 +4467,7 @@ export default function QuranMushafPage({
                           green button on top, not just a tab. Tapping it
                           always shows the links; the ring marks it active. */}
                       <button onClick={() => setPopupTab('links')}
-                        className={`w-full mb-3 py-3 rounded-xl transition-smooth flex flex-col items-center justify-center gap-0.5 ${popupTab === 'links' ? 'bg-amber-600 text-white ring-2 ring-amber-300' : 'bg-amber-600 text-white hover:bg-amber-700'}`}>
+                        className={`w-full mb-3 py-3 rounded-xl transition-smooth flex flex-col items-center justify-center gap-0.5 polish-press ${popupTab === 'links' ? 'grad-amber-door text-white ring-2 ring-amber-300' : 'grad-amber-door text-white'}`}>
                         <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
                         <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
                       </button>
@@ -4480,15 +4486,15 @@ export default function QuranMushafPage({
                       </div>
                       <div className="flex gap-2 mb-4">
                         <button onClick={() => setPopupTab('mutashabihat')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                           المتشابهات
                         </button>
                         <button onClick={() => setPopupTab('irab')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                           الإعراب
                         </button>
                         <button onClick={() => setPopupTab('tafsir')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                           التفسير
                         </button>
                       </div>
@@ -4500,7 +4506,7 @@ export default function QuranMushafPage({
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
                           <p className="text-base text-accent-500 mb-3">{mutashabihatError}</p>
                           <button onClick={() => selectedVerse && findSimilar(selectedVerse)}
-                            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg">
+                            className="px-4 py-2 grad-emerald-door text-white text-sm font-semibold rounded-lg polish-press">
                             إعادة المحاولة
                           </button>
                         </div>
@@ -4561,7 +4567,7 @@ export default function QuranMushafPage({
                                 return (
                                   <div className="flex gap-2 mt-2">
                                     <button onClick={() => playLinkAudio(ra.url)}
-                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg">
+                                      className="flex items-center gap-1.5 px-3 py-1.5 grad-emerald-door text-white text-sm font-semibold rounded-lg polish-press">
                                       <Volume2 className="w-4 h-4" /> {ra.label}
                                     </button>
                                   </div>
@@ -4597,7 +4603,7 @@ export default function QuranMushafPage({
                           <div className="flex gap-2">
                             {TAFSIR_EDITIONS.map((ed) => (
                               <button key={ed.id} onClick={() => setTafsirEdition(ed.id)}
-                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${tafsirEdition === ed.id ? 'bg-amber-700 text-white' : 'bg-amber-50 text-accent-600 hover:bg-amber-100'}`}>
+                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${tafsirEdition === ed.id ? 'grad-amber-door text-white polish-press' : 'bg-amber-50 text-accent-600 hover:bg-amber-100 polish-press'}`}>
                                 {ed.name}
                               </button>
                             ))}
@@ -4610,7 +4616,7 @@ export default function QuranMushafPage({
                             <div className="text-center py-6 bg-gray-50 rounded-lg">
                               <p className="text-base text-accent-500 mb-3">{tafsirError}</p>
                               <button onClick={() => selectedVerse && loadTafsir(tafsirEdition, selectedVerse)}
-                                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-sm font-semibold rounded-lg">
+                                className="px-4 py-2 grad-amber-door text-white text-sm font-semibold rounded-lg polish-press">
                                 إعادة المحاولة
                               </button>
                             </div>
@@ -4636,7 +4642,7 @@ export default function QuranMushafPage({
                           لأنها جزء منه، ورسالة الخطأ تحتها. */}
                       <div className="mt-2 mb-3 px-3">
                         <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
-                          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciting ? 'bg-amber-700 text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
+                          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciting ? 'grad-amber-door text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
                           {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                           {reciting ? `إيقاف التلاوة — ${reciter.name}` : 'استمع للآية'}
                         </button>
@@ -4647,7 +4653,7 @@ export default function QuranMushafPage({
                           <div className="flex flex-wrap gap-1.5">
                             {RECITERS.map((r) => (
                               <button key={r.id} onClick={() => selectedVerse && startRecitation(selectedVerse, r)}
-                                className={`px-3 py-1.5 rounded-full text-sm font-bold transition-smooth ${r.id === reciterId ? 'bg-amber-700 text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                                className={`px-3 py-1.5 rounded-full text-sm font-bold transition-smooth ${r.id === reciterId ? 'grad-amber-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                                 {r.name}
                               </button>
                             ))}
@@ -4679,14 +4685,14 @@ export default function QuranMushafPage({
                                   {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
                                 </select>
                                 {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
-                                <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-bold rounded-xl text-sm">
+                                <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl text-sm polish-press">
                                   {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح'}
                                 </button>
                               </>
                             ) : (
                               <>
                                 <p className="text-sm font-semibold text-accent-700 mb-2">سجّل دخولك الأول عشان نقدر نراجع اقتراحك.</p>
-                                <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-700 text-white font-bold rounded-xl text-sm">تسجيل الدخول</button>
+                                <button onClick={() => onNavigate('auth')} className="w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl text-sm polish-press">تسجيل الدخول</button>
                               </>
                             )}
                           </div>
