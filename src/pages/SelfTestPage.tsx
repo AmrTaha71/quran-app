@@ -804,7 +804,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `rel` is ms since the current test started (performance.now);
   // `t` is the wall-clock epoch ms. Timestamps come from the same
   // clock the watchdog uses, so log order matches engine order.
-  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number };
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; errBody?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number };
   const DIAG_EVENT_CAP = 2000;
   const DIAG_DISPLAY_CAP = 500;
   const diagEventsRef = useRef<DiagEvent[]>([]);
@@ -1421,7 +1421,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // spoken-transcript gate result: a gate rejection surfaces
       // here only as a non-OK status / missing audioUrl.
       if (!res.ok || !data.audioUrl) {
-        diagPush('corr-fetch', { label: 'generate-voice', code: String(res.status), fetchMs, ok: false, reason: res.status === 202 ? 'lock-no-audio' : retried401 ? 'http-error-after-401-retry' : 'http-error' });
+        // DIAG HARDENING (2026-11-06, logging only): include the
+        // function error body (e.g. a generate-voice 500 message) so
+        // a non-200 is diagnosable from the client diag export.
+        // The function returns { error: string } on failures; only
+        // that error string is logged — never transcript/text/audio.
+        const errBody = (data && typeof data.error === 'string') ? data.error : '';
+        diagPush('corr-fetch', { label: 'generate-voice', code: String(res.status), fetchMs, ok: false, reason: res.status === 202 ? 'lock-no-audio' : retried401 ? 'http-error-after-401-retry' : 'http-error', errBody });
         return null;
       }
       diagPush('corr-fetch', { label: 'generate-voice', code: String(res.status), fetchMs, ok: true, reason: retried401 ? 'retried-401' : 'audio-url' });
@@ -3638,9 +3644,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             // Cancel-then-speak only when the engine is actually
             // busy; an idle engine speaks at once. A settle inside
             // the 200ms window must win (doSpeak re-checks).
+            // RETRY (2026-11-06, diag 91:1-15 gen 1): a retry means
+            // the previous attempt never started (onstart watchdog)
+            // — its utterance may still be stuck in the queue even
+            // when the engine reports idle (speaking=false,
+            // pending=false). Force a cancel + delay on retry so
+            // the stuck utterance is cleared before the fresh one
+            // speaks; otherwise the retry queues behind it and
+            // also never starts (two 3s watchdogs, no onstart).
             let busy = false;
             try { busy = window.speechSynthesis.speaking || window.speechSynthesis.pending; } catch {}
-            if (busy) {
+            if (busy || ttsAttempts >= 2) {
               try { window.speechSynthesis.cancel(); } catch {}
               setTimeout(doSpeak, CONT_TTS_CANCEL_DELAY_MS);
             } else {
@@ -3811,6 +3825,31 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // late events cannot settle the prompt — while a later
       // human-audio play failure can still speak TTS again.
       playTtsFallback();
+      // LATE-FETCH PLAY (2026-11-06, diag 91:1-15 continuous): a
+      // cold fetch takes 2-11s, far past the 900ms race timeout,
+      // so the withTimeout branch below can never play it — and
+      // the fetchP.then handler only CACHED it for repeats. The
+      // user therefore heard nothing (TTS failed) or only TTS,
+      // never the fetched human audio. playFetchedUrl is the
+      // single play path for a fetched URL (race win + late win):
+      // it plays only while this prompt is still active and
+      // nothing has sounded yet, and fetchPlayed stops the race
+      // branch and the late handler from playing the same URL
+      // twice. One delayed retry covers a null fetch (202 lock /
+      // transient failure): the lock holder finishes in ~7-12s,
+      // so a retry after 4s may find the audio cached.
+      let fetchPlayed = false;
+      let fetchRetried = false;
+      const playFetchedUrl = (url: string) => {
+        if (fetchPlayed) return;
+        if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current || promptAudioStarted) return;
+        fetchPlayed = true;
+        ttsCancelledUtterance = ttsCurrentUtterance;
+        ttsFallbackUsed = false;
+        if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; }
+        cancelCorrectionSpeech();
+        playUrl(url, audioKey, 'fetch');
+      };
       void withTimeout(fetchP, CORR_AUDIO_TIMEOUT_MS).then((result) => {
         if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current) {
           // DIAG (2026-11-04, logging only): the "clip born then
@@ -3825,13 +3864,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (result.kind === 'value' && result.value) {
           contAudioCacheRef.current.set(audioKey, result.value);
           diagPush('cont-prompt-audio-ready', { label: 'cont-prompt-audio', fetchMs: Date.now() - fetchStart, msFromPrompt: Date.now() - promptStartedAt });
-          if (!promptAudioStarted) {
-            ttsCancelledUtterance = ttsCurrentUtterance;
-            ttsFallbackUsed = false;
-            if (ttsOnstartTimer) { clearTimeout(ttsOnstartTimer); ttsOnstartTimer = null; }
-            cancelCorrectionSpeech();
-            playUrl(result.value, audioKey, 'fetch');
-          }
+          playFetchedUrl(result.value);
         } else if (result.kind === 'timeout') {
           diagPush('cont-prompt-tts-timeout', { label: 'cont-prompt-audio', timeoutMs: CORR_AUDIO_TIMEOUT_MS });
           playTtsFallback();
@@ -3843,6 +3876,31 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           // v3: the entry rate field is base-rate metadata (1.0) —
           // the file is neutral-speed; playbackRate applies at play.
           persistCorrAudio(audioKey, lateUrl, corrGender, words, audioIndices, 1.0);
+          // LATE-FETCH PLAY: the fetch resolved after the 900ms
+          // race timeout (cold generation is 2-11s). If this
+          // prompt is still active and nothing has sounded yet
+          // (TTS failed or never started), play it now instead of
+          // only caching it for a repeat. If TTS already sounded,
+          // promptAudioStarted is true and this is a no-op.
+          playFetchedUrl(lateUrl);
+        } else if (!fetchRetried) {
+          // Null fetch (202 lock / transient failure): one retry
+          // after 4s. If it returns a URL, playFetchedUrl plays
+          // it under the same still-active + nothing-sounded
+          // guards; a second null just leaves the TTS fallback
+          // (fixed below) to speak.
+          fetchRetried = true;
+          setTimeout(() => {
+            if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current || promptAudioStarted) return;
+            void requestCorrectionAudio(words, corrPos ? { shape: corrShape, positions: corrPos } : undefined).then((retryUrl) => {
+              if (retryUrl) {
+                contAudioCacheRef.current.set(audioKey, retryUrl);
+                persistCorrAudio(audioKey, retryUrl, corrGender, words, audioIndices, 1.0);
+                diagPush('cont-prompt-audio-ready', { label: 'cont-prompt-audio', fetchMs: Date.now() - fetchStart, msFromPrompt: Date.now() - promptStartedAt });
+                playFetchedUrl(retryUrl);
+              }
+            });
+          }, 4000);
         }
       });
     }
