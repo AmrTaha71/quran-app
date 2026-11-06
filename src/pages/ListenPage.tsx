@@ -341,6 +341,9 @@ const SLEEP_TIMER_LABELS: Record<SleepTimerMinutes, string> = {
 // not something a headless render can prove). This page only owns
 // the UI: pickers, text, controls, and the offline section.
 // No whole-Quran download, no synthetic audio, no pre-generation.
+// 2026-11-06: hub-level journey resume cards are hidden (sub-doors keep their own استئناف).
+const SHOW_HUB_RESUMES = false;
+
 export default function ListenPage({ onNavigate, visible = true }: { onNavigate: (r: Route) => void; visible?: boolean }) {
   const [surah, setSurah] = useState(1);
   const [reciterId, setReciterId] = useState(readPersistedReciter);
@@ -2305,7 +2308,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               user continues in one tap without entering a card. */}
           {THREE_MODES.map((m) => {
             const saved = savedJourneys[m.id];
-            if (!saved || hiddenJourneyResumes.includes(m.id)) return null;
+            // 2026-11-06: hub-level resume cards removed (each sub-door keeps its own استئناف).
+            if (!SHOW_HUB_RESUMES || !saved || hiddenJourneyResumes.includes(m.id)) return null;
             return (
               <div key={`hub-resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-4 mb-3">
                 <p className="font-semibold text-accent-800">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map } from 'lucide-react';
+import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, PartyPopper } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
@@ -314,6 +314,29 @@ export default function HomeStartPage({ session, onNavigate }: {
           onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
         />
 
+        {/* 2026-11-06: mode doors on Home. Elderly / low-vision switches the
+            same persisted mode as Settings. Children mode is not built yet. */}
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <button
+            onPointerDown={pressFeedback}
+            onClick={() => setElderlyMode(true)}
+            className="py-4 px-3 bg-white border-2 border-emerald-600 text-emerald-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base polish-press polish-focus"
+          >
+            <Glasses className="w-8 h-8" />
+            كبار السن وضعاف النظر
+          </button>
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="py-4 px-3 bg-white/60 border-2 border-dashed border-amber-400 text-amber-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base opacity-70 cursor-not-allowed"
+          >
+            <PartyPopper className="w-8 h-8" />
+            <span>الأطفال</span>
+            <span className="text-xs font-semibold">قريبًا</span>
+          </button>
+        </div>
+
         {/* الحفظ: a uniform door like the others (سمّع لنفسك / الحق الإمام /
             استمع للقرآن). Tap to expand 3 start choices below it; tap
             again to collapse. */}
@@ -429,16 +452,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               </div>
             )}
             {/* (c) from the very beginning: الفاتحة آية ١. */}
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => jumpToAyah(1, 1, onNavigate)}
-              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
-                <BookOpen className="w-4 h-4 text-white" />
-              </span>
-              ابدأ من أول المصحف
-            </button>
+            {/* 2026-11-06: «ابدأ من أول المصحف» removed here — it lives inside the الحفظ door. */}
           </div>
         )}
 

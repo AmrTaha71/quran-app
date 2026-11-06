@@ -4007,8 +4007,8 @@ export default function QuranMushafPage({
                   second wrapped line would cover the page's top
                   ornament — the full set still shows on wider screens
                   and in normal view. */}
-              <span className="hidden min-[420px]:inline-block px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">{labelJuz.name}</span>
-              <span className="hidden min-[420px]:inline-block px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">الحزب {labelHizb.number}</span>
+              <span className="hidden px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">{labelJuz.name}</span>
+              <span className="hidden px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">الحزب {labelHizb.number}</span>
               <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">سورة {labelSurahName}</span>
             </div>
           )}
