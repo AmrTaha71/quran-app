@@ -60,8 +60,10 @@
    #9E5608, and the heart (#7A4505) is a fuller amber; the base
    (#381D02) is a darker bronze so the gold glows against it. */
 .grad-amber-door {
-  background-color: #7A4505;
+  /* 2026-11-06: lifted one step toward true gold — the old stops read as
+     dark brown/chocolate on the iPad. Same hue family, no new colour. */
+  background-color: #9A6510;
   background-image:
-    radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(160deg, #A8650A 0%, #8F5E08 32%, #7A4505 58%, #5A2F03 82%, #381D02 100%);
+    radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(160deg, #C9921C 0%, #B27C14 32%, #9A6510 58%, #7E4F0B 82%, #613B07 100%);
 }

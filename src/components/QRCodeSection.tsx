@@ -6,10 +6,15 @@ export default function QRCodeSection() {
   const [open, setOpen] = useState(false);
   useEscapeClose(open, () => setOpen(false));
 
+  // 2026-11-06: the app is NOT on any store yet, so every QR/button
+  // points at the live web app and each card says how to install it on
+  // that device (Add to Home Screen). When store listings exist, swap
+  // `url` per device and restore the store names.
+  const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rawabit-alziker-alhakim.vercel.app';
   const stores = [
-    { icon: <Monitor className="w-7 h-7" />, label: 'متجر ويندوز', desc: 'Windows Store', url: 'https://apps.microsoft.com', color: 'bg-blue-600' },
-    { icon: <Apple className="w-7 h-7" />, label: 'متجر آبل', desc: 'App Store', url: 'https://apps.apple.com', color: 'bg-gray-800' },
-    { icon: <Smartphone className="w-7 h-7" />, label: 'جوجل بلاي', desc: 'Google Play', url: 'https://play.google.com', color: 'bg-green-600' },
+    { icon: <Monitor className="w-7 h-7" />, label: 'على الكمبيوتر', desc: 'Chrome أو Edge ← أيقونة التثبيت في شريط العنوان', url: appUrl, color: 'grad-emerald-door' },
+    { icon: <Apple className="w-7 h-7" />, label: 'على آيفون وآيباد', desc: 'Safari ← مشاركة ← إضافة إلى الشاشة الرئيسية', url: appUrl, color: 'grad-emerald-door' },
+    { icon: <Smartphone className="w-7 h-7" />, label: 'على أندرويد', desc: 'Chrome ← القائمة ⋮ ← تثبيت التطبيق', url: appUrl, color: 'grad-emerald-door' },
   ];
 
   return (
@@ -76,14 +81,14 @@ export default function QRCodeSection() {
                   <a href={s.url} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-700">
                     <Download className="w-3.5 h-3.5" />
-                    تحميل مباشر
+                    افتح التطبيق
                   </a>
                 </div>
               ))}
             </div>
 
             <p className="text-center text-xs text-accent-600 mt-5">
-              امسح الرمز المناسب لجهازك لتثبيت التطبيق مباشرة
+              امسح الرمز بكاميرا جهازك، وبعدين ثبّته بالخطوات المكتوبة تحت جهازك — قريبًا إن شاء الله على المتاجر
             </p>
           </div>
         </div>

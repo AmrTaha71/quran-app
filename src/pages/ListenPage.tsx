@@ -2198,12 +2198,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     <div className="min-h-screen page-bg pb-24">
       <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => onNavigate('home')}
-            className="px-4 py-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-          >
-            الرئيسية
-          </button>
+          {/* Header «الرئيسية» removed 2026-11-06: the shared BackButton
+              above the page is the one way back. */}
           <div>
             <h1
               className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 flex items-center gap-2"

@@ -49,7 +49,7 @@ export default function MemorizationMap({
           ? `حفظت ${toArabicIndic(run)} آية من أول المصحف — ${toArabicIndic(counts.memorized)} ${counts.memorized === 1 ? 'جزء كامل' : 'أجزاء كاملة'}`
           : 'لسه مفيش محفوظ مسجّل من أول المصحف — اضغط أي جزء تبدأ منه'}
       </p>
-      <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+      <div className="grid grid-cols-6 sm:grid-cols-10 gap-2">
         {entries.map((e) => (
           <button
             key={e.juz}
@@ -60,10 +60,14 @@ export default function MemorizationMap({
             aria-label={`الجزء ${e.juz} — ${STATUS_WORD[e.status]}`}
             className={`py-2 rounded-lg font-bold polish-press polish-focus ${CELL_CLASS[e.status]}`}
           >
-            <span className="block text-lg leading-tight">{toArabicIndic(e.juz)}</span>
-            <span className="block text-[11px] leading-tight font-semibold">
-              {STATUS_WORD[e.status]}
-            </span>
+            <span className="block text-lg leading-tight font-display-ar">{toArabicIndic(e.juz)}</span>
+            {/* Compact map (2026-11-06): not-yet tiles show the number only —
+                the legend below already explains the grey tile. */}
+            {e.status !== 'not-yet' && (
+              <span className="block text-[11px] leading-tight font-semibold">
+                {STATUS_WORD[e.status]}
+              </span>
+            )}
           </button>
         ))}
       </div>

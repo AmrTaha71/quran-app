@@ -421,6 +421,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       supabase.from('admin_users').select('user_id').eq('user_id', uid).maybeSingle()
         .then(({ data: row, error }) => {
           if (error) { setAdminGateError(true); return; }
+          // Diagnostics (stamp lines, diag door) are admin-only; the flag
+          // lets SelfTest hide its debug lines for normal users.
+          try { localStorage.setItem('quran-show-diag', row ? '1' : '0'); } catch { /* storage off */ }
           if (row) setIsAdmin(true);
         });
     });
@@ -743,7 +746,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => d.id !== 'admin' || adminGateError || isAdmin).map((d, i) => (
+            {doors.filter((d) => (d.id !== 'admin' || adminGateError || isAdmin) && (d.id !== 'diag' || isAdmin)).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
                 style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
                 className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">

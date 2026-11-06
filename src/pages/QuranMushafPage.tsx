@@ -2186,7 +2186,7 @@ export default function QuranMushafPage({
         consecutiveFails += 1;
         setFollowChunkFails(consecutiveFails);
         if (consecutiveFails >= 3) {
-          setFollowError('تعذر الاستماع عبر الخادم — تأكد من الاتصال، أو اكتب الكلمات يدوياً بالأسفل');
+          setFollowError('تعذر الاستماع بالطريقة البديلة — تأكد من الاتصال، أو اكتب الكلمات يدوياً بالأسفل');
         }
         await new Promise((r) => setTimeout(r, 1500));
       } finally {
@@ -2769,7 +2769,7 @@ export default function QuranMushafPage({
       // E3 (UI state only): terminal without listening — end the wait.
       setFollowMicWaitingState(false);
       followStartingRef.current = false;
-      setFollowError('الاستماع عبر الخادم يحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
+      setFollowError('الطريقة البديلة تحتاج تسجيل دخول — أو اكتب الكلمات يدوياً بالأسفل');
       return;
     }
     // E3 (UI state only): getUserMedia resolved — the mic decision is
@@ -3827,7 +3827,7 @@ export default function QuranMushafPage({
                     <button onClick={() => startFollowFromLobby('whisper')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press">
-                      <Mic className="w-4 h-4" /> التسجيل عبر الخادم (Whisper) — لو الاستماع المباشر مش شغال
+                      <Mic className="w-4 h-4" /> طريقة استماع بديلة — لو الطريقة العادية مش شغالة
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {/* B1: the cancel button lives here, in the ready
@@ -3968,7 +3968,7 @@ export default function QuranMushafPage({
                   wrapper carries the old button's absolute position
                   and enter animation; its click stops propagation
                   so the tap never turns a page underneath. */}
-              <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[5.75rem] z-30 mushaf-chrome-enter"
+              <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[8.75rem] z-30 mushaf-chrome-enter"
                 onClick={(e) => e.stopPropagation()}>
                 <BackButton label="عودة" onBack={() => { if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
               </div>
@@ -3999,7 +3999,7 @@ export default function QuranMushafPage({
             </div>
           )}
           {!showRatelIntro && !cleanMode && (
-            <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)] md:max-w-[calc(100vw-31rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
               <WorshipTimer dark />
               <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">صفحة {labelPage}</span>
               {/* Juz/Hizb collapse below 420px: on a 320-360px phone the
@@ -4059,7 +4059,7 @@ export default function QuranMushafPage({
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
-              className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-20 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               <Layers className="w-5 h-5" /> {edition.name}
             </button>
           )}

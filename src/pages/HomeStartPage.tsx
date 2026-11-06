@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map } from 'lucide-react';
+import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
@@ -482,7 +482,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           style={{ animationDelay: '120ms' }}
         >
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Headphones className="w-5 h-5 text-white" />
+            <MicVocal className="w-5 h-5 text-white" />
           </span>
           سمّع لنفسك
           <ChevronDown className={`w-5 h-5 text-white alive-chevron ${testOpen ? 'rotate-180' : ''}`} />

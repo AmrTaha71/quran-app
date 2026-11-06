@@ -958,6 +958,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [appShell] = useState(detectAppShell);
   const BUILD_SHA = typeof __BUILD_SHA__ === 'string' && __BUILD_SHA__ ? __BUILD_SHA__ : 'dev';
   const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'}`;
+  // Debug stamp lines are admin-only (flag set by Settings' admin check).
+  const showDiag = (() => { try { return localStorage.getItem('quran-show-diag') === '1'; } catch { return false; } })();
   // D1 shell-aware mic-absent wording (R7): when SR is absent AND
   // the shell is known, name the shell and the actionable move
   // (open in Safari) instead of only the generic message. The claim
@@ -5024,7 +5026,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       <div className="max-w-5xl mx-auto px-4 py-6">
         {phase === 'setup' && (
           <div className="space-y-5">
-            <p className="text-xs text-accent-500 text-center">{stampLine}</p>
+            {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine}</p>)}
             {/* Batch 1: the old unsupported note was a small line
                 buried in the settings card. A user on a voiceless
                 browser deserves this banner first, not last. */}
@@ -5662,7 +5664,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
               )}
             </div>
-            <p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>
+            {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
             <button onClick={() => { diagPush('tap', { label: 'stop-to-setup' }); stopContinuousMic(); setPhase('setup'); }}
               className="block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
               إلغاء التسميع والعودة للإعدادات
@@ -5911,7 +5913,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
 
-            <p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>
+            {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
             <div className="flex justify-between">
               <button onClick={() => goToAyah(index - 1)}
                 disabled={index === 0}
@@ -5940,7 +5942,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </p>
                 {fullHeardToggle}
                 {fullHeardContent}
-                <p className="text-xs text-accent-500 mt-2">{stampLine}</p>
+                {showDiag && (<p className="text-xs text-accent-500 mt-2">{stampLine}</p>)}
               </div>
             )}
             {/* Feature #3: the same gold reward on the done screen
@@ -6006,13 +6008,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
             )}
 
-            {!contZeroMatch && (
+            {!contZeroMatch && showDiag && (
               <p className="text-xs text-accent-500 text-center">{stampLine}</p>
             )}
             {/* DIAG (Claude P0-5): collapsible event log + Copy JSON.
                 Renders on every done screen (both modes, zero-match
                 or scored) so a failed run always has an exportable
                 record — screenshots are no longer the only evidence. */}
+            {showDiag && (
             <div className="bg-white border border-hairline rounded-2xl shadow-sm p-5">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-semibold text-accent-800">سجل التشخيص</h2>
@@ -6025,7 +6028,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
               {diagOpen && (
                 <div className="mt-3 space-y-2">
-                  <p className="text-xs text-accent-600" dir="rtl">{stampLine} • إذن الميكروفون: {micPerm}</p>
+                  {showDiag && (<p className="text-xs text-accent-600" dir="rtl">{stampLine} • إذن الميكروفون: {micPerm}</p>)}
                   <div className="max-h-64 overflow-y-auto bg-stone-50 border border-hairline rounded-xl p-3 space-y-1" dir="ltr">
                     {diagEventsRef.current.slice(-DIAG_DISPLAY_CAP).map((ev, i) => (
                       <p key={i} className="text-xs text-accent-700 break-words">
@@ -6044,6 +6047,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               )}
             </div>
+            )}
             {recSessionRef.current?.recording && (
               <div className="bg-white border border-hairline-amber rounded-2xl shadow-sm p-5 space-y-4">
                 <h2 className="font-semibold text-accent-800">تسجيل حالة اختبار</h2>
