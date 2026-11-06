@@ -3171,7 +3171,9 @@ export default function QuranMushafPage({
   // remounts per displayedPage, so the animation runs fresh on every
   // turn; taps during the 300ms still map correctly because
   // getBoundingClientRect follows the transform.
-  const slideAnim = turnDir === 1 ? 'mushaf-slide-next 300ms ease-out' : 'mushaf-slide-prev 300ms ease-out';
+  // 2026-11-07: Amr asked that pages do not move sideways. Slide disabled;
+  // the page turns in place. Reverse by restoring the two lines below.
+  const slideAnim = 'none';
   // Main paper's top edge in viewport-height % (cover mode only), used
   // to vertically align the facing sliver with the main page.
   const coverMainPaperTop = useMadinahCover && madinahNorm

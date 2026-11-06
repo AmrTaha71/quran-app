@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
+import ReviewDueCard from '../components/ReviewDueCard';
 import ShareProgressCard from '../components/ShareProgressCard';
 import { pressFeedback, installGlobalWater } from '../lib/pressFeedback';
 import VoiceSelector from '../components/VoiceSelector';
@@ -605,6 +606,16 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         {session && memorizedFromStart > 0 && (
           <ShareProgressCard memorizedFromStart={memorizedFromStart} />
         )}
+
+        {/* المراجعة المستحقة (2026-11-07): moved here from Home. */}
+        <ReviewDueCard
+          run={memorizedFromStart}
+          onNavigate={onNavigate}
+          onJumpToAyah={(surah, ayah) => {
+            try { localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah, ayah })); } catch { /* ignore */ }
+            onNavigate('mushaf');
+          }}
+        />
 
         {/* Daily wird + self-test entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
