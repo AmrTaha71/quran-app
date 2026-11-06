@@ -139,6 +139,15 @@ function readPersistedRiwaya(): string | null {
 const AUTO_RESUME_KEY = 'quran-listen-auto-resume';
 const AUTO_RESUME_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
+// External-audio auto-resume (2026-11-06): when ANOTHER app's audio
+// (YouTube / Facebook / a call) pauses our listen audio, the engine
+// records a resume intent under this key — separate from the
+// route-hide auto-resume key above, so the two flows never clobber
+// each other. The return handler consumes it on visibilitychange →
+// visible (+ pageshow fallback). A USER pause never writes here
+// (see userPausedRef), so it can never auto-resume.
+const EXTERNAL_INTERRUPT_KEY = 'quran-listen-external-interrupt';
+
 type AutoResumeIntent =
   | { kind: 'hadr'; surah: number; time: number; at: number }
   | { kind: 'riwaya'; riwaya: string; surah: number; time: number; at: number }
@@ -151,9 +160,9 @@ function validResumeSurah(n: unknown): n is number {
 function validResumeTime(n: unknown): n is number {
   return typeof n === 'number' && Number.isFinite(n) && n >= 0;
 }
-function readAutoResumeIntent(): AutoResumeIntent | null {
+function readIntentFromKey(key: string): AutoResumeIntent | null {
   try {
-    const raw = sessionStorage.getItem(AUTO_RESUME_KEY);
+    const raw = sessionStorage.getItem(key);
     if (!raw) return null;
     const p = JSON.parse(raw) as Record<string, unknown>;
     if (typeof p !== 'object' || p === null) return null;
@@ -181,14 +190,30 @@ function readAutoResumeIntent(): AutoResumeIntent | null {
     return null;
   }
 }
+function readAutoResumeIntent(): AutoResumeIntent | null {
+  return readIntentFromKey(AUTO_RESUME_KEY);
+}
+function readExternalInterruptIntent(): AutoResumeIntent | null {
+  return readIntentFromKey(EXTERNAL_INTERRUPT_KEY);
+}
 function writeAutoResumeIntent(intent: AutoResumeIntent): void {
   try {
     sessionStorage.setItem(AUTO_RESUME_KEY, JSON.stringify(intent));
   } catch {}
 }
+function writeExternalInterruptIntent(intent: AutoResumeIntent): void {
+  try {
+    sessionStorage.setItem(EXTERNAL_INTERRUPT_KEY, JSON.stringify(intent));
+  } catch {}
+}
 function clearAutoResumeIntent(): void {
   try {
     sessionStorage.removeItem(AUTO_RESUME_KEY);
+  } catch {}
+}
+function clearExternalInterruptIntent(): void {
+  try {
+    sessionStorage.removeItem(EXTERNAL_INTERRUPT_KEY);
   } catch {}
 }
 
@@ -371,6 +396,76 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // Anywhere-resume dispatcher target: always the latest closure.
   const listenResumeRef = useRef<(() => void) | null>(null);
 
+  // External-audio auto-resume (2026-11-06): set ONLY by the pause
+  // button (togglePlayPause) immediately BEFORE it calls
+  // engine.pause(). A `pause` event observed while this is false
+  // therefore means the SYSTEM paused us (another app's audio, a
+  // call) — never the user. Cleared on every play / resume / stop,
+  // so a stale "user paused" can never block a later system
+  // interruption's auto-resume. A USER pause must NEVER auto-resume.
+  const userPausedRef = useRef(false);
+
+  // Clear both halves of the external-interrupt state: the stored
+  // intent and the user-paused flag. Called on every play / resume /
+  // stop, so a stale intent or flag can never fire later.
+  const clearExternalInterruptState = (): void => {
+    try {
+      clearExternalInterruptIntent();
+    } catch {
+      // ignore
+    }
+    userPausedRef.current = false;
+  };
+
+  // Record a system-interruption resume intent. Called from every
+  // engine's onInterrupted — which the engines fire ONLY for
+  // external pauses (their internal-pause tokens already filter
+  // engine-initiated pauses) plus tab-hide and preemption, which
+  // the checks below exclude. Records ONLY when ALL of:
+  //  - the user did NOT tap pause (userPausedRef false), and
+  //  - the shared element is actually PAUSED (rules out tab-hide
+  //    while background playback still runs), and
+  //  - listen still owns the element (rules out preemption, where
+  //    the owner is null / another source, and adhkar).
+  // The position comes from the live engine's getPosition() — valid
+  // even after its playing flag cleared, because the engine has
+  // not moved. No engine ref means nothing was playing: nothing
+  // to record. Idempotent: a repeat firing overwrites the same
+  // intent with the same position.
+  const recordExternalInterrupt = (): void => {
+    try {
+      if (userPausedRef.current) return;
+      const audio = getSharedAudio();
+      let paused = true;
+      try {
+        paused = audio.paused;
+      } catch {
+        paused = true;
+      }
+      if (!paused) return;
+      if (currentAudioOwner() !== 'listen') return;
+      const j = journeyEngineRef.current;
+      const r = riwayaEngineRef.current;
+      const e = engineRef.current;
+      let intent: AutoResumeIntent | null = null;
+      if (j) {
+        intent = { kind: 'journey', position: j.getPosition(), at: Date.now() };
+      } else if (r) {
+        const pos = r.getPosition();
+        intent = activeHadrRef.current
+          ? { kind: 'hadr', surah: pos.surah, time: pos.time, at: Date.now() }
+          : { kind: 'riwaya', riwaya: r.current.riwaya, surah: pos.surah, time: pos.time, at: Date.now() };
+      } else if (e) {
+        const pos = e.getPosition();
+        intent = { kind: 'hafs', surah: pos.surah, reciter: pos.reciter, mode: activeModeRef.current, ayah: pos.ayah, time: pos.time ?? 0, at: Date.now() };
+      }
+      if (!intent) return;
+      writeExternalInterruptIntent(intent);
+    } catch {
+      // ignore: recording must never break the interruption UI.
+    }
+  };
+
   const setCurrent = (ayah: number) => {
     currentAyahRef.current = ayah;
     setCurrentAyah(ayah);
@@ -485,6 +580,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   ) => {
     setEngineError(null);
     setInterrupted(false);
+    // A fresh start supersedes any pending external-interrupt
+    // auto-resume: the user made a new choice.
+    clearExternalInterruptState();
     destroyEngine();
     activeSurahRef.current = surahNo;
     activeReciterRef.current = reciter;
@@ -522,6 +620,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         // Redirect B: show the resume button; do NOT auto-play.
         setInterrupted(true);
         setPlaying(false);
+        // External-audio auto-resume: record the intent iff the
+        // system (not the user) paused us.
+        recordExternalInterrupt();
       },
     });
     engineRef.current = engine;
@@ -536,6 +637,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   };
 
   const stopPlayback = () => {
+    // Stopping is a deliberate user choice: drop any pending
+    // external-interrupt auto-resume (never auto-resume a stop).
+    clearExternalInterruptState();
     // Three-mode journey: stopping saves the live position
     // (per-mode resume) via the engine's destroy path, so the
     // next visit returns to exactly here. The Hafs and riwaya
@@ -624,6 +728,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   ) => {
     setEngineError(null);
     setInterrupted(false);
+    // A fresh start supersedes any pending external-interrupt
+    // auto-resume: the user made a new choice.
+    clearExternalInterruptState();
     destroyEngine();
     activeSurahRef.current = surahNo;
     activeRiwayaRef.current = riwaya;
@@ -652,6 +759,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         // Same rule as Hafs: show the resume button; do NOT auto-play.
         setInterrupted(true);
         setPlaying(false);
+        // External-audio auto-resume: record the intent iff the
+        // system (not the user) paused us.
+        recordExternalInterrupt();
       },
     });
     riwayaEngineRef.current = engine;
@@ -680,6 +790,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   ) => {
     setEngineError(null);
     setInterrupted(false);
+    // A fresh start supersedes any pending external-interrupt
+    // auto-resume: the user made a new choice.
+    clearExternalInterruptState();
     destroyEngine();
     activeSurahRef.current = surahNo;
     activeRiwayaRef.current = null;
@@ -717,6 +830,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         // button; do NOT auto-play.
         setInterrupted(true);
         setPlaying(false);
+        // External-audio auto-resume: record the intent iff the
+        // system (not the user) paused us.
+        recordExternalInterrupt();
       },
     });
     riwayaEngineRef.current = engine;
@@ -745,6 +861,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   ) => {
     setEngineError(null);
     setInterrupted(false);
+    // A fresh start supersedes any pending external-interrupt
+    // auto-resume: the user made a new choice.
+    clearExternalInterruptState();
     destroyEngine();
     activeHadrRef.current = false;
     const startSurah = fromSaved ? fromSaved.startSurah : surah;
@@ -819,6 +938,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         // button; do NOT auto-play.
         setInterrupted(true);
         setPlaying(false);
+        // External-audio auto-resume: record the intent iff the
+        // system (not the user) paused us.
+        recordExternalInterrupt();
       },
     });
     journeyEngineRef.current = engine;
@@ -833,6 +955,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   };
 
   const stopJourney = () => {
+    // Stopping is a deliberate user choice: drop any pending
+    // external-interrupt auto-resume (never auto-resume a stop).
+    clearExternalInterruptState();
     // JourneyEngine.destroy() persists the live position (with
     // time), so the next visit resumes from precisely here.
     destroyEngine();
@@ -873,6 +998,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         await jEngine.play();
         setInterrupted(false);
         setPlaying(true);
+        clearExternalInterruptState();
       } catch {
         setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
       }
@@ -885,6 +1011,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         await rEngine.play();
         setInterrupted(false);
         setPlaying(true);
+        clearExternalInterruptState();
       } catch {
         setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
       }
@@ -897,6 +1024,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       await engine.play();
       setInterrupted(false);
       setPlaying(true);
+      clearExternalInterruptState();
     } catch {
       setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
     }
@@ -908,9 +1036,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       setEngineError(null);
       try {
         if (playing) {
+          // User pause: mark it BEFORE pausing (see userPausedRef)
+          // and drop any pending external-interrupt auto-resume.
+          userPausedRef.current = true;
+          clearExternalInterruptIntent();
           jEngine.pause();
           setPlaying(false);
         } else {
+          clearExternalInterruptState();
           await jEngine.play();
           setInterrupted(false);
           setPlaying(true);
@@ -925,9 +1058,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       setEngineError(null);
       try {
         if (playing) {
+          // User pause: mark it BEFORE pausing (see userPausedRef)
+          // and drop any pending external-interrupt auto-resume.
+          userPausedRef.current = true;
+          clearExternalInterruptIntent();
           rEngine.pause();
           setPlaying(false);
         } else {
+          clearExternalInterruptState();
           await rEngine.play();
           setInterrupted(false);
           setPlaying(true);
@@ -942,9 +1080,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     setEngineError(null);
     try {
       if (playing) {
+        // User pause: mark it BEFORE pausing (see userPausedRef)
+        // and drop any pending external-interrupt auto-resume.
+        userPausedRef.current = true;
+        clearExternalInterruptIntent();
         engine.pause();
         setPlaying(false);
       } else {
+        clearExternalInterruptState();
         await engine.play();
         setInterrupted(false);
         setPlaying(true);
@@ -1258,6 +1401,99 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // External-audio auto-resume (2026-11-06): when another app's
+  // audio paused our listen audio, the engine recorded an intent
+  // (see recordExternalInterrupt). On RETURN to the app — the
+  // document becoming visible, or pageshow after a bfcache
+  // restore — resume it immediately, from the saved position
+  // (same reciter / mode / quarter). A user pause never records
+  // an intent, so it can never auto-resume here; the check below
+  // is belt-and-suspenders. HONEST BOUNDARY: a web page cannot
+  // run while hidden, so the resume happens the moment the user
+  // RETURNS to the app (the Safari tab becomes visible), not
+  // while they are on the home screen or in the other app. The
+  // resume is immediate on return. If the play is blocked
+  // (autoplay policy), the intent is kept so the next return
+  // retries, and the tap-resume button stays as the fallback.
+  useEffect(() => {
+    const tryResume = () => {
+      try {
+        let visible = false;
+        try {
+          visible = document.visibilityState === 'visible';
+        } catch {
+          visible = false;
+        }
+        if (!visible) return;
+        const intent = readExternalInterruptIntent();
+        if (!intent) return;
+        if (userPausedRef.current) {
+          // The user paused after the interruption was recorded:
+          // never auto-resume; drop the stale intent.
+          clearExternalInterruptIntent();
+          return;
+        }
+        // Already playing again (e.g. the user tapped play before
+        // this handler ran): drop the stale intent, nothing to do.
+        try {
+          if (!getSharedAudio().paused) {
+            clearExternalInterruptIntent();
+            return;
+          }
+        } catch {
+          // fall through: attempt the resume below.
+        }
+        const eng = journeyEngineRef.current ?? riwayaEngineRef.current ?? engineRef.current;
+        if (eng) {
+          // Resume the live engine in place (same as the tap-resume
+          // button): exact position, quarter tracking intact.
+          void (async () => {
+            try {
+              await eng.play();
+              clearExternalInterruptState();
+              setInterrupted(false);
+              setPlaying(true);
+            } catch {
+              // Blocked play: keep the intent for the next return;
+              // the tap-resume button stays available.
+              setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
+            }
+          })();
+        } else {
+          // No live engine (destroyed after the interruption):
+          // rebuild from the saved intent. resumeFromIntent
+          // re-saves to the route-hide key if the play is blocked,
+          // so the next show retries.
+          clearExternalInterruptState();
+          void resumeFromIntent(intent);
+        }
+      } catch {
+        // ignore: a failing auto-resume must never break the page.
+      }
+    };
+    const onVis = () => {
+      try {
+        if (document.visibilityState === 'visible') tryResume();
+      } catch {}
+    };
+    const onPageShow = (e: Event) => {
+      try {
+        // Only bfcache restores (a return to a loaded page), never
+        // a fresh load — a fresh load has no user gesture, so an
+        // auto-play attempt would only surface an error.
+        const persisted = (e as { persisted?: boolean }).persisted;
+        if (persisted) tryResume();
+      } catch {}
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pageshow', onPageShow);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

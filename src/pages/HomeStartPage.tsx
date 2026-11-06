@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, Headphones, Settings, Link, SunMoon } from 'lucide-react';
+import { BookOpen, Mic, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import { pressFeedback } from '../lib/pressFeedback';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
-import { SURAHS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { readListeningWird } from '../lib/listenPlayback';
 import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getJuzFromPage } from '../lib/quranIndex';
+import { JUZ_STARTS } from '../lib/quranBoundaries';
+import { normalizeDigits, toArabicIndic } from '../lib/numerals';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar';
 
@@ -37,6 +39,26 @@ function pageSurah(page: number): string {
     else break;
   }
   return SURAHS.find((s) => s.no === result)?.name || '';
+}
+
+// Jump the Mushaf to a specific ayah: QuranMushafPage consumes the stored
+// target on mount (goes to the ayah's actual page, opens fullscreen at
+// once, highlights the ayah). Same mechanism as the تربيط اليوم card.
+function jumpToAyah(surah: number, ayah: number, onNavigate: (r: Route) => void): void {
+  try {
+    localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah, ayah }));
+  } catch { /* ignore */ }
+  onNavigate('mushaf');
+}
+
+// Resume from the saved page (the 'quran-mushaf-page' key QuranMushafPage
+// itself reads on open): open fullscreen at once. Same as the old
+// resume button on the الحفظ card.
+function resumeHifz(onNavigate: (r: Route) => void): void {
+  try {
+    sessionStorage.setItem('quran-open-fullscreen', '1');
+  } catch { /* ignore */ }
+  onNavigate('mushaf');
 }
 
 type LinkOfDay = { surah: number; surahName: string; ayah: number; title: string | null; text: string };
@@ -92,6 +114,46 @@ export default function HomeStartPage({ session, onNavigate }: {
     try { return readListeningWird(); } catch { return null; }
   });
   const juz = getJuzFromPage(lastPage.page);
+  // الحفظ door: expands to 3 start choices (resume / pick a place / from
+  // the beginning). Collapsed by default — the door looks exactly like
+  // the other Home doors.
+  const [hifzOpen, setHifzOpen] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  // "ابدأ من مكان معين" picker: chosen surah + ayah. The surah number
+  // input and the name dropdown stay in sync through this state.
+  const [pickerSurah, setPickerSurah] = useState(1);
+  const [pickerSurahText, setPickerSurahText] = useState('١');
+  const [pickerAyah, setPickerAyah] = useState(1);
+  const [pickerAyahText, setPickerAyahText] = useState('١');
+  const pickerMaxAyah = SURAH_AYAH_COUNTS[pickerSurah - 1] ?? 1;
+  function onSurahNoChange(text: string): void {
+    setPickerSurahText(text);
+    const n = Number(normalizeDigits(text));
+    if (Number.isInteger(n) && n >= 1 && n <= 114) {
+      setPickerSurah(n);
+      const max = SURAH_AYAH_COUNTS[n - 1] ?? 1;
+      if (pickerAyah > max) { setPickerAyah(max); setPickerAyahText(toArabicIndic(max)); }
+    }
+  }
+  function onSurahSelect(no: number): void {
+    setPickerSurah(no);
+    setPickerSurahText(toArabicIndic(no));
+    const max = SURAH_AYAH_COUNTS[no - 1] ?? 1;
+    if (pickerAyah > max) { setPickerAyah(max); setPickerAyahText(toArabicIndic(max)); }
+  }
+  function onAyahNoChange(text: string): void {
+    setPickerAyahText(text);
+    const n = Number(normalizeDigits(text));
+    if (Number.isInteger(n) && n >= 1 && n <= pickerMaxAyah) setPickerAyah(n);
+  }
+  function startFromPicker(): void {
+    const s = Number(normalizeDigits(pickerSurahText));
+    const surah = Number.isInteger(s) && s >= 1 && s <= 114 ? s : pickerSurah;
+    const a = Number(normalizeDigits(pickerAyahText));
+    const max = SURAH_AYAH_COUNTS[surah - 1] ?? 1;
+    const ayah = Number.isInteger(a) && a >= 1 ? Math.min(a, max) : pickerAyah;
+    jumpToAyah(surah, ayah, onNavigate);
+  }
 
   useEffect(() => {
     const loadLinkOfDay = async () => {
@@ -158,29 +220,130 @@ export default function HomeStartPage({ session, onNavigate }: {
           </p>
         </div>
 
-        {/* Resume where the user left off */}
-        <div className="grad-emerald-door glass-door-highlight rounded-2xl polish-card polish-fade-up p-5 mb-4 text-white text-center" style={{ animationDelay: '60ms' }}>
-          <p className="text-xl font-bold">الحفظ</p>
-          <p className="font-semibold text-lg mt-1">
-            {lastPage.visited ? 'أكمل من حيث توقفت' : 'ابدأ من أول المصحف'}
-          </p>
-          <p className="text-emerald-100 mt-1">
-            صفحة {lastPage.page.toLocaleString('ar-EG')} — سورة {pageSurah(lastPage.page)} — جزء {juz.number.toLocaleString('ar-EG')}
-          </p>
-          <button
-            onPointerDown={pressFeedback}
-            onClick={() => {
-              try {
-                sessionStorage.setItem('quran-open-fullscreen', '1');
-              } catch {}
-              onNavigate('mushaf');
-            }}
-            className="mt-4 w-full py-3 bg-white text-emerald-700 font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus"
-          >
-            <BookOpen className="w-5 h-5" />
-            {lastPage.visited ? `أكمل الحفظ — صفحة ${lastPage.page.toLocaleString('ar-EG')}` : 'افتح المصحف للحفظ'}
-          </button>
-        </div>
+        {/* الحفظ: a uniform door like the others (سمّع لنفسك / الحق الإمام /
+            استمع للقرآن). Tap to expand 3 start choices below it; tap
+            again to collapse. */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => { setHifzOpen(!hifzOpen); setShowPicker(false); }}
+          aria-expanded={hifzOpen}
+          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
+          style={{ animationDelay: '60ms' }}
+        >
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <BookOpen className="w-5 h-5 text-white" />
+          </span>
+          الحفظ
+          <ChevronDown className={`w-5 h-5 text-white transition-transform ${hifzOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {hifzOpen && (
+          <div className="px-4 mb-4">
+            {/* (a) resume from the saved position — hidden when the user
+                never opened the Mushaf (nothing to resume from). */}
+            {lastPage.visited && (
+              <button
+                onPointerDown={pressFeedback}
+                onClick={() => resumeHifz(onNavigate)}
+                className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white rounded-xl flex flex-col items-center justify-center polish-press polish-press-depth polish-focus"
+              >
+                <span className="font-semibold text-base flex items-center gap-2">
+                  <Play className="w-5 h-5 text-white" />
+                  أكمل من حيث توقفت
+                </span>
+                <span className="text-xs text-emerald-100 mt-0.5">
+                  صفحة {lastPage.page.toLocaleString('ar-EG')} — سورة {pageSurah(lastPage.page)} — جزء {juz.number.toLocaleString('ar-EG')}
+                </span>
+              </button>
+            )}
+            {/* (b) pick a place: Juz grid, or surah (number + name) + ayah. */}
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => setShowPicker(!showPicker)}
+              aria-expanded={showPicker}
+              className="w-full py-3 mb-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+            >
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
+                <MapPin className="w-4 h-4 text-white" />
+              </span>
+              ابدأ من مكان معين
+              <ChevronDown className={`w-4 h-4 text-white transition-transform ${showPicker ? 'rotate-180' : ''}`} />
+            </button>
+            {showPicker && (
+              <div className="rounded-2xl glass-card polish-card p-4 mb-3">
+                <p className="font-bold text-ink text-base mb-2">اختر الجزء</p>
+                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 mb-4">
+                  {JUZ_STARTS.map((j) => (
+                    <button
+                      key={j.juz}
+                      onPointerDown={pressFeedback}
+                      onClick={() => jumpToAyah(j.surah, j.ayah, onNavigate)}
+                      className="py-2.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-lg polish-press polish-focus"
+                    >
+                      {toArabicIndic(j.juz)}
+                    </button>
+                  ))}
+                </div>
+                <p className="font-bold text-ink text-base mb-2">أو اختر السورة والآية</p>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={pickerSurahText}
+                    onChange={(e) => onSurahNoChange(e.target.value)}
+                    placeholder="رقم السورة"
+                    aria-label="رقم السورة"
+                    className="w-24 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-center text-lg font-bold polish-focus"
+                  />
+                  <select
+                    value={pickerSurah}
+                    onChange={(e) => onSurahSelect(Number(e.target.value))}
+                    aria-label="اسم السورة"
+                    className="flex-1 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-base font-semibold polish-focus"
+                  >
+                    {SURAHS.map((s) => (
+                      <option key={s.no} value={s.no}>
+                        {toArabicIndic(s.no)} — {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={pickerAyahText}
+                    onChange={(e) => onAyahNoChange(e.target.value)}
+                    placeholder="رقم الآية"
+                    aria-label="رقم الآية"
+                    className="w-24 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-center text-lg font-bold polish-focus"
+                  />
+                  <button
+                    onPointerDown={pressFeedback}
+                    onClick={startFromPicker}
+                    className="flex-1 py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl polish-press polish-press-depth polish-focus"
+                  >
+                    ابدأ من هنا
+                  </button>
+                </div>
+                <p className="text-xs text-ink-2 mt-2">
+                  سورة {SURAHS[pickerSurah - 1]?.name} فيها {toArabicIndic(pickerMaxAyah)} آية
+                </p>
+              </div>
+            )}
+            {/* (c) from the very beginning: الفاتحة آية ١. */}
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => jumpToAyah(1, 1, onNavigate)}
+              className="w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
+            >
+              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
+                <BookOpen className="w-4 h-4 text-white" />
+              </span>
+              ابدأ من أول المصحف
+            </button>
+          </div>
+        )}
 
         {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن. */}
         <button
