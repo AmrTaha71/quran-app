@@ -10,6 +10,7 @@ import {
   SkipBack,
   SkipForward,
   Square,
+  Timer,
   Trash2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -70,6 +71,17 @@ import {
   readListeningWird,
   writeListeningWird,
 } from '../lib/listenPlayback';
+import {
+  SLEEP_TIMER_OPTIONS,
+  clearSleepTimer,
+  getSleepTimerRemainingMs,
+  registerSleepStopHandler,
+  setSleepTimer,
+  subscribeSleepTimer,
+  unregisterSleepStopHandler,
+} from '../lib/sleepTimer';
+import type { SleepTimerMinutes } from '../lib/sleepTimer';
+import { clearNowPlaying, setNowPlaying } from '../lib/nowPlaying';
 import type { ListenEngine, ListenMode, ListenPosition } from '../lib/listenPlayback';
 import { ListenEngine as ListenEngineClass } from '../lib/listenPlayback';
 import {
@@ -250,6 +262,77 @@ function surahCount(no: number): number {
   return SURAH_AYAH_COUNTS[no - 1] || 0;
 }
 
+// Feature #9 recording — "سمعت / سمّعت مؤخرًا" (the recents row on
+// Home is built by another agent from this key): every Listen start
+// writes one entry to localStorage 'quran-recent-activity-v1' — a
+// JSON array, most recent first, max 6, entry { type: 'listen',
+// surah, ayah?, label, ts }. Same type+surah dedups (the old entry
+// is dropped, the new one goes first). try/catch everywhere:
+// recording must never break playback. No new server table.
+const RECENT_ACTIVITY_KEY = 'quran-recent-activity-v1';
+type RecentActivityEntry = {
+  type: 'listen';
+  surah: number;
+  ayah?: number;
+  label: string;
+  ts: number;
+};
+function recordRecentListen(surah: number, ayah?: number): void {
+  try {
+    let arr: RecentActivityEntry[] = [];
+    try {
+      const raw = localStorage.getItem(RECENT_ACTIVITY_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        arr = parsed.filter(
+          (e): e is RecentActivityEntry =>
+            typeof e === 'object' &&
+            e !== null &&
+            (e as RecentActivityEntry).type === 'listen' &&
+            typeof (e as RecentActivityEntry).surah === 'number' &&
+            typeof (e as RecentActivityEntry).label === 'string' &&
+            typeof (e as RecentActivityEntry).ts === 'number',
+        );
+      }
+    } catch {
+      arr = [];
+    }
+    arr = arr.filter((e) => e.surah !== surah);
+    const entry: RecentActivityEntry = {
+      type: 'listen',
+      surah,
+      ...(ayah !== undefined ? { ayah } : {}),
+      label: `سورة ${surahName(surah)}`,
+      ts: Date.now(),
+    };
+    arr.unshift(entry);
+    localStorage.setItem(RECENT_ACTIVITY_KEY, JSON.stringify(arr.slice(0, 6)));
+  } catch {
+    // ignore: recording must never break playback.
+  }
+}
+
+// Arabic-Indic digits for the sleep countdown (the app's numbers
+// rule): 05:30 reads ٠٥:٣٠.
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+function formatSleepRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const toIndic = (n: number): string =>
+    String(n)
+      .padStart(2, '0')
+      .replace(/\d/g, (d) => ARABIC_INDIC_DIGITS[Number(d)]);
+  return `${toIndic(minutes)}:${toIndic(seconds)}`;
+}
+
+// Sleep-timer chip labels, by duration (minutes).
+const SLEEP_TIMER_LABELS: Record<SleepTimerMinutes, string> = {
+  30: 'بعد نصف ساعة',
+  60: 'بعد ساعة',
+  120: 'بعد ساعتين',
+};
+
 // استمع للقرآن: continuous surah playback with read-along ayah
 // highlighting. The audio itself lives in the sibling ListenEngine
 // (single audio element, so playback can keep going while the
@@ -359,6 +442,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const [showResume, setShowResume] = useState(true);
   const [active, setActive] = useState(false);
   const [playing, setPlaying] = useState(false);
+  // Sleep timer (#10): remaining ms, synced from the shared lib
+  // (its 1s tick re-renders the countdown). Null = no timer.
+  const [sleepRemainingMs, setSleepRemainingMs] = useState<number | null>(() =>
+    getSleepTimerRemainingMs(),
+  );
   // Redirect B: set only by the engine's onInterrupted callback. The
   // page never auto-plays from this state — only a tap on استئناف does.
   const [interrupted, setInterrupted] = useState(false);
@@ -447,6 +535,41 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     userPausedRef.current = false;
   };
 
+  // Sleep timer (#10) — the page's own stop handler ('listen-ui').
+  // The engines each register their own handler too (which pauses
+  // the audio), but only the page can sync the UI: this handler
+  // pauses whichever engine is live AND flips the playing state,
+  // and marks it a USER pause (userPausedRef) so a sleep pause can
+  // never auto-resume like a system interruption. It only touches
+  // refs + the stable setPlaying, so the mount effect's first-
+  // render closure stays correct. The lib calls every handler in
+  // its own try/catch, so the double pause (engine + page) is a
+  // harmless no-op. Never touches adhan audio.
+  const pauseAllForSleep = (): void => {
+    try {
+      userPausedRef.current = true;
+      clearExternalInterruptIntent();
+    } catch {
+      // ignore
+    }
+    try {
+      journeyEngineRef.current?.pause();
+    } catch {
+      // ignore
+    }
+    try {
+      riwayaEngineRef.current?.pause();
+    } catch {
+      // ignore
+    }
+    try {
+      engineRef.current?.pause();
+    } catch {
+      // ignore
+    }
+    setPlaying(false);
+  };
+
   // Record a system-interruption resume intent. Called from every
   // engine's onInterrupted — which the engines fire ONLY for
   // external pauses (their internal-pause tokens already filter
@@ -508,6 +631,61 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     const timer = setTimeout(() => setShowBlackHint(false), 4000);
     return () => clearTimeout(timer);
   }, [blackScreen]);
+
+  // Sleep timer (#10): register the page's stop handler once, and
+  // subscribe to the shared timer so the countdown re-renders on
+  // every 1s tick (and clears when the timer fires or is
+  // cancelled). The timer itself lives in the lib, outside any
+  // component, so it keeps running across page navigation; a full
+  // app reload resets it (module state), and the UI then shows
+  // "not running" automatically.
+  useEffect(() => {
+    registerSleepStopHandler('listen-ui', pauseAllForSleep);
+    const unsubscribe = subscribeSleepTimer(() => {
+      try {
+        setSleepRemainingMs(getSleepTimerRemainingMs());
+      } catch {
+        // ignore: a failed read must never break the page.
+      }
+    });
+    return () => {
+      unregisterSleepStopHandler('listen-ui');
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Follow-along (#4): publish the currently playing ayah to the
+  // shared now-playing store (see nowPlaying.ts) so the Mushaf
+  // page can highlight it later without any Listen change. Null
+  // when nothing ayah-tracked plays (stopped, riwaya/hadr surah
+  // file, or a Juhani surah file inside a journey — its item ayah
+  // is always 1, not a real ayah step). The bar below reads the
+  // same state from the ayah text; the store is the cross-page seam.
+  useEffect(() => {
+    if (!active) {
+      clearNowPlaying();
+      return;
+    }
+    if (journeyMode !== null) {
+      if (journeyItem) {
+        setNowPlaying({ surah: journeyItem.surah, ayah: journeyItem.ayah, kind: journeyItem.kind });
+      } else {
+        clearNowPlaying();
+      }
+      return;
+    }
+    if (hadrOn || riwayaId !== null) {
+      clearNowPlaying();
+      return;
+    }
+    if (currentAyah >= 1) {
+      setNowPlaying({ surah, ayah: currentAyah, kind: 'ayah' });
+    } else {
+      clearNowPlaying();
+    }
+    return () => clearNowPlaying();
+  }, [active, journeyMode, journeyItem, hadrOn, riwayaId, surah, currentAyah]);
 
   const blackPressStart = (x: number, y: number) => {
     blackPressRef.current = { t: Date.now(), x, y };
@@ -622,6 +800,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     setReciterId(reciter);
     setMode(listenMode);
     setCurrent(startAyah);
+    // Feature #9: record this listen start for "سمعت مؤخرًا".
+    recordRecentListen(surahNo, startAyah);
     const engine = new ListenEngineClass({
       reciterId: reciter,
       surah: surahNo,
@@ -767,6 +947,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     activeHadrRef.current = false;
     setSurah(surahNo);
     setRiwayaId(riwaya);
+    // Feature #9: record this listen start for "سمعت مؤخرًا".
+    recordRecentListen(surahNo);
     const engine = new RiwayaEngineClass({
       riwayaId: riwaya,
       surah: surahNo,
@@ -829,6 +1011,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     activeHadrRef.current = true;
     setSurah(surahNo);
     setHadrOn(true);
+    // Feature #9: record this listen start for "سمعت مؤخرًا".
+    recordRecentListen(surahNo);
     const engine = new RiwayaEngineClass({
       riwayaId: 'hadr',
       edition: HADR_EDITION,
@@ -905,6 +1089,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     setJourneyItem(null);
     setPreselectedMode(null);
     setSurah(startSurah);
+    // Feature #9: record this listen start for "سمعت مؤخرًا"
+    // (start surah + start ayah of the journey / resume point).
+    recordRecentListen(startSurah, fromSaved?.ayah ?? 1);
     // The journey's start reciter lives in its own state: Juhani
     // must never reach the global preference (see the state
     // comment above). The 8 keep the old behaviour — the global
@@ -1918,6 +2105,65 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const count = surahCount(surah);
   const locked = active;
 
+  // Follow-along (#4): the ayah row for the now-playing bar — the
+  // row must belong to the CURRENT surah (during a journey the
+  // surah state changes before the new surah's text loads, so a
+  // bare ayah_no match could show the previous surah's ayah).
+  // Null while the text loads, for tafsir clips, for riwaya/hadr
+  // surah files, and for Juhani journeys (currentAyah -1 there).
+  const nowPlayingRow =
+    active && riwayaId === null && !hadrOn && journeyItem?.kind !== 'tafsir' && currentAyah >= 1
+      ? ayahs?.find((r) => r.surah_no === surah && r.ayah_no === currentAyah) ?? null
+      : null;
+
+  // Sleep timer (#10): the setter + live countdown + cancel. Always
+  // rendered (not only while playing) so the user can arm it before
+  // starting, and so a timer running after playback stopped stays
+  // visible and cancellable. Emerald/gold only — no new hue.
+  const sleepTimerBlock = (
+    <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
+      <p className="font-semibold text-accent-800 flex items-center gap-2">
+        <Timer className="w-5 h-5 text-emerald-700" />
+        مؤقت النوم
+      </p>
+      {sleepRemainingMs !== null ? (
+        <div>
+          <p className="text-sm text-accent-800 mt-2">
+            سيتوقف التشغيل بعد{' '}
+            <span className="font-bold">{formatSleepRemaining(sleepRemainingMs)}</span>
+          </p>
+          <p className="text-xs text-accent-600 mt-1">
+            يعمل حتى لو انتقلت لصفحة تانية — لكنه لا يعمل بعد إغلاق التطبيق.
+          </p>
+          <button
+            onClick={() => clearSleepTimer()}
+            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+          >
+            إلغاء المؤقت
+          </button>
+        </div>
+      ) : (
+        <div>
+          <p className="text-sm text-accent-600 mt-2">اختار بعد قد إيه يتوقف التشغيل لوحده:</p>
+          <div className="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="مؤقت النوم">
+            {SLEEP_TIMER_OPTIONS.map((m) => (
+              <button
+                key={m}
+                onClick={() => setSleepTimer(m)}
+                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+              >
+                {SLEEP_TIMER_LABELS[m]}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-accent-600 mt-2">
+            مؤقت واحد مشترك لكل أنواع الاستماع؛ لو ظبطت واحد جديد يلغي القديم.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen page-bg pb-24">
       <header className="sticky top-0 z-40 app-header">
@@ -2661,6 +2907,33 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     ? `سورة ${surahName(surah)} — ${RIWAYAT.find((r) => r.id === riwayaId)?.name || ''}`
                     : `سورة ${surahName(surah)} — آية ${currentAyah} من ${count}`}
             </p>
+            {/* Follow-along (#4): the "now playing" bar — the
+                current ayah's text, updating in real time as the
+                engine advances (Hafs single-surah + journeys with
+                a real ayah step). The surah text loads per surah,
+                so the bar appears once the text is in; while it
+                loads, the header line above already shows surah +
+                ayah number. Hidden for tafsir clips (the header
+                shows the tafsir line instead), riwaya/hadr surah
+                files, and Juhani journeys (no ayah steps there).
+                The ayah list below keeps its amber highlight as
+                before; this bar is the always-visible follow-
+                along, even when the list is scrolled away. The
+                same ayah is published to nowPlaying.ts for the
+                Mushaf page to read later. */}
+            {nowPlayingRow && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3" aria-live="polite">
+                <p className="text-xs font-semibold text-amber-700">
+                  الآية الجارية الآن — سورة {surahName(surah)} ﴿{currentAyah}﴾
+                </p>
+                <p
+                  className="mt-1 leading-loose text-accent-800"
+                  style={{ fontFamily: "'Noto Naskh Arabic', serif", fontSize: '1.2rem' }}
+                >
+                  {nowPlayingRow.ayah_text}
+                </p>
+              </div>
+            )}
             {/* Grant attribution, visible WHILE a tafsir clip plays
                 (the section line alone would vanish once playback
                 starts). */}
@@ -2759,6 +3032,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <p className="text-sm text-accent-600 mt-1 text-center">يخفي الواجهة والصوت مستمر</p>
           </div>
         )}
+
+        {/* Sleep timer (#10): always visible (see sleepTimerBlock
+            above) — arm it before starting, or cancel a running
+            timer after playback stopped. */}
+        {sleepTimerBlock}
 
         {/* Read-along text — Hafs only: riwaya mode is
             listening-only (the Hafs text does not match a non-Hafs

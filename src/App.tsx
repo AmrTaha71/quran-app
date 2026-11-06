@@ -31,6 +31,7 @@ import AdhkarPage from './pages/AdhkarPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
+import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardingDone } from './components/Onboarding';
 import OfflineBanner from './components/OfflineBanner';
 import { parseHash } from './lib/shareLinks';
 
@@ -126,6 +127,25 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [authJustSucceeded, setAuthJustSucceeded] = useState(false);
+  // First-run onboarding (2026-11-06, feature #7): shows once, on the
+  // home route, until the user finishes or skips (either sets the
+  // flag). Settings re-opens it via ONBOARDING_REOPEN_EVENT.
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ONBOARDING_DONE_KEY) !== '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    const reopen = () => setShowOnboarding(true);
+    window.addEventListener(ONBOARDING_REOPEN_EVENT, reopen);
+    return () => window.removeEventListener(ONBOARDING_REOPEN_EVENT, reopen);
+  }, []);
+  const closeOnboarding = () => {
+    markOnboardingDone();
+    setShowOnboarding(false);
+  };
   // S1 auth stream: session-expiry notice shown on #/auth, and the
   // password-recovery state. The recovery initializer reads the URL at
   // FIRST render only — supabase clears the token hash asynchronously
@@ -510,6 +530,11 @@ function AppContent() {
       {/* Silent keeper for the adhan push subscription (closed-app
           notifications); renders nothing, never prompts. */}
       <AdhanPushManager />
+      {/* First-run onboarding overlay (home route only; the app works
+          normally behind it once finished or skipped). */}
+      {showOnboarding && route === 'home' && (
+        <Onboarding onDone={closeOnboarding} />
+      )}
     </>
   );
 }

@@ -1,0 +1,103 @@
+/* Elderly mode (وضع كبار السن, approved 2026-11-06).
+   Root-attribute CSS, mirroring the html[data-mushaf-night="1"] pattern
+   in src/index.css. Everything lives under html[data-elderly="1"], so
+   the mode is one attribute flip (see src/lib/elderlyMode.ts) and the
+   base app is untouched when the mode is off.
+   - Text ~2x: the root font-size is raised, and Tailwind's text,
+     spacing and radius utilities are rem-based, so the whole app
+     scales with it — body text, buttons, headings, door and nav
+     labels. Nothing in the mode reads as small text.
+   - High contrast: dark ink on light backgrounds, white text kept on
+     the emerald/gold doors; muted grey small text is darkened.
+   - Tap targets: buttons/links at least ~56px tall.
+   - Palette unchanged: emerald + gold only, no new hues. Layout
+     structure is NOT changed here (no hiding/showing elements — the
+     simplified Home is JSX in HomeStartPage.tsx).
+   - No motion is added by this file. */
+
+/* ~1.9x base: 16px -> 30px. All rem-based Tailwind sizes follow. */
+html[data-elderly="1"] {
+  font-size: 30px;
+}
+
+html[data-elderly="1"] body {
+  /* Body text: rem-based already, but pin a roomier floor + line
+     height so long lines stay readable at the larger size. */
+  font-size: 1.15rem;
+  line-height: 1.9;
+  color: #122019;
+  background-color: #fffdf7;
+}
+
+/* Ayah text (Amiri/Naskh): the clamp is rem-based so it scales with
+   the root, but raise the floor so verses never render small. */
+html[data-elderly="1"] .font-arabic {
+  font-size: clamp(2.4rem, 4vw + 1.6rem, 3.4rem);
+  line-height: 2.1;
+}
+
+/* Headings: explicit floors so section titles stay clearly larger
+   than body text even where a fixed Tailwind size was used. */
+html[data-elderly="1"] h1 { font-size: 1.9rem; line-height: 1.5; }
+html[data-elderly="1"] h2 { font-size: 1.6rem; line-height: 1.5; }
+html[data-elderly="1"] h3 { font-size: 1.4rem; line-height: 1.5; }
+
+/* High contrast: no small grey text anywhere in the mode. Muted
+   greys/slates/stones and the soft accent tones become dark warm ink
+   on light backgrounds. White text on the emerald/gold doors is
+   already high-contrast and is left alone. */
+html[data-elderly="1"] .text-gray-400,
+html[data-elderly="1"] .text-gray-500,
+html[data-elderly="1"] .text-slate-400,
+html[data-elderly="1"] .text-slate-500,
+html[data-elderly="1"] .text-zinc-400,
+html[data-elderly="1"] .text-zinc-500,
+html[data-elderly="1"] .text-neutral-400,
+html[data-elderly="1"] .text-neutral-500,
+html[data-elderly="1"] .text-stone-400,
+html[data-elderly="1"] .text-stone-500,
+html[data-elderly="1"] .text-accent-400,
+html[data-elderly="1"] .text-accent-500,
+html[data-elderly="1"] .text-accent-600 {
+  color: #26332c;
+}
+
+/* Form fields: index.css pins these to 16px (iOS auto-zoom floor);
+   in elderly mode they must read large too. */
+html[data-elderly="1"] input,
+html[data-elderly="1"] textarea,
+html[data-elderly="1"] select,
+html[data-elderly="1"] input.text-sm,
+html[data-elderly="1"] input.text-xs,
+html[data-elderly="1"] textarea.text-sm,
+html[data-elderly="1"] textarea.text-xs,
+html[data-elderly="1"] select.text-sm,
+html[data-elderly="1"] select.text-xs {
+  font-size: 1.1rem;
+}
+
+/* Larger tap targets: every button/link at least ~56px tall with
+   generous padding. The Mushaf page itself is excluded — its chrome
+   (fullscreen/close buttons over the page image) is owned by the
+   Mushaf zoom work, and growing those buttons would cover page text. */
+html[data-elderly="1"] button,
+html[data-elderly="1"] a,
+html[data-elderly="1"] [role="button"] {
+  min-height: 56px;
+}
+html[data-elderly="1"] .mushaf-page-bg button,
+html[data-elderly="1"] .mushaf-page-bg a,
+html[data-elderly="1"] .mushaf-page-bg [role="button"] {
+  min-height: 0;
+}
+
+/* Reduced motion: this file adds no motion; honour the preference
+   by also freezing any inherited transitions/animations in the mode. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-elderly="1"] *,
+  html[data-elderly="1"] *::before,
+  html[data-elderly="1"] *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

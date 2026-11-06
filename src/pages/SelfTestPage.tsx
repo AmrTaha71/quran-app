@@ -26,7 +26,7 @@ import { formatAr, normalizeDigits } from '../lib/numerals';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
-  Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered,
+  Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
@@ -56,6 +56,41 @@ interface TestRecord {
 
 const HISTORY_KEY = 'quran-test-history';
 const TARGET_KEY = 'quran-mushaf-target';
+
+// Feature #9 recents (2026-11-06): every SelfTest start writes one
+// entry here so the Home "Recently" row (built by another agent)
+// can show the test. Contract: JSON array, most recent first,
+// max 6, entry { type: 'test', surah, ayah?, label, ts }.
+// Dedup is by type+surah, per the contract.
+const RECENT_KEY = 'quran-recent-activity-v1';
+interface RecentEntry { type: 'test'; surah: number; ayah?: number; label: string; ts: number }
+function recordRecentTest(entry: { surah: number; ayah?: number; label: string }): void {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    const list: RecentEntry[] = Array.isArray(parsed) ? (parsed as RecentEntry[]) : [];
+    const next: RecentEntry[] = [
+      { type: 'test' as const, surah: entry.surah, ayah: entry.ayah, label: entry.label, ts: Date.now() },
+      ...list.filter((e) => !(e && e.type === 'test' && e.surah === entry.surah)),
+    ].slice(0, 6);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch { /* recents are best-effort: never break a test start */ }
+}
+// Human-readable label for a normal (contiguous) test range.
+function recentLabelForRange(startPt: RangePoint, endPt: RangePoint): string {
+  const startName = SURAHS.find((s) => s.no === startPt.surah)?.name || '';
+  if (startPt.surah === endPt.surah) {
+    return startPt.ayah === endPt.ayah
+      ? `سورة ${startName} — آية ${startPt.ayah}`
+      : `سورة ${startName} — آية ${startPt.ayah} إلى ${endPt.ayah}`;
+  }
+  const endName = SURAHS.find((s) => s.no === endPt.surah)?.name || '';
+  return `من سورة ${startName} آية ${startPt.ayah} إلى سورة ${endName} آية ${endPt.ayah}`;
+}
+// Feature #5 label for a weak-ayahs test.
+function weakTestLabel(count: number): string {
+  return `آياتي الضعيفة (${count.toLocaleString('ar-EG')} آية)`;
+}
 
 // Surah-name search (lobby manual picker, 2026-11-06): normalize
 // both the query and the surah name — strip tashkeel/diacritics,
@@ -163,6 +198,11 @@ interface TestProgress {
   endGlobal?: number;
   endSurah?: number;
   endAyah?: number;
+  // Feature #5: a weak-ayahs test is a NON-contiguous list of verse
+  // ids, not a range. When set, resume rebuilds exactly this list
+  // (see resumeTest) instead of the covering range, so no non-weak
+  // ayah ever sneaks back in.
+  explicitIds?: number[];
 }
 function loadProgress(): TestProgress | null {
   try {
@@ -727,7 +767,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
   // the open door. All setup state lives here; doors only hide/show
   // the existing cards, they never change a setting.
-  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results';
+  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results' | 'weak';
   const [lobbyDoor, setLobbyDoor] = useState<LobbyDoor | null>(null);
   const [surah, setSurah] = useState(2);
   const [from, setFrom] = useState(1);
@@ -815,6 +855,25 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // range door straight onto that choice's detail, then clear the
   // flag so later visits show the four choices as usual.
   useEffect(() => {
+    // Review-due preset (2026-11-06): Home's ReviewDueCard writes
+    // sessionStorage 'quran-test-range-preset' {startGlobal, endGlobal,
+    // label} and sets 'quran-test-range-choice'='juz'. If a preset
+    // exists, consume it (clear both keys) and start that exact global
+    // range immediately — a true one-tap review start — taking
+    // precedence over the choice flag below.
+    try {
+      const raw = sessionStorage.getItem('quran-test-range-preset');
+      if (raw) {
+        const preset = JSON.parse(raw) as { startGlobal: number; endGlobal: number; label?: string };
+        if (typeof preset.startGlobal === 'number' && typeof preset.endGlobal === 'number' && preset.startGlobal >= 1 && preset.endGlobal >= preset.startGlobal) {
+          sessionStorage.removeItem('quran-test-range-preset');
+          sessionStorage.removeItem('quran-test-range-choice');
+          void startTestGlobal(preset.startGlobal, preset.endGlobal, null, undefined, null, { recentLabel: preset.label });
+          return;
+        }
+        sessionStorage.removeItem('quran-test-range-preset');
+      }
+    } catch { /* ignore — fall through to the choice flag */ }
     try {
       const flag = sessionStorage.getItem('quran-test-range-choice');
       if (flag === 'surah' || flag === 'juz' || flag === 'page' || flag === 'passage') {
@@ -831,6 +890,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // stale render closure. Set alongside setAyahs, never in a deps
   // array (TDZ rule: refs are read at call time, not render time).
   const ayahsRef = useRef<TestAyah[]>([]);
+  // Feature #5: verse ids of the current test when it is a
+  // weak-ayahs (explicit-list) test; null for ordinary range tests.
+  // makeProgress copies it into the saved record so resume can
+  // rebuild the same list (see resumeTest).
+  const explicitAyahIdsRef = useRef<number[] | null>(null);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [grades, setGrades] = useState<boolean[]>([]);
@@ -841,6 +905,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // offline (an online cache hit is just fast, silent).
   const [textOfflineNotice, setTextOfflineNotice] = useState(false);
   const [history, setHistory] = useState<TestRecord[]>(loadHistory);
+  // Feature #5 — weak ayahs ("سمّعني آياتي الضعيفة"): the user's
+  // own 'difficult' + 'read_later' toggles from the user_lists table
+  // (see loadWeakAyahs below), resolved to verse rows. null = not
+  // loaded yet in this visit; [] = loaded, none marked.
+  const [weakAyahs, setWeakAyahs] = useState<TestAyah[] | null>(null);
+  const [weakLoading, setWeakLoading] = useState(false);
+  const [weakError, setWeakError] = useState('');
+  // Feature #5: per-surah counts for the weak-door summary line.
+  const weakBySurah = useMemo(() => {
+    const m = new Map<number, number>();
+    (weakAyahs || []).forEach((a) => m.set(a.surah_no, (m.get(a.surah_no) || 0) + 1));
+    return [...m.entries()].sort((x, y) => x[0] - y[0]);
+  }, [weakAyahs]);
 
   // Mic flow state (per ayah; reset on every ayah change).
   const [micSupported] = useState(() => {
@@ -1924,12 +2001,79 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const makeProgress = (index0: number, grades0: boolean[], skipped0: boolean[]): TestProgress => {
     const s = rangeStart || globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + from - 1);
     const e = rangeEnd || globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + to - 1);
-    return { surah: s.surah, from: s.ayah, to: e.ayah, index: index0, grades: grades0, skipped: skipped0, startGlobal: s.global, endGlobal: e.global, endSurah: e.surah, endAyah: e.ayah };
+    return { surah: s.surah, from: s.ayah, to: e.ayah, index: index0, grades: grades0, skipped: skipped0, startGlobal: s.global, endGlobal: e.global, endSurah: e.surah, endAyah: e.ayah, explicitIds: explicitAyahIdsRef.current ?? undefined };
+  };
+
+  // Feature #5 — weak ayahs: the source is the user's OWN toggles,
+  // the same user_lists rows the Mushaf/lists UI writes (see
+  // src/components/UserLists.tsx): list_type 'difficult' ("صعبة")
+  // and 'read_later' ("ارجع لها بعدين"). No new store, no new
+  // table — verse_id is the seeded quran_verses id, so the rows
+  // below resolve straight to testable ayahs. A signed-out user
+  // has no lists: that is the empty state, not an error.
+  const loadWeakAyahs = async (): Promise<TestAyah[]> => {
+    if (weakAyahs !== null) return weakAyahs;
+    setWeakLoading(true);
+    setWeakError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setWeakAyahs([]); return []; }
+      const { data: rows, error: listErr } = await supabase
+        .from('user_lists')
+        .select('verse_id')
+        .eq('user_id', session.user.id)
+        .in('list_type', ['difficult', 'read_later']);
+      if (listErr) throw listErr;
+      const ids = [...new Set((rows || []).map((r) => r.verse_id).filter((v): v is number => typeof v === 'number'))].sort((a, b) => a - b);
+      if (ids.length === 0) { setWeakAyahs([]); return []; }
+      const verses = await fetchAyahsByIds(ids);
+      setWeakAyahs(verses);
+      return verses;
+    } catch {
+      setWeakError('تعذر تحميل آياتك الضعيفة — تأكد من الاتصال وحاول تاني');
+      return [];
+    } finally {
+      setWeakLoading(false);
+    }
+  };
+
+  // Feature #5 helper: fetch verse rows for an explicit id list
+  // (weak test + its resume). Network first; the offline text cache
+  // covers the same ids when the range was opened before.
+  const fetchAyahsByIds = async (ids: number[]): Promise<TestAyah[]> => {
+    const sorted = [...ids].sort((a, b) => a - b);
+    try {
+      const { data, error } = await supabase
+        .from('quran_verses')
+        .select('id, surah_no, ayah_no, ayah_text')
+        .in('id', sorted)
+        .order('id', { ascending: true });
+      if (!error && data && data.length > 0) return data as TestAyah[];
+    } catch { /* fall through to the cache */ }
+    try {
+      const cached = await getQuranTextCache().getRange(sorted[0], sorted[sorted.length - 1]);
+      if (cached) {
+        const wanted = new Set(sorted);
+        return (cached as TestAyah[]).filter((r) => wanted.has(r.id)).sort((a, b) => a.id - b.id);
+      }
+    } catch { /* no cache fallback */ }
+    return [];
+  };
+
+  // Feature #5: one tap starts the existing test session on the
+  // weak ayahs, in surah order, with the saved default settings
+  // (no per-test override UI on this door). Grading, corrections,
+  // Juhani, caps and settings keys are untouched — startTestGlobal
+  // receives the list via opts.explicitAyahs.
+  const startWeakTest = async () => {
+    const list = weakAyahs && weakAyahs.length > 0 ? weakAyahs : await loadWeakAyahs();
+    if (!list || list.length === 0) return;
+    await startTestGlobal(list[0].id, list[list.length - 1].id, null, undefined, null, { explicitAyahs: list, recentLabel: weakTestLabel(list.length) });
   };
 
   // Global-range test (unit mode + resume): verse ids are sequential
   // 1..6236 in surah order, so id range = global ayah range.
-  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null) => {
+  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null, opts?: { explicitAyahs?: TestAyah[]; recentLabel?: string }) => {
     // D1: a new test starts with a clean honesty state (a previous
     // no-match panel must never leak into the next run's done screen).
     setContZeroMatch(false);
@@ -1982,27 +2126,42 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setTextOfflineNotice(false);
     setLoading(true);
     try {
-      // Phase 1 text cache: a cached range serves with zero network
-      // calls (fast, and working offline). Rows are static, so a
-      // cache hit is identical to the network result; any cache
-      // failure degrades to the network path below, unchanged.
+      // Feature #5: an explicit ayah list (weak-ayahs test) replaces
+      // the contiguous range fetch — the list may span surahs with
+      // gaps, so no covering range is ever built (it would drag in
+      // ayahs the user never marked weak). Everything downstream
+      // reads the same `data` array, so grading, corrections and
+      // both recitation modes run unchanged.
       let data: TestAyah[] | null = null;
       let servedFromCache = false;
-      const cachedRange = await getQuranTextCache().getRange(lo, hi);
-      if (cachedRange) {
-        data = cachedRange as TestAyah[];
-        servedFromCache = true;
+      const explicitAyahs = opts?.explicitAyahs && opts.explicitAyahs.length > 0
+        ? [...opts.explicitAyahs].sort((a, b) => a.id - b.id)
+        : null;
+      if (explicitAyahs) {
+        data = explicitAyahs;
+        explicitAyahIdsRef.current = explicitAyahs.map((a) => a.id);
       } else {
-        const { data: netData, error: qErr } = await supabase
-          .from('quran_verses')
-          .select('id, surah_no, ayah_no, ayah_text')
-          .gte('id', lo)
-          .lte('id', hi)
-          .order('id', { ascending: true });
-        if (qErr) throw qErr;
-        if (netData) {
-          data = netData as TestAyah[];
-          void getQuranTextCache().putRows(netData);
+        explicitAyahIdsRef.current = null;
+        // Phase 1 text cache: a cached range serves with zero network
+        // calls (fast, and working offline). Rows are static, so a
+        // cache hit is identical to the network result; any cache
+        // failure degrades to the network path below, unchanged.
+        const cachedRange = await getQuranTextCache().getRange(lo, hi);
+        if (cachedRange) {
+          data = cachedRange as TestAyah[];
+          servedFromCache = true;
+        } else {
+          const { data: netData, error: qErr } = await supabase
+            .from('quran_verses')
+            .select('id, surah_no, ayah_no, ayah_text')
+            .gte('id', lo)
+            .lte('id', hi)
+            .order('id', { ascending: true });
+          if (qErr) throw qErr;
+          if (netData) {
+            data = netData as TestAyah[];
+            void getQuranTextCache().putRows(netData);
+          }
         }
       }
       if (!data || data.length === 0) {
@@ -2017,6 +2176,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setRangeEnd(endPt);
       setAyahs(data as TestAyah[]);
       ayahsRef.current = data as TestAyah[];
+      // Feature #9: record the test start for the Home "Recently"
+      // row (contract key quran-recent-activity-v1). Best-effort
+      // and fire-and-forget — a storage failure never blocks the
+      // test — and it runs for fresh starts and resumes alike.
+      recordRecentTest({
+        surah: startPt.surah,
+        ayah: startPt.ayah,
+        label: opts?.recentLabel ?? recentLabelForRange(startPt, endPt),
+      });
       // Continuous mode: one listening session over the whole range.
       // No per-ayah progress is saved (a continuous test resumes as
       // a fresh recitation, not mid-stream).
@@ -2122,6 +2290,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const resumeTest = () => {
     const p = savedProgress;
     if (!p) return;
+    // Feature #5: a saved weak-ayahs test resumes as the SAME
+    // explicit list — resuming its covering range would silently
+    // add ayahs the user never marked weak.
+    if (p.explicitIds && p.explicitIds.length > 0) {
+      void (async () => {
+        const rows = await fetchAyahsByIds(p.explicitIds as number[]);
+        if (!rows || rows.length === 0) {
+          setError('تعذر تحميل آياتك الضعيفة — تأكد من الاتصال وحاول تاني');
+          return;
+        }
+        const ids = rows.map((r) => r.id);
+        await startTestGlobal(ids[0], ids[ids.length - 1], { index: p.index, grades: p.grades, skipped: p.skipped }, 'ayah', null, { explicitAyahs: rows, recentLabel: weakTestLabel(rows.length) });
+      })();
+      return;
+    }
     // Resume is always ayah-by-ayah (continuous tests save no
     // mid-stream progress), without touching the saved preference.
     if (typeof p.startGlobal === 'number' && typeof p.endGlobal === 'number') {
@@ -4783,6 +4966,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
+      {/* Feature #3 — reward glow: a soft gold pulse for a correctly
+          recited ayah. Gold family only (amber-600 tones, no new
+          hue), box-shadow only, two slow pulses then still — calm
+          and dignified, never blocking the next ayah. The chime is
+          the page's existing playCorrectChime (already fired on
+          every true grade); no new audio is added. Reduced-motion
+          users get a still soft glow instead of the pulse. */}
+      <style>{`@keyframes reward-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(217, 119, 6, 0), 0 0 16px rgba(217, 119, 6, 0.15); } 50% { box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.22), 0 0 28px rgba(217, 119, 6, 0.35); } } .reward-glow { animation: reward-glow 1.8s ease-in-out 2; } @media (prefers-reduced-motion: reduce) { .reward-glow { animation: none; box-shadow: 0 0 16px rgba(217, 119, 6, 0.2); } }`}</style>
       <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
@@ -4816,7 +5007,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="bg-amber-50 border border-hairline-amber rounded-2xl shadow-sm p-5">
                 <p className="font-bold text-accent-800 mb-1">عندك اختبار غير مكتمل</p>
                 <p className="text-sm text-accent-600 mb-3">
-                  {savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah
+                  {savedProgress.explicitIds && savedProgress.explicitIds.length > 0
+                    ? <>آياتك الضعيفة ({savedProgress.explicitIds.length.toLocaleString('ar-EG')} آية)</>
+                    : savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah
                     ? <>من سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} آية {savedProgress.from.toLocaleString('ar-EG')} إلى سورة {SURAHS.find((s) => s.no === savedProgress.endSurah)?.name || ''} آية {(savedProgress.endAyah || savedProgress.to).toLocaleString('ar-EG')}</>
                     : <>سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} — من آية {savedProgress.from.toLocaleString('ar-EG')} إلى آية {savedProgress.to.toLocaleString('ar-EG')}</>}
                   ، واقف عند الآية رقم {savedProgress.index + 1}
@@ -4863,6 +5056,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </span>
                     <span className="block text-base font-semibold text-ink">فحص الميكروفون</span>
                     <span className="block text-xs text-ink-2 mt-1">تأكد إن الميكروفون شغال وسامعك قبل ما تبدأ</span>
+                  </button>
+                  {/* Feature #5: one-tap door to a test on the ayahs
+                      the user marked weak ("صعبة" / "ارجع لها بعدين").
+                      Opens the weak door (count + start), never a
+                      bare range — the list loads when the door opens. */}
+                  <button onClick={() => { setLobbyDoor('weak'); void loadWeakAyahs(); }}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <AlertTriangle className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">سمّعني آياتي الضعيفة</span>
+                    <span className="block text-xs text-ink-2 mt-1">الآيات اللي علّمتها «صعبة» أو «ارجع لها بعدين»</span>
                   </button>
                   {history.length > 0 && (
                     <button onClick={() => setLobbyDoor('results')}
@@ -5277,6 +5482,51 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
               </>
             )}
+            {/* Feature #5 — weak-ayahs door: one tap starts the
+                existing test session on exactly the marked ayahs
+                (surah order, any surahs). Empty state is kind, never
+                an error: no weak ayahs yet means he is doing well. */}
+            {lobbyDoor === 'weak' && (
+              <>
+                <button onClick={() => setLobbyDoor(null)} className="w-full py-3 glass-card rounded-xl text-base font-semibold text-accent-700">
+                  ← عودة إلى التسميع
+                </button>
+                <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
+                  <h2 className="font-semibold text-accent-800">سمّعني آياتي الضعيفة</h2>
+                  {weakLoading ? (
+                    <p className="text-sm text-accent-600">جارٍ تحميل آياتك الضعيفة…</p>
+                  ) : weakError ? (
+                    <p className="text-sm text-red-600 font-semibold">{weakError}</p>
+                  ) : !weakAyahs || weakAyahs.length === 0 ? (
+                    <div className="text-center py-2">
+                      <p className="text-lg font-bold text-emerald-700">لسه مفيش آيات ضعيفة — أحسنت!</p>
+                      <p className="text-sm text-accent-600 mt-2 leading-relaxed">
+                        لما تعلّم آية بأنها «صعبة» أو «ارجع لها بعدين» من المصحف أو من قوائمك، هتلاقيها هنا وتقدر تسمّعها لوحدها.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-accent-700 leading-relaxed">
+                        عندك {weakAyahs.length.toLocaleString('ar-EG')} آية ضعيفة في {weakBySurah.length.toLocaleString('ar-EG')} {weakBySurah.length === 1 ? 'سورة' : 'سور'} — هتسمّعهم ورا بعض بالترتيب:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {weakBySurah.map(([sNo, count]) => (
+                          <span key={sNo} className="px-3 py-1.5 bg-amber-50 border border-hairline-amber rounded-xl text-sm font-semibold text-amber-800">
+                            سورة {SURAHS.find((s) => s.no === sNo)?.name || ''} ({count.toLocaleString('ar-EG')})
+                          </span>
+                        ))}
+                      </div>
+                      {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                      <button onClick={() => void startWeakTest()} disabled={loading}
+                        className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
+                        {loading ? 'جارٍ تحميل الآيات…' : `ابدأ تسميع الآيات الضعيفة (${weakAyahs.length.toLocaleString('ar-EG')} آية)`}
+                      </button>
+                      <p className="text-xs text-accent-600 leading-relaxed">التسميع بنفس إعداداتك المحفوظة — ولو وقفت في النص، تقدر تكمل من مكانك بعدين.</p>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -5407,7 +5657,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="h-full bg-emerald-500 transition-all" style={{ width: `${((index + (currentDone ? 1 : 0)) / ayahs.length) * 100}%` }} />
             </div>
 
-            <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-6 text-center">
+            {/* Feature #3: the graded ayah's card glows gold only
+                when the ayah was recited correctly (micState
+                'done-correct' is set solely by the gradeMic(true)
+                path) — never on a wrong ayah, never on idle. */}
+            <div className={`bg-white rounded-2xl border shadow-sm p-6 text-center ${micState === 'done-correct' ? 'reward-glow border-amber-300' : 'border-hairline-emerald'}`}>
               {/* Fallback: no live engine, or the user chose manual for
                   this ayah — the exact v1 reveal + self-grade flow. */}
               {(!micSupported || manualMode) ? (
@@ -5666,8 +5920,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-xs text-accent-500 mt-2">{stampLine}</p>
               </div>
             )}
+            {/* Feature #3: the same gold reward on the done screen
+                when every attempted ayah was correct — the chime for
+                this case already plays in finishContinuousPressed /
+                the range-complete path; the glow never fires on a
+                partial or failed score. */}
             {!contZeroMatch && (
-            <div className="bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-6 shadow-lg text-white text-center">
+            <div className={`bg-gradient-to-l from-emerald-600 to-teal-700 rounded-2xl p-6 shadow-lg text-white text-center ${attempted > 0 && correct === attempted ? 'reward-glow' : ''}`}>
               <Award className="w-12 h-12 mx-auto mb-2 text-amber-200" />
               <p className="text-2xl font-bold">نتيجتك: {correct} من {attempted} ({pct}٪)</p>
               <p className="text-emerald-50 mt-2 leading-relaxed">

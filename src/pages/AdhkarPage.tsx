@@ -22,7 +22,17 @@
 // in the description.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle, Timer } from 'lucide-react';
+import {
+  setSleepTimer,
+  clearSleepTimer,
+  getSleepTimerRemainingMs,
+  subscribeSleepTimer,
+  registerSleepStopHandler,
+  unregisterSleepStopHandler,
+  SLEEP_TIMER_OPTIONS,
+} from '../lib/sleepTimer';
+import type { SleepTimerMinutes } from '../lib/sleepTimer';
 import { acquireAudio, currentAudioOwner, releaseAudio, registerResume, unregisterResume, clearResumeStack, hasWaitingResumes } from '../lib/sharedAudio';
 import {
   clearInterruptionMarker,
@@ -112,6 +122,70 @@ function preview(text: string, max = 64): string {
   return text.length > max ? text.slice(0, max).trimEnd() + '…' : text;
 }
 
+// Recents recording (#9) — "سمعت / سمّعت مؤخرًا" on Home: when an
+// adhkar listening session starts, write one entry to localStorage
+// 'quran-recent-activity-v1' — a JSON array, most recent first, max
+// 6, entry { type: 'adhkar', surah: 0, label, ts }. Same type+label
+// dedups (the old entry is dropped, the new one goes first).
+// try/catch everywhere: recording must never break playback.
+const RECENT_ACTIVITY_KEY = 'quran-recent-activity-v1';
+type RecentActivityEntry = {
+  type: 'adhkar';
+  surah: number;
+  label: string;
+  ts: number;
+};
+function recordRecentAdhkar(wird: AdhkarWird): void {
+  try {
+    let arr: RecentActivityEntry[] = [];
+    try {
+      const raw = localStorage.getItem(RECENT_ACTIVITY_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        arr = parsed.filter(
+          (e): e is RecentActivityEntry =>
+            typeof e === 'object' &&
+            e !== null &&
+            typeof (e as RecentActivityEntry).type === 'string' &&
+            typeof (e as RecentActivityEntry).surah === 'number' &&
+            typeof (e as RecentActivityEntry).label === 'string' &&
+            typeof (e as RecentActivityEntry).ts === 'number',
+        );
+      }
+    } catch {
+      arr = [];
+    }
+    const label = wird === 'morning' ? 'أذكار الصباح' : 'أذكار المساء';
+    arr = arr.filter((e) => !(e.type === 'adhkar' && e.label === label));
+    const entry: RecentActivityEntry = { type: 'adhkar', surah: 0, label, ts: Date.now() };
+    arr.unshift(entry);
+    localStorage.setItem(RECENT_ACTIVITY_KEY, JSON.stringify(arr.slice(0, 6)));
+  } catch {
+    // ignore: recording must never break playback.
+  }
+}
+
+// Arabic-Indic digits for the sleep countdown (the app's numbers
+// rule): 05:30 reads ٠٥:٣٠.
+const ARABIC_INDIC_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+function formatSleepRemaining(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const toIndic = (n: number): string =>
+    String(n)
+      .padStart(2, '0')
+      .replace(/\d/g, (d) => ARABIC_INDIC_DIGITS[Number(d)]);
+  return `${toIndic(minutes)}:${toIndic(seconds)}`;
+}
+
+// Sleep-timer chip labels, by duration (minutes).
+const SLEEP_TIMER_LABELS: Record<SleepTimerMinutes, string> = {
+  30: 'بعد نصف ساعة',
+  60: 'بعد ساعة',
+  120: 'بعد ساعتين',
+};
+
 // The reciter for KURSI (the only adhkar item still using per-ayah
 // files): the user's listen preference ('quran-reciter'), default
 // المنشاوي. Read once at mount; a change in Settings takes effect
@@ -170,6 +244,11 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ t: 0, d: 0 });
   const [seg, setSeg] = useState(0);
+  // Sleep timer (#10): remaining ms, synced from the shared lib
+  // (its 1s tick re-renders the countdown). Null = no timer.
+  const [sleepRemainingMs, setSleepRemainingMs] = useState<number | null>(() =>
+    getSleepTimerRemainingMs(),
+  );
 
   // Black screen (same pattern as ListenPage): a black overlay that
   // never touches audio, exited by long-press (>=1000ms) or swipe
@@ -430,6 +509,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   const play = useCallback(() => {
     setError(null);
     setCompleted(false);
+    recordRecentAdhkar(wird);
     const el = ensureElement();
     loadClip(clip, voice, el);
     setMediaSession(clip, wird, true);
@@ -447,6 +527,32 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
     setMediaSession(clip, wird, false);
   }, [clip, wird, setMediaSession]);
 
+  // Sleep timer (#10): this page's stop handler — a clean pause of
+  // the shared adhkar element (no fade-out: the engine doesn't
+  // support fading). Registered on mount, unregistered on unmount.
+  // The countdown subscription keeps the UI live on the lib's 1s
+  // tick; the timer itself lives in the lib, outside any component,
+  // so it keeps running across page navigation; a full app reload
+  // resets it (module state), and the UI then shows "not running"
+  // automatically. Never touches adhan audio.
+  useEffect(() => {
+    registerSleepStopHandler('adhkar', () => pause());
+    return () => {
+      unregisterSleepStopHandler('adhkar');
+    };
+  }, [pause]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeSleepTimer(() => {
+      try {
+        setSleepRemainingMs(getSleepTimerRemainingMs());
+      } catch {
+        // ignore: a failed read must never break the page.
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   // Resume from a captured position (preempted or hidden):
   // reload the captured segment, seek to the captured time,
   // play. Used by the show effect and the anywhere-resume
@@ -459,6 +565,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
       if (!target) return;
       setCompleted(false);
       setError(null);
+      recordRecentAdhkar(s.wird);
       setPos({ index: cap.index, rep: cap.rep });
       setSeg(cap.seg);
       savePosition(s.wird, cap.index, cap.rep);
@@ -594,6 +701,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
     setSeg(0);
     savePosition(wird, target, 1);
     if (autoplay) {
+      recordRecentAdhkar(wird);
       const el = ensureElement();
       loadClip(list[target], voice, el);
       setMediaSession(list[target], wird, true);
@@ -660,6 +768,54 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
 
   const pct = progress.d > 0 ? Math.min(100, (progress.t / progress.d) * 100) : 0;
 
+  // Sleep timer (#10): always visible (not only while playing) so
+  // the user can arm it before starting, and so a timer running
+  // after playback stopped stays visible and cancellable.
+  // Emerald/gold only — no new hue.
+  const sleepTimerBlock = (
+    <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mt-4">
+      <p className="font-semibold text-accent-800 flex items-center gap-2">
+        <Timer className="w-5 h-5 text-emerald-700" />
+        مؤقت النوم
+      </p>
+      {sleepRemainingMs !== null ? (
+        <div>
+          <p className="text-sm text-accent-800 mt-2">
+            سيتوقف التشغيل بعد{' '}
+            <span className="font-bold">{formatSleepRemaining(sleepRemainingMs)}</span>
+          </p>
+          <p className="text-xs text-accent-600 mt-1">
+            يعمل حتى لو انتقلت لصفحة تانية — لكنه لا يعمل بعد إغلاق التطبيق.
+          </p>
+          <button
+            onClick={() => clearSleepTimer()}
+            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+          >
+            إلغاء المؤقت
+          </button>
+        </div>
+      ) : (
+        <div>
+          <p className="text-sm text-accent-600 mt-2">اختار بعد قد إيه يتوقف التشغيل لوحده:</p>
+          <div className="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="مؤقت النوم">
+            {SLEEP_TIMER_OPTIONS.map((m) => (
+              <button
+                key={m}
+                onClick={() => setSleepTimer(m)}
+                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+              >
+                {SLEEP_TIMER_LABELS[m]}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-accent-600 mt-2">
+            مؤقت واحد مشترك لكل أنواع الاستماع؛ لو ظبطت واحد جديد يلغي القديم.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <main className="min-h-screen page-bg pb-24 px-4 pt-6" dir="rtl">
       <div className="max-w-2xl mx-auto">
@@ -706,6 +862,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         </div>
 
         {/* Now playing */}
+        {sleepTimerBlock}
         <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mt-4 polish-listen-card sticky top-0 z-30">
           {completed ? (
             <div className="text-center">

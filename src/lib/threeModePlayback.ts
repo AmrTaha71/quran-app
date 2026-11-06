@@ -87,6 +87,7 @@ import type {
   ThreeModePosition,
 } from './threeModeListen';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
+import { registerSleepStopHandler, unregisterSleepStopHandler } from './sleepTimer';
 
 const ERROR_MESSAGE = 'تعذرت التلاوة — تحقق من الاتصال وحاول تاني';
 
@@ -588,6 +589,9 @@ export class JourneyEngine {
     } catch {
       // Guarded: no document (node) or listener failure is fine.
     }
+    // Sleep timer (#10): pause this journey when the shared timer
+    // fires (clean pause — no fade support in the engines).
+    registerSleepStopHandler('listen-journey', () => this.pause());
   }
 
   get currentItem(): JourneyPlayable | null {
@@ -697,6 +701,9 @@ export class JourneyEngine {
   destroy(): void {
     if (this.destroyed) return;
     this.persistPosition();
+    // Sleep timer (#10): unregister (see the register call in the
+    // constructor; the page's 'listen-ui' handler covers UI sync).
+    unregisterSleepStopHandler('listen-journey');
     const holdsBefore = this.holdsAudio;
     const wasPlaying = this.playingFlag;
     this.destroyed = true;

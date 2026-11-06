@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
@@ -25,7 +25,9 @@ import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
+import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
+import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
 
@@ -61,6 +63,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
   });
   const [mushafNight, setMushafNightState] = useState(isMushafNight);
+  const [elderlyMode, setElderlyModeState] = useState(isElderlyMode);
   // Tap sound (visual batch 2026-11-04): soft click on nav + Home
   // presses, default ON. pressFeedback reads this key live, so the
   // toggle takes effect immediately with no cross-page state.
@@ -445,6 +448,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setMushafNight(next);
     saved();
   };
+  const toggleElderly = () => {
+    const next = !elderlyMode;
+    setElderlyModeState(next);
+    setElderlyMode(next);
+    saved();
+  };
   const toggleTapSound = () => {
     const next = !tapSound;
     setTapSound(next);
@@ -562,6 +571,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير والجهني دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -844,6 +854,16 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </span>
             <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${mushafNight ? 'bg-amber-500' : 'bg-gray-300'}`}>
               <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${mushafNight ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
+            </span>
+          </button>
+          <button onClick={toggleElderly}
+            className={`mt-3 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${elderlyMode ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
+            <span className="text-right">
+              <span className="block font-medium text-accent-800">وضع كبار السن</span>
+              <span className="block text-sm text-accent-600">خط أكبر وتباين أعلى وصفحة رئيسية مبسطة</span>
+            </span>
+            <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${elderlyMode ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${elderlyMode ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
             </span>
           </button>
         </section>
@@ -1201,6 +1221,29 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             ))}
           </div>
+        </section>
+            </>)}
+            {openDoor === 'onboarding' && (<>
+        {/* Re-play the first-run onboarding (2026-11-06, feature #7):
+            clears the done flag, tells App to open the overlay, and
+            navigates home where the overlay mounts. */}
+        <section id="sec-onboarding" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
+            <Compass className="w-5 h-5 text-emerald-600" /> جولة تعريفية
+          </h2>
+          <p className="text-sm text-accent-600 mb-4 leading-relaxed">
+            جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسمّع لنفسك، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
+          </p>
+          <button
+            onClick={() => {
+              clearOnboardingDone();
+              window.dispatchEvent(new Event(ONBOARDING_REOPEN_EVENT));
+              onNavigate('home');
+            }}
+            onPointerDown={pressFeedback}
+            className="btn-3d w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl transition-smooth">
+            إعادة الجولة التعريفية
+          </button>
         </section>
             </>)}
             {openDoor === 'pass' && (<>

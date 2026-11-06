@@ -13,6 +13,16 @@ import './alive-shades.css';
 import './alive-3d.css';
 import './alive-ripple.css';
 import './alive-transitions.css';
+// Elderly mode (2026-11-06): imported LAST so it wins the cascade —
+// its ~2x text / high-contrast / large-target rules must beat every
+// stylesheet above, including the alive files.
+import './elderly.css';
+import { applyElderlyMode } from './lib/elderlyMode';
+
+// Restore the saved elderly mode on launch (no extra tap after a
+// reload): applyElderlyMode() reads localStorage and sets
+// <html data-elderly="1"> when the mode was on.
+applyElderlyMode();
 
 // Offline support + automatic updates: the service worker
 // (public/sw.js) runtime-caches the app shell and the Mushaf pages

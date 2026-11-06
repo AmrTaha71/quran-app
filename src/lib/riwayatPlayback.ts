@@ -30,6 +30,7 @@ import { RIWAYAT, writeRiwayaResume } from './riwayat';
 import type { RiwayaPosition } from './riwayat';
 import { SURAHS } from './surahs';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
+import { registerSleepStopHandler, unregisterSleepStopHandler } from './sleepTimer';
 
 const ERROR_MESSAGE = 'تعذرت التلاوة — تحقق من الاتصال وحاول تاني';
 
@@ -267,6 +268,10 @@ export class RiwayaEngine {
     }
     // NOTE: no Media Session setup here on purpose — same reason
     // as ListenEngine: only touch it after acquiring ownership.
+    // Sleep timer (#10): pause this surah file when the shared
+    // timer fires (clean pause — no fade support in the engines).
+    // Covers riwaya AND hadr (both run through this engine).
+    registerSleepStopHandler('listen-riwaya', () => this.pause());
   }
 
   get current(): { riwaya: string; surah: number } {
@@ -367,6 +372,9 @@ export class RiwayaEngine {
     // Persist first: destroy() is a stop path for riwaya mode,
     // and the resume position is the feature.
     this.persistPosition();
+    // Sleep timer (#10): unregister (see the register call in the
+    // constructor; the page's 'listen-ui' handler covers UI sync).
+    unregisterSleepStopHandler('listen-riwaya');
     const holdsBefore = this.holdsAudio;
     const wasPlaying = this.playingFlag;
     this.destroyed = true;

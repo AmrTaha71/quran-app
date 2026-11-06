@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin } from 'lucide-react';
+import { BookOpen, Mic, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
+import MemorizationMap from '../components/MemorizationMap';
+import ReviewDueCard from '../components/ReviewDueCard';
+import RecentlyRow from '../components/RecentlyRow';
+import { useUserLists } from '../components/UserLists';
+import { memorizedFromStart } from '../lib/homeFeatures';
 import { pressFeedback } from '../lib/pressFeedback';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
@@ -12,6 +17,7 @@ import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getJuzFromPage } from '../lib/quranIndex';
 import { JUZ_STARTS } from '../lib/quranBoundaries';
 import { normalizeDigits, toArabicIndic } from '../lib/numerals';
+import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar';
 
@@ -99,6 +105,10 @@ export default function HomeStartPage({ session, onNavigate }: {
   onNavigate: (r: Route) => void;
 }) {
   const nameKey = `quran-pref-name:${session?.user?.id ?? ''}`;
+  // Elderly mode: a simplified Home (3 big buttons + a way back).
+  // When on, the component returns the simplified view below instead
+  // of the normal Home — the normal return is untouched.
+  const elderly = useElderlyMode();
   const [preferredName, setPreferredName] = useState<string | null>(() => {
     try { return sessionStorage.getItem(nameKey); } catch { return null; }
   });
@@ -124,6 +134,15 @@ export default function HomeStartPage({ session, onNavigate }: {
     try { return readListeningWird(); } catch { return null; }
   });
   const juz = getJuzFromPage(lastPage.page);
+  // Memorized state — the SAME source Lawhati reads (user_lists
+  // 'memorized' via useUserLists), reduced to the contiguous
+  // from-start run by the shared helper. The map and the review
+  // card below both read this run; nothing here is hardcoded.
+  const { lists } = useUserLists();
+  const memorizedRun = memorizedFromStart(lists.memorized);
+  // خريطة حفظي door: expands to the 30-Juz map below it; collapsed
+  // by default — same pattern as the الحفظ / سمّع لنفسك doors.
+  const [mapOpen, setMapOpen] = useState(false);
   // الحفظ door: expands to 3 start choices (resume / pick a place / from
   // the beginning). Collapsed by default — the door looks exactly like
   // the other Home doors.
@@ -208,6 +227,58 @@ export default function HomeStartPage({ session, onNavigate }: {
     loadName();
   }, [session]);
 
+  // Elderly mode — SIMPLIFIED HOME: only 3 big doors + a large,
+  // obvious way back to normal mode. No header, greeting, Hifz door,
+  // Adhkar, QR card, تربيط اليوم, Settings door, footer or BottomNav.
+  // The 3 doors navigate exactly like the normal Home doors.
+  if (elderly) {
+    return (
+      <div className="min-h-screen page-bg pb-24 route-in">
+        <main className="max-w-5xl mx-auto px-4 py-8">
+          <div className="flex flex-col gap-6">
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => onNavigate('listen')}
+              className="w-full min-h-[80px] py-5 grad-emerald-door glass-door-highlight text-white font-bold rounded-2xl flex items-center justify-center gap-3 text-2xl polish-press polish-press-depth polish-focus"
+            >
+              <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
+                <Headphones className="w-7 h-7 text-white" />
+              </span>
+              استمع
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => onNavigate('mushaf')}
+              className="w-full min-h-[80px] py-5 grad-emerald-door glass-door-highlight text-white font-bold rounded-2xl flex items-center justify-center gap-3 text-2xl polish-press polish-press-depth polish-focus"
+            >
+              <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
+                <BookOpen className="w-7 h-7 text-white" />
+              </span>
+              المصحف
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => onNavigate('test')}
+              className="w-full min-h-[80px] py-5 grad-emerald-door glass-door-highlight text-white font-bold rounded-2xl flex items-center justify-center gap-3 text-2xl polish-press polish-press-depth polish-focus"
+            >
+              <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
+                <Mic className="w-7 h-7 text-white" />
+              </span>
+              سمّع لنفسك
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => setElderlyMode(false)}
+              className="w-full min-h-[80px] py-5 bg-white text-ink font-bold rounded-2xl border-2 border-emerald-800 flex items-center justify-center gap-3 text-2xl polish-press polish-press-depth polish-focus"
+            >
+              الوضع العادي
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <header className="sticky top-0 z-40 app-header">
@@ -233,6 +304,15 @@ export default function HomeStartPage({ session, onNavigate }: {
             {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
           </p>
         </div>
+
+        {/* المراجعة المستحقة النهاردة (feature #8): today's review,
+            straight from the wird — first thing after the greeting,
+            so the day's action is seen without scrolling. */}
+        <ReviewDueCard
+          run={memorizedRun}
+          onNavigate={onNavigate}
+          onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
+        />
 
         {/* الحفظ: a uniform door like the others (سمّع لنفسك / الحق الإمام /
             استمع للقرآن). Tap to expand 3 start choices below it; tap
@@ -362,6 +442,34 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
+        {/* خريطة حفظي (feature #1): an emerald door like the others,
+            right after الحفظ — it is about memorization. Tap to expand
+            the 30-Juz map (gold = memorized, amber tint = in progress,
+            grey = not yet); tapping a Juz jumps to it in the Mushaf.
+            No BottomNav tab. */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => setMapOpen(!mapOpen)}
+          aria-expanded={mapOpen}
+          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
+          style={{ animationDelay: '90ms' }}
+        >
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+            <Map className="w-5 h-5 text-white" />
+          </span>
+          خريطة حفظي
+          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {mapOpen && (
+          <div className="px-4 mb-4 alive-subdoors">
+            <MemorizationMap
+              run={memorizedRun}
+              onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
+            />
+          </div>
+        )}
+
         {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن.
             Tap to expand 4 range choices below it; tap again to collapse.
             Only a choice tap navigates (to 'test', with the chosen range
@@ -464,6 +572,14 @@ export default function HomeStartPage({ session, onNavigate }: {
           استمع للأذكار
           <span className="text-xs font-semibold text-emerald-900 bg-amber-100/95 rounded-full px-2 py-0.5">(اقفل الشاشة لو عايز)</span>
         </button>
+
+        {/* سمعت / سمّعت مؤخرًا (feature #9, READ side only): the last
+            few listened/tested items — hidden entirely when there are
+            none yet. Each item jumps back to it in one tap. */}
+        <RecentlyRow
+          onNavigate={onNavigate}
+          onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
+        />
 
         {/* Share app (moved from لوحتي, 2026-11-04): after the adhkar card. */}
         <div className="mb-4 qr-home">

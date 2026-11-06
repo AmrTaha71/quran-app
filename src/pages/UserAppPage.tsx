@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
+import ShareProgressCard from '../components/ShareProgressCard';
 import { pressFeedback, installGlobalWater } from '../lib/pressFeedback';
 import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
@@ -595,6 +596,14 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               عرض الآيات المحفوظة
             </button>
           </div>
+        )}
+
+        {/* Shareable progress card (2026-11-06, feature #6): the same
+            real from-start run as the gate card above — rendered as a
+            shareable image (canvas) or share text. Same gate: hidden
+            while the run is 0. */}
+        {session && memorizedFromStart > 0 && (
+          <ShareProgressCard memorizedFromStart={memorizedFromStart} />
         )}
 
         {/* Daily wird + self-test entry */}

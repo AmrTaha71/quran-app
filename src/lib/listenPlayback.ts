@@ -40,6 +40,7 @@
 import { RECITERS, DEFAULT_RECITER_ID } from './reciters';
 import { SURAHS, SURAH_AYAH_COUNTS } from './surahs';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
+import { registerSleepStopHandler, unregisterSleepStopHandler } from './sleepTimer';
 
 export type ListenMode = 'free' | 'wird';
 
@@ -528,6 +529,10 @@ export class ListenEngine {
     // Session is shared with radio, so this engine touches it only
     // after acquiring ownership in play() — constructing an engine
     // must never overwrite another source's metadata/handlers.
+    // Sleep timer (#10): this engine pauses itself when the
+    // shared timer fires. No fade-out: the engines have no fade
+    // support, so the timer does a clean pause (see sleepTimer.ts).
+    registerSleepStopHandler('listen-hafs', () => this.pause());
   }
 
   get current(): { surah: number; ayah: number } {
@@ -704,6 +709,10 @@ export class ListenEngine {
     // Persist first: destroy() is the stop path for wird mode, and
     // it persists the LIVE position (with time).
     this.persistPosition();
+    // Sleep timer (#10): this engine no longer exists, so its stop
+    // handler must not fire (the page's own 'listen-ui' handler
+    // still pauses whatever engine is live, if any).
+    unregisterSleepStopHandler('listen-hafs');
     // Capture ownership BEFORE tearing down: the shared element
     // must only be paused / detached / released when THIS engine
     // still holds it. A preempted engine's destroy must not touch

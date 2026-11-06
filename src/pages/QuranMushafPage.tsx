@@ -18,6 +18,8 @@ import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, m
 import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { parseHash } from '../lib/shareLinks';
 import { HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
+import { useElderlyMode } from '../lib/elderlyMode';
+import { getNowPlaying, subscribeNowPlaying, type NowPlayingAyah } from '../lib/nowPlaying';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
 import {
@@ -262,7 +264,23 @@ export default function QuranMushafPage({
   // Search-jump highlight: the ayah tapped in لوحتي, marked amber on
   // its exact words until the page turns or fullscreen exits.
   const [searchHighlight, setSearchHighlight] = useState<{ surah: number; ayah: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
+  // FOLLOW-ALONG (feature #4): the ayah currently playing in Listen,
+  // read from the nowPlaying seam (src/lib/nowPlaying.ts). The
+  // verse-list row for it is highlighted gold while it is printed on
+  // the page shown; null when nothing ayah-tracked is playing.
+  const [nowPlayingAyah, setNowPlayingAyah] = useState<NowPlayingAyah>(null);
+  useEffect(() => {
+    const update = () => setNowPlayingAyah(getNowPlaying());
+    update();
+    return subscribeNowPlaying(update);
+  }, []);
+  // ELDERLY MODE (وضع كبار السن): big zoom + tap-an-ayah-reads-aloud.
+  // The hook (src/lib/elderlyMode.ts) reads the persisted mode
+  // synchronously, so the zoom initializer below sees it on first render.
+  const elderlyMode = useElderlyMode();
+  // Start zoomed in (1.5×) when entering the Mushaf with the mode on;
+  // the big preset buttons below do the rest.
+  const [zoom, setZoom] = useState(() => (elderlyMode ? 1.5 : 1));
   // Viewport aspect (width / height) for the Madinah cover geometry.
   // DANCE FIX 2026-10-27 (user video: pages zoom/shift on every
   // turn): the old code updated this on every 'resize'. On iOS
@@ -1208,7 +1226,9 @@ export default function QuranMushafPage({
     // STREAM S2: normal-view zoom never carries across a turn — a
     // zoomed (cropped) page used to stay zoomed on the next page,
     // hiding its edges until the user noticed and zoomed back out.
-    setZoom(1);
+    // ELDERLY MODE: keep the user's zoom across turns instead —
+    // resetting to 1× on every page would defeat the big-text zoom.
+    if (!elderlyMode) setZoom(1);
   };
 
   // Page swipe navigation (touch): attached only to the page image so
@@ -3001,6 +3021,14 @@ export default function QuranMushafPage({
   };
 
   const handleVerseClick = (verse: QuranVerse) => {
+    // ELDERLY MODE: one tap reads the ayah aloud immediately with the
+    // saved reciter — no popup first. startRecitation stops any
+    // recitation already playing, so taps never overlap; tapping the
+    // same ayah again replays it from the start.
+    if (elderlyMode) {
+      startRecitation(verse, reciter);
+      return;
+    }
     if (selectedVerse?.id === verse.id) {
       setSelectedVerse(null);
       return;
@@ -3368,15 +3396,47 @@ export default function QuranMushafPage({
                 <ChevronLeft className="w-5 h-5" />
               </button>
             </span>
-            <span className="flex items-center gap-0.5">
-              <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="تصغير الصفحة" aria-label="تصغير الصفحة"
-                className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
-              <span className="text-xs text-accent-600 w-11 text-center font-semibold">{Math.round(zoom * 100)}%</span>
-              <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
-                className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
-              <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
-                className="p-1 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
-            </span>
+            {elderlyMode ? (
+              // ELDERLY MODE: big zoom controls — large +/−, quick jumps
+              // to 150% / 200% / 300%, a fit (100%) reset, and a big
+              // stop button while a recitation is playing. Reuses the
+              // SAME zoom state and transform as the compact controls
+              // below (zoom > 1 = layout width + scroll-pan, zoom <= 1
+              // = transform scale), so tap mapping is untouched.
+              <span className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center gap-1.5 text-lg font-bold text-emerald-800"><Volume2 className="w-6 h-6" /> اضغط على أي آية لسماعها</span>
+                <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="تصغير الصفحة" aria-label="تصغير الصفحة"
+                  className="min-w-14 min-h-14 px-3 flex items-center justify-center bg-white text-emerald-800 hover:bg-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-sm transition-smooth"><ZoomOut className="w-8 h-8" /></button>
+                <span className="text-xl text-emerald-800 min-w-20 text-center font-bold">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
+                  className="min-w-14 min-h-14 px-3 flex items-center justify-center bg-white text-emerald-800 hover:bg-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-sm transition-smooth"><ZoomIn className="w-8 h-8" /></button>
+                {([1.5, 2, 3] as const).map((level) => (
+                  <button key={level} onClick={() => setZoom(level)} aria-label={`تكبير إلى ${Math.round(level * 100)}%`}
+                    className={`min-h-14 px-4 text-xl font-bold rounded-2xl border-2 shadow-sm transition-smooth ${zoom === level ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-emerald-800 hover:bg-emerald-50 border-emerald-300'}`}>{Math.round(level * 100)}%</button>
+                ))}
+                <button onClick={() => setZoom(1)} title="ملاءمة الصفحة" aria-label="ملاءمة الصفحة"
+                  className="min-h-14 px-4 text-xl font-bold bg-amber-100 text-amber-800 hover:bg-amber-200 rounded-2xl border-2 border-amber-300 shadow-sm transition-smooth">ملاءمة الصفحة</button>
+                <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
+                  className="min-w-14 min-h-14 px-3 flex items-center justify-center bg-white text-emerald-800 hover:bg-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-sm transition-smooth"><Maximize2 className="w-8 h-8" /></button>
+                {reciting && (
+                  <button onClick={stopRecitation} aria-label="إيقاف التلاوة"
+                    className="min-h-14 px-4 flex items-center gap-2 text-xl font-bold bg-red-600 text-white hover:bg-red-700 rounded-2xl shadow-sm transition-smooth"><Square className="w-6 h-6" /> إيقاف التلاوة</button>
+                )}
+                {reciteError && (
+                  <span className="text-base font-semibold text-red-700">{reciteError}</span>
+                )}
+              </span>
+            ) : (
+              <span className="flex items-center gap-0.5">
+                <button onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} title="تصغير الصفحة" aria-label="تصغير الصفحة"
+                  className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomOut className="w-5 h-5" /></button>
+                <span className="text-xs text-accent-600 w-11 text-center font-semibold">{Math.round(zoom * 100)}%</span>
+                <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
+                  className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
+                <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
+                  className="p-1 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
+              </span>
+            )}
             {!showFullscreen && <span className="inline-flex [&>span]:py-1 [&>span]:px-2 [&>span]:text-xs"><WorshipTimer /></span>}
           </div>
         </div>
@@ -3480,7 +3540,7 @@ export default function QuranMushafPage({
                   </div>
                   <div>
                     <h3 className="font-bold text-accent-800 text-base">آيات سورة {currentSurahName}</h3>
-                    <p className="text-sm text-accent-600">اضغط على أي آية لمعرفة الرابط</p>
+                    <p className="text-sm text-accent-600">{elderlyMode ? 'اضغط على أي آية لسماعها' : 'اضغط على أي آية لمعرفة الرابط'}</p>
                   </div>
                 </div>
                 {/* Ayah filter: jump straight to one ayah of this surah. */}
@@ -3515,10 +3575,21 @@ export default function QuranMushafPage({
                   visibleVerses.map((verse) => {
                     const isSelected = selectedVerse?.id === verse.id;
                     const hasLinks = verse.has_links;
+                    // Follow-along (feature #4): highlight this row only
+                    // when the now-playing ayah IS this verse AND it is
+                    // printed on the page shown (pageAyahRefs is reset
+                    // to null on every page turn, so a stale page can
+                    // never highlight). kind 'tafsir' highlights the
+                    // ayah the tafsir is about, same as kind 'ayah'.
+                    const isNowPlaying = nowPlayingAyah !== null
+                      && verse.surah_no === nowPlayingAyah.surah
+                      && verse.ayah_no === nowPlayingAyah.ayah
+                      && (pageAyahRefs?.some((r) => r.surah === nowPlayingAyah.surah && r.ayah === nowPlayingAyah.ayah) ?? false);
                     return (
                       <div key={verse.id}
                         onClick={() => handleVerseClick(verse)}
                         className={`p-4 cursor-pointer transition-smooth animate-fade-in ${
+                          isNowPlaying ? 'bg-amber-50 border-r-4 border-amber-500' :
                           isSelected ? 'bg-emerald-50 border-r-4 border-emerald-500' :
                           hasLinks ? 'bg-emerald-50/30 border-r-4 border-emerald-300 hover:bg-emerald-50' :
                           'hover:bg-gray-50 border-r-4 border-transparent'
@@ -3528,6 +3599,11 @@ export default function QuranMushafPage({
                             {verse.ayah_no}
                           </span>
                           <span className="text-sm text-accent-600">آية {verse.ayah_no}</span>
+                          {isNowPlaying && (
+                            <span className="flex items-center gap-1 text-xs text-amber-800 font-semibold bg-amber-100 px-2 py-0.5 rounded-full">
+                              <Volume2 className="w-3.5 h-3.5" /> تُقرأ الآن
+                            </span>
+                          )}
                           {hasLinks && (
                             <span className="flex items-center gap-1 text-sm text-emerald-700 font-semibold bg-emerald-100 px-2 py-0.5 rounded-full">
                               <Bookmark className="w-3.5 h-3.5" /> {verse.links_count} رابط
