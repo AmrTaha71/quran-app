@@ -101,6 +101,18 @@ export function normalizeArabic(text: string): string {
   // Hamza immediately before waw collapses into the waw, merging
   // رَءُوفٌ and رَؤُوفٌ (both -> روف).
   s = s.replace(/[ؤءئ]\u0648/g, 'و');
+  // Merged article lam (Fix B, 2026-11-06): IndoPak writes a lam-initial
+  // stem with ONE lam + shadda (وَالَّيۡلِ = waw + alef + lam + shadda +
+  // yeh + lam), while imla'i writes both lams (والليل). Stripping the
+  // shadda without doubling gives واليل, which never matches spoken
+  // والليل. Double the lam ONLY for the ليل family: alef + lam + shadda
+  // followed by yeh + lam (marks allowed between, including the
+  // fatha that sits between lam and shadda: لَّ). It cannot touch
+  // الَّذِي / الَّتِي (next letter is ذ / ت, not ي + ل), اللَّه /
+  // اللَّمَمِ (two lams written, shadda on the second lam, so the
+  // alef+lam+shadda pattern does not match), or الشَّمْسُ (shadda is
+  // on the sheen, not the lam).
+  s = s.replace(new RegExp(`\u0627\u0644${MARKS}*\u0651(?=${MARKS}*\u064A${MARKS}*\u0644)`, 'g'), '\u0627\u0644\u0644');
   // Strip all remaining diacritics and Quranic marks.
   s = s.replace(DIACRITICS_AND_MARKS, '');
   // Remaining standalone dagger alefs are plain long-a.
