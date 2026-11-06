@@ -70,6 +70,19 @@ export function normalizeArabic(text: string): string {
   // Alef + dagger is a single alef, not two (القراٰن -> القرآن،
   // اٰمنوا -> امنوا).
   s = s.replace(/ا\u0670/g, 'ا');
+  // IndoPak long-a before a suffix: a dagger on a maksura is the
+  // long-a itself, and the maksura becomes a plain alef once a
+  // suffix follows (ضُحٰىهَا -> ضحاها، هُدٰىكم -> هداكم،
+  // التَّوۡرٰىةَ -> التوراة). The dagger+maksura sequence never
+  // occurs word-final in the seed (338/338 followed by a suffix
+  // letter: ه/ك/ن/ة/ل/م), so this is always the alef reading —
+  // never the maksura. It must run before the waw+dagger rules
+  // (وٰى would otherwise become واي: تَقۡوٰى -> تقواي) and before
+  // the dagger-before-hamza-seat rule below (ٰى would otherwise
+  // become ئ -> ي: ضُحٰى -> ضحي). Bare words that stay a maksura
+  // in imla'i (موسى، هدى) are written with a YEH in the seed
+  // (موسٰي، هدٰي), so they never reach this rule.
+  s = s.replace(/\u0670\u0649/g, 'ا');
   // IndoPak medial long-a: dagger + waw -> alef (الصَّلٰوةَ -> الصلاة).
   // Guarded: not when the waw is a real consonant between two
   // daggers (السَّمٰوٰتِ -> السماوات, with the waw kept).
