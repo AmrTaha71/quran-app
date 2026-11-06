@@ -1,0 +1,81 @@
+/* ==========================================================================
+   alive-glass.css — WATER-GLASS SHEEN + WAVING ICONS (2026-11-07)
+   --------------------------------------------------------------------------
+   SCOPE: the two door classes (.grad-emerald-door, .grad-amber-door) and
+   the Lucide icons inside them. Sets ONLY:
+   - ::after sheen (a slow diagonal light band, like light across water)
+   - filter + transform on svg.lucide inside a door (glassy edge + gentle
+     idle sway)
+   It does not touch fills, shadows, borders, position or overflow (those
+   belong to the shades / 3D / ripple files). No TSX edits.
+   Imported after alive-transitions.css, before elderly.css.
+   ========================================================================== */
+
+/* --- 1. Water sheen across the door face --------------------------------- */
+.grad-emerald-door::after,
+.grad-amber-door::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.22) 47%,
+    rgba(255, 255, 255, 0.08) 53%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  mix-blend-mode: overlay;
+  animation: glass-sheen 7s ease-in-out infinite;
+}
+
+@keyframes glass-sheen {
+  0%   { background-position: 120% 0; }
+  50%  { background-position: -20% 0; }
+  100% { background-position: 120% 0; }
+}
+
+/* --- 2. Glassy icon: light rim on top, soft depth below ------------------ */
+.grad-emerald-door svg.lucide,
+.grad-amber-door svg.lucide {
+  filter:
+    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.55))
+    drop-shadow(0 3px 3px rgba(0, 0, 0, 0.35));
+  transform-origin: 50% 80%;
+  animation: icon-wave 4.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Stagger neighbouring icons so the row ripples instead of moving in step */
+.grad-emerald-door:nth-of-type(2n) svg.lucide,
+.grad-amber-door:nth-of-type(2n) svg.lucide {
+  animation-delay: -1.4s;
+}
+.grad-emerald-door:nth-of-type(3n) svg.lucide,
+.grad-amber-door:nth-of-type(3n) svg.lucide {
+  animation-delay: -2.6s;
+}
+
+@keyframes icon-wave {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  25%      { transform: rotate(-4deg) translateY(-1px); }
+  75%      { transform: rotate(4deg) translateY(1px); }
+}
+
+/* Pressing a door: the icon settles (no sway while the door sinks) */
+.grad-emerald-door:active svg.lucide,
+.grad-amber-door:active svg.lucide {
+  animation-play-state: paused;
+}
+
+/* --- 3. Reduced motion: keep the glass look, drop the movement ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .grad-emerald-door::after,
+  .grad-amber-door::after,
+  .grad-emerald-door svg.lucide,
+  .grad-amber-door svg.lucide {
+    animation: none;
+  }
+}
