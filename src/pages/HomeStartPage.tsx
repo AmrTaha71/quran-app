@@ -5,6 +5,7 @@ import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDo
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
+import MutashabihatGame from '../components/MutashabihatGame';
 import { useUserLists } from '../components/UserLists';
 import { memorizedFromStart } from '../lib/homeFeatures';
 import { pressFeedback } from '../lib/pressFeedback';
@@ -141,6 +142,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   // خريطة حفظي door: expands to the 30-Juz map below it; collapsed
   // by default — same pattern as the الحفظ / سمّع لنفسك doors.
   const [mapOpen, setMapOpen] = useState(false);
+  const [mutOpen, setMutOpen] = useState(false);
   // الحفظ door: expands to 3 start choices (resume / pick a place / from
   // the beginning). Collapsed by default — the door looks exactly like
   // the other Home doors.
@@ -290,6 +292,15 @@ export default function HomeStartPage({ session, onNavigate }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
+        {/* 2026-11-07: «اختبر نفسك» — mutashabihat quiz door at the top. */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => setMutOpen(true)}
+          className="w-full mb-4 py-4 px-4 grad-emerald-door text-white font-bold rounded-2xl text-xl flex items-center justify-center gap-3 polish-press polish-focus"
+        >
+          اختبر نفسك بالمتشابهات
+        </button>
+
         {/* App mark: the artwork itself, sized so the greeting and
             the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">
@@ -648,6 +659,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
       )}
 
+      {mutOpen && <MutashabihatGame onClose={() => setMutOpen(false)} />}
       <BottomNav current="home" onNavigate={onNavigate} />
     </div>
   );
