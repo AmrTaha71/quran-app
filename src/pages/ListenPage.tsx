@@ -1952,7 +1952,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex gap-3 mt-4">
               <button
                 onClick={resumeSaved}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
               >
                 استئناف
               </button>
@@ -1979,7 +1979,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex gap-3 mt-4">
               <button
                 onClick={resumeRiwayatSaved}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
               >
                 استئناف
               </button>
@@ -2005,7 +2005,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <div className="flex gap-3 mt-4">
               <button
                 onClick={resumeHadrSaved}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
               >
                 استئناف
               </button>
@@ -2049,7 +2049,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <div className="flex gap-3 mt-3">
                   <button
                     onClick={() => { resumeJourneySaved(m.id); setHubView(m.id); }}
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
                   >
                     استئناف
                   </button>
@@ -2310,7 +2310,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                     ? void startRiwayaPlayback(surah, riwayaId, 0)
                     : void startPlayback(surah, reciterId, mode, 1)
               }
-              className="mt-5 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+              className="mt-5 w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 btn-3d"
             >
               <Play className="w-5 h-5" />
               ابدأ الاستماع
@@ -2496,7 +2496,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 key={`start-${m.id}`}
                 disabled={disabled}
                 onClick={() => void startJourney(m.id)}
-                className="w-full mt-4 py-4 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-50"
+                className="w-full mt-4 py-4 bg-emerald-600 text-white font-bold rounded-xl disabled:opacity-50 btn-3d"
               >
                 ▶ ابدأ الاستماع
               </button>
@@ -2628,7 +2628,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <div className="flex gap-3 mt-3">
                   <button
                     onClick={() => resumeJourneySaved(m.id)}
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl"
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl btn-3d"
                   >
                     استئناف
                   </button>

@@ -4876,7 +4876,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                 </div>
                 <button onClick={() => void startTest()} disabled={loading}
-                  className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                  className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
                   {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                 </button>
                 <p className="text-sm text-accent-600 text-center">
@@ -5089,7 +5089,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   ← عودة إلى التسميع
                 </button>
                 {rangeChoice === null ? (
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 alive-choices">
                     <button onClick={() => setRangeChoice('surah')}
                       className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
                       <span className="block text-base font-semibold text-ink">بالسورة</span>
@@ -5117,7 +5117,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       ← عودة لاختيار المدى
                     </button>
                     {rangeChoice === 'surah' && (
-                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
                         <h2 className="font-semibold text-accent-800">بالسورة</h2>
                         {surahPicker}
                         <p className="text-sm text-accent-600">
@@ -5126,13 +5126,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); void startTestGlobal(surahRange.start.global, surahRange.end.global, null, eff.mode, eff); }} disabled={loading}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
                     )}
                     {rangeChoice === 'juz' && (
-                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
                         <h2 className="font-semibold text-accent-800">بالجزء</h2>
                         <label className="block">
                           <span className="text-sm font-medium text-accent-700">رقم الجزء (١–٣٠)</span>
@@ -5147,13 +5147,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); void startTestGlobal(juzRange.start.global, juzRange.end.global, null, eff.mode, eff); }} disabled={loading || (recording && juzRange.start.surah !== juzRange.end.surah)}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
                     )}
                     {rangeChoice === 'page' && (
-                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
                         <h2 className="font-semibold text-accent-800">بالصفحة</h2>
                         <label className="block">
                           <span className="text-sm font-medium text-accent-700">رقم الصفحة (١–٦٠٤)</span>
@@ -5176,13 +5176,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); if (pageRange) void startTestGlobal(pageRange.start.global, pageRange.end.global, null, eff.mode, eff); }} disabled={loading || pageRangeState !== 'ready' || !pageRange || (recording && pageRange.start.surah !== pageRange.end.surah)}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
                     )}
                     {rangeChoice === 'passage' && (
-                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4">
+                      <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-4 alive-detail-card">
                         <h2 className="font-semibold text-accent-800">فقرة معينة</h2>
                         {surahPicker}
                         <div className="grid grid-cols-2 gap-3">
@@ -5206,7 +5206,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
                         <button onClick={() => { const eff = takePerTestSettings(); void startTest(surah, from, to, null, eff.mode, eff); }} disabled={loading}
-                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow">
+                          className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-lg font-bold rounded-xl shadow btn-3d-amber">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
                       </div>
@@ -5333,7 +5333,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </p>
                   <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
                   <button onClick={startContinuousMic}
-                    className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto">
+                    className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto btn-3d">
                     <Mic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
                   </button>
                 </>
@@ -5552,7 +5552,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </p>
                       <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ بصوتك</p>
                       <button onClick={() => startMic()}
-                        className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto">
+                        className="mt-5 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold rounded-xl shadow flex items-center justify-center gap-2 mx-auto btn-3d">
                         <Mic className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
                       <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}

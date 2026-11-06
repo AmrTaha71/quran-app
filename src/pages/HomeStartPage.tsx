@@ -248,13 +248,14 @@ export default function HomeStartPage({ session, onNavigate }: {
             <BookOpen className="w-5 h-5 text-white" />
           </span>
           الحفظ
-          <ChevronDown className={`w-5 h-5 text-white transition-transform ${hifzOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${hifzOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {hifzOpen && (
           // Sub-doors use grad-amber-door (gold): the level below the
           // emerald main doors, so the two levels read apart at a glance.
-          <div className="px-4 mb-4">
+          // .alive-subdoors (alive-transitions.css): cascade entrance.
+          <div className="px-4 mb-4 alive-subdoors">
             {/* (a) resume from the saved position — hidden when the user
                 never opened the Mushaf (nothing to resume from). */}
             {lastPage.visited && (
@@ -376,13 +377,14 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Headphones className="w-5 h-5 text-white" />
           </span>
           سمّع لنفسك
-          <ChevronDown className={`w-5 h-5 text-white transition-transform ${testOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${testOpen ? 'rotate-180' : ''}`} />
         </button>
 
         {testOpen && (
           // Sub-doors use grad-amber-door (gold): the level below the
           // emerald main doors, so the two levels read apart at a glance.
-          <div className="px-4 mb-4">
+          // .alive-subdoors (alive-transitions.css): cascade entrance.
+          <div className="px-4 mb-4 alive-subdoors">
             <button
               onPointerDown={pressFeedback}
               onClick={() => openTestRange('surah', onNavigate)}

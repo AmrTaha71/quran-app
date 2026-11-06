@@ -2,6 +2,17 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+// "Make it alive" (2026-11-06): four layered stylesheets, imported AFTER
+// index.css so they win the cascade. Each sets a disjoint property set
+// (no two files set the same property on the same selector):
+//  - alive-shades.css: richer emerald + gold gradients (background only)
+//  - alive-3d.css: button depth — shadows, inset highlights, pressed sink
+//  - alive-ripple.css: water ripple on press (touch-point wave)
+//  - alive-transitions.css: page/door transitions (spring ease, stagger)
+import './alive-shades.css';
+import './alive-3d.css';
+import './alive-ripple.css';
+import './alive-transitions.css';
 
 // Offline support + automatic updates: the service worker
 // (public/sw.js) runtime-caches the app shell and the Mushaf pages

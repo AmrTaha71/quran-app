@@ -1,0 +1,67 @@
+/* ==========================================================================
+   alive-shades.css — RICHER COLOR SHADES ("MAKE IT ALIVE" pass)
+   --------------------------------------------------------------------------
+   SCOPE: background only. This file sets ONLY `background-color` and
+   `background-image` on the two door gradient classes. It deliberately
+   sets NO box-shadow / border / transform (3D specialist), NO
+   transition / animation (transitions specialist), and NO overflow /
+   position (ripple specialist). Import AFTER src/index.css so these
+   rules win the cascade over the flat two-stop gradients there
+   (--chic-grad-emerald / --chic-grad-amber, the last definitions).
+
+   WHAT CHANGED vs the old gradients (still the same two families):
+   - Old emerald: linear-gradient(160deg, #0C7A4E 0%, #053B27 100%)
+     Old gold:    linear-gradient(160deg, #9E5608 0%, #4A2703 100%)
+     Two flat stops: a bright top fading straight into a dark bottom.
+   - New: five-stop linear gradients + a faint top-light wash, so the
+     surface reads as a real object with light falling on it — a lit
+     top edge, a saturated jewel heart where the title sits, and a
+     deep shadowed base. Same 160deg angle as the old gradients, so
+     the light direction matches what the eye already expects.
+   - NO new hue: every stop is emerald-family (hue ~156-162 deg) or
+     gold/amber-family (hue ~36-41 deg). Main doors stay emerald,
+     sub-doors stay gold; the level distinction from push 203 is
+     untouched. .grad-teal-door is intentionally NOT touched here:
+     it is used by no page (0 references in src/**/*.tsx) and the
+     brief is emerald + gold only.
+
+   CONTRAST (white text, WCAG, computed, not eyeballed):
+   - Emerald stops: #0E8757 4.54 : 1 | #0B7448 5.82 : 1 |
+     #0A6B44 6.56 : 1 | #074A30 10.34 : 1 | #042E1D ~15 : 1.
+     Every stop passes AA (4.5 : 1) for normal white text on its own.
+   - Gold stops: #A8650A 4.63 : 1 | #8F5E08 5.57 : 1 |
+     #7A4505 7.83 : 1 | #5A2F03 11.40 : 1 | #381D02 ~15 : 1.
+     Every stop passes AA for normal white text on its own.
+   - The radial top-light wash is rgba(255,255,255,0.08) fading to
+     transparent by ~55% of the surface, centred above the top edge:
+     it is strongest at the very top edge (a light-catching rim where
+     no text sits — door titles are centred with padding) and ~0
+     where the title text sits, so the text zone keeps the full
+     contrast of the stops above. Fallback background-color is the
+     mid "heart" stop of each gradient (emerald 6.56 : 1, gold
+     7.83 : 1), so even with gradients disabled the doors stay AA.
+   ========================================================================== */
+
+/* --- Main doors: deeper, jewel-like emerald ------------------------------
+   Lit emerald top -> saturated jewel heart -> deep forest shadow.
+   The heart (#0A6B44) is MORE saturated than the old top (#0C7A4E),
+   not just darker: that saturation is what makes it read jewel-like
+   rather than flat, while staying dark enough for white text. */
+.grad-emerald-door {
+  background-color: #0A6B44;
+  background-image:
+    radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(160deg, #0E8757 0%, #0B7448 28%, #0A6B44 55%, #074A30 78%, #042E1D 100%);
+}
+
+/* --- Sub-doors: warmer, more luminous gold ------------------------------
+   Honey-gold top -> rich amber heart -> deep bronze shadow.
+   The top (#A8650A) is a warmer, more golden honey than the old
+   #9E5608, and the heart (#7A4505) is a fuller amber; the base
+   (#381D02) is a darker bronze so the gold glows against it. */
+.grad-amber-door {
+  background-color: #7A4505;
+  background-image:
+    radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(160deg, #A8650A 0%, #8F5E08 32%, #7A4505 58%, #5A2F03 82%, #381D02 100%);
+}

@@ -1,9 +1,12 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { getSharedAudio } from './sharedAudio';
 
-// Visual design batch (2026-11-04) + water pass (2026-11-04): one
-// press-feedback entry point for nav + Home buttons — water ripple +
-// tap sound + vibration (where supported). Visuals only: this never
+// Visual design batch (2026-11-04) + water pass (2026-11-04) +
+// alive ripple (2026-11-06): one press-feedback entry point for nav
+// + Home buttons — water ripple + tap sound + vibration (where
+// supported). The ripple's keyframes live in src/alive-ripple.css
+// (imported after index.css); this module only spawns the nodes at
+// the touch point and removes them when they fade. Visuals only: this never
 // changes navigation, playback, grading, or any other behavior. The
 // tap sound is deliberately silenced whenever audio could be playing
 // or recording, so it can never talk over a recitation, a correction,
@@ -208,13 +211,19 @@ export function playErrorBuzz(): void {
   }
 }
 
-// --- Water: pressing on water. A soft wash + two expanding rings
-// spread outward from the exact touch point over ~650-800ms, so the
-// press is unmistakable at a glance (the old single 450ms circle did
-// not read as water). Colors adapt to the host: white on dark
-// buttons, deep emerald on light surfaces. Ink lives inside the
-// dedicated .ripple-layer overlay (never on Arabic text, never a text
-// element's own overflow). Reduced-motion users get no water. ---
+// --- Water: pressing on water. A drop hits at the exact touch
+// point: a small bright drop core blooms first (~320ms), a soft wash
+// spreads under it, and three thin rings chase each other outward
+// (staggered 0/120/240ms, ~700-1000ms), so the press reads as a drop
+// in water, not a glow. Nodes are <span>s in the dedicated
+// .ripple-layer overlay (never on Arabic text, never a text element's
+// own overflow), animated by CSS keyframes in src/alive-ripple.css
+// (transform/opacity only, GPU-friendly, no blur) and removed on
+// animationend with a timer fallback, so no node ever lingers and no
+// button can get stuck pressed. Colors adapt to the host: white on
+// dark buttons, deep emerald on light surfaces. Reduced-motion users
+// get no water. The ripple is purely visual and fire-and-forget: the
+// tap itself is never delayed or intercepted. ---
 function hostIsDark(host: HTMLElement): boolean {
   try {
     const bg = window.getComputedStyle(host).backgroundColor;
@@ -232,11 +241,59 @@ function hostIsDark(host: HTMLElement): boolean {
   }
 }
 
+/** One ripple node: a disc centred on (x, y) inside the layer,
+ *  animated by a keyframe in src/alive-ripple.css. Removed on
+ *  animationend; the timer is a fallback so a node can never linger
+ *  if the animation event is lost (tab hidden, host detached). */
+function spawnRippleNode(
+  layer: HTMLElement,
+  className: string,
+  size: number,
+  x: number,
+  y: number,
+  colorProp: 'background' | 'borderColor',
+  color: string,
+  durationMs: number,
+  delayMs: number,
+): void {
+  const node = document.createElement('span');
+  node.className = className;
+  node.style.width = `${size}px`;
+  node.style.height = `${size}px`;
+  node.style.left = `${x - size / 2}px`;
+  node.style.top = `${y - size / 2}px`;
+  node.style[colorProp] = color;
+  node.style.animationDuration = `${durationMs}ms`;
+  node.style.animationDelay = `${delayMs}ms`;
+  layer.appendChild(node);
+  let gone = false;
+  const remove = () => {
+    if (gone) return;
+    gone = true;
+    try {
+      node.remove();
+    } catch {
+      // already gone
+    }
+  };
+  node.addEventListener('animationend', () => {
+    window.clearTimeout(timer);
+    remove();
+  });
+  // Fallback: duration + delay + 150ms of slack.
+  const timer = window.setTimeout(remove, durationMs + delayMs + 150);
+}
+
 function spawnWater(host: HTMLElement, clientX: number, clientY: number): void {
   try {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const rect = host.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
+    // Touch/pointer coordinates, relative to the host. A (0, 0)
+    // coordinate means "no pointer position" (e.g. keyboard
+    // activation) — fall back to the centre so the wave still reads.
+    const x = clientX === 0 && clientY === 0 ? rect.width / 2 : clientX - rect.left;
+    const y = clientX === 0 && clientY === 0 ? rect.height / 2 : clientY - rect.top;
     // The layer positions against the host, so a statically-positioned
     // host gets a harmless relative context (no offsets: no visual shift).
     try {
@@ -250,59 +307,47 @@ function spawnWater(host: HTMLElement, clientX: number, clientY: number): void {
       layer.className = 'ripple-layer';
       host.appendChild(layer);
     }
-    if (layer.childElementCount > 9) return; // 3 presses in flight (wash + 2 rings each)
+    // Cap: 5 nodes per press (wash + drop + 3 rings) x 3 presses in
+    // flight. A rapid tapper never accumulates lingering DOM nodes.
+    if (layer.childElementCount > 14) return;
     const dark = hostIsDark(host);
-    const washColor = dark ? 'rgba(255, 255, 255, 0.32)' : 'rgba(5, 59, 39, 0.20)';
-    const ringColor = dark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(5, 59, 39, 0.55)';
+    const washColor = dark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(5, 59, 39, 0.18)';
+    const dropColor = dark ? 'rgba(255, 255, 255, 0.90)' : 'rgba(5, 59, 39, 0.55)';
+    const ringColor = dark ? 'rgba(255, 255, 255, 0.80)' : 'rgba(5, 59, 39, 0.50)';
     const maxDim = Math.max(rect.width, rect.height);
-    const washSize = maxDim * 2.2;
-    const wash = document.createElement('span');
-    wash.className = 'water-wash';
-    wash.style.width = `${washSize}px`;
-    wash.style.height = `${washSize}px`;
-    wash.style.left = `${clientX - rect.left - washSize / 2}px`;
-    wash.style.top = `${clientY - rect.top - washSize / 2}px`;
-    wash.style.background = washColor;
-    layer.appendChild(wash);
-    const washAnim = wash.animate(
-      [
-        { transform: 'scale(0)', opacity: 1 },
-        { transform: 'scale(1)', opacity: 0 },
-      ],
-      { duration: 700, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    // The wash is the widest element (2.6x) so the wave visibly
+    // reaches — and dissolves past — the button's edges.
+    spawnRippleNode(layer, 'alive-ripple-wash', maxDim * 2.6, x, y, 'background', washColor, 750, 0);
+    // The drop core: small, bright, fast — the impact itself.
+    spawnRippleNode(
+      layer,
+      'alive-ripple-drop',
+      Math.max(30, maxDim * 0.22),
+      x,
+      y,
+      'background',
+      dropColor,
+      320,
+      0,
     );
-    washAnim.onfinish = () => {
-      try {
-        wash.remove();
-      } catch {
-        // already gone
-      }
-    };
-    // Two rings: the second chases the first by 130ms, like ripples.
-    const ringSize = maxDim * 1.8;
-    [0, 130].forEach((delay, i) => {
-      const ring = document.createElement('span');
-      ring.className = 'water-ring';
-      ring.style.width = `${ringSize}px`;
-      ring.style.height = `${ringSize}px`;
-      ring.style.left = `${clientX - rect.left - ringSize / 2}px`;
-      ring.style.top = `${clientY - rect.top - ringSize / 2}px`;
-      ring.style.borderColor = ringColor;
-      layer.appendChild(ring);
-      const anim = ring.animate(
-        [
-          { transform: 'scale(0.06)', opacity: 0.9 },
-          { transform: 'scale(1)', opacity: 0 },
-        ],
-        { duration: i === 0 ? 650 : 800, delay, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+    // Three rings, each chasing the previous one by 120ms.
+    const ringSize = maxDim * 2.2;
+    [
+      { durationMs: 700, delayMs: 0 },
+      { durationMs: 850, delayMs: 120 },
+      { durationMs: 1000, delayMs: 240 },
+    ].forEach(({ durationMs, delayMs }) => {
+      spawnRippleNode(
+        layer,
+        'alive-ripple-ring',
+        ringSize,
+        x,
+        y,
+        'borderColor',
+        ringColor,
+        durationMs,
+        delayMs,
       );
-      anim.onfinish = () => {
-        try {
-          ring.remove();
-        } catch {
-          // already gone
-        }
-      };
     });
   } catch {
     // water is decorative: never let it break a press

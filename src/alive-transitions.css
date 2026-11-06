@@ -1,0 +1,177 @@
+/* ============ ALIVE transitions (2026-11-06) ============
+   The "make it alive" pass, transitions specialist. This file owns
+   MOTION ONLY: `transition`, `animation`, and `@keyframes` — nothing
+   else. It sets no background, no box-shadow/border, no
+   overflow/position (those belong to the shades / 3D / ripple
+   specialists). Every animation here moves `transform` and `opacity`
+   only (GPU-friendly, no layout work), and every keyframe ends at
+   transform:none with backwards fill, so no retained transform can
+   become a containing block for fixed descendants.
+   Import order matters: this file is imported AFTER src/index.css,
+   so same-specificity rules here win over the polish / bold-pass
+   rules there (route-enter-strong, door-enter, nav-enter,
+   .polish-hub-item, .nav-tab-pill, ::view-transition-*).
+   NO gimmicks by design: no flips, no curl/bend/perspective/zoom,
+   no spinning, no rotation. "Exciting" here = a smooth glide with
+   a gentle springy overshoot in the easing — calm, fitting the
+   Quran mood, never frantic.
+   HARD CONSTRAINTS KEPT: Mushaf/Follow routes never animate — the
+   View Transition in App.tsx already skips them on either side, the
+   route wrapper carries no enter class there, and NOTHING in this
+   file touches the Mushaf page image, its frame, word taps, or the
+   mushaf-slide keyframes (300ms, untouched in QuranMushafPage.tsx).
+   Reduced motion disables everything below (see the block at the
+   end). */
+
+:root {
+  /* Gentle spring: a small overshoot (y2 1.25) so an entrance rises
+     a touch past its rest point and settles — springy, not bouncy. */
+  --alive-spring: cubic-bezier(0.3, 1.25, 0.4, 1);
+  --alive-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ---------- 1. PAGE-TO-PAGE (the headline) ----------
+   The route cross-fade from push 187 was a flat fade (old 140ms,
+   new 10px rise over 300ms). This makes the glide readable: the
+   outgoing page gently fades AND slides a little upward, out of
+   the way, while the incoming page rises 26px and fades in on the
+   spring ease over 400ms — the app feels like it is gliding to
+   the next page, not cutting to it. Mushaf/Follow never reach
+   here: App.tsx skips startViewTransition for them entirely.
+   These selectors match index.css exactly; this file is later,
+   so these values win. */
+@keyframes alive-vt-out {
+  to { opacity: 0; transform: translateY(-10px); }
+}
+@keyframes alive-vt-in {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+::view-transition-old(root) { animation: 220ms var(--alive-ease-out) both alive-vt-out; }
+::view-transition-new(root) { animation: 400ms var(--alive-spring) both alive-vt-in; }
+
+/* Fallback route entrance (browsers without View Transitions, and
+   any non-VT navigation): the same glide, as a mount-only
+   animation on the .route-enter-strong wrapper App.tsx already
+   adds to every non-Mushaf/Follow route. Redefines the keyframes
+   and duration from index.css (32px / 340ms) — a touch softer in
+   distance, springier in ease. During a View Transition,
+   html.vt-active still suppresses this (index.css), so the two
+   never double-play. */
+@keyframes route-enter-strong {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+.route-enter-strong { animation: route-enter-strong 380ms var(--alive-spring) backwards; }
+
+/* ---------- 2. DOOR-TO-DOOR (the other headline) ----------
+   Home's expandable doors (الحفظ / سمّع لنفسك): the expanded
+   sub-doors now arrive as a small cascade — each one rises 16px
+   and fades in on the spring ease, 70ms after the previous one,
+   instead of all popping in at once. The wrapper class
+   .alive-subdoors is added in HomeStartPage.tsx to the two
+   expanded blocks only; the `> *` selector covers sub-door
+   buttons AND the Juz/surah picker panel inside الحفظ.
+   NOTE (honest limit): collapse cannot ease away — the blocks
+   are conditionally rendered ({hifzOpen && ...}), so closing
+   unmounts them instantly. A smooth collapse would need the
+   block kept mounted and hidden with a height/opacity transition,
+   which is a structural change to Home (hidden buttons would
+   stay focusable/tappable) — deliberately NOT done here; see
+   the report. The chevron still rotates closed on the spring
+   ease, so the tap itself reads as a smooth close. */
+@keyframes alive-subdoor-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+.alive-subdoors > * { animation: alive-subdoor-in 420ms var(--alive-spring) backwards; }
+.alive-subdoors > *:nth-child(2) { animation-delay: 70ms; }
+.alive-subdoors > *:nth-child(3) { animation-delay: 140ms; }
+.alive-subdoors > *:nth-child(4) { animation-delay: 210ms; }
+.alive-subdoors > *:nth-child(5) { animation-delay: 280ms; }
+
+/* Main-door entrance, springier: redefines the door-enter
+   keyframes from index.css (24px / 420ms, plain ease-out) with
+   the same distance but the spring ease. Applies everywhere
+   .door-enter is already used — Home main doors (whose inline
+   60ms steps already stagger them), SelfTest choice cards. */
+@keyframes door-enter {
+  from { opacity: 0; transform: translateY(22px); }
+  to { opacity: 1; transform: none; }
+}
+.door-enter { animation: door-enter 420ms var(--alive-spring) backwards; }
+
+/* Door chevrons (الحفظ / سمّع لنفسك): the open/close rotation
+   now follows the same spring instead of Tailwind's default
+   150ms linear-ish rotate, so the door feels hinged, not
+   snapping. Class added in HomeStartPage.tsx. */
+.alive-chevron { transition: transform 300ms var(--alive-spring); }
+
+/* ---------- 3. SUPPORTING: cards + BottomNav ----------
+   Listen hub cards: same cascade idea, a touch slower and
+   calmer than the doors (450ms, 70ms steps). Overrides the
+   polish-hub-item rule from index.css (450ms / 50ms steps on
+   polish-fade-up) — same selectors, this file is later. */
+@keyframes alive-card-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+.polish-hub > .polish-hub-item { animation: alive-card-in 450ms var(--alive-spring) backwards; }
+.polish-hub > .polish-hub-item:nth-child(2) { animation-delay: 70ms; }
+.polish-hub > .polish-hub-item:nth-child(3) { animation-delay: 140ms; }
+.polish-hub > .polish-hub-item:nth-child(4) { animation-delay: 210ms; }
+
+/* SelfTest: the 2×2 range-choice grid staggers like the doors,
+   and each opened range detail card (بالسورة / بالجزء / بالصفحة /
+   فقرة معينة) rises in on the spring ease. Classes added in
+   SelfTestPage.tsx. The choice buttons already carry .door-enter;
+   .alive-choices > * is more specific, so the stagger wins there. */
+.alive-choices > * { animation: alive-card-in 420ms var(--alive-spring) backwards; }
+.alive-choices > *:nth-child(2) { animation-delay: 70ms; }
+.alive-choices > *:nth-child(3) { animation-delay: 140ms; }
+.alive-choices > *:nth-child(4) { animation-delay: 210ms; }
+.alive-detail-card { animation: alive-card-in 420ms var(--alive-spring) backwards; }
+
+/* BottomNav: the gold pill now glides on the spring ease
+   (420ms, was 280ms ease-out) so switching tabs reads as one
+   bar sliding, not a jump. Transition property only — the pill
+   is positioned by an inline transform from BottomNav.tsx, which
+   this rule animates; no positioning of its own is set here.
+   The nav's own mount entrance (.nav-enter, each page mounts
+   its own nav) gets the same spring. */
+.nav-tab-pill { transition: transform 420ms var(--alive-spring), opacity 200ms var(--alive-ease-out); }
+@keyframes nav-enter {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+.nav-enter { animation: nav-enter 360ms var(--alive-spring) backwards; }
+
+/* ---------- Reduced motion: zero motion ----------
+   Every animation/transition in this file stops. The nav pill
+   is the one exception to `transform: none`: its position IS
+   its inline transform, so only its transition is killed (it
+   then jumps instantly to the correct tab — correct under
+   reduced motion). View Transitions are already disabled in
+   index.css; the rules here repeat them so this file is
+   self-contained if import order ever changes. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+  .route-enter-strong,
+  .door-enter,
+  .nav-enter,
+  .polish-hub > .polish-hub-item,
+  .alive-subdoors > *,
+  .alive-choices > *,
+  .alive-detail-card,
+  .alive-chevron {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+  .nav-tab-pill {
+    animation: none !important;
+    transition: none !important;
+  }
+}

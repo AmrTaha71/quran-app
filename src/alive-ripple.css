@@ -1,0 +1,122 @@
+/* alive-ripple.css — water ripple on press (2026-11-06, "make it alive").
+   Owned by the ripple specialist. Loaded by the coordinator AFTER
+   src/index.css, so these rules win on equal specificity.
+   PROPERTY BOUNDARY: this file sets ONLY ripple styles + position /
+   overflow for clipping on the door classes. It never sets background
+   (shades specialist), box-shadow / border / transform on the buttons
+   themselves (3D specialist), or transition / animation on the buttons
+   themselves (transitions specialist). The only transforms here belong
+   to the ripple elements' own keyframes (transform + opacity only, so
+   the animation stays on the compositor and is cheap on iPad).
+   The ripple nodes are created by src/lib/pressFeedback.ts
+   (spawnWater): one press = one soft wash + one drop core + three
+   rings, all centred on the real touch/pointer coordinates, all
+   removed after their animation ends. No blur anywhere. */
+
+/* --- Clipping: the wave must never spill outside the button's
+   rounded shape. The doors get a positioning + clipping context
+   here; every other host is clipped by its .ripple-layer overlay
+   (which pressFeedback.ts creates inside the host) and by the
+   relative-position fix in spawnWater for statically-positioned
+   hosts. overflow:hidden does not clip focus outlines. --- */
+.grad-emerald-door,
+.grad-amber-door,
+.grad-teal-door {
+  position: relative;
+  overflow: hidden;
+}
+
+/* The overlay span pressFeedback.ts appends inside the host. It is
+   the clip container for the ripple nodes (inset 0 + overflow hidden
+   + border-radius inherit = the button's own rounded shape). Restated
+   here so the ripple's clipping does not depend on load order. */
+.ripple-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* --- Shared ripple-node base: absolutely positioned discs, centred
+   on the touch point by inline left/top (set in pressFeedback.ts),
+   never intercepting the tap (pointer-events none). --- */
+.alive-ripple-wash,
+.alive-ripple-drop,
+.alive-ripple-ring {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Soft wash: a faint disc that blooms from the touch point and fades.
+   The largest, calmest element — the "water shook" feeling. */
+.alive-ripple-wash {
+  animation: alive-ripple-wash 750ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes alive-ripple-wash {
+  from {
+    transform: scale(0);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Drop core: the drop itself — a small bright disc at the exact touch
+   point that blooms quickly and is gone in ~320ms, before the rings
+   have travelled far. This is what makes the press read as a drop
+   hitting water rather than a generic glow. */
+.alive-ripple-drop {
+  animation: alive-ripple-drop 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes alive-ripple-drop {
+  from {
+    transform: scale(0.3);
+    opacity: 0.95;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Rings: three thin rings chasing each other outward (staggered by
+   inline animation-delay: 0 / 120 / 240ms), like ripples from a
+   drop. The mid-animation opacity step keeps the ring visible while
+   it travels, then lets it dissolve instead of snapping off. */
+.alive-ripple-ring {
+  border: 2px solid;
+  background: transparent;
+  animation: alive-ripple-ring 700ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes alive-ripple-ring {
+  from {
+    transform: scale(0.05);
+    opacity: 0.85;
+  }
+  40% {
+    opacity: 0.5;
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: no water at all (pressFeedback.ts already skips
+   spawning; this is belt-and-braces for any node already in flight). */
+@media (prefers-reduced-motion: reduce) {
+  .alive-ripple-wash,
+  .alive-ripple-drop,
+  .alive-ripple-ring {
+    animation: none !important;
+    display: none;
+  }
+}

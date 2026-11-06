@@ -1,0 +1,145 @@
+/* ============================================================================
+   alive-3d.css — 3D DEPTH for doors + main action buttons (2026-11-06)
+   Specialist: depth / shading only. Loaded AFTER index.css (coordinator
+   imports this file after it in main.tsx), so these equal-specificity
+   rules win the cascade over .glass-door-highlight / .polish-listen-card
+   shadows defined there.
+
+   PROPERTY BOUNDARY (agreed with the other three specialists):
+   This file sets ONLY box-shadow, border, and transform (+ :active
+   variants). It never touches the door fills, timing, or layering —
+   those belong to the shades / motion / ripple specialists.
+
+   RECIPE (same on every 3D surface, calm + solid, Quran mood):
+   - Top inner highlight: a thin light line catching the top edge.
+   - Bottom inner shade: a soft dark wash inside the lower edge, so the
+     face reads light-on-top / darker-at-base (the layered-gradient feel,
+     done with inset shadows — no fill is touched here).
+   - Bottom edge: a 3px darker base edge, the "thickness" of the object.
+   - Drop shadow: a two-layer cast shadow below the button (a tight
+     contact shadow + a wider soft one) so it stands off the page.
+   - Pressed (:active): the button physically SINKS — translateY(2px),
+     the cast shadow shrinks/flattens, the top highlight dims, and the
+     base edge lightens. No shrinking: a real button sinks, it does not
+     get smaller, so this supersedes the scale(0.94) of .polish-press
+     on these surfaces only (polish-press still owns timing).
+   - The existing .polish-press-depth::after cast shadow is switched off
+     on doors only (box-shadow: none), because the cast shadow now lives
+     in this file — otherwise the two shadows stack into mud.
+   - Text contrast is untouched: white text on the unchanged fills.
+   ========================================================================== */
+
+/* --- Main doors: emerald ------------------------------------------------- */
+.grad-emerald-door {
+  border: 1px solid rgba(0, 0, 0, 0.20);
+  border-bottom: 3px solid rgba(0, 0, 0, 0.30);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 3px 6px rgba(9, 39, 29, 0.28),
+    0 12px 24px -8px rgba(9, 39, 29, 0.45);
+}
+
+/* --- Sub-doors: gold / amber (warm cast shadow to match the fill) ------- */
+.grad-amber-door {
+  border: 1px solid rgba(0, 0, 0, 0.20);
+  border-bottom: 3px solid rgba(0, 0, 0, 0.30);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 3px 6px rgba(74, 39, 3, 0.28),
+    0 12px 24px -8px rgba(74, 39, 3, 0.45);
+}
+
+/* --- Pressed: sink 2px, shadow flattens, highlight dims ----------------- */
+.grad-emerald-door:active {
+  transform: translateY(2px);
+  border-bottom-color: rgba(0, 0, 0, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 1px 3px rgba(9, 39, 29, 0.22),
+    0 4px 10px -4px rgba(9, 39, 29, 0.30);
+}
+
+.grad-amber-door:active {
+  transform: translateY(2px);
+  border-bottom-color: rgba(0, 0, 0, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 1px 3px rgba(74, 39, 3, 0.22),
+    0 4px 10px -4px rgba(74, 39, 3, 0.30);
+}
+
+/* --- Doors: the old ::after cast shadow is retired here ------------------
+   Its job is now done by the box-shadow above; keeping both would double
+   the cast shadow. Its :active fade in index.css then has nothing to fade
+   and is harmless. */
+.grad-emerald-door.polish-press-depth::after,
+.grad-amber-door.polish-press-depth::after {
+  box-shadow: none;
+}
+
+/* ============================================================================
+   .btn-3d — the same depth recipe for main action buttons that do NOT use
+   a door class (their fills come from Tailwind utilities, untouched here).
+   Neutral-green cast shadow suits emerald fills; .btn-3d-amber is the
+   warm-shadow twin for amber fills (e.g. the SelfTest start buttons).
+   Coordinator: add the class to the button's class list, nothing else.
+   ========================================================================== */
+.btn-3d {
+  border: 1px solid rgba(0, 0, 0, 0.20);
+  border-bottom: 3px solid rgba(0, 0, 0, 0.30);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.40),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.20),
+    0 3px 6px rgba(9, 39, 29, 0.28),
+    0 12px 24px -8px rgba(9, 39, 29, 0.45);
+}
+
+.btn-3d-amber {
+  border: 1px solid rgba(0, 0, 0, 0.20);
+  border-bottom: 3px solid rgba(0, 0, 0, 0.30);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.40),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.20),
+    0 3px 6px rgba(74, 39, 3, 0.28),
+    0 12px 24px -8px rgba(74, 39, 3, 0.45);
+}
+
+.btn-3d:active,
+.btn-3d-amber:active {
+  transform: translateY(2px);
+  border-bottom-color: rgba(0, 0, 0, 0.14);
+}
+
+.btn-3d:active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.18),
+    0 1px 3px rgba(9, 39, 29, 0.22),
+    0 4px 10px -4px rgba(9, 39, 29, 0.30);
+}
+
+.btn-3d-amber:active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.20),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.18),
+    0 1px 3px rgba(74, 39, 3, 0.22),
+    0 4px 10px -4px rgba(74, 39, 3, 0.30);
+}
+
+/* --- Reduced motion: no sinking (doors already get transform: none from
+   the reduced-motion block in index.css via .polish-press; this covers
+   .btn-3d buttons, which do not carry that class). ----------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .btn-3d:active,
+  .btn-3d-amber:active {
+    transform: none;
+  }
+}
