@@ -163,12 +163,52 @@ export function reciterIndexForQuarter(
   return ((r0 + steps) % RECITERS.length + RECITERS.length) % RECITERS.length;
 }
 
+// Varied khatma reciter plan (2026-11-07): the user can choose the
+// order (each quarter in turn uses the next chosen reciter), a random
+// pick from a chosen set (seeded, so the same quarter always gets the
+// same reciter), or the default fixed rotation. Stored locally.
+export type VariedPlan =
+  | { kind: 'rotate' }
+  | { kind: 'order'; ids: string[] }
+  | { kind: 'random'; ids: string[]; seed: number };
+
+const VARIED_PLAN_KEY = 'quran-varied-plan';
+
+export function readVariedPlan(): VariedPlan {
+  try {
+    const raw = localStorage.getItem(VARIED_PLAN_KEY);
+    if (!raw) return { kind: 'rotate' };
+    const v = JSON.parse(raw) as VariedPlan;
+    if (v.kind === 'order' && Array.isArray(v.ids) && v.ids.length > 0) return v;
+    if (v.kind === 'random' && Array.isArray(v.ids) && v.ids.length > 0 && typeof v.seed === 'number') return v;
+  } catch { /* ignore */ }
+  return { kind: 'rotate' };
+}
+
+export function writeVariedPlan(plan: VariedPlan): void {
+  try { localStorage.setItem(VARIED_PLAN_KEY, JSON.stringify(plan)); } catch { /* ignore */ }
+}
+
+function variedPlanReciterFor(plan: VariedPlan, quarter: number): string | null {
+  if (plan.kind === 'order') return plan.ids[(quarter - 1) % plan.ids.length];
+  if (plan.kind === 'random') {
+    const x = Math.abs(Math.sin(plan.seed * 12.9898 + quarter * 78.233)) * 43758.5453;
+    const frac = x - Math.floor(x);
+    return plan.ids[Math.floor(frac * plan.ids.length) % plan.ids.length];
+  }
+  return null;
+}
+
 export function reciterIdForQuarter(
   mode: ThreeMode,
   startQuarter: number,
   startReciterId: string,
   quarter: number,
 ): string {
+  if (mode === 'varied') {
+    const picked = variedPlanReciterFor(readVariedPlan(), quarter);
+    if (picked) return picked;
+  }
   // Juhani single khatma: one voice for every quarter — the
   // surah-file hadr voice, not a rotation member. Varied and
   // tadabbur never pass Juhani (the picker gates it), so the
