@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, PartyPopper } from 'lucide-react';
@@ -143,6 +144,8 @@ export default function HomeStartPage({ session, onNavigate }: {
   // by default — same pattern as the الحفظ / سمّع لنفسك doors.
   const [mapOpen, setMapOpen] = useState(false);
   const [mutOpen, setMutOpen] = useState(false);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [tarteelOpen, setTarteelOpen] = useState(false);
   // الحفظ door: expands to 3 start choices (resume / pick a place / from
   // the beginning). Collapsed by default — the door looks exactly like
   // the other Home doors.
@@ -509,6 +512,36 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
+        {/* اختبر نفسك: directly under سمّع لنفسك. Expands to two sub-doors:
+            ترتيل (right) then المتشابهات (left). */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => setQuizOpen(!quizOpen)}
+          aria-expanded={quizOpen}
+          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus"
+        >
+          اختبر نفسك
+          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${quizOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {quizOpen && (
+          <div className="px-4 mb-4 flex gap-3 alive-subdoors">
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => setTarteelOpen(true)}
+              className="flex-1 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+            >
+              ترتيل
+            </button>
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => setMutOpen(true)}
+              className="flex-1 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+            >
+              المتشابهات
+            </button>
+          </div>
+        )}
+
         {/* الحق الإمام: directly under سمّع لنفسك (user order 2026-11-04). */}
         <button
           onPointerDown={pressFeedback}
@@ -522,14 +555,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           الحق الإمام
         </button>
 
-        {/* 2026-11-07: «اختبر نفسك» — mutashabihat quiz door, directly under سمّع لنفسك (2026-11-07). */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => setMutOpen(true)}
-          className="w-full mb-4 py-4 px-4 grad-emerald-door text-white font-bold rounded-2xl text-xl flex items-center justify-center gap-3 polish-press polish-focus"
-        >
-          اختبر نفسك بالمتشابهات
-        </button>
 
         {/* استمع للقرآن: full door, same size as الحق الإمام. */}
         {listeningWird && (
@@ -660,6 +685,7 @@ export default function HomeStartPage({ session, onNavigate }: {
       )}
 
       {mutOpen && <MutashabihatGame onClose={() => setMutOpen(false)} />}
+      {tarteelOpen && <TarteelQuizModal onClose={() => setTarteelOpen(false)} />}
       <BottomNav current="home" onNavigate={onNavigate} />
     </div>
   );

@@ -28,7 +28,7 @@ import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock,
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText,
 } from 'lucide-react';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
@@ -551,7 +551,7 @@ export default function QuranMushafPage({
   // (with a choice of three published tafsirs inside it). Links is
   // the default tab; hopping between similar ayahs keeps the
   // mutashabihat tab so verses can still be compared by hopping.
-  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'similar' | 'asbab' | 'tafsir'>('links');
+  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'asbab' | 'tafsir'>('links');
   const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
   const [tafsirText, setTafsirText] = useState<string | null>(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
@@ -4499,21 +4499,20 @@ export default function QuranMushafPage({
                         </button>
                         <button onClick={() => setPopupTab('meanings')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'meanings' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          معاني الكلمات
-                        </button>
-                        <button onClick={() => setPopupTab('similar')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'similar' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          مشابهات
+                          <Languages className="inline w-4 h-4 ml-1" />معاني الكلمات
                         </button>
                         <button onClick={() => setPopupTab('asbab')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'asbab' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          أسباب النزول
+                          <ScrollText className="inline w-4 h-4 ml-1" />أسباب النزول
                         </button>
                         <button onClick={() => setPopupTab('tafsir')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                           التفسير
                         </button>
                       </div>
+                      {popupTab === 'mutashabihat' && (
+                        <div className="mb-3"><AyahSimilar surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} /></div>
+                      )}
                       {popupTab === 'mutashabihat' && (mutashabihatLoading ? (
                         <div className="flex items-center justify-center py-6">
                           <div className="w-7 h-7 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
@@ -4601,9 +4600,6 @@ export default function QuranMushafPage({
                       {popupTab === 'links' && linkAudioError && <p className="text-sm text-red-600 font-semibold mt-2">{linkAudioError}</p>}
                       {popupTab === 'meanings' && (
                         <AyahMeanings surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} />
-                      )}
-                      {popupTab === 'similar' && (
-                        <AyahSimilar surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} />
                       )}
                       {popupTab === 'asbab' && (
                         <AyahAsbab surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} />
