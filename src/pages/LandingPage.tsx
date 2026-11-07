@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Headphones, Globe, BookMarked, Share2, Link } from 'lucide-react';
+import { Headphones, Globe, BookMarked, Share2, Link, Brain, Moon, BookOpen, HeartHandshake } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import { TOTAL_VERSES } from '../lib/types';
@@ -99,6 +99,11 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               : 'Memorize the Quran through links: every ayah connected to what comes before and after it, so it sticks.'}
           </p>
 
+          <div className="inline-flex items-center gap-2 px-5 py-2.5 mb-10 rounded-full bg-emerald-600 text-white font-bold shadow-lg">
+            <HeartHandshake className="w-5 h-5" />
+            مجاني بالكامل: بلا إعلانات، وبلا اشتراكات، ولن يكون فيه إعلانات ولا مقابل مادي إن شاء الله
+          </div>
+
           <div className="flex flex-col items-center gap-6 mb-10">
             <CircularProgressIndicator value={percentage} size={160} label={t('progress')} />
             <div className="text-center">
@@ -118,7 +123,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               className="flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-smooth"
             >
               <Headphones className="w-6 h-6" />
-              {session ? 'لوحتي' : t('userApp')}
+              {session ? 'لوحتي' : 'ابدأ الحفظ مجاناً'}
             </button>
             <button
               onClick={() => onNavigate('mushaf')}
@@ -127,6 +132,26 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               <BookMarked className="w-6 h-6" />
               افتح المصحف للحفظ
             </button>
+          </div>
+
+          {/* What the app gives you: visible benefits before the share block. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-right mb-12">
+            {[
+              { icon: Link, title: 'تربيطات تثبّت الحفظ', text: 'كل آية مربوطة بما قبلها وما بعدها، فالحفظ بيتثبت في الذهن بسرعة.' },
+              { icon: Brain, title: 'اختبر نفسك', text: 'اختبار المتشابهات المشهورة، واختبار الترتيل بالميكروفون بالنطاق اللي تختاره: جزء أو حزب أو ربع أو سورة.' },
+              { icon: Headphones, title: 'استمع في أي وقت', text: 'تلاوة متواصلة، ومؤقت نوم، والصوت مستمر حتى لو قفلت الشاشة.' },
+              { icon: BookOpen, title: 'فهم الآية', text: 'معاني الكلمات، أسباب النزول، المشابهات، والتفسير في نفس الصفحة.' },
+              { icon: BookMarked, title: 'مصحف للحفظ', text: 'مصحف مرتب للمراجعة، وفيه أكتر من طبعة، منها مصحف ورش.' },
+              { icon: Moon, title: 'مريح للعين', text: 'شاشة سوداء تخفي الواجهة وتترك الصوت يكمل.' },
+            ].map((f) => (
+              <div key={f.title} className="bg-white/80 backdrop-blur rounded-2xl p-5 border border-hairline-emerald shadow-sm">
+                <div className="w-11 h-11 rounded-xl bg-emerald-50 flex items-center justify-center mb-3">
+                  <f.icon className="w-6 h-6 text-emerald-700" />
+                </div>
+                <p className="font-bold text-accent-800 text-lg mb-1">{f.title}</p>
+                <p className="text-accent-600 leading-relaxed">{f.text}</p>
+              </div>
+            ))}
           </div>
 
           {/* Share section */}
