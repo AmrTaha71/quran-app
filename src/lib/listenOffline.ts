@@ -43,7 +43,6 @@
 // (clipKey, formatApproxSize, meta parse/validate) need no DOM.
 // No Supabase, no React in this module.
 
-import { trimmedAyahUrl } from './trimmedAyahAudio';
 import { RECITERS } from './reciters';
 import { SURAH_AYAH_COUNTS } from './surahs';
 
@@ -407,13 +406,10 @@ export async function resolveListenUrl(
   ayah: number,
 ): Promise<string> {
   const cached = await getCachedClipUrl(reciterId, surah, ayah);
-  const reciter = cached === null ? findReciter(reciterId) : null;
-  if (cached === null && !reciter) throw new Error(`Unknown reciter: ${reciterId}`);
-  const src = cached ?? (reciter as NonNullable<typeof reciter>).audioUrl(surah, ayah);
-  // Trim the recording's own silence so ayat join like one recitation.
-  // Falls back to the untouched source if trimming is not possible.
-  const trimmed = await trimmedAyahUrl(src);
-  return trimmed ?? src;
+  if (cached !== null) return cached;
+  const reciter = findReciter(reciterId);
+  if (!reciter) throw new Error(`Unknown reciter: ${reciterId}`);
+  return reciter.audioUrl(surah, ayah);
 }
 
 /**
