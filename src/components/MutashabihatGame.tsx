@@ -4,7 +4,7 @@
 // Quran text; see the generator notes in that file's sibling docs).
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
-import BANK from '../data/mutashabihat-bank.json';
+import BANK from '../data/mutashabihat-famous.json'; // 2026-11-07: only clues backed by two sources (Quranpedia similar groups)
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { playClap, playCelebrate, playBuzz } from '../lib/gameSounds';
 
