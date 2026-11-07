@@ -2280,6 +2280,27 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         </div>
       </header>
 
+      {/* 2026-11-07: always-visible control bar while a recitation is active.
+          Fixed to the bottom of the screen so the user never has to scroll back
+          to the top to stop or lock while the page follows the ayah. */}
+      {(playing || journeyMode !== null) && (
+        <div className="fixed bottom-0 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-white/95 backdrop-blur border-t border-hairline-emerald shadow-2xl">
+          <div className="max-w-5xl mx-auto grid grid-cols-2 gap-3">
+            <button
+              onClick={stopPlayback}
+              className="py-4 bg-red-600 hover:bg-red-700 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+            >
+              <Square className="w-6 h-6" /> إيقاف
+            </button>
+            <button
+              onClick={() => setBlackScreen(true)}
+              className="py-4 bg-stone-800 hover:bg-stone-900 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
+            >
+              <Moon className="w-6 h-6" /> قفل الشاشة
+            </button>
+          </div>
+        </div>
+      )}
       <main className="max-w-5xl mx-auto px-4 py-5">
         {/* Resume card FIRST, when a listening wird is saved */}
         {savedWird && showResume && (

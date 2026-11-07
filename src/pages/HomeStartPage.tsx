@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
@@ -146,6 +147,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   const [mutOpen, setMutOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
   const [tarteelOpen, setTarteelOpen] = useState(false);
+  const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
   // الحفظ door: expands to 3 start choices (resume / pick a place / from
   // the beginning). Collapsed by default — the door looks exactly like
   // the other Home doors.
@@ -541,6 +543,17 @@ export default function HomeStartPage({ session, onNavigate }: {
             </button>
           </div>
         )}
+        {quizOpen && (
+          <div className="px-4 mb-4 alive-subdoors">
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => setComprehensiveOpen(true)}
+              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+            >
+              اختبار شامل (100 درجة)
+            </button>
+          </div>
+        )}
 
         {/* الحق الإمام: directly under سمّع لنفسك (user order 2026-11-04). */}
         <button
@@ -686,6 +699,7 @@ export default function HomeStartPage({ session, onNavigate }: {
 
       {mutOpen && <MutashabihatGame onClose={() => setMutOpen(false)} />}
       {tarteelOpen && <TarteelQuizModal onClose={() => setTarteelOpen(false)} />}
+      {comprehensiveOpen && <ComprehensiveTestModal onClose={() => setComprehensiveOpen(false)} />}
       <BottomNav current="home" onNavigate={onNavigate} />
     </div>
   );
