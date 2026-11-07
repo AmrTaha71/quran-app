@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import TimerWheel from '../components/TimerWheel';
 import {
   Check,
   Download,
@@ -2205,6 +2206,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // visible and cancellable. Emerald/gold only — no new hue.
   const KHATMA_MINUTE_CHIPS: [number, string][] = [[15, 'ربع ساعة'], [30, 'نص ساعة'], [45, '٤٥ دقيقة']];
   const KHATMA_HOUR_CHIPS: [number, string][] = [[60, 'ساعة'], [120, 'ساعتين'], [180, '٣ ساعات']];
+  const [wheelMinutes, setWheelMinutes] = useState<number>(30);
   const sleepTimerBlock = (
     <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
       <p className="font-semibold text-accent-800 flex items-center gap-2">
@@ -2235,20 +2237,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-accent-600 mt-2">اختار إمتى يتوقف التشغيل:</p>
-          <p className="text-xs font-semibold text-accent-700">بالدقايق</p>
-          <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالدقايق">
-            {KHATMA_MINUTE_CHIPS.map(([m, label]) => (
-              <button key={m} onClick={() => armTimerMinutes(m)}
-                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">{label}</button>
-            ))}
-          </div>
-          <p className="text-xs font-semibold text-accent-700">بالساعات</p>
-          <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالساعات">
-            {KHATMA_HOUR_CHIPS.map(([m, label]) => (
-              <button key={m} onClick={() => armTimerMinutes(m)}
-                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">{label}</button>
-            ))}
-          </div>
+          <p className="text-xs font-semibold text-accent-700">المدة</p>
+          <TimerWheel items={[...KHATMA_MINUTE_CHIPS, ...KHATMA_HOUR_CHIPS]} initialIndex={1} onChange={setWheelMinutes} />
+          <button onClick={() => armTimerMinutes(wheelMinutes)}
+            className="w-full py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl polish-press">ابدأ المؤقت</button>
           <p className="text-xs font-semibold text-accent-700">بالساعة</p>
           <div className="flex gap-2">
             <input type="time" value={clockAt} onChange={(e) => setClockAt(e.target.value)}
@@ -2258,9 +2250,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           </div>
           <p className="text-xs font-semibold text-accent-700">بالجزء أو الحزب أو السورة</p>
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالوحدة">
-            <button onClick={() => armTimerAtUnit('juz')} className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">الجزء</button>
-            <button onClick={() => armTimerAtUnit('hizb')} className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">الحزب</button>
-            <button onClick={() => armTimerAtUnit('surah')} className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">السورة</button>
+            <button onClick={() => armTimerAtUnit('juz')} className="py-3.5 px-2 bg-white border border-hairline-emerald text-accent-800 text-base font-bold rounded-xl polish-press">الجزء</button>
+            <button onClick={() => armTimerAtUnit('hizb')} className="py-3.5 px-2 bg-white border border-hairline-emerald text-accent-800 text-base font-bold rounded-xl polish-press">الحزب</button>
+            <button onClick={() => armTimerAtUnit('surah')} className="py-3.5 px-2 bg-white border border-hairline-emerald text-accent-800 text-base font-bold rounded-xl polish-press">السورة</button>
           </div>
           <p className="text-xs text-accent-600">مؤقت واحد بس في كل مرة؛ لو ظبطت واحد جديد يلغي القديم.</p>
         </div>
@@ -3049,7 +3041,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 </button>
               </div>
             )}
-            <div className="flex flex-wrap gap-2 mt-4">
+            <button
+              onClick={stopPlayback}
+              className="mt-4 w-full py-4 bg-red-600 hover:bg-red-700 text-white text-xl font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus"
+            >
+              <Square className="w-6 h-6" /> إيقاف التشغيل
+            </button>
+            <div className="flex flex-wrap gap-2 mt-3">
               <button
                 onClick={() => void togglePlayPause()}
                 className="flex-1 min-w-[120px] py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus"
@@ -3100,12 +3098,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 className="px-4 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl flex items-center gap-2 polish-press"
               >
                 <RotateCcw className="w-5 h-5" /> {journeyMode !== null ? 'من أول الرحلة' : 'من أول السورة'}
-              </button>
-              <button
-                onClick={stopPlayback}
-                className="px-4 py-3 bg-white border border-red-200 text-red-700 font-semibold rounded-xl flex items-center gap-2 polish-press"
-              >
-                <Square className="w-5 h-5" /> إيقاف
               </button>
             </div>
             <button
