@@ -3,7 +3,7 @@ import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, PartyPopper } from 'lucide-react';
+import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, PartyPopper, Users } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
@@ -566,6 +566,20 @@ export default function HomeStartPage({ session, onNavigate }: {
             <Mic className="w-5 h-5 text-white" />
           </span>
           الحق الإمام
+        </button>
+
+        {/* سمع مع الرفيق: placeholder door, not wired yet (coming soon). */}
+        <button
+          type="button"
+          disabled
+          aria-disabled="true"
+          className="w-full py-4 mb-4 bg-slate-200 text-slate-500 font-bold rounded-xl flex items-center justify-center gap-2 text-lg cursor-not-allowed"
+        >
+          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/60">
+            <Users className="w-5 h-5 text-slate-500" />
+          </span>
+          سمع مع الرفيق
+          <span className="text-xs font-semibold bg-slate-300 text-slate-600 rounded-full px-2 py-0.5">قريباً</span>
         </button>
 
 
