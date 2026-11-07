@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
+import { AyahSimilar, AyahAsbab } from '../components/AyahSimilarAsbab';
+import AyahMeanings from '../components/AyahMeanings';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
@@ -549,7 +551,7 @@ export default function QuranMushafPage({
   // (with a choice of three published tafsirs inside it). Links is
   // the default tab; hopping between similar ayahs keeps the
   // mutashabihat tab so verses can still be compared by hopping.
-  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'tafsir'>('links');
+  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'similar' | 'asbab' | 'tafsir'>('links');
   const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
   const [tafsirText, setTafsirText] = useState<string | null>(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
@@ -4495,6 +4497,18 @@ export default function QuranMushafPage({
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                           الإعراب
                         </button>
+                        <button onClick={() => setPopupTab('meanings')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'meanings' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
+                          معاني الكلمات
+                        </button>
+                        <button onClick={() => setPopupTab('similar')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'similar' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
+                          مشابهات
+                        </button>
+                        <button onClick={() => setPopupTab('asbab')}
+                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'asbab' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
+                          أسباب النزول
+                        </button>
                         <button onClick={() => setPopupTab('tafsir')}
                           className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                           التفسير
@@ -4585,6 +4599,15 @@ export default function QuranMushafPage({
                         </div>
                       ))}
                       {popupTab === 'links' && linkAudioError && <p className="text-sm text-red-600 font-semibold mt-2">{linkAudioError}</p>}
+                      {popupTab === 'meanings' && (
+                        <AyahMeanings surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} />
+                      )}
+                      {popupTab === 'similar' && (
+                        <AyahSimilar surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} />
+                      )}
+                      {popupTab === 'asbab' && (
+                        <AyahAsbab surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} />
+                      )}
                       {popupTab === 'irab' && (
                         <div className="space-y-3">
                           <iframe
