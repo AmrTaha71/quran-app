@@ -53,7 +53,7 @@ export default function QuranAsrLab() {
         setStatus('ready');
       } else if (m.type === 'error') {
         setErr(m.message);
-        setStatus('idle');
+        setStatus(m.loaded ? 'ready' : 'idle');
       }
     };
     workerRef.current = w;

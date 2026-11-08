@@ -36,11 +36,13 @@ self.onmessage = async (e: MessageEvent) => {
     } else if (msg.type === 'run') {
       await load();
       const t0 = performance.now();
-      const out = await asr!(msg.audio, { language: 'arabic', task: 'transcribe' });
+      // The fine-tuned model is Arabic-only and its generation config is not
+      // marked multilingual, so no language/task options (they throw).
+      const out = await asr!(msg.audio, { chunk_length_s: 30, stride_length_s: 5 });
       const text = Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text;
       self.postMessage({ type: 'result', id: msg.id, text: text.trim(), ms: Math.round(performance.now() - t0), backend });
     }
   } catch (err) {
-    self.postMessage({ type: 'error', message: String((err as Error)?.message || err) });
+    self.postMessage({ type: 'error', message: String((err as Error)?.message || err), loaded: !!asr });
   }
 };
