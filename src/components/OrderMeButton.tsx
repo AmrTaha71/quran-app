@@ -103,7 +103,7 @@ export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }:
 // mount, short stand), tilted like a radio-studio mic. Gold on green.
 function VintageMic({ listening }: { listening: boolean }) {
   return (
-    <svg viewBox="0 0 80 100" className={`w-20 h-24 shrink-0 drop-shadow-lg ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
+    <svg viewBox="0 0 80 100" className={`w-28 h-32 shrink-0 drop-shadow-lg ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
       <defs>
         <linearGradient id="vmGold" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#fff1c1" />

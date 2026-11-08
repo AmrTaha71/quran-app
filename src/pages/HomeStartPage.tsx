@@ -306,16 +306,16 @@ export default function HomeStartPage({ session, onNavigate }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
-        {/* «اؤمرني»: voice command door at the very top. */}
-        <div className="mb-5">
-          <OrderMeButton onNavigate={onNavigate}
-            onMutashabihat={() => setMutOpen(true)}
-            onElderly={() => setElderlyMode(true)} />
-        </div>
         {/* App mark: the artwork itself, sized so the greeting and
             the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">
           <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md polish-hero-medal" />
+        </div>
+        {/* «اؤمرني»: voice command door, right under the app mark. */}
+        <div className="mb-5">
+          <OrderMeButton onNavigate={onNavigate}
+            onMutashabihat={() => setMutOpen(true)}
+            onElderly={() => setElderlyMode(true)} />
         </div>
 
         <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4 text-center">
