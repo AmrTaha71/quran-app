@@ -34,6 +34,7 @@ import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
 import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardingDone } from './components/Onboarding';
 import DevicePicker from './components/DevicePicker';
+import VoiceSearchMic from './components/VoiceSearchMic';
 import { getLocalDeviceKind } from './lib/deviceProfile';
 import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
@@ -578,6 +579,8 @@ function AppContent() {
       {/* Silent keeper for the adhan push subscription (closed-app
           notifications); renders nothing, never prompts. */}
       <AdhanPushManager />
+      {/* Mic beside any focused search field (voice or typing). */}
+      <VoiceSearchMic />
       {/* First-run onboarding overlay (home route only; the app works
           normally behind it once finished or skipped). */}
       {showOnboarding && route === 'home' && (

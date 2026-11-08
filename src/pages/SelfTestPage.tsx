@@ -5017,7 +5017,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     <label className="block">
       <span className="text-sm font-medium text-accent-700">السورة</span>
       <div className="relative mt-1">
-        <input type="text" value={surahSearch} dir="rtl"
+        <input type="text" value={surahSearch} dir="rtl" data-no-voice
           onChange={(e) => applySurahSearch(e.target.value)}
           placeholder="اكتب أو قول اسم السورة… مثال: الشمس"
           className="w-full px-3 py-2.5 pl-12 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
