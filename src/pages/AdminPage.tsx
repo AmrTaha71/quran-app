@@ -46,6 +46,9 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [startingBalance, setStartingBalance] = useState(5);
   const [balanceDraft, setBalanceDraft] = useState('5');
   const [editingBalance, setEditingBalance] = useState(false);
+  // Dashboard sub-doors (2026-11-08): one panel open at a time, all closed by default.
+  const [openPanel, setOpenPanel] = useState<'progress' | 'users' | 'openai' | null>(null);
+  const toggleFor = (p: 'progress' | 'users' | 'openai') => setOpenPanel((cur) => (cur === p ? null : p));
   const [usageError, setUsageError] = useState('');
   const [linkModalVerse, setLinkModalVerse] = useState<QuranVerse | null>(null);
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
@@ -624,8 +627,25 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
           </div>
         )}
+        {/* Dashboard sub-doors: small buttons, each opens its own panel */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {([
+            ['progress', 'تقدم الروابط'],
+            ['users', 'المستخدمين'],
+            ['openai', 'رصيد OpenAI'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => toggleFor(key)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-smooth ${openPanel === key ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-800 border-hairline hover:bg-gray-50'}`}
+            >
+              {label} {openPanel === key ? '▴' : '▾'}
+            </button>
+          ))}
+        </div>
+
         {/* Dashboard — beautified */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6 ${openPanel === 'progress' ? '' : 'hidden'}`}>
           <div className="bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 rounded-2xl p-6 flex items-center gap-6 shadow-lg relative overflow-hidden">
             <div className="absolute -top-6 -right-6 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
             <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-teal-300/10 rounded-full blur-xl" />
@@ -644,7 +664,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         {/* User accounts — so the admins can rejoice in the good they
             provide (2026-10-28). Counted by the admin-only
             get_user_stats RPC; the button refreshes the count. */}
-        <div className="bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-6 mb-4 shadow-lg relative overflow-hidden">
+        <div className={`bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600 rounded-2xl p-6 mb-4 shadow-lg relative overflow-hidden ${openPanel === 'users' ? '' : 'hidden'}`}>
           <div className="absolute -top-6 -left-6 w-28 h-28 bg-white/10 rounded-full blur-2xl" />
           <div className="flex flex-wrap items-center gap-6 relative">
             <div className="flex items-center justify-center w-16 h-16 bg-white/15 rounded-2xl shrink-0">
@@ -671,7 +691,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* OpenAI balance monitor — estimated from app-side usage logging */}
-        <div className="bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm">
+        <div className={`bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm ${openPanel === 'openai' ? '' : 'hidden'}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-accent-800">رصيد OpenAI (تقديري)</p>
