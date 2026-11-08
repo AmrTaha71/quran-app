@@ -4415,6 +4415,43 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // him, even if he never pauses. One correction at a time (while
   // a fix is awaited, new misses wait for the next stall prompt),
   // and a miss corrected once is never re-interrupted.
+  // Interim-based miss interrupt (2026-11-08). iPad/iPhone Safari often
+  // sends NO final result until the whole recitation ends, so the
+  // finals-only check above never fired mid-flow and every correction
+  // came at the end. Here the same confirmed-miss rule (a LATER word
+  // already matched) runs on finals + the live interim text. To avoid
+  // flicker from unstable interims, the SAME miss must be seen on two
+  // interim events at least 500ms apart. Grading is untouched: the
+  // transcript is restored right after the check.
+  const interimMissSeenRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+  const checkContMissInterruptInterim = (interimText: string) => {
+    if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
+    const saved = liveRef.current.contFinals;
+    let owed: ReturnType<typeof contOwedWords>;
+    try {
+      liveRef.current.contFinals = `${saved} ${interimText}`.trim();
+      owed = contOwedWords();
+    } finally {
+      liveRef.current.contFinals = saved;
+    }
+    if (!owed.isMiss || owed.words.length === 0) { interimMissSeenRef.current = { key: '', at: 0 }; return; }
+    const key = owed.indices.join('|');
+    if (key === contPromptedKeyRef.current) return;
+    const aw = contAwaitingRef.current;
+    if (aw) {
+      const awaitedLast = aw.indices.length > 0 ? Math.max(...aw.indices) : -1;
+      if (owed.indices[0] <= awaitedLast) return;
+    }
+    const now = Date.now();
+    const seen = interimMissSeenRef.current;
+    if (seen.key !== key) { interimMissSeenRef.current = { key, at: now }; return; }
+    if (now - seen.at < 500) return;
+    interimMissSeenRef.current = { key: '', at: 0 };
+    if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
+    diagPush('corr-source', { label: 'interim-miss', reason: key });
+    speakContPrompt(withPrecedingContextWord(owed.words, owed.indices, liveRef.current.contExpected), owed.indices, owed.norms, 'confirmed-miss');
+  };
+
   const checkContMissInterrupt = () => {
     if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
     const owed = contOwedWords();
@@ -4696,6 +4733,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         // noteContMatchProgress, but on live values; never touches
         // contFinals, contCreditedRef, grading, or correction.
         if (liveRef.current.contListening && !contNoMatchRef.current) {
+          // Mid-flow correction from interim (Safari sends finals late).
+          checkContMissInterruptInterim(interimText.trim());
           const live = contLiveProgress();
           if (live.count > contLastMatchedCountRef.current) {
             contLastMatchedCountRef.current = live.count;
