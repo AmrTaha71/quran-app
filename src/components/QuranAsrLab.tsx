@@ -46,7 +46,7 @@ export default function QuranAsrLab() {
       } else if (m.type === 'ready') {
         setBackend(m.backend);
         setStatus('ready');
-        setInfo(`الودن جاهزة (${m.backend}) — التحميل خد ${Math.round((Date.now() - loadStartRef.current) / 1000)} ثانية`);
+        setInfo(`البرنامج جاهز (${m.backend}) — التحميل خد ${Math.round((Date.now() - loadStartRef.current) / 1000)} ثانية`);
       } else if (m.type === 'result') {
         setText(m.text);
         setInfo(`التحليل خد ${(m.ms / 1000).toFixed(1)} ثانية على جهازك (${m.backend})`);
@@ -97,11 +97,11 @@ export default function QuranAsrLab() {
 
   return (
     <div dir="rtl" className="bg-white border-2 border-amber-300 rounded-2xl p-4 space-y-3">
-      <p className="font-bold text-accent-800">تجربة: ودن القرآن على جهازك</p>
-      <p className="text-xs text-accent-600">نموذج متدرب على القرآن، بيشتغل على جهازك من غير إنترنت بعد أول تحميل (حوالي 100 ميجا مرة واحدة). سجّل كام آية، وشوف هو سمع إيه.</p>
+      <p className="font-bold text-accent-800">تجربة: التعرّف على التلاوة على جهازك</p>
+      <p className="text-xs text-accent-600">برنامج متدرب على سماع القرآن، بيشتغل على جهازك من غير إنترنت بعد أول تحميل (حوالي 100 ميجا مرة واحدة). سجّل كام آية، وشوف هو سمع إيه.</p>
       {status === 'idle' && (
         <button type="button" onClick={load} className="w-full min-h-[48px] rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2">
-          <Download className="w-5 h-5" /> حمّل الودن
+          <Download className="w-5 h-5" /> حمّل البرنامج
         </button>
       )}
       {status === 'loading' && <p className="text-sm text-accent-700">بيحمّل… {pct}%</p>}

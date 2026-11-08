@@ -3,7 +3,6 @@
 // matching page opens. Not understood -> shows what was heard and
 // asks again; nothing opens by guess. (2026-11-08)
 import { useState } from 'react';
-import { Mic } from 'lucide-react';
 import { parseVoiceCommand, surahGlobalRange, surahName, type VoiceAction } from '../lib/voiceCommand';
 import { pressFeedback } from '../lib/pressFeedback';
 
@@ -84,19 +83,53 @@ export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }:
         onPointerDown={pressFeedback}
         onClick={start}
         aria-label="اؤمرني"
-        className={`relative w-36 h-36 rounded-full flex flex-col items-center justify-center text-white shadow-2xl ring-4 ring-amber-200 polish-press transition-transform ${state === 'listening' ? 'bg-gradient-to-br from-red-500 to-red-700 animate-pulse scale-105' : 'bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700'}`}
+        className={`group relative w-full max-w-md flex items-center gap-4 px-5 py-4 rounded-3xl shadow-xl polish-press transition-transform ${state === 'listening' ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#0f5c4d] via-[#12705d] to-[#0b3f37]'}`}
       >
-        <span className="absolute inset-2 rounded-full border-2 border-white/40" />
-        <Mic className="w-14 h-14 drop-shadow" strokeWidth={2.4} />
-        <span className="mt-1 text-xl font-bold drop-shadow">{state === 'listening' ? 'بسمعك…' : 'اؤمرني'}</span>
+        <VintageMic listening={state === 'listening'} />
+        <span className="flex-1 text-right">
+          <span className="block text-3xl font-bold font-display-ar text-[#f6d27a] drop-shadow">{state === 'listening' ? 'بسمعك…' : 'اؤمرني'}</span>
+          <span className="block text-sm text-[#f3ead7]/90 mt-1">{state === 'listening' ? 'قول دلوقتي…' : 'قول لي عايز تعمل إيه، وأنا أفتحهولك'}</span>
+        </span>
       </button>
-      <p className="text-center text-base font-semibold text-accent-800">
-        {state === 'listening' ? 'قول دلوقتي…' : 'دوس وقول لي عايز تعمل إيه، وأنا أفتحهولك'}
-      </p>
       {state !== 'listening' && !note && (
         <p className="text-center text-xs text-accent-600">مثال: «عايز أقرأ سورة الكهف» • «عايز أسمع سورة الملك» • «سمّعلي الشمس»</p>
       )}
       {note && <p className="text-center text-sm text-accent-700 bg-white/80 rounded-xl px-3 py-2">{note}</p>}
     </div>
+  );
+}
+
+// Classic 1960s broadcast microphone (capsule head with grille, ring
+// mount, short stand), tilted like a radio-studio mic. Gold on green.
+function VintageMic({ listening }: { listening: boolean }) {
+  return (
+    <svg viewBox="0 0 80 100" className={`w-20 h-24 shrink-0 drop-shadow-lg ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
+      <defs>
+        <linearGradient id="vmGold" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#fff1c1" />
+          <stop offset="0.45" stopColor="#e9b949" />
+          <stop offset="1" stopColor="#9a6a12" />
+        </linearGradient>
+        <linearGradient id="vmHead" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#3b3b3b" />
+          <stop offset="0.5" stopColor="#9a9a9a" />
+          <stop offset="1" stopColor="#2d2d2d" />
+        </linearGradient>
+      </defs>
+      <g transform="rotate(-18 40 50)">
+        {/* capsule head */}
+        <rect x="24" y="6" width="32" height="46" rx="16" fill="url(#vmHead)" stroke="url(#vmGold)" strokeWidth="3" />
+        {[14, 20, 26, 32, 38, 44].map((y) => (
+          <line key={y} x1="27" y1={y} x2="53" y2={y} stroke="#1e1e1e" strokeWidth="1.6" opacity="0.7" />
+        ))}
+        <rect x="22" y="27" width="36" height="6" rx="3" fill="url(#vmGold)" />
+        {/* yoke */}
+        <path d="M18 30 Q18 62 40 62 Q62 62 62 30" fill="none" stroke="url(#vmGold)" strokeWidth="4" strokeLinecap="round" />
+        {/* stand */}
+        <rect x="37" y="62" width="6" height="22" fill="url(#vmGold)" />
+        <ellipse cx="40" cy="88" rx="18" ry="5" fill="url(#vmGold)" />
+        {listening && <circle cx="40" cy="29" r="30" fill="none" stroke="#fecdd3" strokeWidth="2" opacity="0.7" />}
+      </g>
+    </svg>
   );
 }
