@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
+import QuranAsrLab from '../components/QuranAsrLab';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
@@ -5213,6 +5214,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 removed or renamed, only hidden behind a door. */}
             {lobbyDoor === null && (
               <>
+                {/* Pilot (2026-11-08): on-device Quran ear. */}
+                <QuranAsrLab />
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setLobbyDoor('range')}
                     className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
