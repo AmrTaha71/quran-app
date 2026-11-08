@@ -194,3 +194,20 @@ export function hasChosenReciter(): boolean {
 export function markChosenReciter(): void {
   try { localStorage.setItem(CHOSEN_KEY, '1'); } catch { /* ignore */ }
 }
+
+/** Juz numbers (1..30) that a global ayah range touches. */
+export function juzOfRange(startGlobal: number, endGlobal: number): number[] {
+  const out: number[] = [];
+  for (let j = 1; j <= 30; j++) {
+    const a = JUZ_STARTS[j - 1].global;
+    const b = j < 30 ? JUZ_STARTS[j].global - 1 : TOTAL_AYAHS;
+    if (b >= startGlobal && a <= endGlobal) out.push(j);
+  }
+  return out;
+}
+
+/** Reciters whose files cover the whole range on this device. */
+export function recitersForRange(startGlobal: number, endGlobal: number): string[] {
+  const juz = juzOfRange(startGlobal, endGlobal);
+  return CORR_RECITERS.map((r) => r.folder).filter((f) => juz.every((j) => isJuzDownloaded(f, j)));
+}

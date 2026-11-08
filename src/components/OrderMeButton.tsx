@@ -17,9 +17,14 @@ interface Props {
 export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }: Props) {
   const [state, setState] = useState<'idle' | 'listening'>('idle');
   const [note, setNote] = useState('');
+  const [askSurah, setAskSurah] = useState<number | null>(null);
 
   const run = (a: VoiceAction) => {
     try {
+      if (a.kind === 'ask') {
+        setAskSurah(a.surah);
+        return;
+      }
       if (a.kind === 'mushaf') {
         if (a.surah) localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: a.surah, ayah: 1 }));
         onNavigate('mushaf');
@@ -91,44 +96,51 @@ export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }:
           <span className="block text-sm text-[#f3ead7]/90 mt-1">{state === 'listening' ? 'قول دلوقتي…' : 'قول لي عايز تعمل إيه، وأنا أفتحهولك'}</span>
         </span>
       </button>
-      {state !== 'listening' && !note && (
-        <p className="text-center text-xs text-accent-600">مثال: «عايز أقرأ سورة الكهف» • «عايز أسمع سورة الملك» • «سمّعلي الشمس»</p>
+      {askSurah && (
+        <div className="w-full max-w-md bg-white rounded-2xl border-2 border-amber-300 p-3 space-y-2" dir="rtl">
+          <p className="text-center font-bold text-accent-900">عايز تعمل إيه في سورة {surahName(askSurah)}؟</p>
+          <div className="grid grid-cols-3 gap-2">
+            <button type="button" onClick={() => { const s0 = askSurah; setAskSurah(null); run({ kind: 'mushaf', surah: s0 }); }} className="min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold">أقرأها</button>
+            <button type="button" onClick={() => { const s0 = askSurah; setAskSurah(null); run({ kind: 'listen', surah: s0 }); }} className="min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold">أسمعها</button>
+            <button type="button" onClick={() => { const s0 = askSurah; setAskSurah(null); run({ kind: 'test', surah: s0 }); }} className="min-h-[48px] rounded-xl bg-amber-500 text-white font-bold">سمّعها لي</button>
+          </div>
+        </div>
+      )}
+      {state !== 'listening' && !note && !askSurah && (
+        <p className="text-center text-xs text-accent-600">قول: «اقرأ الكهف» • «اسمع الملك» • «سمّعلي الشمس» • «المتشابهات» — أو قول اسم السورة بس وأنا أسألك</p>
       )}
       {note && <p className="text-center text-sm text-accent-700 bg-white/80 rounded-xl px-3 py-2">{note}</p>}
     </div>
   );
 }
 
-// Classic 1960s broadcast microphone (capsule head with grille, ring
-// mount, short stand), tilted like a radio-studio mic. Gold on green.
+// Chrome studio microphone (drawn here, in the style of a classic
+// tilted stage mic: rounded capsule, slotted grille, holder ring).
 function VintageMic({ listening }: { listening: boolean }) {
   return (
-    <svg viewBox="0 0 80 100" className={`w-28 h-32 shrink-0 drop-shadow-lg ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
+    <svg viewBox="0 0 100 120" className={`w-28 h-32 shrink-0 drop-shadow-xl ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
       <defs>
-        <linearGradient id="vmGold" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#fff1c1" />
-          <stop offset="0.45" stopColor="#e9b949" />
-          <stop offset="1" stopColor="#9a6a12" />
+        <linearGradient id="vmChrome" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#5b5f6a" />
+          <stop offset="0.25" stopColor="#f4f6fb" />
+          <stop offset="0.5" stopColor="#b9bfcc" />
+          <stop offset="0.75" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#6b7080" />
         </linearGradient>
-        <linearGradient id="vmHead" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#3b3b3b" />
-          <stop offset="0.5" stopColor="#9a9a9a" />
-          <stop offset="1" stopColor="#2d2d2d" />
+        <linearGradient id="vmGlow" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f6d27a" />
+          <stop offset="1" stopColor="#c58a1f" />
         </linearGradient>
       </defs>
-      <g transform="rotate(-18 40 50)">
-        {/* capsule head */}
-        <rect x="24" y="6" width="32" height="46" rx="16" fill="url(#vmHead)" stroke="url(#vmGold)" strokeWidth="3" />
-        {[14, 20, 26, 32, 38, 44].map((y) => (
-          <line key={y} x1="27" y1={y} x2="53" y2={y} stroke="#1e1e1e" strokeWidth="1.6" opacity="0.7" />
+      <g transform="rotate(-20 50 60)">
+        <rect x="28" y="4" width="44" height="66" rx="22" fill="url(#vmChrome)" stroke="url(#vmGlow)" strokeWidth="2.5" />
+        {[14, 21, 28, 35, 42, 49, 56].map((y) => (
+          <rect key={y} x="35" y={y} width="30" height="3.4" rx="1.7" fill="#1f2937" opacity="0.75" />
         ))}
-        <rect x="22" y="27" width="36" height="6" rx="3" fill="url(#vmGold)" />
-        {/* yoke */}
-        <path d="M18 30 Q18 62 40 62 Q62 62 62 30" fill="none" stroke="url(#vmGold)" strokeWidth="4" strokeLinecap="round" />
-        {/* stand */}
-        <rect x="37" y="62" width="6" height="22" fill="url(#vmGold)" />
-        <ellipse cx="40" cy="88" rx="18" ry="5" fill="url(#vmGold)" />
-        {listening && <circle cx="40" cy="29" r="30" fill="none" stroke="#fecdd3" strokeWidth="2" opacity="0.7" />}
+        <rect x="40" y="70" width="20" height="10" rx="3" fill="url(#vmChrome)" />
+        <rect x="34" y="78" width="32" height="14" rx="4" fill="url(#vmChrome)" stroke="url(#vmGlow)" strokeWidth="2" />
+        <rect x="45" y="92" width="10" height="26" fill="url(#vmChrome)" />
+        {listening && <circle cx="50" cy="37" r="40" fill="none" stroke="#fecdd3" strokeWidth="2" opacity="0.8" />}
       </g>
     </svg>
   );

@@ -3,7 +3,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
-import { hasChosenReciter, markChosenReciter } from '../lib/corrDownload';
+import { hasChosenReciter, markChosenReciter, recitersForRange } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
@@ -806,6 +806,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => { void loadCorrReciter(corrReciter); }, [corrReciter]);
   // First visit: ask «عايز مين يسمّعلك؟» once (2026-11-08).
   const [askReciter, setAskReciter] = useState<boolean>(() => !hasChosenReciter());
+  const [reciterAsk, setReciterAsk] = useState<{ options: string[]; run: (f: string) => void } | null>(null);
+  const [reciterNote, setReciterNote] = useState('');
   // Warm the on-device ear as soon as the page opens when it is chosen.
   useEffect(() => { if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
   // Keep the screen awake while a recitation test runs (2026-11-08).
@@ -2154,7 +2156,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   // Global-range test (unit mode + resume): verse ids are sequential
   // 1..6236 in surah order, so id range = global ayah range.
-  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null, opts?: { explicitAyahs?: TestAyah[]; recentLabel?: string }) => {
+  const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null, opts?: { explicitAyahs?: TestAyah[]; recentLabel?: string; reciterChosen?: boolean }) => {
+    // «تسمّع مع مين؟» (2026-11-08): reciters downloaded for this range.
+    // Several -> ask; exactly one -> use it and say so; none -> keep the
+    // chosen reciter (it streams online).
+    if (!opts?.reciterChosen && !restore) {
+      const avail = recitersForRange(startGlobal, endGlobal);
+      if (avail.length > 1) {
+        setReciterAsk({ options: avail, run: (f: string) => { setCorrReciter(f); setCorrReciterState(f); setReciterAsk(null); void startTestGlobal(startGlobal, endGlobal, restore, forceMode, settingsOverride, { ...(opts || {}), reciterChosen: true }); } });
+        return;
+      }
+      if (avail.length === 1 && avail[0] !== getCorrReciter()) {
+        setCorrReciter(avail[0]);
+        setCorrReciterState(avail[0]);
+      }
+      if (avail.length === 1) {
+        const nm = CORR_RECITERS.find((r) => r.folder === avail[0])?.name || '';
+        setReciterNote(`هتسمّع مع ${nm}`);
+        setTimeout(() => setReciterNote(''), 4000);
+      }
+    }
     // D1: a new test starts with a clean honesty state (a previous
     // no-match panel must never leak into the next run's done screen).
     setContZeroMatch(false);
@@ -5233,7 +5254,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Mic className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">سمّع لنفسك</h1>
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">سمّع لي</h1>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
           <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"
@@ -5283,6 +5304,24 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 a short hub of main doors + the start button on the hub.
                 Each door opens its existing card(s) below; nothing was
                 removed or renamed, only hidden behind a door. */}
+            {reciterAsk && (
+              <div className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center p-3" dir="rtl">
+                <div className="w-full max-w-md bg-white rounded-2xl p-4 space-y-3">
+                  <h2 className="text-xl font-bold text-emerald-800">تحب تسمّع مع مين؟</h2>
+                  <p className="text-sm text-accent-600">دول القراء المتنزّلين على جهازك للجزء ده — يشتغلوا من غير نت.</p>
+                  {reciterAsk.options.map((f) => (
+                    <button key={f} type="button" onClick={() => reciterAsk.run(f)}
+                      className="w-full min-h-[52px] rounded-xl border-2 border-emerald-200 bg-emerald-50 text-lg font-bold text-emerald-900">
+                      {CORR_RECITERS.find((r) => r.folder === f)?.name || f}
+                    </button>
+                  ))}
+                  <button type="button" onClick={() => setReciterAsk(null)} className="w-full text-sm text-accent-500 underline">إلغاء</button>
+                </div>
+              </div>
+            )}
+            {reciterNote && (
+              <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[95] bg-emerald-700 text-white font-bold rounded-full px-5 py-2 shadow-lg" dir="rtl">{reciterNote}</div>
+            )}
             {askReciter && (
               <div className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center p-3" dir="rtl">
                 <div className="w-full max-w-lg bg-white rounded-2xl p-4 max-h-[90vh] overflow-y-auto space-y-3">

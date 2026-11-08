@@ -623,7 +623,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="glass-card rounded-2xl shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-1">
               <Mic className="w-5 h-5 text-emerald-700" />
-              <h2 className="font-semibold text-ink">سمّع لنفسك</h2>
+              <h2 className="font-semibold text-ink">سمّع لي</h2>
             </div>
             <button onClick={() => onNavigate('test')}
               className="mt-4 md:mt-auto w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus">

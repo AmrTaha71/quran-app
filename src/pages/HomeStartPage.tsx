@@ -278,7 +278,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
                 <Mic className="w-7 h-7 text-white" />
               </span>
-              سمّع لنفسك
+              سمّع لي
             </button>
             <button
               onPointerDown={pressFeedback}
@@ -444,34 +444,34 @@ export default function HomeStartPage({ session, onNavigate }: {
             )}
             {/* (c) from the very beginning: الفاتحة آية ١. */}
             {/* 2026-11-06: «ابدأ من أول المصحف» removed here — it lives inside the الحفظ door. */}
-          </div>
-        )}
+            {/* خريطة حفظي moved inside الحفظ (2026-11-08). */}
+            {/* خريطة حفظي (feature #1): an emerald door like the others,
+                right after الحفظ — it is about memorization. Tap to expand
+                the 30-Juz map (gold = memorized, amber tint = in progress,
+                grey = not yet); tapping a Juz jumps to it in the Mushaf.
+                No BottomNav tab. */}
+            <button
+              onPointerDown={pressFeedback}
+              onClick={() => setMapOpen(!mapOpen)}
+              aria-expanded={mapOpen}
+              className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
+              style={{ animationDelay: '90ms' }}
+            >
+              <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
+                <Map className="w-5 h-5 text-white" />
+              </span>
+              خريطة حفظي
+              <ChevronDown className={`w-5 h-5 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-        {/* خريطة حفظي (feature #1): an emerald door like the others,
-            right after الحفظ — it is about memorization. Tap to expand
-            the 30-Juz map (gold = memorized, amber tint = in progress,
-            grey = not yet); tapping a Juz jumps to it in the Mushaf.
-            No BottomNav tab. */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => setMapOpen(!mapOpen)}
-          aria-expanded={mapOpen}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '90ms' }}
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Map className="w-5 h-5 text-white" />
-          </span>
-          خريطة حفظي
-          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
-        </button>
-
-        {mapOpen && (
-          <div className="px-4 mb-4 alive-subdoors">
-            <MemorizationMap
-              run={memorizedRun}
-              onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
-            />
+            {mapOpen && (
+              <div className="px-4 mb-4 alive-subdoors">
+                <MemorizationMap
+                  run={memorizedRun}
+                  onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -489,7 +489,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
             <MicVocal className="w-5 h-5 text-white" />
           </span>
-          سمّع لنفسك
+          سمّع لي
           <ChevronDown className={`w-5 h-5 text-white alive-chevron ${testOpen ? 'rotate-180' : ''}`} />
         </button>
 

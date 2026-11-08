@@ -1248,7 +1248,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Compass className="w-5 h-5 text-emerald-600" /> جولة تعريفية
           </h2>
           <p className="text-sm text-accent-600 mb-4 leading-relaxed">
-            جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسمّع لنفسك، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
+            جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسمّع لي، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
           </p>
           <button
             onClick={() => {

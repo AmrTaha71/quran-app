@@ -9,7 +9,8 @@ export type VoiceAction =
   | { kind: 'test'; surah: number | null }
   | { kind: 'mutashabihat' }
   | { kind: 'route'; route: 'adhkar' | 'follow' | 'settings' | 'room' | 'app' }
-  | { kind: 'elderly' };
+  | { kind: 'elderly' }
+  | { kind: 'ask'; surah: number };
 
 function norm(s: string): string {
   return s
@@ -51,10 +52,13 @@ export function parseVoiceCommand(raw: string): VoiceAction | null {
   if (has(t, ['لوحتي', 'لوحه'])) return { kind: 'route', route: 'app' };
   // Recite (test) before listen: "سمعني/سمع لنفسي/اسمع" overlap.
   if (has(t, ['سمعلي', 'سمع لي', 'سمعلى', 'اسمعلي', 'اسمع لي', 'تسمعلي', 'تسمع لي', 'راجعلي', 'راجع لي', 'سمعني حفظ', 'امتحني', 'امتحنى', 'اسمع لك', 'اسمعها', 'اسمع نفسي', 'سمع لنفسي', 'اختبر', 'اختبرني', 'تسميع', 'اسمعه', 'اسمع حفظي', 'احفظ'])) return { kind: 'test', surah };
-  if (has(t, ['اسمع', 'سمعني', 'شغل', 'استماع', 'استمع'])) return { kind: 'listen', surah };
+  // «سمّعني» means "play it for me" in Egyptian but dictation also gives it
+  // for «سمّعلي» — ambiguous, so ask instead of guessing.
+  if (has(t, ['سمعني', 'سمعنى']) && surah) return { kind: 'ask', surah };
+  if (has(t, ['اسمع', 'شغل', 'استماع', 'استمع'])) return { kind: 'listen', surah };
   if (has(t, ['اقرا', 'المصحف', 'مصحف', 'افتح', 'قراءه', 'قرايه'])) return { kind: 'mushaf', surah };
-  // Only a surah name: open it in the mushaf.
-  if (surah) return { kind: 'mushaf', surah };
+  // Only a surah name (or an unclear verb): ask what to do with it.
+  if (surah) return { kind: 'ask', surah };
   return null;
 }
 
