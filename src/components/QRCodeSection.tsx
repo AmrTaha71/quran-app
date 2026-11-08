@@ -32,7 +32,7 @@ export default function QRCodeSection() {
 
       {open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-label="حمّل التطبيق" className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center">

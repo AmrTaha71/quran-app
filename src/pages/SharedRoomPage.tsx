@@ -542,6 +542,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         <div className="bg-white rounded-xl border p-4 space-y-3">
           <p className="font-semibold text-slate-800">أو ادخل بكود الغرفة</p>
           <input
+            aria-label="كود الغرفة"
             value={joinInput}
             onChange={(e) => setJoinInput(e.target.value)}
             maxLength={CODE_LENGTH}
@@ -831,6 +832,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         </div>
         <div className="flex gap-2">
           <select
+            aria-label="اختر السورة"
             value={pos.surah}
             onChange={(e) => sendPos({ surah: Number(e.target.value), ayah: 1 })}
             className="flex-1 border rounded-lg px-2 py-2 bg-white"
@@ -840,6 +842,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             ))}
           </select>
           <input
+            aria-label="رقم الآية"
             type="number"
             min={1}
             max={ayahCount}
@@ -868,13 +871,14 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         </div>
         <div className="flex gap-2">
           <input
+            aria-label="اكتب رسالة"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') sendMessage(); }}
             placeholder="اكتب رسالة"
             className="flex-1 border rounded-lg px-3 py-2"
           />
-          <button onClick={sendMessage} className="px-4 rounded-lg bg-slate-800 text-white flex items-center">
+          <button onClick={sendMessage} aria-label="إرسال الرسالة" className="px-4 rounded-lg bg-slate-800 text-white flex items-center">
             <Send className="w-4 h-4" />
           </button>
         </div>

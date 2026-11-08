@@ -4421,7 +4421,7 @@ export default function QuranMushafPage({
                       className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0">
                       مش دي؟ كمّل الاستماع
                     </button>
-                    <button onClick={stopFollow} title="إيقاف المتابعة"
+                    <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
                   </div>
                 )}
@@ -4433,7 +4433,7 @@ export default function QuranMushafPage({
                         ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
                         : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
-                    <button onClick={stopFollow} title="إيقاف المتابعة"
+                    <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
                   </div>
                 )}

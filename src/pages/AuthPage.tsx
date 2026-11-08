@@ -473,7 +473,7 @@ export default function AuthPage({
                     <label className="block text-sm font-semibold text-accent-700 mb-1.5">كلمة السر الجديدة</label>
                     <div className="relative">
                       <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                      <input type={showPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required
+                      <input type={showPassword ? 'text' : 'password'} aria-label="كلمة السر الجديدة" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required
                       placeholder="••••••"
                       className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
@@ -486,7 +486,7 @@ export default function AuthPage({
                     <label className="block text-sm font-semibold text-accent-700 mb-1.5">تأكيد كلمة السر الجديدة</label>
                     <div className="relative">
                       <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                      <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
+                      <input type="password" aria-label="تأكيد كلمة السر الجديدة" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required
                       placeholder="••••••"
                       className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                     </div>

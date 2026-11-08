@@ -154,7 +154,7 @@ export function LongPressMenu({
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl p-5 w-full max-w-xs animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
+      <div role="dialog" aria-modal="true" aria-label="إضافة إلى قائمة" className="bg-white rounded-3xl shadow-2xl p-5 w-full max-w-xs animate-slide-up my-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-semibold text-accent-800">إضافة إلى قائمة</p>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action text-ink-3 hover:bg-gray-100 rounded-lg p-1">

@@ -8,6 +8,7 @@ import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
+import { useEscapeClose } from '../lib/useEscape';
 
 type Scope = 'surah' | 'juz' | 'hizb' | 'quarter';
 const SCOPE_LABEL: Record<Scope, string> = { surah: 'سورة', juz: 'جزء', hizb: 'حزب', quarter: 'ربع' };
@@ -52,6 +53,7 @@ function loadText(): Promise<Map<string, string> | null> {
 }
 
 export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
+  useEscapeClose(true, onClose);
   const [scope, setScope] = useState<Scope>('juz');
   const [num, setNum] = useState(1);
   const [reciterId, setReciterId] = useState(DEFAULT_RECITER_ID);
@@ -111,7 +113,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div dir="rtl" className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div dir="rtl" role="dialog" aria-modal="true" aria-label="اختبار الترتيل" className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-accent-800">اختبار الترتيل</h2>
           <button onClick={onClose} className="text-accent-600 font-bold px-2">إغلاق</button>

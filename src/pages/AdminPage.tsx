@@ -919,7 +919,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       {/* Pending Links Review Modal */}
       {showPending && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowPending(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-label="روابط بانتظار المراجعة" className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-3xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />

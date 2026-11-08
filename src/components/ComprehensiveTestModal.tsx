@@ -4,6 +4,7 @@
 // (the app cannot grade voice yet). Results are kept locally so the user
 // can see the score and its change over time.
 import { useEffect, useMemo, useState } from 'react';
+import { useEscapeClose } from '../lib/useEscape';
 import { SURAHS } from '../lib/surahs';
 import BANK from '../data/mutashabihat-famous.json';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
@@ -69,6 +70,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [rabtIdx, setRabtIdx] = useState(0);
 
   useEffect(() => { loadText().then(setText); }, []);
+  useEscapeClose(true, onClose);
 
   const lv = LEVELS.find((l) => l.id === level)!;
   const part = PARTS.find((p) => p.id === (step as PartId));
@@ -159,7 +161,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
-      <div dir="rtl" className="bg-white rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div dir="rtl" role="dialog" aria-modal="true" aria-label="اختبار شامل" className="bg-white rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-accent-800">اختبار شامل</h2>
           <button onClick={onClose} className="text-accent-600 font-bold px-2">إغلاق</button>
