@@ -5212,10 +5212,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 a short hub of main doors + the start button on the hub.
                 Each door opens its existing card(s) below; nothing was
                 removed or renamed, only hidden behind a door. */}
+            {/* Pilot (2026-11-08): on-device recitation recognizer, on every lobby screen. */}
+            <QuranAsrLab />
             {lobbyDoor === null && (
               <>
-                {/* Pilot (2026-11-08): on-device Quran ear. */}
-                <QuranAsrLab />
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setLobbyDoor('range')}
                     className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
