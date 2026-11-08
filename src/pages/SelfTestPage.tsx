@@ -6175,6 +6175,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
               )}
             </div>)}
+            {/* Always-visible diagnostics copy (2026-11-08): one tap, right under the score. */}
+            <div className="flex flex-col items-center gap-1">
+              <button type="button" onClick={() => void diagCopyJson()}
+                className="min-h-[48px] px-6 rounded-xl bg-slate-800 text-white font-bold">
+                📋 انسخ سجل التشخيص وابعته لـ Claude
+              </button>
+              {diagCopied && <span className="text-sm text-emerald-700">{diagCopied}</span>}
+            </div>
             {!contZeroMatch && testMode === 'continuous' && (
               <div className="bg-white border border-hairline rounded-xl px-4 py-3">
                 <p className="text-sm text-accent-600 leading-relaxed" dir="rtl">
