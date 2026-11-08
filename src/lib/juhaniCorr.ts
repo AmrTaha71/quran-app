@@ -107,7 +107,67 @@ const rangeOkSurahs = new Set<number>(JUHANI_RANGE_OK_SURAHS_JUZ30);
 const key = (surah: number, ayah: number): string => `${surah}:${ayah}`;
 
 /** Flat per-word timings [s0,e0,s1,e1,...] in seconds, or null. */
+// ------------------------------------------------------------------
+// Ready-made correction reciters (2026-11-08). Word timings from
+// cpfair/quran-align (CC BY 4.0), for EveryAyah per-ayah recordings,
+// whole Quran. Files: public/corr-timings/<folder>.json, map
+// "surah:ayah" -> flat [s0,e0,s1,e1,...] seconds within the AYAH file.
+// When one is active it replaces the Juhani juz-30 manifest everywhere
+// (timings, enable check, audio URL), so the rest of the correction
+// engine is unchanged.
+// ------------------------------------------------------------------
+export const CORR_RECITERS: { folder: string; name: string }[] = [
+  { folder: 'Minshawy_Murattal_128kbps', name: 'المنشاوي (مرتل)' },
+  { folder: 'Husary_64kbps', name: 'الحصري (مرتل)' },
+  { folder: 'Abdul_Basit_Murattal_64kbps', name: 'عبد الباسط (مرتل)' },
+  { folder: 'Alafasy_128kbps', name: 'العفاسي' },
+  { folder: 'Mohammad_al_Tablaway_128kbps', name: 'الطبلاوي' },
+  { folder: 'Saood_ash-Shuraym_128kbps', name: 'الشريم' },
+  { folder: 'Abu_Bakr_Ash-Shaatree_128kbps', name: 'الشاطري' },
+  { folder: 'Hani_Rifai_192kbps', name: 'هاني الرفاعي' },
+];
+export const CORR_RECITER_KEY = 'quran-corr-reciter';
+export const CORR_RECITER_DEFAULT = 'Minshawy_Murattal_128kbps';
+
+let activeCorr: { folder: string; map: Record<string, number[]> } | null = null;
+let loadingFolder: string | null = null;
+
+export function getCorrReciter(): string {
+  try {
+    const v = localStorage.getItem(CORR_RECITER_KEY);
+    if (v && CORR_RECITERS.some((r) => r.folder === v)) return v;
+  } catch { /* ignore */ }
+  return CORR_RECITER_DEFAULT;
+}
+
+/** Loads (once) and activates the chosen reciter's timings. */
+export async function loadCorrReciter(folder: string = getCorrReciter()): Promise<void> {
+  if (activeCorr?.folder === folder || loadingFolder === folder) return;
+  loadingFolder = folder;
+  try {
+    const res = await fetch(`/corr-timings/${folder}.json`);
+    if (!res.ok) return;
+    const map = (await res.json()) as Record<string, number[]>;
+    if (loadingFolder === folder) activeCorr = { folder, map };
+  } catch { /* offline: whole-ayah fallback still uses this reciter */ } finally {
+    if (loadingFolder === folder) loadingFolder = null;
+  }
+}
+
+export function setCorrReciter(folder: string): void {
+  try { localStorage.setItem(CORR_RECITER_KEY, folder); } catch { /* ignore */ }
+  activeCorr = null;
+  void loadCorrReciter(folder);
+}
+
+/** EveryAyah per-ayah file of the chosen correction reciter. */
+export function corrAyahUrl(surah: number, ayah: number): string {
+  const p3 = (n: number) => String(n).padStart(3, '0');
+  return `https://everyayah.com/data/${getCorrReciter()}/${p3(surah)}${p3(ayah)}.mp3`;
+}
+
 function timingsFor(surah: number, ayah: number): number[] | null {
+  if (activeCorr) return activeCorr.map[key(surah, ayah)] ?? null;
   const t = JUHANI_TIMINGS_JUZ30[key(surah, ayah)];
   return t ?? null;
 }
@@ -131,7 +191,7 @@ function timingsShapeOk(t: number[], wordCount: number): boolean {
  *  `wordCount` is the APP's word count for the ayah (the length of
  *  expectedWordList), so numbering parity is enforced at runtime too. */
 export function isJuhaniCorrEnabled(surah: number, ayah: number, wordCount: number): boolean {
-  if (!rangeOkSurahs.has(surah)) return false;
+  if (!activeCorr && !rangeOkSurahs.has(surah)) return false;
   const t = timingsFor(surah, ayah);
   if (!t) return false;
   return timingsShapeOk(t, wordCount);

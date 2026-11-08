@@ -15,7 +15,7 @@ import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
-  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniSurahUrl, juhaniAyahUrl, wholeAyahPlan, juhaniAyahStartTime,
+  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniAyahStartTime, wholeAyahPlan, corrAyahUrl, loadCorrReciter, setCorrReciter, getCorrReciter, CORR_RECITERS,
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
@@ -775,6 +775,10 @@ type MicState = 'idle' | 'listening' | 'correcting' | 'done-correct' | 'done-wro
 
 export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [phase, setPhase] = useState<'setup' | 'testing' | 'done'>('setup');
+  // Correction reciter (ready-made word timings, whole Quran): load the
+  // chosen one's timings as soon as the page opens.
+  const [corrReciter, setCorrReciterState] = useState<string>(() => getCorrReciter());
+  useEffect(() => { void loadCorrReciter(corrReciter); }, [corrReciter]);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
@@ -1814,7 +1818,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const wordPlan = planJuhaniWindows(ayah.surah_no, ayah.ayah_no, wordCount, wrongIdx);
     const plan = wordPlan ?? (ayah.id > 0 ? wholeAyahPlan(wordCount) : null);
     if (!plan) return false;
-    const playUrlForPlan = wordPlan ? juhaniSurahUrl(ayah.surah_no) : juhaniAyahUrl(ayah.id);
+    // Chosen ready-made reciter: per-ayah EveryAyah file for both the
+    // word windows and the whole-ayah fallback.
+    const playUrlForPlan = corrAyahUrl(ayah.surah_no, ayah.ayah_no);
     if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
     const player = juhaniPlayerRef.current;
     stopRefUnit();
@@ -3176,7 +3182,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       warmErrorBuzz();
       if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
       juhaniPlayerRef.current.unlock(
-        juhaniSurahUrl(ayah.surah_no),
+        corrAyahUrl(ayah.surah_no, ayah.ayah_no),
         juhaniAyahStartTime(ayah.surah_no, ayah.ayah_no) ?? undefined,
       );
     }
@@ -4643,7 +4649,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         warmErrorBuzz();
         if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
         juhaniPlayerRef.current.unlock(
-          juhaniSurahUrl(firstAyah.surah_no),
+          corrAyahUrl(firstAyah.surah_no, firstAyah.ayah_no),
           juhaniAyahStartTime(firstAyah.surah_no, firstAyah.ayah_no) ?? undefined,
         );
       }
@@ -5062,6 +5068,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const perTestEff = perTest ?? { mode: reciteMode, corrDelayMode, corrRate };
   const perTestSettings = (
     <div className="rounded-xl border border-hairline-emerald bg-emerald-50 p-2.5 space-y-2">
+      {/* «سمّع مع»: the reciter whose real voice corrects you (2026-11-08). */}
+      <label className="flex items-center gap-2 text-sm font-semibold text-accent-800">
+        <span className="shrink-0">سمّع مع</span>
+        <select value={corrReciter}
+          onChange={(e) => { setCorrReciter(e.target.value); setCorrReciterState(e.target.value); }}
+          className="flex-1 min-h-[44px] px-3 rounded-xl border border-hairline bg-white text-base">
+          {CORR_RECITERS.map((r) => <option key={r.folder} value={r.folder}>{r.name}</option>)}
+        </select>
+      </label>
+      <p className="text-[11px] text-accent-500" dir="rtl">توقيت الكلمات: cpfair/quran-align (CC BY 4.0) • الصوت: EveryAyah</p>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-accent-800">إعدادات هذا التسميع</p>
         <label className="flex items-center gap-1.5 text-xs font-semibold text-accent-700">
