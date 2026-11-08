@@ -54,12 +54,12 @@ export default function DevicePicker({ userId, onDone }: Props) {
             <p className="font-semibold text-slate-800">نوع الموبايل</p>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" className={card(platform === 'ios')} onClick={() => setPlatform('ios')}>آيفون</button>
-              <button type="button" className={card(platform === 'android')} onClick={() => setPlatform('android')}>أندرويد</button>
+              <button type="button" className={card(platform === 'android')} onClick={() => setPlatform('android')}>أندرويد (مش آيفون)</button>
             </div>
             <p className="font-semibold text-slate-800">حجم الشاشة</p>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" className={card(size === 'small')} onClick={() => setSize('small')}>صغيرة</button>
-              <button type="button" className={card(size === 'large')} onClick={() => setSize('large')}>كبيرة</button>
+              <button type="button" className={card(size === 'large')} onClick={() => setSize('large')}>كبيرة (Plus، Max، Pro Max)</button>
             </div>
           </div>
         )}
