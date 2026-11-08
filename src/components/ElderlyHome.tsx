@@ -68,6 +68,7 @@ const BIG_BTN = 'w-full min-h-[72px] py-4 rounded-2xl font-bold text-xl flex ite
 export default function ElderlyHome({ onNavigate, onResume }: Props) {
   const [day, setDay] = useState<AdhanDay | null>(null);
   const [tasbih, setTasbih] = useState(readTasbih);
+  const [flash, setFlash] = useState(0);
   const [sleepSet, setSleepSet] = useState(false);
 
   useEffect(() => {
@@ -163,28 +164,26 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
             </button>
           ))}
         </div>
+        {/* Under the finger: always the phrase itself, with a short flash
+            on each tap. The number lives in the row below. */}
         <button
           onPointerDown={pressFeedback}
-          onClick={count}
-          className="w-full min-h-[120px] rounded-3xl bg-emerald-700 text-white font-bold flex flex-col items-center justify-center gap-1"
+          onClick={() => { count(); setFlash((n) => n + 1); }}
+          className="relative w-full min-h-[140px] rounded-3xl bg-emerald-700 text-white font-bold flex items-center justify-center overflow-hidden"
         >
-          <Hand className="w-8 h-8" />
-          <span className="text-5xl">{tasbih.count.toLocaleString('ar-EG')}</span>
-          <span className="text-lg">{TASBIH_PHRASES[tasbih.phrase]}</span>
+          <span key={flash} className="absolute inset-0 bg-white/40 animate-[tasbihFlash_0.35s_ease-out_forwards] pointer-events-none" />
+          <span className="text-4xl font-display-ar relative">{TASBIH_PHRASES[tasbih.phrase]}</span>
         </button>
-        <button onClick={resetCount} className="w-full min-h-[56px] rounded-xl border-2 text-lg font-semibold text-ink">
-          ابدأ العد من جديد
-        </button>
+        <style>{`@keyframes tasbihFlash { from { opacity: 1 } to { opacity: 0 } }`}</style>
+        <div className="grid grid-cols-3 items-center gap-2">
+          <span />
+          <span className="text-center text-5xl font-bold text-emerald-800">{tasbih.count.toLocaleString('ar-EG')}</span>
+          <button onClick={resetCount} className="min-h-[56px] rounded-xl border-2 text-base font-semibold text-ink">
+            ابدأ من جديد
+          </button>
+        </div>
       </div>
 
-      {/* 5. Listen with family (shared room) */}
-      <button
-        onPointerDown={pressFeedback}
-        onClick={() => onNavigate('room')}
-        className={`${BIG_BTN} bg-white text-emerald-800 border-2 border-emerald-700`}
-      >
-        <Users className="w-7 h-7" /> {roomLabel()}
-      </button>
 
       {/* 6. Listen until sleep */}
       <button
