@@ -74,8 +74,9 @@ export function transcribe(audio: Float32Array): Promise<{ text: string; ms: num
 
 // ---- SpeechRecognition look-alike -------------------------------------
 const TARGET_RATE = 16000;
-const SILENCE_END_MS = 350;
-const MAX_SEGMENT_S = 6;
+const SILENCE_END_MS = 300;
+const MAX_SEGMENT_S = 7;
+const KEEPALIVE_MS = 400;
 const MIN_SEGMENT_S = 0.35;
 
 function downsample(input: Float32Array, fromRate: number): Float32Array {
@@ -118,6 +119,8 @@ export class QuranModelRecognition {
   private inSpeech = false;
   private silenceMs = 0;
   private noiseFloor = 0.005;
+  private speechLevel = 0;
+  private lastKeepalive = 0;
   private stopped = false;
   private ended = false;
   private inflight = 0;
@@ -158,8 +161,13 @@ export class QuranModelRecognition {
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
     const rms = Math.sqrt(sum / buf.length);
     const chunkMs = (buf.length / rate) * 1000;
-    const threshold = Math.max(0.012, this.noiseFloor * 3);
-    const loud = rms > threshold;
+    // Start threshold from the room noise; once speaking, a pause is a drop
+    // well below the reciter's own level (AGC keeps between-word noise
+    // above a fixed floor, so a fixed threshold never saw a pause).
+    const startThreshold = Math.max(0.012, this.noiseFloor * 3);
+    const pauseThreshold = Math.max(startThreshold * 0.8, this.speechLevel * 0.3);
+    const loud = rms > (this.inSpeech ? pauseThreshold : startThreshold);
+    if (loud) this.speechLevel = this.speechLevel === 0 ? rms : this.speechLevel * 0.9 + rms * 0.1;
     if (!this.inSpeech && !loud) {
       // Track the room's noise floor while quiet.
       this.noiseFloor = this.noiseFloor * 0.95 + rms * 0.05;
@@ -177,6 +185,22 @@ export class QuranModelRecognition {
         this.flushSegment();
       }
     }
+    this.keepalive();
+  }
+
+  // While he is reciting or a segment is being transcribed, send an empty
+  // interim result: the page re-arms its "silence -> prompt the next word"
+  // timer on every result, and without interims (this ear only has finals)
+  // that timer fired in the middle of fluent recitation.
+  private keepalive() {
+    if (!(this.inSpeech || this.inflight > 0)) return;
+    const now = Date.now();
+    if (now - this.lastKeepalive < KEEPALIVE_MS) return;
+    this.lastKeepalive = now;
+    const alt = { transcript: '', confidence: 0 };
+    const result: any = [alt];
+    result.isFinal = false;
+    this.onresult?.({ resultIndex: 0, results: [result] });
   }
 
   private flushSegment() {
