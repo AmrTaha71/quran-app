@@ -975,7 +975,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const BUILD_SHA = typeof __BUILD_SHA__ === 'string' && __BUILD_SHA__ ? __BUILD_SHA__ : 'dev';
   const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'}`;
   // Debug stamp lines are admin-only (flag set by Settings' admin check).
-  const showDiag = (() => { try { return localStorage.getItem('quran-show-diag') === '1'; } catch { return false; } })();
+  // Shown by default while recitation correction is being tuned (2026-11-08); set 'quran-show-diag' = '0' to hide.
+  const showDiag = (() => { try { return localStorage.getItem('quran-show-diag') !== '0'; } catch { return true; } })();
   // D1 shell-aware mic-absent wording (R7): when SR is absent AND
   // the shell is known, name the shell and the actionable move
   // (open in Safari) instead of only the generic message. The claim

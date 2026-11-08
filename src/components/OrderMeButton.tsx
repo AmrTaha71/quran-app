@@ -78,16 +78,24 @@ export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }:
   };
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col items-center gap-2 py-2">
       <button
         type="button"
         onPointerDown={pressFeedback}
         onClick={start}
-        className={`w-full flex items-center justify-center gap-3 px-6 py-5 rounded-2xl text-white font-bold text-2xl shadow-lg polish-press ${state === 'listening' ? 'bg-red-600 animate-pulse' : 'grad-emerald-door'}`}
+        aria-label="اؤمرني"
+        className={`relative w-36 h-36 rounded-full flex flex-col items-center justify-center text-white shadow-2xl ring-4 ring-amber-200 polish-press transition-transform ${state === 'listening' ? 'bg-gradient-to-br from-red-500 to-red-700 animate-pulse scale-105' : 'bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700'}`}
       >
-        <Mic className="w-8 h-8" />
-        {state === 'listening' ? 'بسمعك…' : 'اؤمرني'}
+        <span className="absolute inset-2 rounded-full border-2 border-white/40" />
+        <Mic className="w-14 h-14 drop-shadow" strokeWidth={2.4} />
+        <span className="mt-1 text-xl font-bold drop-shadow">{state === 'listening' ? 'بسمعك…' : 'اؤمرني'}</span>
       </button>
+      <p className="text-center text-base font-semibold text-accent-800">
+        {state === 'listening' ? 'قول دلوقتي…' : 'دوس وقول لي عايز تعمل إيه، وأنا أفتحهولك'}
+      </p>
+      {state !== 'listening' && !note && (
+        <p className="text-center text-xs text-accent-600">مثال: «عايز أقرأ سورة الكهف» • «عايز أسمع سورة الملك» • «سمّعلي الشمس»</p>
+      )}
       {note && <p className="text-center text-sm text-accent-700 bg-white/80 rounded-xl px-3 py-2">{note}</p>}
     </div>
   );
