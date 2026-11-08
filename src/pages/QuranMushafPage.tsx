@@ -304,7 +304,8 @@ export default function QuranMushafPage({
   const [viewportAspect, setViewportAspect] = useState(() =>
     typeof window !== 'undefined' && window.innerHeight > 0
       ? window.innerWidth / window.innerHeight : 0.695);
-  const [showFullscreen, setShowFullscreen] = useState(false);
+  // Opens fullscreen by default (user request 2026-11-08): no extra expand tap.
+  const [showFullscreen, setShowFullscreen] = useState(true);
   useEffect(() => {
     if (showFullscreen) setViewportAspect(window.innerWidth / Math.max(1, window.innerHeight));
   }, [showFullscreen]);

@@ -3,7 +3,7 @@ import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, PartyPopper, Users } from 'lucide-react';
+import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
@@ -568,19 +568,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           الحق الإمام
         </button>
 
-        {/* سمع مع الرفيق: placeholder door, not wired yet (coming soon). */}
-        <button
-          type="button"
-          disabled
-          aria-disabled="true"
-          className="w-full py-4 mb-4 bg-slate-200 text-slate-500 font-bold rounded-xl flex items-center justify-center gap-2 text-lg cursor-not-allowed"
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/60">
-            <Users className="w-5 h-5 text-slate-500" />
-          </span>
-          سمع مع الرفيق
-          <span className="text-xs font-semibold bg-slate-300 text-slate-600 rounded-full px-2 py-0.5">قريباً</span>
-        </button>
 
 
         {/* استمع للقرآن: full door, same size as الحق الإمام. */}
@@ -621,9 +608,19 @@ export default function HomeStartPage({ session, onNavigate }: {
 
 
 
-        {/* 2026-11-07: mode doors moved to the bottom of Home, label «صفحة جدو». Elderly / low-vision switches the
-            same persisted mode as Settings. Children mode is not built yet. */}
+        {/* Mode doors at the bottom of Home: «راجع مع الرفيق» (coming soon, left) and «صفحة جدو» (right).
+            Elderly / low-vision switches the same persisted mode as Settings. Children door removed. */}
         <div className="grid grid-cols-2 gap-3 mb-4">
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="py-4 px-3 bg-slate-200 text-slate-500 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base cursor-not-allowed"
+          >
+            <Users className="w-8 h-8" />
+            <span>راجع مع الرفيق</span>
+            <span className="text-xs font-semibold bg-slate-300 text-slate-600 rounded-full px-2 py-0.5">قريباً</span>
+          </button>
           <button
             onPointerDown={pressFeedback}
             onClick={() => setElderlyMode(true)}
@@ -631,16 +628,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           >
             <Glasses className="w-8 h-8" />
             صفحة جدو
-          </button>
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="py-4 px-3 bg-white/60 border-2 border-dashed border-amber-400 text-amber-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base opacity-70 cursor-not-allowed"
-          >
-            <PartyPopper className="w-8 h-8" />
-            <span>الأطفال</span>
-            <span className="text-xs font-semibold">قريبًا</span>
           </button>
         </div>
 
