@@ -3849,6 +3849,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const speakContPrompt = (words: string[], fixIdx?: number[], fixNorms?: string[], trigger?: 'stall' | 'confirmed-miss' | 'overshoot') => {
     if (words.length === 0 || contPromptingRef.current) return;
+    // Every word of this prompt was already corrected twice: stay quiet.
+    if (fixIdx && fixIdx.length > 0 && fixIdx.every((i) => contGaveUpRef.current.has(i))) return;
     // Iteration 2: generation token + settled flag + prompt-entry
     // timestamp (detection proxy for the diag voice-start timing).
     const gen = ++speakGenRef.current;
@@ -3885,11 +3887,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setContAudioFailed(false);
     // Two prompts for the same words and still not heard back: let the
     // flow pass them (they stay missed in the grade) so he is never stuck.
+    // Counted PER WORD (not per index set): the owed set changes as words
+    // get credited, which used to reset the count and loop forever.
     if (fixIdx && fixIdx.length > 0) {
-      const k = fixIdx.join('|');
-      const n = (contPromptCountRef.current.get(k) || 0) + 1;
-      contPromptCountRef.current.set(k, n);
-      if (n >= 2) fixIdx.forEach((i) => contGaveUpRef.current.add(i));
+      fixIdx.forEach((i) => {
+        const k = String(i);
+        const n = (contPromptCountRef.current.get(k) || 0) + 1;
+        contPromptCountRef.current.set(k, n);
+        if (n >= 2) contGaveUpRef.current.add(i);
+      });
     }
     // Keep what he already said (2026-11-08): Safari holds the whole
     // recitation as interim text and gives no final before we stop the
