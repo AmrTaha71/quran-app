@@ -5832,7 +5832,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="w-3 h-3 bg-red-500 rounded-full" />
                     <p className="text-lg font-bold text-accent-700">بسمعك… كمّل من غير توقف</p>
                   </div>
-                  <p className="text-xs text-accent-500 mb-3">الاستماع المباشر محتاج إنترنت</p>
+                  <p className="text-xs text-accent-500 mb-3">{getEar() === 'model' ? 'بيسمعك برنامج التلاوة على جهازك — من غير إنترنت' : 'الاستماع المباشر محتاج إنترنت'}</p>
                   {ayahs[contProgress.ayahIdx] && (
                     <p className="text-sm font-semibold text-emerald-700 mb-4">
                       الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
@@ -6082,7 +6082,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         );
                       })()}
-                      <p className="text-xs text-accent-500 mb-3">الاستماع المباشر محتاج إنترنت</p>
+                      <p className="text-xs text-accent-500 mb-3">{getEar() === 'model' ? 'بيسمعك برنامج التلاوة على جهازك — من غير إنترنت' : 'الاستماع المباشر محتاج إنترنت'}</p>
                       {postCorrHint && (
                         <p className="text-sm font-semibold text-emerald-700 mb-3">التصحيح خلص — كمّل باقي الآية بصوتك؛ اللي قلته أثناء التصحيح ما اتسمعش، فقولوه تاني</p>
                       )}

@@ -152,6 +152,10 @@ async function trimShellCache() {
       if (keep.has(url.pathname)) continue;
       if (url.pathname.startsWith('/mutashabihat/')) continue;
       if (url.pathname.endsWith('.json')) continue;
+      // On-device Quran ear: ORT runtime + the worker chunk (not referenced
+      // by index.html, so it would be trimmed and the ear would die offline).
+      if (url.pathname.startsWith('/ort/')) continue;
+      if (/\/assets\/quranAsr\.worker-[^/]+\.js$/.test(url.pathname)) continue;
       await cache.delete(key);
     }
   } catch {}
@@ -301,7 +305,7 @@ self.addEventListener('fetch', (event) => {
   // and bundled .json (mutashabihat data) so similar-ayah lookup
   // works offline too. A miss with no cache and no network resolves
   // to a 504 response instead of null (respondWith(null) throws).
-  if (url.origin === self.location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png') || url.pathname.endsWith('.json') || url.pathname.endsWith('.svg'))) {
+  if (url.origin === self.location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png') || url.pathname.endsWith('.json') || url.pathname.endsWith('.svg') || url.pathname.endsWith('.wasm') || url.pathname.endsWith('.mjs'))) {
     event.respondWith(
       caches.match(req).then((cached) => {
         const network = fetch(req).then((res) => {

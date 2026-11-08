@@ -4,6 +4,9 @@
 import { pipeline, env } from '@huggingface/transformers';
 
 env.allowLocalModels = false;
+// ORT runtime from our own origin (public/ort/), not the jsDelivr CDN, so
+// the service worker caches it and the ear works offline.
+if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.wasmPaths = '/ort/';
 const MODEL = 'iqbalaesthetic/Basira';
 
 type Asr = (audio: Float32Array, opts?: Record<string, unknown>) => Promise<{ text: string } | { text: string }[]>;
