@@ -38,7 +38,13 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
   const abortRef = useRef<AbortController | null>(null);
   const queueAllRef = useRef(false);
 
-  const choose = (f: string) => { setCorrReciter(f); setChosen(f); onChosen?.(); };
+  // Tapping a reciter asks how much to put on the device, so the user
+  // sees he can take just the juz he memorizes (2026-11-08).
+  const [askFor, setAskFor] = useState<string | null>(null);
+  const choose = (f: string) => {
+    setCorrReciter(f); setChosen(f); onChosen?.();
+    if (!isDownloaded(f)) setAskFor(f);
+  };
 
   const download = async (f: string): Promise<boolean> => {
     const ctrl = new AbortController();
@@ -97,6 +103,19 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
               </button>
               <span className="text-xs text-accent-600">{formatSize(CORR_SIZE_MB[r.folder] || 0)}</span>
             </div>
+            {askFor === r.folder && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 space-y-2">
+                <p className="text-sm font-semibold text-accent-900">هيسمّعلك في جزء واحد ولا في القرآن كله؟</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button type="button" onClick={() => { setAskFor(null); setOpenJuz(r.folder); }}
+                    className="min-h-[44px] rounded-lg bg-emerald-600 text-white text-sm font-bold">جزء أو أكتر (من {juzSizeMb(r.folder, 1)} ميجا للجزء)</button>
+                  <button type="button" disabled={!!busy} onClick={() => { setAskFor(null); void download(r.folder); }}
+                    className="min-h-[44px] rounded-lg bg-amber-500 text-white text-sm font-bold disabled:opacity-40">القرآن كله ({formatSize(CORR_SIZE_MB[r.folder] || 0)})</button>
+                  <button type="button" onClick={() => setAskFor(null)}
+                    className="min-h-[44px] rounded-lg border text-sm">بالنت بس دلوقتي</button>
+                </div>
+              </div>
+            )}
             <button type="button" onClick={() => setOpenJuz(openJuz === r.folder ? null : r.folder)}
               className="text-sm font-semibold text-emerald-700 underline">
               {openJuz === r.folder ? 'اقفل الأجزاء' : `نزّل بالجزء (${downloadedJuzCount(r.folder)} من 30 على جهازك)`}
