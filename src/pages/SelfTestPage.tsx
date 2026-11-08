@@ -3842,6 +3842,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // never waits on the network, and a fresh prompt clears any
     // stale audio-failure note.
     setContAudioFailed(false);
+    // Keep what he already said (2026-11-08): Safari holds the whole
+    // recitation as interim text and gives no final before we stop the
+    // recognizer, so stopping without folding it in threw away every
+    // word heard so far (the "heard 5 words" run).
+    {
+      const pending = takePendingInterim();
+      if (pending) {
+        liveRef.current.contFinals = `${liveRef.current.contFinals} ${pending}`.trim();
+        setTranscript(liveRef.current.contFinals);
+      }
+    }
     contPromptingRef.current = true;
     setContPrompting(true);
     userStopRef.current = true;
@@ -4428,13 +4439,20 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
     const saved = liveRef.current.contFinals;
     let owed: ReturnType<typeof contOwedWords>;
+    let matchedNow: boolean[] = [];
     try {
       liveRef.current.contFinals = `${saved} ${interimText}`.trim();
       owed = contOwedWords();
+      matchedNow = contEffectiveMatched().matched;
     } finally {
       liveRef.current.contFinals = saved;
     }
     if (!owed.isMiss || owed.words.length === 0) { interimMissSeenRef.current = { key: '', at: 0 }; return; }
+    // Stronger evidence than the finals path: the TWO words right after
+    // the missed ones must both be matched, so one misheard word never
+    // stops him (the on/off loop of 2026-11-08).
+    const lastMiss = Math.max(...owed.indices);
+    if (!(matchedNow[lastMiss + 1] && matchedNow[lastMiss + 2])) return;
     const key = owed.indices.join('|');
     if (key === contPromptedKeyRef.current) return;
     const aw = contAwaitingRef.current;
