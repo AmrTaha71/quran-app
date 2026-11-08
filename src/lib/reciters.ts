@@ -32,6 +32,8 @@ export const RECITERS: Reciter[] = [
   // Jaber: only 64kbps exists on any open source found (everyayah);
   // his islamic.network edition is blocked, and no 128 folder exists.
   { id: 'jaber', name: 'علي جابر', quality: '64', audioUrl: everyayah('Ali_Jaber_64kbps') },
+  // Hani Ar-Rifai: added as a trial (2026-11-08). Folder name and licence not verified from the sandbox; check playback on device.
+  { id: 'rifai', name: 'هاني الرفاعي', quality: '192', audioUrl: everyayah('Hani_Rifai_192kbps') },
 ];
 
 export const DEFAULT_RECITER_ID = 'minshawi';

@@ -28,6 +28,7 @@ import SettingsPage from './pages/SettingsPage';
 import SelfTestPage from './pages/SelfTestPage';
 import ListenPage from './pages/ListenPage';
 import AdhkarPage from './pages/AdhkarPage';
+import SharedRoomPage from './pages/SharedRoomPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
@@ -37,19 +38,19 @@ import { BackButton, useBackTarget } from './components/BackButton';
 import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are
 // excluded: a SIGNED_OUT there is normal, not an expiry.
-const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar'];
+const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room'];
 
 // Routes that show the shell back button (2026-11-06, back-button
 // part 1): every tab route goes back to الرئيسية unless the page
 // registered an internal target (open Settings door, Listen detail
 // view, SelfTest sub-view). Home, landing, auth, admin and splash
 // never show it.
-const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow'];
+const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room'];
 
 function getRouteFromHash(): Route {
   const rawHash = window.location.hash;
@@ -524,6 +525,8 @@ function AppContent() {
     // The wrapper above IS the page on these routes — nothing else
     // renders beside it.
     page = null;
+  } else if (route === 'room') {
+    page = <SharedRoomPage session={session} onNavigate={navigate} />;
   } else if (route === 'home' && session) {
     // Logged-in users never see the landing page — admins included
     // (2026-10-27: admins are users too, same account, same start

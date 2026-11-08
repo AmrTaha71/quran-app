@@ -19,8 +19,9 @@ import { getJuzFromPage } from '../lib/quranIndex';
 import { JUZ_STARTS } from '../lib/quranBoundaries';
 import { normalizeDigits, toArabicIndic } from '../lib/numerals';
 import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
+import ElderlyHome from '../components/ElderlyHome';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 // Light start page (الرئيسية) for logged-in users: NOT a second
 // dashboard. One resume card (last Mushaf page, from the same
@@ -240,7 +241,8 @@ export default function HomeStartPage({ session, onNavigate }: {
     return (
       <div className="min-h-screen page-bg pb-24 route-in">
         <main className="max-w-5xl mx-auto px-4 py-8">
-          <div className="flex flex-col gap-6">
+          <ElderlyHome onNavigate={onNavigate} onResume={() => resumeHifz(onNavigate)} />
+          <div className="flex flex-col gap-6 mt-6">
             <button
               onPointerDown={pressFeedback}
               onClick={() => onNavigate('listen')}
@@ -608,18 +610,16 @@ export default function HomeStartPage({ session, onNavigate }: {
 
 
 
-        {/* Mode doors at the bottom of Home: «راجع مع الرفيق» (coming soon, left) and «صفحة جدو» (right).
+        {/* Mode doors at the bottom of Home: «راجع مع الرفيق» (shared room, left) and «صفحة جدو» (right).
             Elderly / low-vision switches the same persisted mode as Settings. Children door removed. */}
         <div className="grid grid-cols-2 gap-3 mb-4">
           <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="py-4 px-3 bg-slate-200 text-slate-500 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base cursor-not-allowed"
+            onPointerDown={pressFeedback}
+            onClick={() => onNavigate('room')}
+            className="py-4 px-3 bg-white border-2 border-emerald-600 text-emerald-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base polish-press polish-focus"
           >
             <Users className="w-8 h-8" />
             <span>راجع مع الرفيق</span>
-            <span className="text-xs font-semibold bg-slate-300 text-slate-600 rounded-full px-2 py-0.5">قريباً</span>
           </button>
           <button
             onPointerDown={pressFeedback}
