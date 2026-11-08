@@ -42,7 +42,7 @@ export const CORR_DELAY_MODE_LABEL: Record<CorrDelayMode, string> = {
   'ayah-end': 'في نهاية الآية',
 };
 
-export const CORR_DELAY_MODE_DEFAULT: CorrDelayMode = '3s';
+export const CORR_DELAY_MODE_DEFAULT: CorrDelayMode = '1s';
 
 /** Stored value -> mode. Numeric legacy values (the old corrDelay
  *  stepper, clamped 2..10): 1-2 -> '1s', 3 -> '3s', 4+ -> '5s'.
@@ -135,6 +135,20 @@ export function isJuhaniCorrEnabled(surah: number, ayah: number, wordCount: numb
   const t = timingsFor(surah, ayah);
   if (!t) return false;
   return timingsShapeOk(t, wordCount);
+}
+
+/** Per-ayah Juhani file (same AlQuranCloud edition as the hadr surah
+ *  file), by global ayah number 1..6236. Used when an ayah has no
+ *  word timings: the whole ayah plays in Juhani's voice instead of a
+ *  generated voice (2026-11-08). */
+export function juhaniAyahUrl(globalAyah: number): string {
+  return `https://cdn.islamic.network/quran/audio/128/ar.abdullahawadaljuhani/${globalAyah}.mp3`;
+}
+
+/** Whole-file plan for a per-ayah file: one segment from 0 to the end
+ *  (the player also stops on `ended`). */
+export function wholeAyahPlan(wordCount: number): JuhaniPlan {
+  return { segments: [{ start: 0, end: Math.max(0, wordCount - 1), tStart: 0, tEnd: 120 }], truncated: false };
 }
 
 export function juhaniSurahUrl(surah: number): string {

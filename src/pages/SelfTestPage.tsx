@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { useWakeLock } from '../lib/wakeLock';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
@@ -14,7 +15,7 @@ import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
-  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniSurahUrl, juhaniAyahStartTime,
+  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniSurahUrl, juhaniAyahUrl, wholeAyahPlan, juhaniAyahStartTime,
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
@@ -162,7 +163,16 @@ function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: 
       const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
       // A stored corrDelayMode wins; otherwise migrate the legacy numeric
       // corrDelay (1-2 -> 1s, 3 -> 3s, 4+ -> 5s; missing/invalid -> 3s).
-      const corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
+      let corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
+      // One-time move to the new 1-second default (2026-11-08): the
+      // user asked for corrections one second after the mistake. The
+      // user can still pick another timing afterwards.
+      try {
+        if (localStorage.getItem('quran-corr-1s-default-v1') !== '1') {
+          localStorage.setItem('quran-corr-1s-default-v1', '1');
+          if (corrDelayMode === '3s' || corrDelayMode === 'ayah-end') corrDelayMode = '1s';
+        }
+      } catch { /* storage blocked */ }
       const corrDelay = corrDelaySeconds(corrDelayMode);
       const corrRate: CorrRate = p.corrRate === 'slow' || p.corrRate === 'fast' || p.corrRate === 'veryFast' ? p.corrRate : 'normal';
       return { level, mode, corrDelay, corrDelayMode, corrRate };
@@ -765,6 +775,8 @@ type MicState = 'idle' | 'listening' | 'correcting' | 'done-correct' | 'done-wro
 
 export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [phase, setPhase] = useState<'setup' | 'testing' | 'done'>('setup');
+  // Keep the screen awake while a recitation test runs (2026-11-08).
+  useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
   // the open door. All setup state lives here; doors only hide/show
   // the existing cards, they never change a setting.
@@ -1785,7 +1797,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   // Buzz at the moment the correction window opens (detection).
   const buzzOnDetection = () => {
-    if (!juhaniEnabledForCurrent()) return;
     playErrorBuzz();
     diagPush('juhani-buzz', { label: corrWindowSourceRef.current || 'unknown', reason: `mode=${liveRef.current.corrDelayMode}` });
   };
@@ -1796,8 +1807,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // 1.25: 1.5x hadr is hard to hear). Ayah mode passes nothing, so
   // its rate is unchanged.
   const startJuhaniCorrection = (ayah: TestAyah, wordCount: number, wrongIdx: number[], onFallback: () => void, onDone?: () => void, maxRate?: number): boolean => {
-    const plan = planJuhaniWindows(ayah.surah_no, ayah.ayah_no, wordCount, wrongIdx);
+    // Word-timed ayah: Juhani's exact words from the surah file.
+    // Untimed ayah (2026-11-08): the whole ayah from Juhani's per-ayah
+    // file — still his real voice, never a generated one. A load
+    // failure still falls back via onFallback.
+    const wordPlan = planJuhaniWindows(ayah.surah_no, ayah.ayah_no, wordCount, wrongIdx);
+    const plan = wordPlan ?? (ayah.id > 0 ? wholeAyahPlan(wordCount) : null);
     if (!plan) return false;
+    const playUrlForPlan = wordPlan ? juhaniSurahUrl(ayah.surah_no) : juhaniAyahUrl(ayah.id);
     if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
     const player = juhaniPlayerRef.current;
     stopRefUnit();
@@ -1807,7 +1824,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     diagPush('corr-source', { label: 'juhani-window', reason: `mode=${liveRef.current.corrDelayMode};rate=${rate};segs=${plan.segments.length}${plan.truncated ? ';truncated' : ''}` });
     setCorrWindowPlaying(true);
     player.play({
-      url: juhaniSurahUrl(ayah.surah_no),
+      url: playUrlForPlan,
       segments: plan.segments,
       rate,
       onStart: () => { diagPush('tts-start', { label: 'juhani-window' }); },
@@ -4349,7 +4366,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
       speakContPrompt(now.words, now.indices, now.norms, 'stall');
-    }, Math.max(3, liveRef.current.corrDelay) * 1000);
+    }, Math.max(1, liveRef.current.corrDelay) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded

@@ -4385,7 +4385,8 @@ export default function QuranMushafPage({
               </button>
 
               {/* Verse selector — only the ayahs printed on this page */}
-              <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(1rem_+_env(safe-area-inset-bottom))] pointer-events-auto px-4"
+              {/* Fades out with the other fullscreen overlays (auto-hide after 3s, tap to show). */}
+              <div className={`absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(1rem_+_env(safe-area-inset-bottom))] px-4 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
                 onClick={(e) => e.stopPropagation()}>
                 {followStatus === 'locked' && followPos && !followOn && (
                   <div className="mb-2 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
