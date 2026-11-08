@@ -9,7 +9,7 @@ export function roomLabel(): string {
   } catch {
     g = null;
   }
-  if (g === 'male') return 'راجع مع رفيقك';
+  if (g === 'male') return 'راجع مع صديقك';
   if (g === 'female') return 'راجعي مع رفيقتك';
   return 'راجع مع الرفيق';
 }

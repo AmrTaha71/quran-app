@@ -87,6 +87,7 @@ export default function QRCodeSection() {
               ))}
             </div>
 
+            <p className="text-center text-sm font-semibold text-emerald-800 mt-5">شاركنا الأجر وارسله لأصدقائك</p>
             <p className="text-center text-xs text-accent-600 mt-5">
               امسح الرمز بكاميرا جهازك، وبعدين ثبّته بالخطوات المكتوبة تحت جهازك — قريبًا إن شاء الله على المتاجر
             </p>
