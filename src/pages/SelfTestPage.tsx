@@ -2242,6 +2242,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         });
         liveRef.current.contExpected = expected;
         liveRef.current.contFinals = '';
+        interimPromptedMaxRef.current = -1;
         liveRef.current.contListening = false;
         liveRef.current.contStrict = liveRef.current.level !== 'beginner';
         setTestMode('continuous');
@@ -4441,39 +4442,56 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // interim events at least 500ms apart. Grading is untouched: the
   // transcript is restored right after the check.
   const interimMissSeenRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+  // Highest expected-word index already prompted by this path in the
+  // current run: later checks only look at misses AFTER it, so one
+  // unrepaired early miss never blocks every later correction (the
+  // "only the first mistake was corrected" run of 2026-11-08).
+  const interimPromptedMaxRef = useRef(-1);
   const checkContMissInterruptInterim = (interimText: string) => {
     if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
+    const expected = liveRef.current.contExpected;
+    if (expected.length === 0) return;
     const saved = liveRef.current.contFinals;
-    let owed: ReturnType<typeof contOwedWords>;
-    let matchedNow: boolean[] = [];
+    let matched: boolean[] = [];
+    let lastMatchedIdx = -1;
     try {
       liveRef.current.contFinals = `${saved} ${interimText}`.trim();
-      owed = contOwedWords();
-      matchedNow = contEffectiveMatched().matched;
+      const r = contEffectiveMatched();
+      matched = r.matched;
+      lastMatchedIdx = r.lastMatchedIdx;
     } finally {
       liveRef.current.contFinals = saved;
     }
-    if (!owed.isMiss || owed.words.length === 0) { interimMissSeenRef.current = { key: '', at: 0 }; return; }
-    // Stronger evidence than the finals path: the TWO words right after
-    // the missed ones must both be matched, so one misheard word never
-    // stops him (the on/off loop of 2026-11-08).
-    const lastMiss = Math.max(...owed.indices);
-    if (!(matchedNow[lastMiss + 1] && matchedNow[lastMiss + 2])) return;
-    const key = owed.indices.join('|');
-    if (key === contPromptedKeyRef.current) return;
     const aw = contAwaitingRef.current;
-    if (aw) {
-      const awaitedLast = aw.indices.length > 0 ? Math.max(...aw.indices) : -1;
-      if (owed.indices[0] <= awaitedLast) return;
+    const awaitedLast = aw && aw.indices.length > 0 ? Math.max(...aw.indices) : -1;
+    const floor = Math.max(awaitedLast, interimPromptedMaxRef.current);
+    // First passed-over miss after the floor, confirmed by the TWO words
+    // right after it being matched (one misheard word never stops him).
+    let first = -1;
+    for (let i = floor + 1; i < lastMatchedIdx; i++) {
+      if (!matched[i] && !contCreditedRef.current.has(i)) { first = i; break; }
     }
+    if (first < 0) { interimMissSeenRef.current = { key: '', at: 0 }; return; }
+    const ayahIdx = expected[first].ayahIdx;
+    const indices: number[] = [];
+    for (let i = first; i < lastMatchedIdx && expected[i].ayahIdx === ayahIdx; i++) {
+      if (!matched[i]) indices.push(i); else if (indices.length > 0) break;
+    }
+    const lastMiss = indices[indices.length - 1];
+    if (!(matched[lastMiss + 1] && matched[lastMiss + 2])) return;
+    const key = indices.join('|');
+    if (key === contPromptedKeyRef.current) return;
     const now = Date.now();
     const seen = interimMissSeenRef.current;
     if (seen.key !== key) { interimMissSeenRef.current = { key, at: now }; return; }
     if (now - seen.at < 500) return;
     interimMissSeenRef.current = { key: '', at: 0 };
+    interimPromptedMaxRef.current = lastMiss;
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
     diagPush('corr-source', { label: 'interim-miss', reason: key });
-    speakContPrompt(withPrecedingContextWord(owed.words, owed.indices, liveRef.current.contExpected), owed.indices, owed.norms, 'confirmed-miss');
+    const words = indices.map((i) => expected[i].orig);
+    const norms = indices.map((i) => expected[i].norm);
+    speakContPrompt(withPrecedingContextWord(words, indices, expected), indices, norms, 'confirmed-miss');
   };
 
   const checkContMissInterrupt = () => {
