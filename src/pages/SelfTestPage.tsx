@@ -466,6 +466,25 @@ function muqattaatMatchAt(expected: string[], i: number, spoken: string[], j: nu
   return null;
 }
 
+// Tolerant equality (beginner level, 2026-11-08): the device's offline
+// dictation drops long-vowel alifs and a final «ها» (يغشاها -> يغشها,
+// جلاها -> جلا), which used to trap the reciter in a correction loop on a
+// word he said right. Only those two shapes are forgiven: a different
+// consonant (يخشاها for يغشاها) is still a mistake.
+function softWordEq(spoken: string, expected: string): boolean {
+  if (spoken === expected) return true;
+  if (spoken.length < 3) return false;
+  // Skeleton without long-vowel letters (expected norms spell alif
+  // maqsura as ي: جَلَّىٰهَا -> جليها).
+  const sk = (w: string) => w.replace(/[اىي]/g, '');
+  const e = sk(expected);
+  const sp = sk(spoken);
+  if (sp === e) return true;
+  // Dropped final «ها»: جلا for جليها.
+  if (e.endsWith('ه') && sp === e.slice(0, -1)) return true;
+  return false;
+}
+
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   // E2: spoken index each expected word matched at (-1 if unmatched).
@@ -483,7 +502,7 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
   while (i < expected.length) {
     let found = -1;
     for (let k = j; k < spoken.length; k++) {
-      if (spoken[k] === expected[i]) { found = k; break; }
+      if (softWordEq(spoken[k], expected[i])) { found = k; break; }
     }
     if (found >= 0) { matched[i] = true; positions[i] = found; j = found + 1; i++; continue; }
     let joined = -1;
@@ -2249,6 +2268,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         liveRef.current.contExpected = expected;
         liveRef.current.contFinals = '';
         interimPromptedMaxRef.current = -1;
+        contGaveUpRef.current = new Set();
+        contPromptCountRef.current = new Map();
         liveRef.current.contListening = false;
         liveRef.current.contStrict = liveRef.current.level !== 'beginner';
         setTestMode('continuous');
@@ -3489,9 +3510,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // merge must be re-examined. No separation of read/mutation is
   // made: the merge is load-bearing for the overshoot wrapper, which
   // relies on this side effect to keep credited current.
-  const contEffectiveMatched = (): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
+  // Words prompted twice without being heard back: the flow moves past
+  // them (no third prompt, no stuck pointer); grading still counts them
+  // as missed (forGrade).
+  const contGaveUpRef = useRef<Set<number>>(new Set());
+  const contPromptCountRef = useRef<Map<string, number>>(new Map());
+  const contEffectiveMatched = (forGrade = false): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
     const raw = contRawAlignment();
-    const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i));
+    const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i) || (!forGrade && contGaveUpRef.current.has(i)));
     raw.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
     let lastMatchedIdx = -1;
     matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
@@ -3855,6 +3881,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // never waits on the network, and a fresh prompt clears any
     // stale audio-failure note.
     setContAudioFailed(false);
+    // Two prompts for the same words and still not heard back: let the
+    // flow pass them (they stay missed in the grade) so he is never stuck.
+    if (fixIdx && fixIdx.length > 0) {
+      const k = fixIdx.join('|');
+      const n = (contPromptCountRef.current.get(k) || 0) + 1;
+      contPromptCountRef.current.set(k, n);
+      if (n >= 2) fixIdx.forEach((i) => contGaveUpRef.current.add(i));
+    }
     // Keep what he already said (2026-11-08): Safari holds the whole
     // recitation as interim text and gives no final before we stop the
     // recognizer, so stopping without folding it in threw away every
@@ -4588,7 +4622,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const gradeContinuousNow = (): boolean => {
     const expected = liveRef.current.contExpected;
     const raw = contRawAlignment();
-    const { matched } = contEffectiveMatched();
+    const { matched } = contEffectiveMatched(true);
     const ayahCount = expected.length ? expected[expected.length - 1].ayahIdx + 1 : 0;
     // D1: record the word counts for the done diagnostic, and guard
     // every caller (not just the finish button): a zero-match
