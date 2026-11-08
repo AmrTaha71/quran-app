@@ -4,7 +4,8 @@ import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users } from 'lucide-react';
+import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast } from 'lucide-react';
+import BigScreenSheet from '../components/BigScreenSheet';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
@@ -148,6 +149,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   // by default — same pattern as the الحفظ / سمّع لنفسك doors.
   const [mapOpen, setMapOpen] = useState(false);
   const [mutOpen, setMutOpen] = useState(false);
+  const [bigOpen, setBigOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
   const [tarteelOpen, setTarteelOpen] = useState(false);
   const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
@@ -311,6 +313,15 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="flex justify-center mb-5">
           <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md polish-hero-medal" />
         </div>
+        {/* «اعرض على الشاشة الكبيرة» (2026-11-09) */}
+        <button
+          onPointerDown={pressFeedback}
+          onClick={() => setBigOpen(true)}
+          className="w-full max-w-md mx-auto mb-4 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-emerald-700 bg-white text-emerald-800 font-bold text-lg polish-press"
+        >
+          <Cast className="w-6 h-6" /> اعرض على الشاشة الكبيرة
+        </button>
+        {bigOpen && <BigScreenSheet onClose={() => setBigOpen(false)} onRemote={() => { setBigOpen(false); onNavigate('room'); }} />}
         {/* «اؤمرني»: voice command door, right under the app mark. */}
         <div className="mb-5">
           <OrderMeButton onNavigate={onNavigate}
