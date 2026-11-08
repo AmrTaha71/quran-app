@@ -1622,6 +1622,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // path above and by mid-flow interrupts, where the correction
   // cannot be prefetched (the miss is only known when it happens).
   const requestCorrectionAudio = async (words: string[], pos?: { shape: 'context' | 'bare'; positions: CorrPosition[] }): Promise<string | null> => {
+    // Offline: the generated-voice service cannot be reached; the real
+    // reciter (or browser TTS) plays instead. Skip the doomed request, which
+    // was retried every ~0.4s and drained the battery (2026-11-08 diag).
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
     if (words.length === 0) return null;
     // DIAG (2026-11-04, logging only): fetch clock for the corr-fetch event below.
     const corrFetchStart = Date.now();
