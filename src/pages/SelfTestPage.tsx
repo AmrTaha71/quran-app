@@ -4975,15 +4975,57 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // name search (push 198, normSurahSearch) + the 114-surah dropdown.
   // Choosing a surah resets the passage to its first 5 ayahs (the
   // manual picker's old behaviour) and clears the search.
+  // Search selects at once (2026-11-08): typing or saying a surah name
+  // jumps the picker to the best match (exact name first, then the
+  // first name that starts with it, then the first that contains it),
+  // so no second step in the dropdown is needed.
+  const chooseSurah = (n: number) => {
+    setSurah(n);
+    setFrom(1);
+    setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
+  };
+  const applySurahSearch = (text: string) => {
+    setSurahSearch(text);
+    const q = normSurahSearch(text.replace(/^\s*(سورة|سوره|صورة|صوره)\s+/, ''));
+    if (!q) return;
+    const names = SURAHS.map((x) => ({ no: x.no, n: normSurahSearch(x.name) }));
+    const hit = names.find((x) => x.n === q) || names.find((x) => x.n.startsWith(q)) || names.find((x) => x.n.includes(q));
+    if (hit) chooseSurah(hit.no);
+  };
+  const [surahVoiceOn, setSurahVoiceOn] = useState(false);
+  const surahVoiceSearch = () => {
+    const W = window as unknown as { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any };
+    const Ctor = W.SpeechRecognition || W.webkitSpeechRecognition;
+    if (!Ctor) { setSurahSearch('البحث بالصوت مش مدعوم على المتصفح ده'); return; }
+    try {
+      const r = new Ctor();
+      r.lang = 'ar-SA';
+      r.interimResults = false;
+      r.maxAlternatives = 1;
+      r.onresult = (e: any) => {
+        const t = String(e?.results?.[0]?.[0]?.transcript || '').trim();
+        if (t) applySurahSearch(t);
+      };
+      r.onend = () => setSurahVoiceOn(false);
+      r.onerror = () => setSurahVoiceOn(false);
+      setSurahVoiceOn(true);
+      r.start();
+    } catch { setSurahVoiceOn(false); }
+  };
+
   const surahPicker = (
     <label className="block">
       <span className="text-sm font-medium text-accent-700">السورة</span>
       <div className="relative mt-1">
         <input type="text" value={surahSearch} dir="rtl"
-          onChange={(e) => setSurahSearch(e.target.value)}
-          placeholder="اكتب اسم السورة… مثال: الشمس"
-          className="w-full px-3 py-2.5 pl-10 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
-        <Search className="w-5 h-5 text-accent-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          onChange={(e) => applySurahSearch(e.target.value)}
+          placeholder="اكتب أو قول اسم السورة… مثال: الشمس"
+          className="w-full px-3 py-2.5 pl-12 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+        <button type="button" onClick={(e) => { e.preventDefault(); surahVoiceSearch(); }}
+          aria-label="ابحث بالصوت"
+          className={`absolute left-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg ${surahVoiceOn ? 'bg-red-500 text-white animate-pulse' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+          <Mic className="w-5 h-5" />
+        </button>
       </div>
       {surahSearch.trim() !== '' && (
         <p className="text-xs text-accent-600 mt-1">
@@ -4994,10 +5036,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       )}
       <select value={surah}
         onChange={(e) => {
-          const n = Number(e.target.value);
-          setSurah(n);
-          setFrom(1);
-          setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
+          chooseSurah(Number(e.target.value));
           setSurahSearch('');
         }}
         className="mt-2 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
