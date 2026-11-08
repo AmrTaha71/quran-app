@@ -3854,6 +3854,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (words.length === 0 || contPromptingRef.current) return;
     // Every word of this prompt was already corrected twice: stay quiet.
     if (fixIdx && fixIdx.length > 0 && fixIdx.every((i) => contGaveUpRef.current.has(i))) return;
+    // Never pull him back more than one ayah (2026-11-08 diag): a stale
+    // miss from ayah 5 interrupted him at ayah 12, and the words he kept
+    // reciting during that correction were lost, which created new misses.
+    // Older misses stay in the review list; only the flow skips them.
+    if (fixIdx && fixIdx.length > 0) {
+      const expected = liveRef.current.contExpected;
+      const { lastMatchedIdx } = contEffectiveMatched();
+      const curAyah = lastMatchedIdx >= 0 ? expected[lastMatchedIdx].ayahIdx : 0;
+      const missAyah = expected[fixIdx[0]]?.ayahIdx ?? curAyah;
+      if (missAyah < curAyah - 1) {
+        fixIdx.forEach((i) => contGaveUpRef.current.add(i));
+        diagPush('corr-skip', { label: 'stale-miss', reason: `missAyah=${missAyah + 1};cur=${curAyah + 1}` });
+        return;
+      }
+    }
     // Iteration 2: generation token + settled flag + prompt-entry
     // timestamp (detection proxy for the diag voice-start timing).
     const gen = ++speakGenRef.current;
