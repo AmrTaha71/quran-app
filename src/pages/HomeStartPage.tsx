@@ -1,3 +1,4 @@
+import { roomLabel } from '../lib/roomLabel';
 import { useEffect, useState } from 'react';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import TarteelQuizModal from '../components/TarteelQuizModal';
@@ -619,7 +620,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             className="py-4 px-3 bg-white border-2 border-emerald-600 text-emerald-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base polish-press polish-focus"
           >
             <Users className="w-8 h-8" />
-            <span>راجع مع الرفيق</span>
+            <span>{roomLabel()}</span>
           </button>
           <button
             onPointerDown={pressFeedback}

@@ -1,3 +1,4 @@
+import { roomLabel } from '../lib/roomLabel';
 import { useEffect, useState } from 'react';
 import { Clock, Headphones, RotateCcw, Users, MoonStar, Hand } from 'lucide-react';
 import { pressFeedback } from '../lib/pressFeedback';
@@ -182,7 +183,7 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
         onClick={() => onNavigate('room')}
         className={`${BIG_BTN} bg-white text-emerald-800 border-2 border-emerald-700`}
       >
-        <Users className="w-7 h-7" /> راجع مع الرفيق
+        <Users className="w-7 h-7" /> {roomLabel()}
       </button>
 
       {/* 6. Listen until sleep */}
