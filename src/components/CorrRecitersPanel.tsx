@@ -130,7 +130,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                     return (
                       <button key={j} type="button" onClick={() => void toggleJuz(r.folder, j)}
                         className={`min-h-[44px] rounded-lg text-xs font-bold border ${has ? 'bg-emerald-600 text-white border-emerald-600' : running ? 'bg-amber-100 border-amber-400' : 'bg-white border-hairline text-accent-800'}`}>
-                        {running ? `${juzBusy!.pct}%` : <>ج{j}<span className="block font-normal opacity-80">{juzSizeMb(r.folder, j)}م</span></>}
+                        {running ? `${juzBusy!.pct}%` : <>ج{j}<span className="block font-normal opacity-80">{juzSizeMb(r.folder, j)} ميجا</span></>}
                       </button>
                     );
                   })}
