@@ -407,7 +407,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
       <div className="bg-white rounded-xl border p-4 space-y-2 text-sm text-slate-600">
         <p className="font-semibold text-slate-800">شاشة التلفزيون</p>
         <p>على متصفح التلفزيون افتح الرابط ده (مرة واحدة، وبعدين احفظه):</p>
-        <p dir="ltr" className="break-all text-slate-800">{typeof window !== 'undefined' ? `${window.location.origin}/#/room?view=tv` : ''}</p>
+        <p dir="ltr" className="break-all text-slate-800">{typeof window !== 'undefined' ? `${window.location.host}/tv` : ''}</p>
         <p>التلفزيون هيظهر كود، وانت ادخله هنا عشان تتحكم فيه.</p>
       </div>
 

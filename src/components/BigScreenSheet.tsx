@@ -5,7 +5,7 @@
 import { Cast, X, Smartphone, Tv } from 'lucide-react';
 
 export default function BigScreenSheet({ onClose, onRemote }: { onClose: () => void; onRemote: () => void }) {
-  const tvUrl = typeof window !== 'undefined' ? `${window.location.origin}/#/room?view=tv` : '';
+  const tvUrl = typeof window !== 'undefined' ? `${window.location.host}/tv` : '';
   return (
     <div dir="rtl" className="fixed inset-0 z-[80] bg-black/50 flex items-end sm:items-center justify-center p-3" onClick={onClose}>
       <div className="w-full max-w-lg bg-white rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
