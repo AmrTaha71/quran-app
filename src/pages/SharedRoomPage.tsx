@@ -4,6 +4,7 @@ import type { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { pressFeedback } from '../lib/pressFeedback';
+import QRCode from 'qrcode';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -52,7 +53,19 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   // TV mode: opened as #/room?view=tv on the TV browser. It makes its own
   // code and shows it big; the phone joins with that code and acts as the remote.
   const tvView = typeof window !== 'undefined' && window.location.hash.includes('view=tv');
-  const [code, setCode] = useState<string | null>(() => (tvView ? newCode() : null));
+  // Phone scanned the TV's QR: #/room?join=CODE joins at once (2026-11-09).
+  const joinFromLink = (() => {
+    if (typeof window === 'undefined') return null;
+    const m = /[?&]join=([A-Z0-9]{6})/i.exec(window.location.hash);
+    return m && isValidCode(m[1].toUpperCase()) ? m[1].toUpperCase() : null;
+  })();
+  const [code, setCode] = useState<string | null>(() => (tvView ? newCode() : joinFromLink));
+  const [tvQr, setTvQr] = useState('');
+  useEffect(() => {
+    if (!tvView || !code) return;
+    const url = `${window.location.origin}/#/room?join=${code}`;
+    void QRCode.toDataURL(url, { width: 360, margin: 1 }).then(setTvQr).catch(() => setTvQr(''));
+  }, [tvView, code]);
   const [joinInput, setJoinInput] = useState('');
   const [joinError, setJoinError] = useState('');
   const [members, setMembers] = useState(0);
@@ -373,7 +386,13 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   if (tvView) {
     return (
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
-        <p className="text-3xl opacity-80">كود الريموت من الموبايل</p>
+        {tvQr && (
+          <div className="flex flex-col items-center gap-3">
+            <img src={tvQr} alt="" className="w-64 h-64 rounded-2xl bg-white p-3" />
+            <p className="text-3xl font-bold text-amber-300">صوّر الكود ده بكاميرا موبايلك</p>
+          </div>
+        )}
+        <p className="text-2xl opacity-80">أو اكتب الكود ده في الموبايل</p>
         <p dir="ltr" className="text-8xl font-bold tracking-[0.3em]">{code}</p>
         <p className="text-3xl opacity-80">الموجودين: {members || 1}</p>
         <div className="mt-6">
