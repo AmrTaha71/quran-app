@@ -582,7 +582,7 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
   while (i < expected.length) {
     let found = -1;
     for (let k = j; k < spoken.length; k++) {
-      if (spoken[k] === expected[i]) { found = k; break; }
+      if (softWordEq(spoken[k], expected[i])) { found = k; break; }
     }
     if (found >= 0) { consumeThrough(found, 1); matched[i] = true; positions[i] = found; i++; continue; }
     let joined = -1;
