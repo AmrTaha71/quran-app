@@ -96,15 +96,17 @@ function playTapSound(): void {
     const osc = tapCtx.createOscillator();
     const gain = tapCtx.createGain();
     const jitter = 0.97 + Math.random() * 0.06; // ±3% pitch so repeated taps don't machine-gun
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(1500 * jitter, t);
-    osc.frequency.exponentialRampToValueAtTime(900 * jitter, t + 0.06);
-    gain.gain.setValueAtTime(0.07, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    // Soft, flat-pitched tick: a sine with no pitch sweep (sweeps sound like
+    // arcade blips on Windows) and a short gentle decay.
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(820 * jitter, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.035, t + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
     osc.connect(gain);
     gain.connect(tapCtx.destination);
     osc.start(t);
-    osc.stop(t + 0.09);
+    osc.stop(t + 0.06);
   } catch {
     // sound is decorative: never let it break a press
   }

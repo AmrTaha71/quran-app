@@ -3,6 +3,7 @@ import type { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { pressFeedback } from '../lib/pressFeedback';
+import { getQuranTextCache } from '../lib/quranTextCache';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
 // «راجع مع الرفيق»: a shared room between two people, joined by a code.
@@ -68,6 +69,24 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   const voiceApiRef = useRef<VoiceApi | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const posRef = useRef(pos);
+  // TV mode: show the ayah text itself (not only the number), read from the local text cache.
+  const [tvAyahText, setTvAyahText] = useState<string>('');
+  useEffect(() => {
+    if (!tvView) return;
+    let cancelled = false;
+    const count = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 0;
+    void getQuranTextCache()
+      .getSurah(pos.surah, count)
+      .then((rows) => {
+        if (cancelled) return;
+        const row = rows?.find((r) => r.ayah_no === pos.ayah);
+        setTvAyahText(row?.ayah_text ?? '');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos.surah, pos.ayah]);
   posRef.current = pos;
 
   useEffect(() => {
@@ -358,8 +377,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         <p className="text-3xl opacity-80">الموجودين: {members || 1}</p>
         <div className="mt-6">
           <p className="text-4xl font-bold">سورة {surahName}</p>
-          <p className="text-[9rem] leading-none font-bold text-amber-300">{pos.ayah}</p>
-          <p className="text-3xl opacity-80">الآية</p>
+          <p className="text-6xl leading-relaxed font-bold text-amber-300 max-w-6xl mx-auto">{tvAyahText || pos.ayah}</p>
+          <p className="text-3xl opacity-80 mt-4">الآية {pos.ayah}</p>
         </div>
       </div>
     );
