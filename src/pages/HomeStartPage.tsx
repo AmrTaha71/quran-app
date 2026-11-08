@@ -21,6 +21,7 @@ import { JUZ_STARTS } from '../lib/quranBoundaries';
 import { normalizeDigits, toArabicIndic } from '../lib/numerals';
 import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import ElderlyHome from '../components/ElderlyHome';
+import OrderMeButton from '../components/OrderMeButton';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
@@ -242,6 +243,11 @@ export default function HomeStartPage({ session, onNavigate }: {
     return (
       <div className="min-h-screen page-bg pb-24 route-in">
         <main className="max-w-5xl mx-auto px-4 py-8">
+          <div className="mb-6">
+            <OrderMeButton onNavigate={onNavigate}
+              onMutashabihat={() => { setElderlyMode(false); setMutOpen(true); }}
+              onElderly={() => {}} />
+          </div>
           <ElderlyHome onNavigate={onNavigate} onResume={() => resumeHifz(onNavigate)} />
           <div className="flex flex-col gap-6 mt-6">
             <button
@@ -300,6 +306,12 @@ export default function HomeStartPage({ session, onNavigate }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-5">
+        {/* «اؤمرني»: voice command door at the very top. */}
+        <div className="mb-5">
+          <OrderMeButton onNavigate={onNavigate}
+            onMutashabihat={() => setMutOpen(true)}
+            onElderly={() => setElderlyMode(true)} />
+        </div>
         {/* App mark: the artwork itself, sized so the greeting and
             the resume action stay visible without scrolling. */}
         <div className="flex justify-center mb-5">

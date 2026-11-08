@@ -1847,6 +1847,27 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // «اؤمرني» (2026-11-08): "عايز أسمع سورة الملك" sets a one-time
+  // 'quran-listen-surah' and navigates here. The page stays mounted
+  // between routes, so this runs whenever it becomes visible. Plays
+  // the whole surah from ayah 1 with the user's current reciter.
+  useEffect(() => {
+    if (!visible) return;
+    let n = 0;
+    try {
+      n = Number(sessionStorage.getItem('quran-listen-surah') || 0);
+      sessionStorage.removeItem('quran-listen-surah');
+    } catch {}
+    if (!Number.isInteger(n) || n < 1 || n > 114) return;
+    setHadrOn(false);
+    setHadrSelected(false);
+    changeRiwaya(null);
+    setHubView('free');
+    setSurah(n);
+    void startPlayback(n, reciterId, 'free', 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   const resumeRiwayatSaved = () => {
     setHubView('free');
     if (!savedRiwayatResume) return;
