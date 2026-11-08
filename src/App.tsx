@@ -33,6 +33,8 @@ import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
 import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardingDone } from './components/Onboarding';
+import DevicePicker from './components/DevicePicker';
+import { getLocalDeviceKind } from './lib/deviceProfile';
 import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
 import { setBackTarget } from './lib/backTarget';
@@ -134,6 +136,8 @@ function switchRoute(prev: Route, next: Route, apply: () => void): void {
 function AppContent() {
   const [route, setRoute] = useState<Route>(getRouteFromHash());
   const [session, setSession] = useState<Session | null>(null);
+  // Bumped after the device picker is answered, so it unmounts.
+  const [, setDeviceTick] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [authJustSucceeded, setAuthJustSucceeded] = useState(false);
@@ -578,6 +582,10 @@ function AppContent() {
           normally behind it once finished or skipped). */}
       {showOnboarding && route === 'home' && (
         <Onboarding onDone={closeOnboarding} />
+      )}
+      {/* Device picker: once per browser after sign-in. */}
+      {session && !getLocalDeviceKind() && !showOnboarding && (
+        <DevicePicker userId={session.user.id} onDone={() => setDeviceTick((n) => n + 1)} />
       )}
     </>
   );
