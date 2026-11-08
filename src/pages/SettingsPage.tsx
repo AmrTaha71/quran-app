@@ -24,6 +24,7 @@ import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
+import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
@@ -583,6 +584,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: 'الموقع والتنبيهات والصوت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'download', icon: Download, title: 'صفحات المصحف على جهازك', sub: 'تحميل الصفحات للقراءة دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'reciters', icon: Headphones, title: 'عايز مين يسمّعلك؟', sub: 'قارئ التصحيح والتسميع من غير نت', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
     { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير والجهني دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -1104,6 +1106,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>
           )}
         </section>
+            </>)}
+            {openDoor === 'reciters' && (<>
+              <CorrRecitersPanel />
             </>)}
             {openDoor === 'audio' && (<>
         {/* Audio downloads manager — tafsir clips + Juhani surah

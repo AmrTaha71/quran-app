@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
+import CorrRecitersPanel from '../components/CorrRecitersPanel';
+import { hasChosenReciter, markChosenReciter } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
@@ -780,6 +782,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // chosen one's timings as soon as the page opens.
   const [corrReciter, setCorrReciterState] = useState<string>(() => getCorrReciter());
   useEffect(() => { void loadCorrReciter(corrReciter); }, [corrReciter]);
+  // First visit: ask «عايز مين يسمّعلك؟» once (2026-11-08).
+  const [askReciter, setAskReciter] = useState<boolean>(() => !hasChosenReciter());
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
@@ -5212,6 +5216,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 a short hub of main doors + the start button on the hub.
                 Each door opens its existing card(s) below; nothing was
                 removed or renamed, only hidden behind a door. */}
+            {askReciter && (
+              <div className="fixed inset-0 z-[90] bg-black/50 flex items-end sm:items-center justify-center p-3" dir="rtl">
+                <div className="w-full max-w-lg bg-white rounded-2xl p-4 max-h-[90vh] overflow-y-auto space-y-3">
+                  <h2 className="text-xl font-bold text-emerald-800">عايز مين يسمّعلك؟</h2>
+                  <CorrRecitersPanel onChosen={() => setCorrReciterState(getCorrReciter())} />
+                  <button type="button" onClick={() => { markChosenReciter(); setCorrReciterState(getCorrReciter()); setAskReciter(false); }}
+                    className="w-full min-h-[48px] rounded-xl bg-emerald-700 text-white font-bold">تمام — يلا نسمّع</button>
+                  <p className="text-xs text-center text-accent-500">تقدر تغيّر القارئ أو تنزّل وتمسح بعدين من الإعدادات ← عايز مين يسمّعلك؟</p>
+                </div>
+              </div>
+            )}
             {/* Pilot (2026-11-08): on-device recitation recognizer, on every lobby screen. */}
             <QuranAsrLab />
             {lobbyDoor === null && (
