@@ -43,6 +43,7 @@ self.onmessage = async (e: MessageEvent) => {
       self.postMessage({ type: 'result', id: msg.id, text: text.trim(), ms: Math.round(performance.now() - t0), backend });
     }
   } catch (err) {
-    self.postMessage({ type: 'error', message: String((err as Error)?.message || err), loaded: !!asr });
+    const id = (e.data && (e.data as { id?: number }).id);
+    self.postMessage({ type: 'error', id: typeof id === 'number' ? id : undefined, message: String((err as Error)?.message || err), loaded: !!asr });
   }
 };

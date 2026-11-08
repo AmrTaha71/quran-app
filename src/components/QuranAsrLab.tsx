@@ -1,8 +1,9 @@
-// Pilot: «ودن القرآن على جهازك» (2026-11-08). Record a few ayahs, then the
-// on-device Quran model transcribes them. Measures download, speed and
-// accuracy on the user's own iPad before it replaces the browser ear.
+// «التعرّف على التلاوة على جهازك» (2026-11-08): download the on-device
+// Quran model, try it on a short recording, and choose it as the ear for
+// recitation (setting 'quran-ear'). Shares the one worker in lib/quranEar.
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Download } from 'lucide-react';
+import { loadEar, transcribe, onEarMessage, earBackend, getEar, setEar } from '../lib/quranEar';
 
 type Status = 'idle' | 'loading' | 'ready' | 'recording' | 'working';
 
@@ -22,51 +23,38 @@ async function toMono16k(blob: Blob): Promise<Float32Array> {
 }
 
 export default function QuranAsrLab() {
-  const workerRef = useRef<Worker | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const [status, setStatus] = useState<Status>('idle');
+  const [status, setStatus] = useState<Status>(earBackend() ? 'ready' : 'idle');
   const [pct, setPct] = useState(0);
-  const [backend, setBackend] = useState('');
   const [text, setText] = useState('');
   const [info, setInfo] = useState('');
   const [err, setErr] = useState('');
-  const loadStartRef = useRef(0);
+  const [useIt, setUseIt] = useState(getEar() === 'model');
 
-  const ensureWorker = () => {
-    if (workerRef.current) return workerRef.current;
-    const w = new Worker(new URL('../workers/quranAsr.worker.ts', import.meta.url), { type: 'module' });
+  useEffect(() => {
     const files: Record<string, number> = {};
-    w.onmessage = (e) => {
-      const m = e.data;
+    return onEarMessage((m) => {
       if (m.type === 'progress') {
         files[m.file] = m.progress ?? 0;
         const vals = Object.values(files);
         setPct(Math.round(vals.reduce((a, b) => a + b, 0) / Math.max(1, vals.length)));
-      } else if (m.type === 'ready') {
-        setBackend(m.backend);
-        setStatus('ready');
-        setInfo(`البرنامج جاهز (${m.backend}) — التحميل خد ${Math.round((Date.now() - loadStartRef.current) / 1000)} ثانية`);
-      } else if (m.type === 'result') {
-        setText(m.text);
-        setInfo(`التحليل خد ${(m.ms / 1000).toFixed(1)} ثانية على جهازك (${m.backend})`);
-        setStatus('ready');
-      } else if (m.type === 'error') {
-        setErr(m.message);
-        setStatus(m.loaded ? 'ready' : 'idle');
       }
-    };
-    workerRef.current = w;
-    return w;
-  };
+    });
+  }, []);
 
-  useEffect(() => () => { workerRef.current?.terminate(); }, []);
-
-  const load = () => {
+  const load = async () => {
     setErr('');
     setStatus('loading');
-    loadStartRef.current = Date.now();
-    ensureWorker().postMessage({ type: 'load' });
+    const t0 = Date.now();
+    try {
+      const b = await loadEar();
+      setStatus('ready');
+      setInfo(`البرنامج جاهز (${b}) — خد ${Math.round((Date.now() - t0) / 1000)} ثانية`);
+    } catch (e) {
+      setErr(String((e as Error).message || e));
+      setStatus('idle');
+    }
   };
 
   const startRec = async () => {
@@ -81,11 +69,13 @@ export default function QuranAsrLab() {
         setStatus('working');
         try {
           const audio = await toMono16k(new Blob(chunksRef.current, { type: rec.mimeType }));
-          ensureWorker().postMessage({ type: 'run', id: Date.now(), audio }, [audio.buffer]);
+          const r = await transcribe(audio);
+          if (r) { setText(r.text); setInfo(`التحليل خد ${(r.ms / 1000).toFixed(1)} ثانية على جهازك (${earBackend()})`); }
+          else setErr('ما قدرش يحلّل التسجيل');
         } catch (e) {
           setErr(String((e as Error).message || e));
-          setStatus('ready');
         }
+        setStatus('ready');
       };
       recRef.current = rec;
       rec.start();
@@ -95,19 +85,25 @@ export default function QuranAsrLab() {
     }
   };
 
+  const toggleUse = (v: boolean) => { setEar(v ? 'model' : 'browser'); setUseIt(v); if (v) void load(); };
+
   return (
     <div dir="rtl" className="bg-white border-2 border-amber-300 rounded-2xl p-4 space-y-3">
-      <p className="font-bold text-accent-800">تجربة: التعرّف على التلاوة على جهازك</p>
-      <p className="text-xs text-accent-600">برنامج متدرب على سماع القرآن، بيشتغل على جهازك من غير إنترنت بعد أول تحميل (حوالي 100 ميجا مرة واحدة). سجّل كام آية، وشوف هو سمع إيه.</p>
+      <p className="font-bold text-accent-800">التعرّف على التلاوة على جهازك</p>
+      <p className="text-xs text-accent-600">برنامج متدرب على سماع القرآن، بيشتغل على جهازك من غير إنترنت بعد أول تحميل (حوالي 100 ميجا مرة واحدة).</p>
+      <label className="flex items-center gap-2 text-sm font-semibold text-accent-900 bg-emerald-50 rounded-xl p-3">
+        <input type="checkbox" checked={useIt} onChange={(e) => toggleUse(e.target.checked)} className="w-5 h-5 accent-emerald-600" />
+        استخدمه هو اللي يسمعني في التسميع المتصل (بدل سمع المتصفح)
+      </label>
       {status === 'idle' && (
-        <button type="button" onClick={load} className="w-full min-h-[48px] rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2">
+        <button type="button" onClick={() => void load()} className="w-full min-h-[48px] rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2">
           <Download className="w-5 h-5" /> حمّل البرنامج
         </button>
       )}
       {status === 'loading' && <p className="text-sm text-accent-700">بيحمّل… {pct}%</p>}
       {(status === 'ready' || status === 'working') && (
-        <button type="button" disabled={status === 'working'} onClick={startRec} className="w-full min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-          <Mic className="w-5 h-5" /> {status === 'working' ? 'بيحلّل…' : 'ابدأ سجّل'}
+        <button type="button" disabled={status === 'working'} onClick={() => void startRec()} className="w-full min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+          <Mic className="w-5 h-5" /> {status === 'working' ? 'بيحلّل…' : 'جرّب: سجّل كام آية'}
         </button>
       )}
       {status === 'recording' && (
@@ -118,7 +114,7 @@ export default function QuranAsrLab() {
       {info && <p className="text-xs text-accent-600">{info}</p>}
       {text && <p className="text-lg leading-loose bg-emerald-50 rounded-xl p-3 text-accent-900">{text}</p>}
       {err && <p className="text-xs text-red-600 break-all">{err}</p>}
-      {backend && <p className="text-[11px] text-accent-500">النموذج: tarteel-ai/whisper-base-ar-quran (Apache-2.0)</p>}
+      <p className="text-[11px] text-accent-500">النموذج: tarteel-ai/whisper-base-ar-quran (Apache-2.0)</p>
     </div>
   );
 }

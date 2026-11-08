@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
+import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import { hasChosenReciter, markChosenReciter } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
@@ -805,6 +806,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => { void loadCorrReciter(corrReciter); }, [corrReciter]);
   // First visit: ask «عايز مين يسمّعلك؟» once (2026-11-08).
   const [askReciter, setAskReciter] = useState<boolean>(() => !hasChosenReciter());
+  // Warm the on-device ear as soon as the page opens when it is chosen.
+  useEffect(() => { if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
@@ -4721,7 +4724,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
+    // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
+    const useModelEar = getEar() === 'model';
+    if (!SR && !useModelEar) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
       return;
     }
@@ -4755,7 +4760,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setInterim('');
     userStopRef.current = false;
     lastInterimRef.current = '';
-    const rec = new SR();
+    const rec: any = useModelEar ? new QuranModelRecognition() : new SR();
+    diagPush('ear', { label: useModelEar ? 'quran-model' : 'browser' });
     // [P7] Fixed test locale (see helpers).
     rec.lang = TEST_SPEECH_LOCALE;
     rec.continuous = true;
