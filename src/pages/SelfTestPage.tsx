@@ -476,7 +476,9 @@ function softWordEq(spoken: string, expected: string): boolean {
   if (spoken.length < 3) return false;
   // Skeleton without long-vowel letters (expected norms spell alif
   // maqsura as ي: جَلَّىٰهَا -> جليها).
-  const sk = (w: string) => w.replace(/[اىي]/g, '');
+  // ة -> ه (ناقة/ناقه), drop long-vowel letters, collapse doubled letters
+  // (the Uthmani «واليل» vs dictation «والليل»).
+  const sk = (w: string) => w.replace(/ة/g, 'ه').replace(/[اىي]/g, '').replace(/(.)\1+/g, '$1');
   const e = sk(expected);
   const sp = sk(spoken);
   if (sp === e) return true;
