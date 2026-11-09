@@ -23,7 +23,35 @@ const STUN_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 // page: when set, the TV shows that Madinah mushaf page (phone turns pages).
 // tasbih: when set, the TV shows the phrase and count (phone is the sabha).
-type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: { phrase: string; count: number } };
+type Tasbih = { phrase: string; count: number; font?: number; frame?: number };
+type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: Tasbih };
+// Sabha board styles (2026-11-09): Arabic display fonts + ornamental frames.
+const DHIKR_FONTS = [
+  { name: 'أميري', css: "'Amiri', serif" },
+  { name: 'رقعة', css: "'Aref Ruqaa', serif" },
+  { name: 'كوفي', css: "'Reem Kufi', sans-serif" },
+  { name: 'نسخ', css: "'Scheherazade New', serif" },
+  { name: 'لطيف', css: "'Lateef', serif" },
+  { name: 'نستعليق', css: "'Noto Nastaliq Urdu', serif" },
+];
+const DHIKR_FRAMES = ['ذهبي', 'مزخرف', 'هادئ', 'بدون'];
+const DHIKR_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Aref+Ruqaa:wght@700&family=Reem+Kufi:wght@700&family=Scheherazade+New:wght@700&family=Lateef:wght@700&family=Noto+Nastaliq+Urdu:wght@700&display=swap';
+function DhikrFrame({ frame, children }: { frame: number; children: React.ReactNode }) {
+  if (frame === 3) return <div className="w-full px-8">{children}</div>;
+  const outer = frame === 0
+    ? 'border-[10px] border-double border-amber-400 shadow-[0_0_60px_rgba(246,210,122,.35)]'
+    : frame === 1
+      ? 'border-[6px] border-amber-300 outline outline-[3px] outline-offset-[14px] outline-amber-500/70 shadow-[inset_0_0_80px_rgba(246,210,122,.25)]'
+      : 'border-2 border-emerald-300/40';
+  return (
+    <div className={`relative w-[94vw] min-h-[70vh] flex items-center justify-center rounded-[3rem] px-12 py-16 bg-gradient-to-b from-emerald-900/60 to-emerald-950 ${outer}`}>
+      {frame === 1 && ['top-4 right-4', 'top-4 left-4', 'bottom-4 right-4', 'bottom-4 left-4'].map((c) => (
+        <span key={c} className={`absolute ${c} text-6xl text-amber-400`}>۞</span>
+      ))}
+      {children}
+    </div>
+  );
+}
 const ROOM_TASBIH = ['سبحان الله', 'الحمد لله', 'الله أكبر', 'لا إله إلا الله', 'أستغفر الله'];
 type Msg = { id: string; by: string; text: string; at: number };
 type VoiceApi = { start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void };
@@ -66,6 +94,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   })();
   const [code, setCode] = useState<string | null>(() => (tvView ? newCode() : joinFromLink));
   const [tvQr, setTvQr] = useState('');
+  // TV sabha: idle -> slideshow of the five adhkar; soft tick on each count.
+  const [tvIdle, setTvIdle] = useState(false);
+  const [slide, setSlide] = useState(0);
+  const tickCtxRef = useRef<AudioContext | null>(null);
   useEffect(() => {
     if (!tvView || !code) return;
     const url = `${window.location.origin}/#/room?join=${code}`;
@@ -75,6 +107,41 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   const [joinError, setJoinError] = useState('');
   const [members, setMembers] = useState(0);
   const [pos, setPos] = useState<Pos>({ surah: 1, ayah: 1, by: '', at: 0 });
+  useEffect(() => {
+    if (!tvView) return;
+    if (!document.getElementById('dhikr-fonts')) {
+      const l = document.createElement('link');
+      l.id = 'dhikr-fonts'; l.rel = 'stylesheet'; l.href = DHIKR_FONTS_HREF;
+      document.head.appendChild(l);
+    }
+  }, [tvView]);
+  const tvCount = pos.tasbih?.count ?? -1;
+  useEffect(() => {
+    if (!tvView || !pos.tasbih) return;
+    setTvIdle(false);
+    // Soft wooden tick on the TV (may be muted until the TV page was
+    // interacted with; the phone gives its own tap feedback anyway).
+    if (pos.tasbih.count > 0) {
+      try {
+        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = tickCtxRef.current || new AC();
+        tickCtxRef.current = ctx;
+        const t = ctx.currentTime;
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.setValueAtTime(520, t);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+        o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.14);
+      } catch { /* no audio on this TV */ }
+    }
+    const idle = setTimeout(() => setTvIdle(true), 20000);
+    return () => clearTimeout(idle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tvView, tvCount, pos.at]);
+  useEffect(() => {
+    if (!tvIdle) return;
+    const iv = setInterval(() => setSlide((n) => (n + 1) % ROOM_TASBIH.length), 6000);
+    return () => clearInterval(iv);
+  }, [tvIdle]);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [draft, setDraft] = useState('');
   const [copied, setCopied] = useState(false);
@@ -260,7 +327,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     };
   }, [code, me]);
 
-  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: { phrase: string; count: number } }) => {
+  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: Tasbih }) => {
     const p: Pos = { ...next, by: me, at: Date.now() };
     setPos(p);
     channelRef.current?.send({ type: 'broadcast', event: 'pos', payload: p });
@@ -393,9 +460,17 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
         {pos.tasbih ? (
           <>
-            <style>{`@keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } }`}</style>
-            <p key={pos.tasbih.count} className="text-[10rem] leading-tight font-bold text-amber-300 font-display-ar animate-[dhikrPulse_0.45s_ease-out]">{pos.tasbih.phrase}</p>
-            <p className="text-3xl opacity-50">{pos.tasbih.count.toLocaleString('ar-EG')}</p>
+            <style>{`@keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } } @keyframes dhikrSlide { 0% { opacity: 0 } 15% { opacity: 1 } 85% { opacity: 1 } 100% { opacity: 0 } }`}</style>
+            <DhikrFrame frame={pos.tasbih.frame ?? 0}>
+              {tvIdle ? (
+                <p key={`s${slide}`} style={{ fontFamily: DHIKR_FONTS[pos.tasbih.font ?? 0].css }}
+                  className="text-[11vw] leading-tight font-bold text-amber-200 animate-[dhikrSlide_6s_ease-in-out]">{ROOM_TASBIH[slide]}</p>
+              ) : (
+                <p key={pos.tasbih.count} style={{ fontFamily: DHIKR_FONTS[pos.tasbih.font ?? 0].css }}
+                  className="text-[11vw] leading-tight font-bold text-amber-300 animate-[dhikrPulse_0.45s_ease-out]">{pos.tasbih.phrase}</p>
+              )}
+            </DhikrFrame>
+            {!tvIdle && <p className="text-3xl opacity-40">{pos.tasbih.count.toLocaleString('ar-EG')}</p>}
             <p className="fixed bottom-3 left-4 text-xl opacity-60" dir="ltr">{code}</p>
           </>
         ) : pos.page ? (
@@ -486,7 +561,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         {pos.tasbih ? (
           <>
             <button onPointerDown={pressFeedback}
-              onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: pos.tasbih!.phrase, count: pos.tasbih!.count + 1 } })}
+              onClick={() => { try { navigator.vibrate?.(15); } catch { /* ignore */ } sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { ...pos.tasbih!, count: pos.tasbih!.count + 1 } }); }}
               className="w-full min-h-[140px] rounded-3xl bg-emerald-700 text-white text-5xl font-bold font-display-ar active:scale-95 transition-transform">
               <span key={pos.tasbih.count} className="inline-block animate-[dhikrPulse_0.45s_ease-out]">{pos.tasbih.phrase}</span>
             </button>
@@ -494,13 +569,27 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             <div className="grid grid-cols-3 items-center gap-2">
               <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} className="min-h-[48px] rounded-xl border text-sm">اقفل السبحة</button>
               <span className="text-center text-xl text-emerald-700/70">{pos.tasbih.count.toLocaleString('ar-EG')}</span>
-              <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: pos.tasbih!.phrase, count: 0 } })} className="min-h-[48px] rounded-xl border-2 text-sm font-semibold">ابدأ من جديد</button>
+              <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { ...pos.tasbih!, count: 0 } })} className="min-h-[48px] rounded-xl border-2 text-sm font-semibold">ابدأ من جديد</button>
+            </div>
+            <p className="text-sm font-semibold text-emerald-900">الخط</p>
+            <div className="grid grid-cols-3 gap-2">
+              {DHIKR_FONTS.map((f, i) => (
+                <button key={f.name} onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { ...pos.tasbih!, font: i } })}
+                  className={`min-h-[44px] rounded-lg border text-sm ${((pos.tasbih!.font ?? 0) === i) ? 'bg-emerald-700 text-white' : 'bg-white'}`}>{f.name}</button>
+              ))}
+            </div>
+            <p className="text-sm font-semibold text-emerald-900">الإطار</p>
+            <div className="grid grid-cols-4 gap-2">
+              {DHIKR_FRAMES.map((f, i) => (
+                <button key={f} onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { ...pos.tasbih!, frame: i } })}
+                  className={`min-h-[44px] rounded-lg border text-sm ${((pos.tasbih!.frame ?? 0) === i) ? 'bg-amber-500 text-white' : 'bg-white'}`}>{f}</button>
+              ))}
             </div>
           </>
         ) : (
           <div className="grid grid-cols-2 gap-2">
             {ROOM_TASBIH.map((ph) => (
-              <button key={ph} onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: ph, count: 0 } })}
+              <button key={ph} onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: ph, count: 0, font: pos.tasbih?.font, frame: pos.tasbih?.frame } })}
                 className="min-h-[52px] rounded-xl bg-white border-2 border-emerald-200 font-bold text-emerald-900">{ph}</button>
             ))}
           </div>
