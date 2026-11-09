@@ -3245,7 +3245,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       );
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
+    // Ayah-by-ayah uses the on-device Quran ear too when chosen (2026-11-09).
+    const useModelEarAyah = getEar() === 'model';
+    if (!SR && !useModelEarAyah) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
       return;
     }
@@ -3270,7 +3272,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setWrongIndices([]);
     userStopRef.current = false;
     lastInterimRef.current = '';
-    const rec = new SR();
+    const rec: any = useModelEarAyah ? new QuranModelRecognition() : new SR();
+    diagPush('ear', { label: useModelEarAyah ? 'quran-model' : 'browser' });
     // [P7] Fixed test locale (see helpers): Quranic recitation,
     // not the UI language, decides the model.
     rec.lang = TEST_SPEECH_LOCALE;
