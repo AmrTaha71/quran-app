@@ -78,6 +78,8 @@ const KEEP_CACHES = new Set([
   FULL_IMG_CACHE_UNVERIFIED, FULL_IMG_CACHE_TAJWEED_UNVERIFIED,
   FULL_IMG_CACHE_WARSH_UNVERIFIED, FULL_IMG_CACHE_HAFS_UNVERIFIED,
   AUDIO_TAFSIR_CACHE, AUDIO_JUHANI_CACHE, AUDIO_CORR_CACHE, AUDIO_ADHAN_CACHE,
+  // transformers.js model cache for the on-device Quran ear (default name).
+  'transformers-cache',
 ]);
 const MAX_IMG_ENTRIES = 150;
 
