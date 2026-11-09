@@ -144,6 +144,37 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     const iv = setInterval(() => setSlide((n) => (n + 1) % (ROOM_TASBIH.length * DHIKR_FONTS.length)), 5000);
     return () => clearInterval(iv);
   }, [tvIdle]);
+  const [msgs, setMsgs] = useState<Msg[]>([]);
+  const [draft, setDraft] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState('');
+  const [voiceError, setVoiceError] = useState('');
+
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const voiceApiRef = useRef<VoiceApi | null>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const posRef = useRef(pos);
+  // TV mode: show the ayah text itself (not only the number), read from the local text cache.
+  const [tvAyahText, setTvAyahText] = useState<string>('');
+  useEffect(() => {
+    if (!tvView) return;
+    let cancelled = false;
+    const count = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 0;
+    void getQuranTextCache()
+      .getSurah(pos.surah, count)
+      .then((rows) => {
+        if (cancelled) return;
+        const row = rows?.find((r) => r.ayah_no === pos.ayah);
+        setTvAyahText(row?.ayah_text ?? '');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos.surah, pos.ayah]);
   // TV khatma: the TV plays the reciter ayah by ayah, highlights the word
   // being recited (cpfair timings; proportional fallback), and moves on.
   const khAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -182,37 +213,6 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     return () => { cancelled = true; a.onended = null; a.ontimeupdate = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tvView, kh?.reciter, kh?.playing, pos.surah, pos.ayah, tvAyahText]);
-  const [msgs, setMsgs] = useState<Msg[]>([]);
-  const [draft, setDraft] = useState('');
-  const [copied, setCopied] = useState(false);
-
-  const [voiceOn, setVoiceOn] = useState(false);
-  const [muted, setMuted] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState('');
-  const [voiceError, setVoiceError] = useState('');
-
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const voiceApiRef = useRef<VoiceApi | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-  const posRef = useRef(pos);
-  // TV mode: show the ayah text itself (not only the number), read from the local text cache.
-  const [tvAyahText, setTvAyahText] = useState<string>('');
-  useEffect(() => {
-    if (!tvView) return;
-    let cancelled = false;
-    const count = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 0;
-    void getQuranTextCache()
-      .getSurah(pos.surah, count)
-      .then((rows) => {
-        if (cancelled) return;
-        const row = rows?.find((r) => r.ayah_no === pos.ayah);
-        setTvAyahText(row?.ayah_text ?? '');
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pos.surah, pos.ayah]);
   posRef.current = pos;
 
   useEffect(() => {
