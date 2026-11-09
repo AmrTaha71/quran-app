@@ -2410,6 +2410,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         <div className="mb-4">
           <p className="font-semibold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
           <p className="text-sm text-accent-600 mb-4">اضغط على كارت لاختيار التفاصيل والبدء.</p>
+          <p className="text-xs text-accent-600 mb-4">لتوفير البطارية، يمكنك قفل الشاشة.</p>
           {/* Saved journey resumes first, so a returning journey
               user continues in one tap without entering a card. */}
           {THREE_MODES.map((m) => {
