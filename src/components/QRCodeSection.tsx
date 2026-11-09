@@ -1,6 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { useEscapeClose } from '../lib/useEscape';
 import { QrCode, X, Apple, Smartphone, Monitor, Download } from 'lucide-react';
+
+// QR is generated in the browser so the app URL never goes to a third party.
+function LocalQr({ url, alt, fallback }: { url: string; alt: string; fallback: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    QRCode.toDataURL(url, { width: 120, margin: 1, errorCorrectionLevel: 'M' })
+      .then((d) => { if (!cancelled) setSrc(d); })
+      .catch(() => { if (!cancelled) setSrc(null); });
+    return () => { cancelled = true; };
+  }, [url]);
+  if (src) {
+    return <img src={src} alt={alt} className="w-full h-full rounded-lg" />;
+  }
+  return (
+    <div className="flex flex-col items-center text-accent-400">
+      <QrCode className="w-10 h-10 mb-1" />
+      <span className="text-xs">{fallback}</span>
+    </div>
+  );
+}
 
 export default function QRCodeSection() {
   const [open, setOpen] = useState(false);
@@ -61,21 +83,7 @@ export default function QRCodeSection() {
 
                   {/* QR Code */}
                   <div className="w-32 h-32 bg-white border-3 border-hairline-emerald rounded-2xl flex items-center justify-center p-2 shadow-sm">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(s.url)}`}
-                      alt={`QR ${s.label}`}
-                      className="w-full h-full rounded-lg"
-                      loading="lazy"
-                      onError={(e) => {
-                        const img = e.target as HTMLImageElement;
-                        img.style.display = 'none';
-                        img.nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                    <div className="hidden flex-col items-center text-accent-400">
-                      <QrCode className="w-10 h-10 mb-1" />
-                      <span className="text-xs">{s.desc}</span>
-                    </div>
+                    <LocalQr url={s.url} alt={`QR ${s.label}`} fallback={s.desc} />
                   </div>
 
                   <a href={s.url} target="_blank" rel="noopener noreferrer"
