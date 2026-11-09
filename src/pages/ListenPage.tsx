@@ -2476,6 +2476,31 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <span className="block text-lg">سماع حر</span>
               <span className="block text-sm font-normal text-amber-100 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
             </button>
+            <button
+              disabled={locked}
+              onClick={() => {
+                // Quran radio: every reciter, random order, shown in the
+                // varied panel so the user starts it there (same engine).
+                writeVariedPlan({ kind: 'random', ids: RECITERS.map((r) => r.id), seed: Math.floor(Math.random() * 1e6) + 1 });
+                setHadrOn(false);
+                setHadrSelected(false);
+                changeRiwaya(null);
+                setHubView('varied');
+              }}
+              className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
+            >
+              <span className="block text-lg">إذاعة القرآن</span>
+              <span className="block text-sm font-normal text-amber-100 mt-1">تلاوات متواصلة من كل القراء بترتيب عشوائي. اضغط ابدأ بالداخل.</span>
+            </button>
+            <a
+              href="https://makkahlive.net/en/radio/quran-cairo"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 shadow-sm polish-hub-item"
+            >
+              <span className="block text-lg">إذاعة القرآن الكريم من القاهرة</span>
+              <span className="block text-sm font-normal text-accent-600 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
+            </a>
           </div>
         </div>
         )}
