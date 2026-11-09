@@ -22,7 +22,7 @@ All three TV apps are thin launchers that open https://rawabit-alziker-alhakim.v
 
 ## Category / rating
 - Category: Education (or Lifestyle → Religion where offered). Content rating: Everyone / 3+.
-- Privacy policy URL: https://rawabit-alziker-alhakim.vercel.app (privacy page to be linked).
+- Privacy policy URL: https://rawabit-alziker-alhakim.vercel.app (https://rawabit-alziker-alhakim.vercel.app/privacy/).
 - Contact email: the developer account email.
 
 ## Screenshots needed
