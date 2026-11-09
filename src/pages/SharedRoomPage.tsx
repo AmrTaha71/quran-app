@@ -393,8 +393,9 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
         {pos.tasbih ? (
           <>
-            <p className="text-8xl font-bold text-amber-300 font-display-ar">{pos.tasbih.phrase}</p>
-            <p className="text-[12rem] leading-none font-bold">{pos.tasbih.count.toLocaleString('ar-EG')}</p>
+            <style>{`@keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } }`}</style>
+            <p key={pos.tasbih.count} className="text-[10rem] leading-tight font-bold text-amber-300 font-display-ar animate-[dhikrPulse_0.45s_ease-out]">{pos.tasbih.phrase}</p>
+            <p className="text-3xl opacity-50">{pos.tasbih.count.toLocaleString('ar-EG')}</p>
             <p className="fixed bottom-3 left-4 text-xl opacity-60" dir="ltr">{code}</p>
           </>
         ) : pos.page ? (
@@ -486,12 +487,13 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           <>
             <button onPointerDown={pressFeedback}
               onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: pos.tasbih!.phrase, count: pos.tasbih!.count + 1 } })}
-              className="w-full min-h-[140px] rounded-3xl bg-emerald-700 text-white text-4xl font-bold font-display-ar active:scale-95 transition-transform">
-              {pos.tasbih.phrase}
+              className="w-full min-h-[140px] rounded-3xl bg-emerald-700 text-white text-5xl font-bold font-display-ar active:scale-95 transition-transform">
+              <span key={pos.tasbih.count} className="inline-block animate-[dhikrPulse_0.45s_ease-out]">{pos.tasbih.phrase}</span>
             </button>
+            <style>{`@keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } }`}</style>
             <div className="grid grid-cols-3 items-center gap-2">
               <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} className="min-h-[48px] rounded-xl border text-sm">اقفل السبحة</button>
-              <span className="text-center text-4xl font-bold text-emerald-800">{pos.tasbih.count.toLocaleString('ar-EG')}</span>
+              <span className="text-center text-xl text-emerald-700/70">{pos.tasbih.count.toLocaleString('ar-EG')}</span>
               <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: pos.tasbih!.phrase, count: 0 } })} className="min-h-[48px] rounded-xl border-2 text-sm font-semibold">ابدأ من جديد</button>
             </div>
           </>

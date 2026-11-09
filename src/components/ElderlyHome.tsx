@@ -172,12 +172,12 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
           className="relative w-full min-h-[140px] rounded-3xl bg-emerald-700 text-white font-bold flex items-center justify-center overflow-hidden"
         >
           <span key={flash} className="absolute inset-0 bg-white/40 animate-[tasbihFlash_0.35s_ease-out_forwards] pointer-events-none" />
-          <span className="text-4xl font-display-ar relative">{TASBIH_PHRASES[tasbih.phrase]}</span>
+          <span key={flash} className="text-5xl font-display-ar relative inline-block animate-[dhikrPulse_0.45s_ease-out]">{TASBIH_PHRASES[tasbih.phrase]}</span>
         </button>
-        <style>{`@keyframes tasbihFlash { from { opacity: 1 } to { opacity: 0 } }`}</style>
+        <style>{`@keyframes tasbihFlash { from { opacity: 1 } to { opacity: 0 } } @keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } }`}</style>
         <div className="grid grid-cols-3 items-center gap-2">
           <span />
-          <span className="text-center text-5xl font-bold text-emerald-800">{tasbih.count.toLocaleString('ar-EG')}</span>
+          <span className="text-center text-xl text-emerald-700/70">{tasbih.count.toLocaleString('ar-EG')}</span>
           <button onClick={resetCount} className="min-h-[56px] rounded-xl border-2 text-base font-semibold text-ink">
             ابدأ من جديد
           </button>
