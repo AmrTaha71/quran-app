@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 import { editionPageUrl } from '../lib/pageDownload';
 import { getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getQuranTextCache } from '../lib/quranTextCache';
-import { playAdhanSound, ADHAN_PRAYERS, ensureAdhanDay, loadAdhanSettings, timeInTimezone, type AdhanLocation, type AdhanDay } from '../lib/adhan';
+import { getAdhanVoice, playAdhanSound, ADHAN_PRAYERS, ensureAdhanDay, loadAdhanSettings, timeInTimezone, type AdhanLocation, type AdhanDay } from '../lib/adhan';
 import { CORR_RECITERS, reciterWordTimings, reciterAyahUrl } from '../lib/juhaniCorr';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -27,7 +27,7 @@ const STUN_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 // tasbih: when set, the TV shows the phrase and count (phone is the sabha).
 type Tasbih = { phrase: string; count: number; font?: number; frame?: number };
 type Khatma = { reciter: string; playing: boolean };
-type HomeBoard = { loc: AdhanLocation };
+type HomeBoard = { loc: AdhanLocation; voice?: string };
 type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: Tasbih; khatma?: Khatma; home?: HomeBoard };
 // Home board adhkar: morning (Fajr -> Asr), evening (Asr -> Isha), else tasbih.
 const MORNING_ADHKAR = [
@@ -258,7 +258,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     if (adhanFiredRef.current === key) return;
     adhanFiredRef.current = key;
     setAdhanNow(p.label);
-    const a = playAdhanSound('full');
+    const a = playAdhanSound('full', pos.home.voice);
     adhanAudioRef.current = a;
     const done = () => setAdhanNow('');
     if (a) a.onended = done;
@@ -429,10 +429,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   const startHomeBoard = () => {
     setHomeMsg('');
     const saved = loadAdhanSettings().location;
-    if (saved) { sendPos({ surah: pos.surah, ayah: pos.ayah, home: { loc: saved } }); return; }
+    if (saved) { sendPos({ surah: pos.surah, ayah: pos.ayah, home: { loc: saved, voice: getAdhanVoice().id } }); return; }
     if (!navigator.geolocation) { setHomeMsg('حدد مدينتك من إعدادات الأذان الأول'); return; }
     navigator.geolocation.getCurrentPosition(
-      (g) => sendPos({ surah: pos.surah, ayah: pos.ayah, home: { loc: { kind: 'gps', lat: g.coords.latitude, lng: g.coords.longitude, label: 'موقعي' } } }),
+      (g) => sendPos({ surah: pos.surah, ayah: pos.ayah, home: { loc: { kind: 'gps', lat: g.coords.latitude, lng: g.coords.longitude, label: 'موقعي' }, voice: getAdhanVoice().id } }),
       () => setHomeMsg('محتاج إذن الموقع، أو حدد مدينتك من إعدادات الأذان'),
       { timeout: 10000 },
     );

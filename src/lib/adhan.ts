@@ -289,9 +289,15 @@ export function markAdhanFired(dateKey: string, prayer: string): void {
 // full adhan (so the banner can stop it), null for the beep.
 // Muezzin choices (2026-11-09). Files live in the public `adhan` bucket;
 // a voice whose file is not uploaded yet is hidden by the settings UI.
+const COMMONS = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
 const ADHAN_BUCKET = 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/adhan/';
 export const ADHAN_VOICES: { id: string; name: string; url: string; credit: string }[] = [
   { id: 'makkah', name: 'المسجد الحرام', url: ADHAN_AUDIO_URL, credit: ADHAN_AUDIO_CREDIT },
+  // Wikimedia Commons free-licence files, played straight from Commons.
+  { id: 'c-madinah', name: 'المسجد النبوي', url: COMMONS + '33937_ejaz215_call-to-prayer-from-the-prophet-s-mo.ogg', credit: 'ejaz215 (Freesound) — Wikimedia Commons, CC BY' },
+  { id: 'c-beautiful', name: 'أذان هادئ', url: COMMONS + 'Beautiful_adhan.ogg', credit: 'Adam-synagda — Wikimedia Commons, ملكية عامة' },
+  { id: 'c-azan', name: 'أذان طويل', url: COMMONS + 'Azan.ogg', credit: 'Andrewler — Wikimedia Commons, CC BY-SA 4.0' },
+  { id: 'c-aaqib', name: 'أذان عاقب عزيز (قصير ١:٢٧)', url: COMMONS + 'The_Adhan_-_Muslim_Call_to_Prayer_-_Aaqib_Azeez.mp3', credit: 'Atcovi — Wikimedia Commons (own work)' },
   { id: 'cairo-hamed', name: 'الشيخ حامد — مسجد المحمودية، القاهرة', url: ADHAN_BUCKET + 'cairo-hamed-mahmoudeya.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
   { id: 'cairo-ahmed', name: 'الشيخ أحمد — مسجد عمر مكرم، القاهرة', url: ADHAN_BUCKET + 'cairo-ahmed-omarmakram.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
   { id: 'cairo-mohamed', name: 'الشيخ محمد — مسجد الشيخ عبد الله، الجمالية', url: ADHAN_BUCKET + 'cairo-mohamed-gamaliya.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
@@ -307,7 +313,7 @@ export function setAdhanVoice(id: string): void {
 }
 /** Which voices are actually uploaded (HEAD check). */
 export async function availableAdhanVoices(): Promise<string[]> {
-  const ok = await Promise.all(ADHAN_VOICES.map((v) => (v.id === 'makkah' ? Promise.resolve(true)
+  const ok = await Promise.all(ADHAN_VOICES.map((v) => (!v.url.startsWith(ADHAN_BUCKET) || v.id === 'makkah' ? Promise.resolve(true)
     : fetch(v.url, { method: 'HEAD' }).then((r) => r.ok).catch(() => false))));
   return ADHAN_VOICES.filter((_, i) => ok[i]).map((v) => v.id);
 }
