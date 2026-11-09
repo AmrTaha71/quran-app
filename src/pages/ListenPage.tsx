@@ -2489,7 +2489,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               }}
               className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
             >
-              <span className="block text-lg">إذاعة القرآن</span>
+              <span className="block text-lg">إذاعة التطبيق</span>
               <span className="block text-sm font-normal text-amber-100 mt-1">تلاوات متواصلة من كل القراء بترتيب عشوائي. اضغط ابدأ بالداخل.</span>
             </button>
             <a
@@ -2498,7 +2498,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               rel="noopener noreferrer"
               className="block w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 shadow-sm polish-hub-item"
             >
-              <span className="block text-lg">إذاعة القرآن الكريم من القاهرة</span>
+              <span className="block text-lg">إذاعة القرآن الكريم</span>
+              <span className="block text-sm font-normal text-accent-800 mt-1">من القاهرة</span>
               <span className="block text-sm font-normal text-accent-600 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
             </a>
           </div>
