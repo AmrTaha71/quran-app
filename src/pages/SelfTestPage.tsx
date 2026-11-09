@@ -158,6 +158,26 @@ type ReciteMode = 'ayah' | 'continuous';
 // Self-test settings (verification level + recitation mode) persist
 // across visits, so the user picks them once.
 const SETTINGS_KEY = 'quran-test-settings';
+// User-chosen correction style (2026-11-09): when a mistake is corrected,
+// and how long a silence counts as "forgot the ayah".
+type MistakeMode = 'instant' | 'buzz-end' | 'ayah-end' | 'next-ayah';
+const MISTAKE_MODES: { id: MistakeMode; label: string }[] = [
+  { id: 'instant', label: 'يصحح على طول' },
+  { id: 'buzz-end', label: 'تنبيه دلوقتي والتصحيح آخر الآية' },
+  { id: 'ayah-end', label: 'يستنى لآخر الآية' },
+  { id: 'next-ayah', label: 'لما أبدأ الآية اللي بعدها' },
+];
+const FORGET_SECS = [0, 3, 5, 10, 15];
+const CORR_STYLE_KEY = 'quran-corr-style';
+function loadCorrStyle(): { mistake: MistakeMode; forget: number } {
+  try {
+    const p = JSON.parse(localStorage.getItem(CORR_STYLE_KEY) || '{}');
+    const mistake = MISTAKE_MODES.some((m) => m.id === p.mistake) ? p.mistake : 'instant';
+    const forget = FORGET_SECS.includes(p.forget) ? p.forget : 0;
+    return { mistake, forget };
+  } catch { return { mistake: 'instant', forget: 0 }; }
+}
+
 function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: number; corrDelayMode: CorrDelayMode; corrRate: CorrRate } {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -1353,6 +1373,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [reciteMode, setReciteMode] = useState<ReciteMode>(() => loadTestSettings().mode);
   const [corrDelay, setCorrDelay] = useState<number>(() => loadTestSettings().corrDelay);
   const [corrDelayMode, setCorrDelayMode] = useState<CorrDelayMode>(() => loadTestSettings().corrDelayMode);
+  const [corrStyle, setCorrStyleState] = useState(loadCorrStyle);
+  const corrStyleRef = useRef(corrStyle);
+  const setCorrStyle = (next: { mistake: MistakeMode; forget: number }) => {
+    corrStyleRef.current = next; setCorrStyleState(next);
+    try { localStorage.setItem(CORR_STYLE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+  // Deferred-miss gate: keys already buzzed, so the buzz plays once.
+  const deferBuzzedRef = useRef<Set<string>>(new Set());
   const [corrRate, setCorrRate] = useState<CorrRate>(() => loadTestSettings().corrRate);
   // The mode of the test actually running (resume always runs ayah
   // mode, whatever the setup preference says).
@@ -3086,6 +3114,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if (!ayah || liveRef.current.micState !== 'listening' || liveRef.current.mode !== 'ayah') return;
       // 'ayah-end': corrections wait for the ayah to complete (Juhani-enabled ayahs only).
       if (liveRef.current.corrDelayMode === 'ayah-end' && juhaniEnabledForCurrent()) return;
+      if (corrStyleRef.current.mistake !== 'instant') return;
       const expected = expectedWordList(ayah.ayah_text);
       const spokenAll = spokenTokens(`${liveRef.current.finals} ${interimText}`.trim());
       if (spokenAll.length >= expected.length) return;
@@ -4472,13 +4501,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     contStallTimerRef.current = setTimeout(() => {
       contStallTimerRef.current = null;
       if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
-      if (liveRef.current.corrDelayMode === 'ayah-end') return;
+      if (liveRef.current.corrDelayMode === 'ayah-end' && !corrStyleRef.current.forget) return;
       const now = contOwedWords();
       if (now.words.length === 0) return;
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
       speakContPrompt(now.words, now.indices, now.norms, 'stall');
-    }, Math.max(1, liveRef.current.corrDelay) * 1000);
+    }, (corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
@@ -4541,6 +4570,28 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // unrepaired early miss never blocks every later correction (the
   // "only the first mistake was corrected" run of 2026-11-08).
   const interimPromptedMaxRef = useRef(-1);
+  // true = correct now. Otherwise the miss waits (buzz once in
+  // 'buzz-end'); every later final/interim re-checks, and if he fixed
+  // it himself meanwhile the miss is gone and nothing is said.
+  const contMissGate = (indices: number[], matched: boolean[], lastMatchedIdx: number): boolean => {
+    const mode = corrStyleRef.current.mistake;
+    if (mode === 'instant' || indices.length === 0) return true;
+    const expected = liveRef.current.contExpected;
+    const missAyah = expected[indices[0]]?.ayahIdx ?? 0;
+    const curAyah = lastMatchedIdx >= 0 ? expected[lastMatchedIdx].ayahIdx : 0;
+    let lastOfAyah = indices[0];
+    while (lastOfAyah + 1 < expected.length && expected[lastOfAyah + 1].ayahIdx === missAyah) lastOfAyah++;
+    const ayahDone = curAyah > missAyah || (lastMatchedIdx >= lastOfAyah && !!matched[lastOfAyah]);
+    const release = mode === 'next-ayah' ? curAyah > missAyah : ayahDone;
+    const key = indices.join('|');
+    if (release) { deferBuzzedRef.current.delete(key); return true; }
+    if (mode === 'buzz-end' && !deferBuzzedRef.current.has(key)) {
+      deferBuzzedRef.current.add(key);
+      playErrorBuzz();
+      diagPush('juhani-buzz', { label: 'deferred', reason: key });
+    }
+    return false;
+  };
   const checkContMissInterruptInterim = (interimText: string) => {
     if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
     const expected = liveRef.current.contExpected;
@@ -4579,6 +4630,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const seen = interimMissSeenRef.current;
     if (seen.key !== key) { interimMissSeenRef.current = { key, at: now }; return; }
     if (now - seen.at < 500) return;
+    if (!contMissGate(indices, matched, lastMatchedIdx)) return;
     interimMissSeenRef.current = { key: '', at: 0 };
     interimPromptedMaxRef.current = lastMiss;
     if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
@@ -4633,6 +4685,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // N1: indices-based dedupe key (see speakContPrompt).
       const key = target.indices.join('|');
       if (key === contPromptedKeyRef.current) continue;
+      if (corrStyleRef.current.mistake !== 'instant') {
+        const em = contEffectiveMatched();
+        if (target.indices.some((i) => em.matched[i] || contCreditedRef.current.has(i))) continue;
+        if (!contMissGate(target.indices, em.matched, em.lastMatchedIdx)) continue;
+      }
       if (contStallTimerRef.current) { clearTimeout(contStallTimerRef.current); contStallTimerRef.current = null; }
       // Miss interrupts (confirmed + overshoot only — stall prompts
       // never come through here) speak one preceding expected word
@@ -5462,6 +5519,29 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <button key={m} onClick={() => applySettings(verifyLevel, reciteMode, m, corrRate)}
                         className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${corrDelayMode === m ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
                         {CORR_DELAY_MODE_LABEL[m]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs font-medium text-accent-700 mb-1">لو غلطت في كلمة</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {MISTAKE_MODES.map((m) => (
+                      <button key={m.id} onClick={() => setCorrStyle({ ...corrStyle, mistake: m.id })}
+                        className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${corrStyle.mistake === m.id ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-accent-600 mt-1">لو صلّحت نفسك قبل ما يجي وقت التصحيح، مش هيوقفك.</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs font-medium text-accent-700 mb-1">لو سكتّ ونسيت، يقولّي الكلمة بعد</p>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    {FORGET_SECS.map((n) => (
+                      <button key={n} onClick={() => setCorrStyle({ ...corrStyle, forget: n })}
+                        className={`min-h-[44px] px-1 rounded-xl font-semibold text-xs polish-press ${corrStyle.forget === n ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                        {n === 0 ? 'زي التصحيح' : `${n.toLocaleString('ar-EG')} ث`}
                       </button>
                     ))}
                   </div>
