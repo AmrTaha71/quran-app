@@ -511,7 +511,7 @@ export default function AuthPage({
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')}</label>
                 <div className="relative">
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  <input type="email" aria-label={t('email')} value={email} onChange={(e) => setEmail(e.target.value)}
                     placeholder="email@example.com"
                     className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
@@ -546,7 +546,7 @@ export default function AuthPage({
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('username')} / {t('email')}</label>
                 <div className="relative">
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
+                  <input type="text" aria-label={`${t('username')} / ${t('email')}`} value={username} onChange={(e) => setUsername(e.target.value)} required
                   placeholder={t('enterUsername')}
                   autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
@@ -585,7 +585,7 @@ export default function AuthPage({
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('username')}</label>
                 <div className="relative">
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} required
+                  <input type="text" aria-label={t('username')} value={username} onChange={(e) => setUsername(e.target.value)} required
                   placeholder={t('enterUsername')}
                   autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
@@ -607,7 +607,7 @@ export default function AuthPage({
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-600">(مطلوب)</span></label>
                 <div className="relative">
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
+                  <input type="email" aria-label={t('email')} value={email} onChange={(e) => setEmail(e.target.value)} required
                   placeholder="email@example.com"
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>

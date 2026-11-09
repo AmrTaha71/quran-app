@@ -5212,7 +5212,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             : `${manualSurahMatches.length.toLocaleString('ar-EG')} سورة مطابقة`}
         </p>
       )}
-      <select value={surah}
+      <select aria-label="السورة" value={surah}
         onChange={(e) => {
           chooseSurah(Number(e.target.value));
           setSurahSearch('');
@@ -5243,7 +5243,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       {/* «سمّع مع»: the reciter whose real voice corrects you (2026-11-08). */}
       <label className="flex items-center gap-2 text-sm font-semibold text-accent-800">
         <span className="shrink-0">سمّع مع</span>
-        <select value={corrReciter}
+        <select aria-label="سمّع مع" value={corrReciter}
           onChange={(e) => { setCorrReciter(e.target.value); setCorrReciterState(e.target.value); }}
           className="flex-1 min-h-[44px] px-3 rounded-xl border border-hairline bg-white text-base">
           {CORR_RECITERS.map((r) => <option key={r.folder} value={r.folder}>{r.name}</option>)}
@@ -5589,7 +5589,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">لهجة الصوت</span>
-                      <select value={recTags.dialect} onChange={(e) => setRecTags((t) => ({ ...t, dialect: e.target.value }))}
+                      <select aria-label="لهجة الصوت" value={recTags.dialect} onChange={(e) => setRecTags((t) => ({ ...t, dialect: e.target.value }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="">اختر…</option>
                         <option value="مصري">مصري</option>
@@ -5602,7 +5602,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </label>
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">جنس الصوت</span>
-                      <select value={recTags.gender} onChange={(e) => setRecTags((t) => ({ ...t, gender: e.target.value }))}
+                      <select aria-label="جنس الصوت" value={recTags.gender} onChange={(e) => setRecTags((t) => ({ ...t, gender: e.target.value }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="">اختر…</option>
                         <option value="male">رجالي</option>
@@ -5611,7 +5611,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </label>
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">سرعة التلاوة</span>
-                      <select value={recTags.pace} onChange={(e) => setRecTags((t) => ({ ...t, pace: e.target.value as VoiceTags['pace'] }))}
+                      <select aria-label="سرعة التلاوة" value={recTags.pace} onChange={(e) => setRecTags((t) => ({ ...t, pace: e.target.value as VoiceTags['pace'] }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="slow">بطيئة</option>
                         <option value="normal">عادية</option>
@@ -5620,7 +5620,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </label>
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">ضجيج المكان</span>
-                      <select value={recTags.noise} onChange={(e) => setRecTags((t) => ({ ...t, noise: e.target.value as VoiceTags['noise'] }))}
+                      <select aria-label="ضجيج المكان" value={recTags.noise} onChange={(e) => setRecTags((t) => ({ ...t, noise: e.target.value as VoiceTags['noise'] }))}
                         className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
                         <option value="low">هادئ</option>
                         <option value="medium">متوسط</option>
@@ -5639,7 +5639,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="text-xs font-semibold text-accent-700">السورة</span>
-                        <select value={plDraft.surah} onChange={(e) => setPlDraft((d) => ({ ...d, surah: Number(e.target.value) }))}
+                        <select aria-label="السورة" value={plDraft.surah} onChange={(e) => setPlDraft((d) => ({ ...d, surah: Number(e.target.value) }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
                           {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
                         </select>
@@ -5662,7 +5662,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </label>
                       <label className="block col-span-2">
                         <span className="text-xs font-semibold text-accent-700">نوع الخطأ</span>
-                        <select value={plDraft.type} onChange={(e) => setPlDraft((d) => ({ ...d, type: e.target.value as FixedTaxonomy }))}
+                        <select aria-label="نوع الخطأ" value={plDraft.type} onChange={(e) => setPlDraft((d) => ({ ...d, type: e.target.value as FixedTaxonomy }))}
                           className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
                           {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
                         </select>
@@ -6485,7 +6485,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <div key={a.id} className="border border-hairline rounded-xl p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-semibold text-accent-800">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
-                              <select value={st} onChange={(e) => setStatus(key, a.surah_no, a.ayah_no, e.target.value)}
+                              <select aria-label="حالة الآية" value={st} onChange={(e) => setStatus(key, a.surah_no, a.ayah_no, e.target.value)}
                                 className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
                                 <option value="correct">صحيح</option>
                                 <option value="planted">خطأ مزروع (مخطط)</option>
@@ -6524,7 +6524,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                 <div className="grid grid-cols-2 gap-2">
                                   <input placeholder="قلت (خطأً)" value={(unDraft[key]?.spoken) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), spoken: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
                                   <input placeholder="بدل كلمة" value={(unDraft[key]?.expected) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), expected: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
-                                  <select value={(unDraft[key]?.type) || 'substitution'} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: e.target.value as FixedTaxonomy } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
+                                  <select aria-label="نوع الخطأ" value={(unDraft[key]?.type) || 'substitution'} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: e.target.value as FixedTaxonomy } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
                                     {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
                                   </select>
                                   <input placeholder="تفاصيل اختيارية" value={(unDraft[key]?.free) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), free: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
