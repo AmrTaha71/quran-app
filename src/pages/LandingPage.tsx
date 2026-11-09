@@ -167,7 +167,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
       </section>
 
       <footer className="py-10 px-4 border-t border-hairline-emerald bg-white">
-        <div className="max-w-6xl mx-auto text-center text-base text-accent-500">
+        <div className="max-w-6xl mx-auto text-center text-base text-accent-600">
           <p>{t('appName')} © 2026</p>
           <p className="mt-2 text-sm text-emerald-700 font-semibold">معك في كل آية، حتى نُتمّ حفظ كتاب الله</p>
         </div>

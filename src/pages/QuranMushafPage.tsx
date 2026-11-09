@@ -3363,7 +3363,7 @@ export default function QuranMushafPage({
               className="flex items-center gap-1.5 px-2 py-1 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">
               <Bookmark className="w-4 h-4" /> لوحتي
             </button>
-            <button onClick={() => onNavigate('home')}
+            <button onClick={() => onNavigate('home')} aria-label="الرئيسية"
               className="flex items-center gap-1.5 px-2 py-1 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
               <Home className="w-4 h-4" />
             </button>
