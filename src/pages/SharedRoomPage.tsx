@@ -139,7 +139,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   }, [tvView, tvCount, pos.at]);
   useEffect(() => {
     if (!tvIdle) return;
-    const iv = setInterval(() => setSlide((n) => (n + 1) % ROOM_TASBIH.length), 6000);
+    const iv = setInterval(() => setSlide((n) => (n + 1) % (ROOM_TASBIH.length * DHIKR_FONTS.length)), 5000);
     return () => clearInterval(iv);
   }, [tvIdle]);
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -461,10 +461,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         {pos.tasbih ? (
           <>
             <style>{`@keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } } @keyframes dhikrSlide { 0% { opacity: 0 } 15% { opacity: 1 } 85% { opacity: 1 } 100% { opacity: 0 } }`}</style>
-            <DhikrFrame frame={pos.tasbih.frame ?? 0}>
+            <DhikrFrame frame={tvIdle ? Math.floor(slide / ROOM_TASBIH.length) % 3 : (pos.tasbih.frame ?? 0)}>
               {tvIdle ? (
-                <p key={`s${slide}`} style={{ fontFamily: DHIKR_FONTS[pos.tasbih.font ?? 0].css }}
-                  className="text-[11vw] leading-tight font-bold text-amber-200 animate-[dhikrSlide_6s_ease-in-out]">{ROOM_TASBIH[slide]}</p>
+                <p key={`s${slide}`} style={{ fontFamily: DHIKR_FONTS[Math.floor(slide / ROOM_TASBIH.length) % DHIKR_FONTS.length].css }}
+                  className="text-[11vw] leading-tight font-bold text-amber-200 animate-[dhikrSlide_5s_ease-in-out]">{ROOM_TASBIH[slide % ROOM_TASBIH.length]}</p>
               ) : (
                 <p key={pos.tasbih.count} style={{ fontFamily: DHIKR_FONTS[pos.tasbih.font ?? 0].css }}
                   className="text-[11vw] leading-tight font-bold text-amber-300 animate-[dhikrPulse_0.45s_ease-out]">{pos.tasbih.phrase}</p>
