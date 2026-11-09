@@ -33,8 +33,6 @@ export const RECITERS: Reciter[] = [
   // his islamic.network edition is blocked, and no 128 folder exists.
   { id: 'jaber', name: 'علي جابر', quality: '64', audioUrl: everyayah('Ali_Jaber_64kbps') },
   // Hani Ar-Rifai: added as a trial (2026-11-08). Folder name and licence not verified from the sandbox; check playback on device.
-  // Mahmoud Ali Al-Banna (2026-11-09): EveryAyah 32kbps is the only folder there.
-  { id: 'banna', name: 'محمود علي البنا', quality: '32', audioUrl: everyayah('mahmoud_ali_al_banna_32kbps') },
   { id: 'rifai', name: 'هاني الرفاعي', quality: '192', audioUrl: everyayah('Hani_Rifai_192kbps') },
 ];
 

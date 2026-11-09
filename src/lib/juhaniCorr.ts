@@ -125,7 +125,6 @@ export const CORR_RECITERS: { folder: string; name: string }[] = [
   { folder: 'Saood_ash-Shuraym_128kbps', name: 'الشريم' },
   { folder: 'Abu_Bakr_Ash-Shaatree_128kbps', name: 'الشاطري' },
   { folder: 'Hani_Rifai_192kbps', name: 'هاني الرفاعي' },
-  { folder: 'mahmoud_ali_al_banna_32kbps', name: 'محمود علي البنا (الآية كاملة)' },
 ];
 export const CORR_RECITER_KEY = 'quran-corr-reciter';
 export const CORR_RECITER_DEFAULT = 'Minshawy_Murattal_128kbps';

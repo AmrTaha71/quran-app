@@ -25,7 +25,6 @@ export const CORR_SIZE_MB: Record<string, number> = {
   'Saood_ash-Shuraym_128kbps': 700,
   'Abu_Bakr_Ash-Shaatree_128kbps': 800,
   Hani_Rifai_192kbps: 1300,
-  mahmoud_ali_al_banna_32kbps: 230,
 };
 export const ALL_SIZE_MB = CORR_RECITERS.reduce((a, r) => a + (CORR_SIZE_MB[r.folder] || 0), 0);
 
