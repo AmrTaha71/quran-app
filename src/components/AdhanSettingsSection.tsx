@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
 import {
   ADHAN_AUDIO_CREDIT,
+  ADHAN_VOICES, getAdhanVoice, setAdhanVoice, availableAdhanVoices,
   ADHAN_COUNTRIES,
   ADHAN_PRAYERS,
   adhanLocationLabel,
@@ -335,9 +336,10 @@ export default function AdhanSettingsSection() {
             onClick={() => update({ sound: 'full' })}
             className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
-            <span className="block font-medium text-accent-800">أذان كامل — المسجد الحرام</span>
-            <span className="block text-sm text-accent-600">المصدر الوحيد المفتوح الترخيص في القايمة</span>
+            <span className="block font-medium text-accent-800">أذان كامل</span>
+            <span className="block text-sm text-accent-600">اختار المؤذن من تحت</span>
           </button>
+          {settings.sound === 'full' && <AdhanVoicePicker />}
           <button
             onClick={() => update({ sound: 'beep' })}
             className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'beep' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
@@ -360,7 +362,7 @@ export default function AdhanSettingsSection() {
         >
           {testing ? '⏹ إيقاف التجربة' : '▶ جرّب الصوت المختار'}
         </button>
-        <p className="text-xs text-accent-600 mt-2">{ADHAN_AUDIO_CREDIT}</p>
+        <p className="text-xs text-accent-600 mt-2" dir="auto">{getAdhanVoice().credit || ADHAN_AUDIO_CREDIT}</p>
         <p className="text-xs text-accent-600 mt-1">
           ملحوظة: آيفون/آيباد ممكن يمنع تشغيل الصوت قبل ما تلمس أي حاجة في التطبيق — زرار «جرّب الصوت» بيفتح الصوت، وأي ضغطة بعد فتح التطبيق تكفي للتنبيهات اللي بعدها.
         </p>
@@ -422,5 +424,21 @@ export default function AdhanSettingsSection() {
         )}
       </div>
     </section>
+  );
+}
+
+function AdhanVoicePicker() {
+  const [avail, setAvail] = useState<string[]>(['makkah']);
+  const [cur, setCur] = useState(getAdhanVoice().id);
+  useEffect(() => { void availableAdhanVoices().then(setAvail); }, []);
+  return (
+    <div className="grid gap-1.5 pr-3">
+      {ADHAN_VOICES.filter((v) => avail.includes(v.id)).map((v) => (
+        <button key={v.id} onClick={() => { setAdhanVoice(v.id); setCur(v.id); }}
+          className={`text-right px-3 py-2 rounded-lg border text-sm ${cur === v.id ? 'border-emerald-500 bg-emerald-50 font-semibold' : 'border-hairline'}`}>
+          {v.name}
+        </button>
+      ))}
+    </div>
   );
 }

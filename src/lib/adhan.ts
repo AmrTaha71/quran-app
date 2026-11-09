@@ -287,7 +287,32 @@ export function markAdhanFired(dateKey: string, prayer: string): void {
 
 // Play the chosen alert sound. Returns the audio element for the
 // full adhan (so the banner can stop it), null for the beep.
-export function playAdhanSound(sound: AdhanSound): HTMLAudioElement | null {
+// Muezzin choices (2026-11-09). Files live in the public `adhan` bucket;
+// a voice whose file is not uploaded yet is hidden by the settings UI.
+const ADHAN_BUCKET = 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/adhan/';
+export const ADHAN_VOICES: { id: string; name: string; url: string; credit: string }[] = [
+  { id: 'makkah', name: 'المسجد الحرام', url: ADHAN_AUDIO_URL, credit: ADHAN_AUDIO_CREDIT },
+  { id: 'cairo-hamed', name: 'الشيخ حامد — مسجد المحمودية، القاهرة', url: ADHAN_BUCKET + 'cairo-hamed-mahmoudeya.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
+  { id: 'cairo-ahmed', name: 'الشيخ أحمد — مسجد عمر مكرم، القاهرة', url: ADHAN_BUCKET + 'cairo-ahmed-omarmakram.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
+  { id: 'cairo-mohamed', name: 'الشيخ محمد — مسجد الشيخ عبد الله، الجمالية', url: ADHAN_BUCKET + 'cairo-mohamed-gamaliya.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
+];
+export const ADHAN_VOICE_KEY = 'quran-adhan-voice';
+export function getAdhanVoice() {
+  let id = 'makkah';
+  try { id = localStorage.getItem(ADHAN_VOICE_KEY) || 'makkah'; } catch { /* ignore */ }
+  return ADHAN_VOICES.find((v) => v.id === id) ?? ADHAN_VOICES[0];
+}
+export function setAdhanVoice(id: string): void {
+  try { localStorage.setItem(ADHAN_VOICE_KEY, id); } catch { /* ignore */ }
+}
+/** Which voices are actually uploaded (HEAD check). */
+export async function availableAdhanVoices(): Promise<string[]> {
+  const ok = await Promise.all(ADHAN_VOICES.map((v) => (v.id === 'makkah' ? Promise.resolve(true)
+    : fetch(v.url, { method: 'HEAD' }).then((r) => r.ok).catch(() => false))));
+  return ADHAN_VOICES.filter((_, i) => ok[i]).map((v) => v.id);
+}
+
+export function playAdhanSound(sound: AdhanSound, voiceId?: string): HTMLAudioElement | null {
   if (sound === 'beep') {
     try {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -312,7 +337,9 @@ export function playAdhanSound(sound: AdhanSound): HTMLAudioElement | null {
     return null;
   }
   try {
-    const audio = new Audio(ADHAN_AUDIO_URL);
+    const v = voiceId ? (ADHAN_VOICES.find((x) => x.id === voiceId) ?? getAdhanVoice()) : getAdhanVoice();
+    const audio = new Audio(v.url);
+    audio.onerror = () => { if (v.id !== 'makkah') { audio.src = ADHAN_AUDIO_URL; void audio.play().catch(() => {}); } };
     void audio.play().catch(() => {
       // iOS blocks playback without a prior user gesture in this
       // session — the banner still shows, and the next alert after
