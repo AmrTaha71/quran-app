@@ -223,6 +223,8 @@ function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalErro
   );
 }
 
+const FOLLOW_HELP_KEY = 'quran-follow-help-seen';
+
 export default function QuranMushafPage({
   session,
   onNavigate,
@@ -1385,6 +1387,21 @@ export default function QuranMushafPage({
   const [followStatus, setFollowStatus] = useState<'listening' | 'locked'>('listening');
   const [followPos, setFollowPos] = useState<TrackedPosition | null>(null);
   const [followHeard, setFollowHeard] = useState('');
+  // Follow-imam instructions: shown on the first 3 openings, then hidden
+  // (a small «التعليمات» link brings them back).
+  const [followHelpShow, setFollowHelpShow] = useState(() => {
+    try { return Number(localStorage.getItem(FOLLOW_HELP_KEY) || '0') < 3; } catch { return true; }
+  });
+  const followHelpCountedRef = useRef(false);
+  const followLobbyOpen = (followOn || !!startInFollow) && !followPos && !showRatelIntro;
+  useEffect(() => {
+    if (!followLobbyOpen || followHelpCountedRef.current) return;
+    followHelpCountedRef.current = true;
+    try {
+      const n = Number(localStorage.getItem(FOLLOW_HELP_KEY) || '0');
+      if (n < 99) localStorage.setItem(FOLLOW_HELP_KEY, String(n + 1));
+    } catch { /* ignore */ }
+  }, [followLobbyOpen]);
   const [followError, setFollowError] = useState<string | null>(null);
   const [followManual, setFollowManual] = useState('');
   // Visible follow diagnostics (no silent failure): index-load state,
@@ -3814,9 +3831,16 @@ export default function QuranMushafPage({
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
                 <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
+                {followHelpShow ? (<>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-2">
                   اضغط بدء الاستماع، وقرّب الجهاز منك. أول ما يلقط الإمام ٥ كلمات، المصحف هيفتح لوحده على الصفحة ويظلّل الآية — من غير ما تدوس حاجة تانية. وبعد ما يفتح على الآية، المتابعة بتقف عندها — لو الإمام تقدّم لآية تانية، اقلب الصفحة يدويًا أو اضغط «مش دي؟ كمّل الاستماع» لالتقاط موضع جديد. هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.
                 </p>
+                <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس، وبعدين تقدر تفتحها من «التعليمات».</p>
+                <button type="button" onClick={() => { try { localStorage.setItem(FOLLOW_HELP_KEY, '99'); } catch { /* ignore */ } setFollowHelpShow(false); }}
+                  className="mt-2 text-xs underline text-amber-200">فهمت، مش محتاج التعليمات تاني</button>
+                </>) : (
+                  <button type="button" onClick={() => setFollowHelpShow(true)} className="mt-2 text-xs underline text-amber-200">التعليمات</button>
+                )}
                 {followReady ? (
                   <>
                     {/* The start button also (re-)enters follow mode:
