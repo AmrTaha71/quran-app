@@ -555,3 +555,18 @@ export function createJuhaniPlayer(): JuhaniPlayer {
 
   return { unlock, prewarm, play, stop, dispose };
 }
+
+/** Raw word timings of any reciter (TV khatma highlight). Cached per folder. */
+const rawTimingCache = new Map<string, Promise<Record<string, number[]> | null>>();
+export function reciterWordTimings(folder: string, surah: number, ayah: number): Promise<number[] | null> {
+  let pr = rawTimingCache.get(folder);
+  if (!pr) {
+    pr = fetch(`/corr-timings/${folder}.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    rawTimingCache.set(folder, pr);
+  }
+  return pr.then((m) => (m ? m[key(surah, ayah)] ?? null : null));
+}
+export function reciterAyahUrl(folder: string, surah: number, ayah: number): string {
+  const p3 = (n: number) => String(n).padStart(3, '0');
+  return `https://everyayah.com/data/${folder}/${p3(surah)}${p3(ayah)}.mp3`;
+}

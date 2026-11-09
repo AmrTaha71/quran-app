@@ -8,6 +8,7 @@ import QRCode from 'qrcode';
 import { editionPageUrl } from '../lib/pageDownload';
 import { getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getQuranTextCache } from '../lib/quranTextCache';
+import { CORR_RECITERS, reciterWordTimings, reciterAyahUrl } from '../lib/juhaniCorr';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
 // «راجع مع الرفيق»: a shared room between two people, joined by a code.
@@ -24,7 +25,8 @@ const STUN_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 // page: when set, the TV shows that Madinah mushaf page (phone turns pages).
 // tasbih: when set, the TV shows the phrase and count (phone is the sabha).
 type Tasbih = { phrase: string; count: number; font?: number; frame?: number };
-type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: Tasbih };
+type Khatma = { reciter: string; playing: boolean };
+type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: Tasbih; khatma?: Khatma };
 // Sabha board styles (2026-11-09): Arabic display fonts + ornamental frames.
 const DHIKR_FONTS = [
   { name: 'أميري', css: "'Amiri', serif" },
@@ -142,6 +144,44 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     const iv = setInterval(() => setSlide((n) => (n + 1) % (ROOM_TASBIH.length * DHIKR_FONTS.length)), 5000);
     return () => clearInterval(iv);
   }, [tvIdle]);
+  // TV khatma: the TV plays the reciter ayah by ayah, highlights the word
+  // being recited (cpfair timings; proportional fallback), and moves on.
+  const khAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [khWord, setKhWord] = useState(-1);
+  const [khBlocked, setKhBlocked] = useState(false);
+  const kh = pos.khatma;
+  useEffect(() => {
+    if (!tvView || !kh) { khAudioRef.current?.pause(); setKhWord(-1); return; }
+    const a = khAudioRef.current || new Audio();
+    khAudioRef.current = a;
+    if (!kh.playing) { a.pause(); return; }
+    let cancelled = false;
+    let times: number[] | null = null;
+    void reciterWordTimings(kh.reciter, pos.surah, pos.ayah).then((t) => { times = t; });
+    const words = () => (tvAyahText ? tvAyahText.split(/\s+/).filter(Boolean).length : 0);
+    a.src = reciterAyahUrl(kh.reciter, pos.surah, pos.ayah);
+    a.ontimeupdate = () => {
+      const n = words(); if (!n) return;
+      const t = a.currentTime;
+      let w = -1;
+      if (times && times.length === n * 2) {
+        for (let i = 0; i < n; i++) if (t >= times[i * 2] - 0.05) w = i;
+      } else if (a.duration > 0) {
+        w = Math.min(n - 1, Math.floor((t / a.duration) * n));
+      }
+      setKhWord(w);
+    };
+    a.onended = () => {
+      if (cancelled) return;
+      const count = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 0;
+      const next = pos.ayah < count ? { surah: pos.surah, ayah: pos.ayah + 1 } : pos.surah < 114 ? { surah: pos.surah + 1, ayah: 1 } : null;
+      if (next) sendPos({ ...next, khatma: kh }); else sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { ...kh, playing: false } });
+    };
+    setKhWord(-1);
+    a.play().then(() => setKhBlocked(false)).catch(() => setKhBlocked(true));
+    return () => { cancelled = true; a.onended = null; a.ontimeupdate = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tvView, kh?.reciter, kh?.playing, pos.surah, pos.ayah, tvAyahText]);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [draft, setDraft] = useState('');
   const [copied, setCopied] = useState(false);
@@ -327,7 +367,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     };
   }, [code, me]);
 
-  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: Tasbih }) => {
+  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: Tasbih; khatma?: Khatma }) => {
     const p: Pos = { ...next, by: me, at: Date.now() };
     setPos(p);
     channelRef.current?.send({ type: 'broadcast', event: 'pos', payload: p });
@@ -458,7 +498,22 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   if (tvView) {
     return (
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
-        {pos.tasbih ? (
+        {kh ? (
+          <>
+            <p className="fixed top-3 left-4 text-xl opacity-60" dir="ltr">{code}</p>
+            <p className="text-4xl font-bold opacity-90">سورة {surahName} • الآية {pos.ayah.toLocaleString('ar-EG')}</p>
+            <p className="text-[5.5vw] leading-[1.9] font-bold max-w-[92vw] mx-auto font-display-ar">
+              {(tvAyahText || '').split(/\s+/).filter(Boolean).map((w, i) => (
+                <span key={i} className={`inline-block px-2 mx-0.5 rounded-2xl transition-colors duration-200 ${i === khWord ? 'bg-amber-400 text-emerald-950' : i < khWord ? 'text-amber-200' : 'text-white/70'}`}>{w}</span>
+              ))}
+            </p>
+            {khBlocked && kh.playing && (
+              <button onClick={() => { void khAudioRef.current?.play().then(() => setKhBlocked(false)).catch(() => {}); }}
+                className="mt-6 px-10 py-5 rounded-2xl bg-amber-400 text-emerald-950 text-4xl font-bold">▶ دوس OK بالريموت لتشغيل الصوت</button>
+            )}
+            {!kh.playing && <p className="text-3xl opacity-60">متوقف مؤقتاً</p>}
+          </>
+        ) : pos.tasbih ? (
           <>
             <style>{`@keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } } @keyframes dhikrSlide { 0% { opacity: 0 } 15% { opacity: 1 } 85% { opacity: 1 } 100% { opacity: 0 } }`}</style>
             <DhikrFrame frame={tvIdle ? Math.floor(slide / ROOM_TASBIH.length) % 3 : (pos.tasbih.frame ?? 0)}>
@@ -554,6 +609,24 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         )}
         {voiceStatus && <p className="text-sm text-slate-600">{voiceStatus}</p>}
         {voiceError && <p className="text-sm text-red-600">{voiceError}</p>}
+      </div>
+
+      <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-3">
+        <p className="text-lg font-bold text-amber-900">ختمة بصوت القارئ على الشاشة</p>
+        <p className="text-xs text-amber-800">التلفزيون يقرأ من الآية الحالية، والكلمة اللي بتتقري بتنوّر عشان العين تمشي معاها.</p>
+        <select value={pos.khatma?.reciter ?? CORR_RECITERS[0].folder}
+          onChange={(e) => sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { reciter: e.target.value, playing: pos.khatma?.playing ?? false } })}
+          className="w-full min-h-[44px] rounded-lg border px-2 bg-white">
+          {CORR_RECITERS.map((r) => <option key={r.folder} value={r.folder}>{r.name}</option>)}
+        </select>
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { reciter: pos.khatma?.reciter ?? CORR_RECITERS[0].folder, playing: !pos.khatma?.playing } })}
+            className="min-h-[48px] rounded-xl bg-amber-500 text-white font-bold">{pos.khatma?.playing ? 'إيقاف مؤقت' : 'شغّل'}</button>
+          <button onClick={() => { const c = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 1; sendPos({ surah: pos.surah, ayah: Math.min(c, pos.ayah + 1), khatma: pos.khatma }); }}
+            className="min-h-[48px] rounded-xl border text-sm">الآية اللي بعدها</button>
+          <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} disabled={!pos.khatma}
+            className="min-h-[48px] rounded-xl border text-sm disabled:opacity-40">اقفل الختمة</button>
+        </div>
       </div>
 
       <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
