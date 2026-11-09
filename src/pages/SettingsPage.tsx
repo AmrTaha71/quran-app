@@ -25,6 +25,7 @@ import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
+import DeleteAccountButton from '../components/DeleteAccountButton';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
@@ -593,6 +594,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'account-delete', icon: Shield, title: 'حسابي', sub: 'مسح الحساب والبيانات', box: 'bg-red-50 border-red-200', fg: 'text-red-700' },
   ];
 
   // One download card per audio kind (tafsir / Juhani): surah
@@ -1106,6 +1108,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>
           )}
         </section>
+            </>)}
+            {openDoor === 'account-delete' && (<>
+              <DeleteAccountButton />
             </>)}
             {openDoor === 'reciters' && (<>
               <CorrRecitersPanel />
