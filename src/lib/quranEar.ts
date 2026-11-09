@@ -11,8 +11,16 @@
 export const EAR_KEY = 'quran-ear';
 export type EarKind = 'model' | 'browser';
 
+const EAR_READY_KEY = 'quran-ear-ready';
+
+/** The on-device ear is the default once it has loaded on this device;
+ *  an explicit choice in the card always wins (2026-11-09). */
 export function getEar(): EarKind {
-  try { return localStorage.getItem(EAR_KEY) === 'model' ? 'model' : 'browser'; } catch { return 'browser'; }
+  try {
+    const v = localStorage.getItem(EAR_KEY);
+    if (v === 'model' || v === 'browser') return v;
+    return localStorage.getItem(EAR_READY_KEY) === '1' ? 'model' : 'browser';
+  } catch { return 'browser'; }
 }
 export function setEar(k: EarKind): void {
   try { localStorage.setItem(EAR_KEY, k); } catch { /* ignore */ }
@@ -56,7 +64,7 @@ export function loadEar(): Promise<string> {
   if (loadPromise) return loadPromise;
   loadPromise = new Promise<string>((resolve, reject) => {
     const off = onEarMessage((m) => {
-      if (m.type === 'ready') { readyBackend = m.backend; off(); resolve(m.backend); }
+      if (m.type === 'ready') { readyBackend = m.backend; try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
       else if (m.type === 'error' && m.id === undefined) { off(); loadPromise = null; reject(new Error(m.message)); }
     });
     getWorker().postMessage({ type: 'load' });
