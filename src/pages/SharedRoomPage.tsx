@@ -22,7 +22,9 @@ const CODE_LENGTH = 6;
 const STUN_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 // page: when set, the TV shows that Madinah mushaf page (phone turns pages).
-type Pos = { surah: number; ayah: number; by: string; at: number; page?: number };
+// tasbih: when set, the TV shows the phrase and count (phone is the sabha).
+type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: { phrase: string; count: number } };
+const ROOM_TASBIH = ['سبحان الله', 'الحمد لله', 'الله أكبر', 'لا إله إلا الله', 'أستغفر الله'];
 type Msg = { id: string; by: string; text: string; at: number };
 type VoiceApi = { start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void };
 
@@ -258,7 +260,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     };
   }, [code, me]);
 
-  const sendPos = (next: { surah: number; ayah: number; page?: number }) => {
+  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: { phrase: string; count: number } }) => {
     const p: Pos = { ...next, by: me, at: Date.now() };
     setPos(p);
     channelRef.current?.send({ type: 'broadcast', event: 'pos', payload: p });
@@ -389,7 +391,13 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   if (tvView) {
     return (
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
-        {pos.page ? (
+        {pos.tasbih ? (
+          <>
+            <p className="text-8xl font-bold text-amber-300 font-display-ar">{pos.tasbih.phrase}</p>
+            <p className="text-[12rem] leading-none font-bold">{pos.tasbih.count.toLocaleString('ar-EG')}</p>
+            <p className="fixed bottom-3 left-4 text-xl opacity-60" dir="ltr">{code}</p>
+          </>
+        ) : pos.page ? (
           <>
             <img src={editionPageUrl('madinah', pos.page)} alt="" className="h-[92vh] w-auto rounded-lg shadow-2xl bg-[#fdf8ec]" />
             <p className="fixed bottom-3 left-4 text-xl opacity-70">صفحة {pos.page} • كود {code}</p>
@@ -470,6 +478,31 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         )}
         {voiceStatus && <p className="text-sm text-slate-600">{voiceStatus}</p>}
         {voiceError && <p className="text-sm text-red-600">{voiceError}</p>}
+      </div>
+
+      <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
+        <p className="text-lg font-bold text-emerald-900">السبحة على الشاشة الكبيرة</p>
+        {pos.tasbih ? (
+          <>
+            <button onPointerDown={pressFeedback}
+              onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: pos.tasbih!.phrase, count: pos.tasbih!.count + 1 } })}
+              className="w-full min-h-[140px] rounded-3xl bg-emerald-700 text-white text-4xl font-bold font-display-ar active:scale-95 transition-transform">
+              {pos.tasbih.phrase}
+            </button>
+            <div className="grid grid-cols-3 items-center gap-2">
+              <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} className="min-h-[48px] rounded-xl border text-sm">اقفل السبحة</button>
+              <span className="text-center text-4xl font-bold text-emerald-800">{pos.tasbih.count.toLocaleString('ar-EG')}</span>
+              <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: pos.tasbih!.phrase, count: 0 } })} className="min-h-[48px] rounded-xl border-2 text-sm font-semibold">ابدأ من جديد</button>
+            </div>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {ROOM_TASBIH.map((ph) => (
+              <button key={ph} onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { phrase: ph, count: 0 } })}
+                className="min-h-[52px] rounded-xl bg-white border-2 border-emerald-200 font-bold text-emerald-900">{ph}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-3">
