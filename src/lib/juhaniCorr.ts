@@ -125,6 +125,7 @@ export const CORR_RECITERS: { folder: string; name: string }[] = [
   { folder: 'Saood_ash-Shuraym_128kbps', name: 'الشريم' },
   { folder: 'Abu_Bakr_Ash-Shaatree_128kbps', name: 'الشاطري' },
   { folder: 'Hani_Rifai_192kbps', name: 'هاني الرفاعي' },
+  { folder: 'mahmoud_ali_al_banna_32kbps', name: 'محمود علي البنا (الآية كاملة)' },
 ];
 export const CORR_RECITER_KEY = 'quran-corr-reciter';
 export const CORR_RECITER_DEFAULT = 'Minshawy_Murattal_128kbps';
@@ -146,7 +147,7 @@ export async function loadCorrReciter(folder: string = getCorrReciter()): Promis
   loadingFolder = folder;
   try {
     const res = await fetch(`/corr-timings/${folder}.json`);
-    if (!res.ok) return;
+    if (!res.ok) { if (loadingFolder === folder) activeCorr = { folder, map: {} }; return; }
     const map = (await res.json()) as Record<string, number[]>;
     if (loadingFolder === folder) activeCorr = { folder, map };
   } catch { /* offline: whole-ayah fallback still uses this reciter */ } finally {
