@@ -476,7 +476,7 @@ export default function AuthPage({
                       <input type={showPassword ? 'text' : 'password'} aria-label="كلمة السر الجديدة" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required
                       placeholder="••••••"
                       className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                      <button type="button" aria-label={showPassword ? 'إخفاء كلمة السر' : 'إظهار كلمة السر'} onClick={() => setShowPassword(!showPassword)}
                         className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -560,7 +560,7 @@ export default function AuthPage({
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
                   placeholder="••••••"
                   className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  <button type="button" aria-label={showPassword ? 'إخفاء كلمة السر' : 'إظهار كلمة السر'} onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -621,7 +621,7 @@ export default function AuthPage({
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
                   placeholder="••••••"
                   className="w-full pr-10 pl-10 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                  <button type="button" aria-label={showPassword ? 'إخفاء كلمة السر' : 'إظهار كلمة السر'} onClick={() => setShowPassword(!showPassword)}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-accent-400 hover:text-accent-600">
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
