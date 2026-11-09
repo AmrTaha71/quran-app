@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { pressFeedback } from '../lib/pressFeedback';
 import QRCode from 'qrcode';
+import { editionPageUrl } from '../lib/pageDownload';
+import { getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -19,7 +21,8 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
 const STUN_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
-type Pos = { surah: number; ayah: number; by: string; at: number };
+// page: when set, the TV shows that Madinah mushaf page (phone turns pages).
+type Pos = { surah: number; ayah: number; by: string; at: number; page?: number };
 type Msg = { id: string; by: string; text: string; at: number };
 type VoiceApi = { start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void };
 
@@ -255,7 +258,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     };
   }, [code, me]);
 
-  const sendPos = (next: { surah: number; ayah: number }) => {
+  const sendPos = (next: { surah: number; ayah: number; page?: number }) => {
     const p: Pos = { ...next, by: me, at: Date.now() };
     setPos(p);
     channelRef.current?.send({ type: 'broadcast', event: 'pos', payload: p });
@@ -386,6 +389,19 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   if (tvView) {
     return (
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
+        {pos.page ? (
+          <>
+            <img src={editionPageUrl('madinah', pos.page)} alt="" className="h-[92vh] w-auto rounded-lg shadow-2xl bg-[#fdf8ec]" />
+            <p className="fixed bottom-3 left-4 text-xl opacity-70">صفحة {pos.page} • كود {code}</p>
+          </>
+        ) : members > 1 ? (
+          <>
+            <p className="fixed top-3 left-4 text-xl opacity-60" dir="ltr">{code}</p>
+            <p className="text-5xl font-bold">سورة {surahName}</p>
+            <p className="text-7xl leading-relaxed font-bold text-amber-300 max-w-6xl mx-auto">{tvAyahText || pos.ayah}</p>
+            <p className="text-3xl opacity-80 mt-4">الآية {pos.ayah}</p>
+          </>
+        ) : (<>
         {tvQr && (
           <div className="flex flex-col items-center gap-3">
             <img src={tvQr} alt="" className="w-64 h-64 rounded-2xl bg-white p-3" />
@@ -400,6 +416,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           <p className="text-6xl leading-relaxed font-bold text-amber-300 max-w-6xl mx-auto">{tvAyahText || pos.ayah}</p>
           <p className="text-3xl opacity-80 mt-4">الآية {pos.ayah}</p>
         </div>
+        </>)}
       </div>
     );
   }
@@ -453,6 +470,22 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         )}
         {voiceStatus && <p className="text-sm text-slate-600">{voiceStatus}</p>}
         {voiceError && <p className="text-sm text-red-600">{voiceError}</p>}
+      </div>
+
+      <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-3">
+        <p className="text-lg font-bold text-amber-900">المصحف على الشاشة الكبيرة</p>
+        {pos.page ? (
+          <>
+            <p className="text-center text-2xl font-bold text-amber-900">صفحة {pos.page}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, page: Math.max(1, (pos.page || 1) - 1) })} className="min-h-[64px] rounded-xl bg-white border-2 text-xl font-bold">الصفحة اللي قبلها</button>
+              <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, page: Math.min(TOTAL_MUSHAF_PAGES, (pos.page || 1) + 1) })} className="min-h-[64px] rounded-xl bg-emerald-700 text-white text-xl font-bold">الصفحة اللي بعدها</button>
+            </div>
+            <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} className="w-full py-2 rounded-lg border text-sm">ارجع لعرض الآية</button>
+          </>
+        ) : (
+          <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, page: getSurahStartPage(pos.surah) })} className="w-full min-h-[52px] rounded-xl bg-amber-500 text-white font-bold">اعرض صفحة المصحف (سورة {surahName})</button>
+        )}
       </div>
 
       <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
