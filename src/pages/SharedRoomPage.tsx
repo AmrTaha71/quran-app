@@ -8,6 +8,7 @@ import QRCode from 'qrcode';
 import { editionPageUrl } from '../lib/pageDownload';
 import { getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getQuranTextCache } from '../lib/quranTextCache';
+import { playAdhanSound, ADHAN_PRAYERS, ensureAdhanDay, loadAdhanSettings, timeInTimezone, type AdhanLocation, type AdhanDay } from '../lib/adhan';
 import { CORR_RECITERS, reciterWordTimings, reciterAyahUrl } from '../lib/juhaniCorr';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -26,7 +27,24 @@ const STUN_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 // tasbih: when set, the TV shows the phrase and count (phone is the sabha).
 type Tasbih = { phrase: string; count: number; font?: number; frame?: number };
 type Khatma = { reciter: string; playing: boolean };
-type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: Tasbih; khatma?: Khatma };
+type HomeBoard = { loc: AdhanLocation };
+type Pos = { surah: number; ayah: number; by: string; at: number; page?: number; tasbih?: Tasbih; khatma?: Khatma; home?: HomeBoard };
+// Home board adhkar: morning (Fajr -> Asr), evening (Asr -> Isha), else tasbih.
+const MORNING_ADHKAR = [
+  'أصبحنا وأصبح الملك لله، والحمد لله',
+  'اللهم بك أصبحنا وبك أمسينا وبك نحيا وبك نموت وإليك النشور',
+  'رضيت بالله ربًا وبالإسلام دينًا وبمحمد ﷺ نبيًا',
+  'بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم',
+  'سبحان الله وبحمده',
+];
+const EVENING_ADHKAR = [
+  'أمسينا وأمسى الملك لله، والحمد لله',
+  'اللهم بك أمسينا وبك أصبحنا وبك نحيا وبك نموت وإليك المصير',
+  'أعوذ بكلمات الله التامات من شر ما خلق',
+  'رضيت بالله ربًا وبالإسلام دينًا وبمحمد ﷺ نبيًا',
+  'بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم',
+];
+const toMin = (hhmm: string) => { const [h, m] = hhmm.slice(0, 5).split(':').map(Number); return h * 60 + m; };
 // Sabha board styles (2026-11-09): Arabic display fonts + ornamental frames.
 const DHIKR_FONTS = [
   { name: 'أميري', css: "'Amiri', serif" },
@@ -213,7 +231,41 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     return () => { cancelled = true; a.onended = null; a.ontimeupdate = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tvView, kh?.reciter, kh?.playing, pos.surah, pos.ayah, tvAyahText]);
-  posRef.current = pos;
+  // TV home board: clock, prayer times + countdown, adhkar by time of day.
+  const [homeDay, setHomeDay] = useState<AdhanDay | null>(null);
+  const [nowTick, setNowTick] = useState(0);
+  const homeLocKey = pos.home ? JSON.stringify(pos.home.loc) : '';
+  useEffect(() => {
+    if (!tvView || !pos.home) return;
+    let off = false;
+    const load = () => { void ensureAdhanDay(pos.home!.loc).then((d) => { if (!off) setHomeDay(d); }).catch(() => {}); };
+    load();
+    const iv = setInterval(() => { setNowTick((n) => n + 1); }, 1000);
+    const daily = setInterval(load, 30 * 60 * 1000);
+    return () => { off = true; clearInterval(iv); clearInterval(daily); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tvView, homeLocKey]);
+  // Adhan on the TV at each prayer time (once per prayer per day).
+  const [adhanNow, setAdhanNow] = useState('');
+  const adhanFiredRef = useRef('');
+  const adhanAudioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    if (!tvView || !pos.home || !homeDay) return;
+    const nowStr = timeInTimezone(homeDay.timezone);
+    const p = ADHAN_PRAYERS.find((x) => homeDay.timings[x.key]?.slice(0, 5) === nowStr);
+    if (!p) return;
+    const key = `${homeDay.dateKey}:${p.key}`;
+    if (adhanFiredRef.current === key) return;
+    adhanFiredRef.current = key;
+    setAdhanNow(p.label);
+    const a = playAdhanSound('full');
+    adhanAudioRef.current = a;
+    const done = () => setAdhanNow('');
+    if (a) a.onended = done;
+    const t = setTimeout(done, 5 * 60 * 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowTick]);  posRef.current = pos;
 
   useEffect(() => {
     if (!code) return;
@@ -367,10 +419,23 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     };
   }, [code, me]);
 
-  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: Tasbih; khatma?: Khatma }) => {
+  const sendPos = (next: { surah: number; ayah: number; page?: number; tasbih?: Tasbih; khatma?: Khatma; home?: HomeBoard }) => {
     const p: Pos = { ...next, by: me, at: Date.now() };
     setPos(p);
     channelRef.current?.send({ type: 'broadcast', event: 'pos', payload: p });
+  };
+
+  const [homeMsg, setHomeMsg] = useState('');
+  const startHomeBoard = () => {
+    setHomeMsg('');
+    const saved = loadAdhanSettings().location;
+    if (saved) { sendPos({ surah: pos.surah, ayah: pos.ayah, home: { loc: saved } }); return; }
+    if (!navigator.geolocation) { setHomeMsg('حدد مدينتك من إعدادات الأذان الأول'); return; }
+    navigator.geolocation.getCurrentPosition(
+      (g) => sendPos({ surah: pos.surah, ayah: pos.ayah, home: { loc: { kind: 'gps', lat: g.coords.latitude, lng: g.coords.longitude, label: 'موقعي' } } }),
+      () => setHomeMsg('محتاج إذن الموقع، أو حدد مدينتك من إعدادات الأذان'),
+      { timeout: 10000 },
+    );
   };
 
   const joinRoom = () => {
@@ -498,7 +563,61 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   if (tvView) {
     return (
       <div dir="rtl" className="min-h-screen bg-emerald-950 text-white flex flex-col items-center justify-center gap-8 p-10 text-center">
-        {kh ? (
+        {pos.home ? (() => {
+          void nowTick;
+          const tz = homeDay?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const nowStr = timeInTimezone(tz);
+          const nowM = toMin(nowStr);
+          const secs = new Date().getSeconds();
+          const times = ADHAN_PRAYERS.map((p) => ({ ...p, t: homeDay?.timings[p.key]?.slice(0, 5) || '' }));
+          const next = times.find((p) => p.t && toMin(p.t) > nowM) || times[0];
+          let left = next.t ? toMin(next.t) - nowM : 0; if (left <= 0) left += 1440;
+          const leftS = left * 60 - secs;
+          const hh = Math.floor(leftS / 3600), mm = Math.floor((leftS % 3600) / 60), ss = leftS % 60;
+          const fajr = toMin(times[0].t || '05:00'), asr = toMin(times[2].t || '15:00'), isha = toMin(times[4].t || '19:00');
+          const list = nowM >= fajr && nowM < asr ? MORNING_ADHKAR : nowM >= asr && nowM < isha ? EVENING_ADHKAR : ROOM_TASBIH;
+          const label = list === MORNING_ADHKAR ? 'أذكار الصباح' : list === EVENING_ADHKAR ? 'أذكار المساء' : 'تسبيح';
+          const idx = Math.floor(Date.now() / 10000) % list.length;
+          const p2 = (n: number) => String(n).padStart(2, '0');
+          return (
+            <>
+              <div className="w-[94vw] flex items-start justify-between">
+                <div className="text-right">
+                  <p className="text-[7vw] font-bold leading-none" dir="ltr">{nowStr}</p>
+                  {homeDay?.hijri && <p className="text-3xl opacity-70 mt-2">{homeDay.hijri}</p>}
+                </div>
+                <div className="text-left">
+                  <p className="text-3xl opacity-80">باقي على {next.label}</p>
+                  <p className="text-[5vw] font-bold text-amber-300 leading-none" dir="ltr">{p2(hh)}:{p2(mm)}:{p2(ss)}</p>
+                </div>
+              </div>
+              <DhikrFrame frame={1}>
+                {adhanNow ? (
+                  <div>
+                    <p className="text-[4vw] text-amber-200/90">حان الآن موعد أذان</p>
+                    <p className="text-[10vw] font-bold text-amber-300 leading-tight" style={{ fontFamily: DHIKR_FONTS[0].css }}>{adhanNow}</p>
+                    <button onClick={() => { adhanAudioRef.current?.pause(); setAdhanNow(''); }} className="mt-4 px-8 py-3 rounded-2xl bg-white/15 text-2xl">إيقاف الأذان</button>
+                  </div>
+                ) : (
+                <div>
+                  <p className="text-3xl text-amber-200/80 mb-4">{label}</p>
+                  <p key={`${label}${idx}`} style={{ fontFamily: DHIKR_FONTS[0].css }} className="text-[5.5vw] leading-snug font-bold text-amber-200 animate-[dhikrSlide_10s_ease-in-out]">{list[idx]}</p>
+                </div>
+                )}
+              </DhikrFrame>
+              <style>{`@keyframes dhikrSlide { 0% { opacity: 0 } 10% { opacity: 1 } 90% { opacity: 1 } 100% { opacity: 0 } }`}</style>
+              <div className="w-[94vw] grid grid-cols-5 gap-4">
+                {times.map((p) => (
+                  <div key={p.key} className={`rounded-2xl py-3 ${p.key === next.key ? 'bg-amber-400 text-emerald-950' : 'bg-white/10'}`}>
+                    <p className="text-3xl font-bold">{p.label}</p>
+                    <p className="text-4xl" dir="ltr">{p.t || '--:--'}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="fixed bottom-2 left-4 text-lg opacity-50" dir="ltr">{code}</p>
+            </>
+          );
+        })() : kh ? (
           <>
             <p className="fixed top-3 left-4 text-xl opacity-60" dir="ltr">{code}</p>
             <p className="text-4xl font-bold opacity-90">سورة {surahName} • الآية {pos.ayah.toLocaleString('ar-EG')}</p>
@@ -609,6 +728,16 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         )}
         {voiceStatus && <p className="text-sm text-slate-600">{voiceStatus}</p>}
         {voiceError && <p className="text-sm text-red-600">{voiceError}</p>}
+      </div>
+
+      <div className="bg-sky-50 rounded-xl border border-sky-200 p-4 space-y-3">
+        <p className="text-lg font-bold text-sky-900">شاشة البيت: مواقيت الصلاة والأذكار</p>
+        <p className="text-xs text-sky-800">الساعة، والوقت الباقي على الصلاة الجاية، وأذكار الصباح بعد الفجر والمساء بعد العصر بتتغير لوحدها.</p>
+        {homeMsg && <p className="text-xs text-red-600">{homeMsg}</p>}
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={startHomeBoard} className="min-h-[48px] rounded-xl bg-sky-600 text-white font-bold">{pos.home ? 'حدّث المكان' : 'اعرضها على التلفزيون'}</button>
+          <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} disabled={!pos.home} className="min-h-[48px] rounded-xl border text-sm disabled:opacity-40">اقفلها</button>
+        </div>
       </div>
 
       <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-3">
