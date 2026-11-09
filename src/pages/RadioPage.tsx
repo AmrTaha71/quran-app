@@ -6,6 +6,18 @@ import {
   getSharedAudio,
   releaseAudio,
 } from '../lib/sharedAudio';
+import {
+  SLEEP_TIMER_OPTIONS,
+  clearSleepTimer,
+  getSleepTimerRemainingMs,
+  registerSleepStopHandler,
+  setSleepTimer,
+  subscribeSleepTimer,
+  unregisterSleepStopHandler,
+  type SleepTimerMinutes,
+} from '../lib/sleepTimer';
+
+const SLEEP_LABELS: Record<SleepTimerMinutes, string> = { 30: '30 دقيقة', 60: 'ساعة', 120: 'ساعتين' };
 
 type Route =
   | 'home'
@@ -324,6 +336,21 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
     setConnecting(false);
   };
 
+  // Sleep timer: the lib fires this handler when the countdown ends.
+  // The ref keeps the handler current across renders.
+  const stopStreamRef = useRef(stopStream);
+  stopStreamRef.current = stopStream;
+  useEffect(() => {
+    registerSleepStopHandler('radio', () => stopStreamRef.current());
+    return () => unregisterSleepStopHandler('radio');
+  }, []);
+  const [timerLeftMs, setTimerLeftMs] = useState<number | null>(null);
+  useEffect(() => {
+    const sync = () => setTimerLeftMs(getSleepTimerRemainingMs());
+    sync();
+    return subscribeSleepTimer(sync);
+  }, []);
+
   // One-time wiring on the shared element: events + Media
   // Session. Every handler references only functions declared
   // earlier and stable setters/refs, so empty deps are TDZ-safe.
@@ -464,6 +491,34 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
             شاشة سوداء
           </button>
           <p className="text-sm text-accent-600 mt-1">يخفي الواجهة والصوت مستمر</p>
+
+          <div className="mt-4 text-start" role="group" aria-label="مؤقت النوم">
+            {timerLeftMs !== null ? (
+              <div className="flex items-center justify-between gap-2 bg-emerald-50 rounded-xl p-3">
+                <p className="text-sm font-semibold text-accent-800">
+                  يتوقف تلقائياً بعد {Math.max(1, Math.ceil(timerLeftMs / 60000)).toLocaleString('ar-EG')} دقيقة
+                </p>
+                <button onClick={clearSleepTimer} className="px-3 py-2 bg-white border border-emerald-200 text-accent-800 font-semibold rounded-lg text-sm">
+                  إلغاء المؤقت
+                </button>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-accent-600 mb-2">توقف تلقائي بعد:</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {SLEEP_TIMER_OPTIONS.map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setSleepTimer(m)}
+                      className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
+                    >
+                      {SLEEP_LABELS[m]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
           {connecting && !playing && (
             <p className="text-sm text-accent-600 mt-3">جارٍ الاتصال بالبث…</p>
