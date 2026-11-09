@@ -311,6 +311,26 @@ export function getAdhanVoice() {
 export function setAdhanVoice(id: string): void {
   try { localStorage.setItem(ADHAN_VOICE_KEY, id); } catch { /* ignore */ }
 }
+/** Offline download of one adhan voice (served cache-first by the SW). */
+export const ADHAN_CACHE = 'quran-adhan';
+export async function isAdhanVoiceDownloaded(id: string): Promise<boolean> {
+  const v = ADHAN_VOICES.find((x) => x.id === id);
+  if (!v || !('caches' in window)) return false;
+  try { return !!(await (await caches.open(ADHAN_CACHE)).match(v.url)); } catch { return false; }
+}
+export async function downloadAdhanVoice(id: string): Promise<boolean> {
+  const v = ADHAN_VOICES.find((x) => x.id === id);
+  if (!v || !('caches' in window)) return false;
+  try {
+    const c = await caches.open(ADHAN_CACHE);
+    let r: Response;
+    try { r = await fetch(v.url, { mode: 'cors' }); if (!r.ok) throw new Error(String(r.status)); }
+    catch { r = await fetch(v.url, { mode: 'no-cors' }); }
+    await c.put(v.url, r);
+    return true;
+  } catch { return false; }
+}
+
 /** Which voices are actually uploaded (HEAD check). */
 export async function availableAdhanVoices(): Promise<string[]> {
   const ok = await Promise.all(ADHAN_VOICES.map((v) => (!v.url.startsWith(ADHAN_BUCKET) || v.id === 'makkah' ? Promise.resolve(true)

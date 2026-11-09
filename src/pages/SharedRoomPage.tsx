@@ -8,7 +8,7 @@ import QRCode from 'qrcode';
 import { editionPageUrl } from '../lib/pageDownload';
 import { getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getQuranTextCache } from '../lib/quranTextCache';
-import { getAdhanVoice, playAdhanSound, ADHAN_PRAYERS, ensureAdhanDay, loadAdhanSettings, timeInTimezone, type AdhanLocation, type AdhanDay } from '../lib/adhan';
+import { downloadAdhanVoice, isAdhanVoiceDownloaded, getAdhanVoice, playAdhanSound, ADHAN_PRAYERS, ensureAdhanDay, loadAdhanSettings, timeInTimezone, type AdhanLocation, type AdhanDay } from '../lib/adhan';
 import { CORR_RECITERS, reciterWordTimings, reciterAyahUrl } from '../lib/juhaniCorr';
 import { Users, Copy, BookOpen, LogOut, Send, Mic, MicOff, PhoneOff } from 'lucide-react';
 
@@ -240,6 +240,9 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     let off = false;
     const load = () => { void ensureAdhanDay(pos.home!.loc).then((d) => { if (!off) setHomeDay(d); }).catch(() => {}); };
     load();
+    // TV keeps its own offline copy of the chosen adhan voice.
+    const vid = pos.home.voice || 'makkah';
+    void isAdhanVoiceDownloaded(vid).then((y) => { if (!y) void downloadAdhanVoice(vid); });
     const iv = setInterval(() => { setNowTick((n) => n + 1); }, 1000);
     const daily = setInterval(load, 30 * 60 * 1000);
     return () => { off = true; clearInterval(iv); clearInterval(daily); };

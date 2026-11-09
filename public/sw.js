@@ -70,12 +70,14 @@ const AUDIO_TAFSIR_CACHE = 'quran-audio-tafsir';
 const AUDIO_JUHANI_CACHE = 'quran-audio-juhani';
 // Correction reciters' ayah files (src/lib/corrDownload.ts), user-downloaded.
 const AUDIO_CORR_CACHE = 'quran-audio-corr';
+// Adhan voices the user downloaded for offline (src/lib/adhan.ts).
+const AUDIO_ADHAN_CACHE = 'quran-adhan';
 const KEEP_CACHES = new Set([
   SHELL_CACHE, IMG_CACHE,
   FULL_IMG_CACHE, FULL_IMG_CACHE_TAJWEED, FULL_IMG_CACHE_WARSH, FULL_IMG_CACHE_HAFS,
   FULL_IMG_CACHE_UNVERIFIED, FULL_IMG_CACHE_TAJWEED_UNVERIFIED,
   FULL_IMG_CACHE_WARSH_UNVERIFIED, FULL_IMG_CACHE_HAFS_UNVERIFIED,
-  AUDIO_TAFSIR_CACHE, AUDIO_JUHANI_CACHE, AUDIO_CORR_CACHE,
+  AUDIO_TAFSIR_CACHE, AUDIO_JUHANI_CACHE, AUDIO_CORR_CACHE, AUDIO_ADHAN_CACHE,
 ]);
 const MAX_IMG_ENTRIES = 150;
 
@@ -200,6 +202,8 @@ self.addEventListener('activate', (event) => {
 function isDownloadedAudioUrl(url) {
   if (/\/10-\d{6}-104\.mp3$/.test(url.pathname)) return true;
   if (url.hostname === 'everyayah.com' && url.pathname.startsWith('/data/')) return true;
+  if (url.pathname.includes('/object/public/adhan/')) return true;
+  if (url.hostname === 'commons.wikimedia.org' && url.pathname.startsWith('/wiki/Special:FilePath/')) return true;
   return (
     url.hostname === 'cdn.islamic.network' &&
     url.pathname.startsWith('/quran/audio-surah/128/ar.abdullahawadaljuhani/')
@@ -210,6 +214,7 @@ async function serveDownloadedAudio(req) {
   try {
     const cached = await caches.match(req);
     if (!cached) return fetch(req);
+    if (cached.type === 'opaque') return cached;
     const range = req.headers.get('range');
     if (!range) return cached;
     const m = /^bytes=(\d+)-(\d*)$/.exec(range.trim());

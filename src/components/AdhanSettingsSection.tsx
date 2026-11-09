@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
 import {
   ADHAN_AUDIO_CREDIT,
-  ADHAN_VOICES, getAdhanVoice, setAdhanVoice, availableAdhanVoices,
+  ADHAN_VOICES, getAdhanVoice, setAdhanVoice, availableAdhanVoices, isAdhanVoiceDownloaded, downloadAdhanVoice,
   ADHAN_COUNTRIES,
   ADHAN_PRAYERS,
   adhanLocationLabel,
@@ -430,7 +430,9 @@ export default function AdhanSettingsSection() {
 function AdhanVoicePicker() {
   const [avail, setAvail] = useState<string[]>(['makkah']);
   const [cur, setCur] = useState(getAdhanVoice().id);
+  const [dl, setDl] = useState<'no' | 'busy' | 'yes' | 'fail'>('no');
   useEffect(() => { void availableAdhanVoices().then(setAvail); }, []);
+  useEffect(() => { setDl('no'); void isAdhanVoiceDownloaded(cur).then((y) => y && setDl('yes')); }, [cur]);
   return (
     <div className="grid gap-1.5 pr-3">
       {ADHAN_VOICES.filter((v) => avail.includes(v.id)).map((v) => (
@@ -439,6 +441,10 @@ function AdhanVoicePicker() {
           {v.name}
         </button>
       ))}
+      <button disabled={dl === 'busy' || dl === 'yes'} onClick={async () => { setDl('busy'); setDl((await downloadAdhanVoice(cur)) ? 'yes' : 'fail'); }}
+        className="mt-1 min-h-[44px] rounded-lg bg-emerald-600 text-white text-sm font-semibold disabled:opacity-70">
+        {dl === 'yes' ? '✓ متنزّل، هيشتغل من غير إنترنت' : dl === 'busy' ? 'بينزّل…' : dl === 'fail' ? 'التنزيل فشل، جرّب تاني' : 'عجبك؟ نزّله يشتغل من غير إنترنت'}
+      </button>
     </div>
   );
 }
