@@ -3300,7 +3300,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     // Ayah-by-ayah uses the on-device Quran ear too when chosen (2026-11-09).
-    const useModelEarAyah = getEar() === 'model';
+    // Batch 4 fallback (2026-11-10): no browser speech API (e.g. iOS Chrome) -> the on-device ear,
+    // automatically. Nothing is uploaded, so no consent prompt is needed for this path.
+    const useModelEarAyah = getEar() === 'model' || !SR;
     if (!SR && !useModelEarAyah) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
       return;
@@ -4850,7 +4852,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
-    const useModelEar = getEar() === 'model';
+    // Batch 4 fallback (2026-11-10): no browser speech API -> the on-device ear, automatically.
+    const useModelEar = getEar() === 'model' || !SR;
     if (!SR && !useModelEar) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
       return;
