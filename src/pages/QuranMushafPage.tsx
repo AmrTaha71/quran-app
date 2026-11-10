@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
+import { transcribeBlob } from '../lib/quranEar';
 import { AyahSimilar, AyahAsbab } from '../components/AyahSimilarAsbab';
 import AyahMeanings from '../components/AyahMeanings';
 import { supabase } from '../lib/supabase';
@@ -2143,38 +2144,20 @@ export default function QuranMushafPage({
     const loopGen = followStartGenRef.current;
     let consecutiveFails = 0;
     while (followListeningRef.current && !followAutoLockedRef.current && loopGen === followStartGenRef.current) {
-      let chunkPath = '';
       let aborter: AbortController | null = null;
       try {
         setFollowChunkCount((c) => c + 1);
         setFollowChunkPhase('recording');
         const blob = await recordChunk(8000);
         if (!followListeningRef.current || followAutoLockedRef.current || loopGen !== followStartGenRef.current) break;
-        // The chunk file's extension matches its real bytes (iOS records
-        // mp4, desktop webm) so stored chunks are honestly named.
-        const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
-        chunkPath = `follow/${uid}/${Date.now()}.${ext}`;
-        setFollowChunkPhase('uploading');
-        const { error: upErr } = await supabase.storage.from('rana-audio').upload(chunkPath, blob);
-        if (upErr) throw upErr;
+        // 2026-11-10: the chunk is transcribed ON THE DEVICE (quranEar, no upload,
+        // no paid edge call). Nothing is stored, so there is no file to delete.
         if (!followListeningRef.current || followAutoLockedRef.current || loopGen !== followStartGenRef.current) break;
-        const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(chunkPath);
         setFollowChunkPhase('transcribing');
         aborter = new AbortController();
         followTranscribeAbortRef.current = aborter;
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
-          method: 'POST',
-          // LOCKDOWN 2026-10-30: transcribe-audio now requires a
-          // logged-in user JWT (verify_jwt=true). The loop already
-          // requires a session (uid above), so the token exists
-          // whenever this runs; a missing token 401s into the
-          // existing failure path below, never a crash.
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token ?? ''}` },
-          body: JSON.stringify({ audioUrl: urlData.publicUrl }),
-          signal: aborter.signal,
-        });
-        if (!res.ok) throw new Error('transcribe failed');
-        const data = await res.json();
+        const transcript = (await transcribeBlob(blob)) ?? '';
+        const data = { transcript };
         // Pre-forward guard (third drop point, after the loop condition
         // and onFollowFinal's own guard): a transcript that lands after
         // a lock/stop must never be delivered to the matcher.
@@ -2211,9 +2194,6 @@ export default function QuranMushafPage({
         await new Promise((r) => setTimeout(r, 1500));
       } finally {
         if (aborter && followTranscribeAbortRef.current === aborter) followTranscribeAbortRef.current = null;
-        if (chunkPath) {
-          try { await supabase.storage.from('rana-audio').remove([chunkPath]); } catch {}
-        }
       }
     }
     setFollowChunkPhase('idle');
@@ -3916,7 +3896,7 @@ export default function QuranMushafPage({
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
                     {followEngine === 'whisper' && (
                       <p className="text-xs text-emerald-200 mt-2">
-                        المحرك: عبر الخادم (Whisper) — تأخير ~١٠ ثوانٍ
+                        المحرك: على جهازك (بدون خادم) — تأخير ~١٠ ثوانٍ
                         {followChunkPhase !== 'idle' && ` • ${followChunkPhase === 'recording' ? 'بتسجّل المقطع…' : followChunkPhase === 'uploading' ? 'برفع المقطع…' : 'بفرّغ الصوت…'} (المقطع ${followChunkCount})`}
                         {followChunkFails > 0 && ` • فشل ${followChunkFails}/٣`}
                       </p>
