@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { currentSpeechLocale } from '../lib/LanguageContext';
+import { transcribeBlob } from '../lib/quranEar';
 import type { QuranVerse } from '../lib/types';
 import { LINK_TYPES, LINK_TYPE_HINTS } from '../lib/types';
 import {
@@ -247,42 +248,19 @@ export default function LinkModal({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setError('يجب تسجيل الدخول'); setPhase('input'); return; }
 
-      let audioUrl = existingUrl;
-      if (!audioUrl) {
+      // The audio is stored for Rana's approval (see approveRecording); the
+      // transcript itself is made on the device, so no paid edge call (2026-11-10).
+      if (!existingUrl) {
         const fileName = `rana-${Date.now()}.webm`;
         const { error: upErr } = await supabase.storage.from('rana-audio').upload(fileName, audioBlob);
         if (upErr) throw new Error('فشل رفع الملف الصوتي');
 
         const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
         setAudioPublicUrl(urlData.publicUrl);
-        audioUrl = urlData.publicUrl;
       }
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
-        method: 'POST',
-        // LOCKDOWN 2026-10-30: transcribe-audio requires a logged-in
-        // user JWT (verify_jwt=true). Session is already enforced
-        // above, so the token exists here.
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-        body: JSON.stringify({ audioUrl }),
-      });
-
-      if (!res.ok) {
-        // Edge function failed — let user type manually
-        setError('تعذر التحويل التلقائي. اكتبي النص يدوياً بالأسفل.');
-        setPhase('input');
-        return;
-      }
-
-      const data = await res.json();
-      if (data.error) {
-        setError('تعذر التحويل التلقائي. اكتبي النص يدوياً بالأسفل.');
-        setPhase('input');
-        return;
-      }
-
-      const transcript = data.transcript || '';
-      if (transcript.includes('نص تجريبي') || transcript.includes('لم يتم تكوين')) {
+      const transcript = (await transcribeBlob(audioBlob)) ?? '';
+      if (!transcript.trim()) {
         setError('تعذر التحويل التلقائي. اكتبي النص يدوياً بالأسفل.');
         setPhase('input');
         return;

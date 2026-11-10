@@ -5,6 +5,7 @@
 // correction player keeps asking for the same URLs and gets the file
 // offline. EveryAyah sends no CORS header, so files are fetched
 // 'no-cors' and stored opaque (same as the Juhani downloads).
+import { CORR_TIMING_RUNS } from './corrTimingCoverage';
 import { SURAH_AYAH_COUNTS } from './surahs';
 import { CORR_RECITERS } from './juhaniCorr';
 import { JUZ_STARTS } from './quranBoundaries';
@@ -207,7 +208,37 @@ export function juzOfRange(startGlobal: number, endGlobal: number): number[] {
 }
 
 /** Reciters whose files cover the whole range on this device. */
+/** Reciters that have word timings for EVERY ayah of the range (2026-11-10).
+ *  Coverage is static (corrTimingCoverage.ts), not what was downloaded: a
+ *  reciter without timings for part of the range is not offered for it. */
 export function recitersForRange(startGlobal: number, endGlobal: number): string[] {
-  const juz = juzOfRange(startGlobal, endGlobal);
-  return CORR_RECITERS.map((r) => r.folder).filter((f) => juz.every((j) => isJuzDownloaded(f, j)));
+  const lo = Math.min(startGlobal, endGlobal);
+  const hi = Math.max(startGlobal, endGlobal);
+  return CORR_RECITERS.map((r) => r.folder).filter((f) =>
+    (CORR_TIMING_RUNS[f] || []).some(([a, b]) => a <= lo && hi <= b));
+}
+
+/** When no single reciter has timings for the whole range, split the range
+ *  into consecutive parts, each read by one reciter (2026-11-10). Greedy: at
+ *  each ayah take the reciter whose timings run furthest. Returns null when
+ *  some ayah has no reciter with timings at all. Bounds are inclusive. */
+export interface RangeReciterPart { start: number; end: number; folder: string; }
+export function planRangeReciters(startGlobal: number, endGlobal: number): RangeReciterPart[] | null {
+  const lo = Math.min(startGlobal, endGlobal);
+  const hi = Math.max(startGlobal, endGlobal);
+  const parts: RangeReciterPart[] = [];
+  let g = lo;
+  while (g <= hi) {
+    let bestEnd = -1;
+    let bestFolder = '';
+    for (const r of CORR_RECITERS) {
+      for (const [a, b] of CORR_TIMING_RUNS[r.folder] || []) {
+        if (a <= g && g <= b && Math.min(b, hi) > bestEnd) { bestEnd = Math.min(b, hi); bestFolder = r.folder; }
+      }
+    }
+    if (bestEnd < 0) return null;
+    parts.push({ start: g, end: bestEnd, folder: bestFolder });
+    g = bestEnd + 1;
+  }
+  return parts;
 }

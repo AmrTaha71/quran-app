@@ -6,7 +6,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
-import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
+import { CORR_RECITERS } from '../lib/juhaniCorr';
+import { recitersForRange, ayahUrl, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import { useEscapeClose } from '../lib/useEscape';
 
@@ -25,6 +26,13 @@ function scopeRange(scope: Scope, n: number): { start: number; end: number } {
   const table = scope === 'juz' ? JUZ_STARTS : scope === 'hizb' ? HIZB_STARTS : QUARTER_STARTS;
   const start = table[n - 1].global;
   const end = n < table.length ? table[n].global : TOTAL_AYAT + 1;
+  return { start, end };
+}
+
+// Juz range [first..last] as a global ayah range [start, end).
+function juzSpan(first: number, last: number): { start: number; end: number } {
+  const start = JUZ_STARTS[first - 1].global;
+  const end = last < 30 ? JUZ_STARTS[last].global : TOTAL_AYAT + 1;
   return { start, end };
 }
 
@@ -56,8 +64,10 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   useEscapeClose(true, onClose);
   const [scope, setScope] = useState<Scope>('juz');
   const [num, setNum] = useState(1);
-  const [reciterId, setReciterId] = useState(DEFAULT_RECITER_ID);
-  const [round, setRound] = useState<{ from: { s: number; a: number }; urls: string[] } | null>(null);
+  // Juz range (2026-11-10): «من جزء» = num, «إلى جزء» = toNum (scope juz only).
+  const [toNum, setToNum] = useState(1);
+  const [reciterId, setReciterId] = useState('');
+  const [round, setRound] = useState<{ from: { s: number; a: number }; urls: string[]; reciter: string; notes: string[] } | null>(null);
   const [text, setText] = useState<Map<string, string> | null>(null);
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -66,10 +76,25 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   useEffect(() => () => { audioRef.current?.pause(); }, []);
 
   const count = SCOPE_COUNT[scope];
-  const reciter = RECITERS.find((r) => r.id === reciterId) ?? RECITERS[0];
+  // Only readers with word timings for the WHOLE picked range are offered
+  // (2026-11-10). One reader -> used silently; none -> nothing to play.
+  const range = scope === 'juz' ? juzSpan(num, toNum) : scopeRange(scope, num);
+  const options = recitersForRange(range.start, range.end - 1);
+  const activeId = options.includes(reciterId) ? reciterId : (options[0] ?? '');
+  const reciterName = (f: string) => CORR_RECITERS.find((r) => r.folder === f)?.name ?? f;
+  // No single reader covers the whole range: split it between readers (2026-11-10).
+  const mixed: RangeReciterPart[] | null = options.length === 0 ? planRangeReciters(range.start, range.end - 1) : null;
+  const folderAt = (g: number): string => (mixed?.find((p) => g >= p.start && g <= p.end)?.folder) ?? activeId;
+  const canStart = options.length > 0 || mixed !== null;
+  const partLabel = (p: RangeReciterPart) => {
+    const a = fromGlobal(p.start);
+    const b = fromGlobal(p.end);
+    return `من ${surahNameOf(a.s)} آية ${a.a} إلى ${surahNameOf(b.s)} آية ${b.a}: بصوت ${reciterName(p.folder)}`;
+  };
 
   function startRound() {
-    const { start, end } = scopeRange(scope, num);
+    const { start, end } = range;
+    if (!canStart) return;
     // Need at least one ayah after the picked one inside the range.
     const span = Math.max(1, end - start - 1);
     const g = start + Math.floor(Math.random() * span);
@@ -78,11 +103,11 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     const urls: string[] = [];
     for (let x = g + 1; x <= last; x++) {
       const p = fromGlobal(x);
-      urls.push(reciter.audioUrl(p.s, p.a));
+      urls.push(ayahUrl(folderAt(x), p.s, p.a));
     }
     audioRef.current?.pause();
     setPlaying(false);
-    setRound({ from, urls });
+    setRound({ from, urls, reciter: mixed ? '' : activeId, notes: mixed ? mixed.map(partLabel) : [] });
   }
 
   function play() {
@@ -124,25 +149,57 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-accent-600 mb-2">اختار النطاق اللي عايز تتختبر فيه</p>
             <div className="grid grid-cols-4 gap-2 mb-4">
               {(Object.keys(SCOPE_LABEL) as Scope[]).map((k) => (
-                <button key={k} onClick={() => { setScope(k); setNum(1); }}
+                <button key={k} onClick={() => { setScope(k); setNum(1); setToNum(1); }}
                   className={`py-2 rounded-lg text-sm font-bold ${scope === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600'}`}>
                   {SCOPE_LABEL[k]}
                 </button>
               ))}
             </div>
-            <label className="block text-sm text-accent-700 mb-1">{SCOPE_LABEL[scope]}</label>
-            <select value={num} onChange={(e) => setNum(Number(e.target.value))} className="w-full border border-emerald-200 rounded-lg p-2 mb-4">
-              {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {scope === 'surah' ? `${n} - ${surahNameOf(n)}` : `${SCOPE_LABEL[scope]} ${n}`}
-                </option>
-              ))}
-            </select>
-            <label className="block text-sm text-accent-700 mb-1">القارئ</label>
-            <select value={reciterId} onChange={(e) => setReciterId(e.target.value)} className="w-full border border-emerald-200 rounded-lg p-2 mb-5">
-              {RECITERS.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-            <button onClick={startRound} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">تمام، سيف</button>
+            {scope === 'juz' ? (
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div>
+                  <label className="block text-sm text-accent-700 mb-1">من جزء</label>
+                  <select value={num} onChange={(e) => { const v = Number(e.target.value); setNum(v); if (toNum < v) setToNum(v); }} className="w-full border border-emerald-200 rounded-lg p-2">
+                    {Array.from({ length: count }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{`جزء ${n}`}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-accent-700 mb-1">إلى جزء</label>
+                  <select value={toNum} onChange={(e) => setToNum(Number(e.target.value))} className="w-full border border-emerald-200 rounded-lg p-2">
+                    {Array.from({ length: count - num + 1 }, (_, i) => num + i).map((n) => <option key={n} value={n}>{`جزء ${n}`}</option>)}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <>
+                <label className="block text-sm text-accent-700 mb-1">{SCOPE_LABEL[scope]}</label>
+                <select value={num} onChange={(e) => setNum(Number(e.target.value))} className="w-full border border-emerald-200 rounded-lg p-2 mb-4">
+                  {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {scope === 'surah' ? `${n} - ${surahNameOf(n)}` : `${SCOPE_LABEL[scope]} ${n}`}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+            {options.length === 0 && mixed === null && (
+              <p className="text-sm text-amber-700 mb-4">ما فيش قارئ عنده توقيت كلمات لجزء من المدى ده. اختار مدى تاني.</p>
+            )}
+            {options.length === 0 && mixed !== null && (
+              <div className="text-sm text-accent-700 mb-4 space-y-1">
+                <p>ما فيش قارئ واحد عنده المدى ده كله، فهيتقسم بين أكتر من قارئ:</p>
+                {mixed.map((p) => <p key={`${p.start}-${p.folder}`} className="text-xs text-accent-600">{partLabel(p)}</p>)}
+              </div>
+            )}
+            {options.length > 1 && (
+              <>
+                <label className="block text-sm text-accent-700 mb-1">القارئ</label>
+                <select value={activeId} onChange={(e) => setReciterId(e.target.value)} className="w-full border border-emerald-200 rounded-lg p-2 mb-5">
+                  {options.map((f) => <option key={f} value={f}>{reciterName(f)}</option>)}
+                </select>
+              </>
+            )}
+            <button onClick={startRound} disabled={!canStart} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">تمام، سيف</button>
           </>
         )}
 
@@ -163,7 +220,9 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
               </button>
               <button onClick={startRound} className="py-3 grad-emerald-door text-white font-bold rounded-xl">الجولة الجاية</button>
             </div>
-            <p className="text-xs text-accent-600 text-center mt-3">القارئ: {reciter.name}</p>
+            {round.notes.length > 0
+              ? round.notes.map((n) => <p key={n} className="text-xs text-accent-600 text-center mt-1">{n}</p>)
+              : <p className="text-xs text-accent-600 text-center mt-3">القارئ: {reciterName(round.reciter)}</p>}
           </>
         )}
       </div>

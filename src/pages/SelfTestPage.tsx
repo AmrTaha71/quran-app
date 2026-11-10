@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
+import TajwidSkillPicker from '../components/TajwidSkillPicker';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import { hasChosenReciter, markChosenReciter, recitersForRange } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
@@ -29,6 +30,7 @@ import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
 import { setBackTarget } from '../lib/backTarget';
 import { formatAr, normalizeDigits } from '../lib/numerals';
+import { addReRecite, totalReRecites, type ReRecites } from '../lib/practiceHistory';
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
@@ -1357,6 +1359,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [postCorrHint, setPostCorrHint] = useState(false);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
+  // Batch 4 part 2 (2026-11-10): practice history. Score never changes on a re-recite.
+  const [reRecites, setReRecites] = useState<ReRecites>({});
   const [micError, setMicError] = useState('');
   // S4 voice safety: a stopped-but-preserved session. micStalled is
   // set only by recoverable stops (no-result watchdog, restart-budget
@@ -2386,6 +2390,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       liveRef.current.grades = grades0;
       setSkipped(skipped0);
       liveRef.current.skipped = skipped0;
+      setReRecites({});
       setWrongByAyah({});
       setExtraByAyah({});
       setContExtras([]);
@@ -5065,8 +5070,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
   };
 
-  const goToAyah = (i: number) => {
+  const goToAyah = (i: number, asReRecite = false) => {
     if (i < 0 || i >= ayahs.length) return;
+    if (asReRecite) {
+      const a = ayahs[i];
+      setReRecites((m) => addReRecite(m, `${a.surah_no}:${a.ayah_no}`));
+    }
     liveRef.current.ayah = ayahs[i];
     setIndex(i);
     setRevealed(false);
@@ -5509,6 +5518,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p>
+                <TajwidSkillPicker />
                 {!micSupported && (
                   <p className="col-span-2 text-xs text-amber-link leading-snug">{micAbsentSetupNote}</p>
                 )}
@@ -6137,7 +6147,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {/* Batch 1: re-recite the same ayah in place. goToAyah
                       resets the mic state; a fresh pass overwrites
                       the grade (and the wrong words) for this ayah. */}
-                  <button onClick={() => { stopRefUnit(); goToAyah(index); }}
+                  <button onClick={() => { stopRefUnit(); goToAyah(index, true); }}
                     className="mt-5 ml-2 px-6 py-3 bg-white border border-hairline-emerald hover:bg-emerald-50 text-emerald-700 text-lg font-bold rounded-xl shadow polish-press">
                     🔁 سمّع الآية دي تاني
                   </button>
@@ -6270,7 +6280,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
             {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
             <div className="flex justify-between">
-              <button onClick={() => goToAyah(index - 1)}
+              <button onClick={() => goToAyah(index - 1, true)}
                 disabled={index === 0}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg disabled:opacity-30 polish-press">
                 <ChevronRight className="w-5 h-5" /> الآية السابقة
@@ -6312,6 +6322,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <p className="text-emerald-50 mt-2 leading-relaxed">
                 {pct >= 90 ? 'ما شاء الله — حفظ متقن، ثبّت الله ما حفظت' : pct >= 60 ? 'تقدّم طيب — راجع الآيات التي أخطأت فيها ثم أعد التسميع' : 'لا بأس — التعثر أول طريق الإتقان، راجع الآيات ثم أعد المحاولة'}
               </p>
+              {totalReRecites(reRecites) > 0 && (
+                <p className="text-emerald-50/90 text-sm mt-1">أعيدت ممارسة {totalReRecites(reRecites).toLocaleString('ar-EG')} مرة — النتيجة لم تتغير</p>
+              )}
               {skippedCount > 0 && (
                 <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
               )}

@@ -80,6 +80,32 @@ export function transcribe(audio: Float32Array): Promise<{ text: string; ms: num
   });
 }
 
+/** Transcribes a whole recorded blob on the device (no upload, no cost).
+ *  Decodes it, mixes to mono, resamples to 16 kHz; the worker chunks long
+ *  audio itself. Returns null when decoding or the model fails. */
+export async function transcribeBlob(blob: Blob): Promise<string | null> {
+  try {
+    await loadEar();
+    const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    const ctx = new Ctx();
+    try {
+      const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+      const mono = new Float32Array(decoded.length);
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        const data = decoded.getChannelData(c);
+        for (let i = 0; i < data.length; i++) mono[i] += data[i] / decoded.numberOfChannels;
+      }
+      const pcm = downsample(mono, decoded.sampleRate);
+      const r = await transcribe(pcm);
+      return r?.text ?? null;
+    } finally {
+      void ctx.close().catch(() => undefined);
+    }
+  } catch {
+    return null;
+  }
+}
+
 // ---- SpeechRecognition look-alike -------------------------------------
 const TARGET_RATE = 16000;
 const SILENCE_END_MS = 300;
