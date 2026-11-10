@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
-import { recitersForRange, ayahUrl, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
+import { recitersForRange, ayahUrl, planRangeReciters, downloadRange, isRangeDownloaded, rangeSizeMb, formatSize, type RangeReciterPart } from '../lib/corrDownload';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import { useEscapeClose } from '../lib/useEscape';
 
@@ -86,6 +86,29 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   const mixed: RangeReciterPart[] | null = options.length === 0 ? planRangeReciters(range.start, range.end - 1) : null;
   const folderAt = (g: number): string => (mixed?.find((p) => g >= p.start && g <= p.end)?.folder) ?? activeId;
   const canStart = options.length > 0 || mixed !== null;
+  // Range download (2026-11-10): the chosen range only, one part per reader if split.
+  const dlParts: RangeReciterPart[] = mixed ?? (activeId ? [{ start: range.start, end: range.end - 1, folder: activeId }] : []);
+  const dlSizeMb = dlParts.reduce((a, p) => a + rangeSizeMb(p.folder, p.start, p.end), 0);
+  const dlDone = dlParts.length > 0 && dlParts.every((p) => isRangeDownloaded(p.folder, p.start, p.end));
+  const [dlBusy, setDlBusy] = useState(false);
+  const [dlPct, setDlPct] = useState(0);
+  const [dlMsg, setDlMsg] = useState('');
+  const dlAbort = useRef<AbortController | null>(null);
+  const runRangeDownload = async () => {
+    const ctrl = new AbortController();
+    dlAbort.current = ctrl;
+    setDlBusy(true);
+    setDlMsg('');
+    let failed = false;
+    for (const p of dlParts) {
+      if (isRangeDownloaded(p.folder, p.start, p.end)) continue;
+      const res = await downloadRange(p.folder, p.start, p.end, (d, t) => setDlPct(t ? Math.round((d / t) * 100) : 0), ctrl.signal);
+      if (res !== 'done') { failed = true; break; }
+    }
+    setDlBusy(false);
+    setDlPct(0);
+    setDlMsg(ctrl.signal.aborted ? 'وقفنا التحميل' : failed ? 'التحميل ما اكتملش — جرّب تاني' : 'تم التحميل، هيتسمّع بدون نت');
+  };
   const partLabel = (p: RangeReciterPart) => {
     const a = fromGlobal(p.start);
     const b = fromGlobal(p.end);
@@ -198,6 +221,25 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
                   {options.map((f) => <option key={f} value={f}>{reciterName(f)}</option>)}
                 </select>
               </>
+            )}
+            {canStart && (
+              <div className="mb-4 space-y-2">
+                {dlDone ? (
+                  <p className="text-sm text-emerald-700">المدى ده محمّل على جهازك ✓</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-accent-600">حجم المدى تقريباً {formatSize(dlSizeMb)}</p>
+                    <button type="button" onClick={() => void runRangeDownload()} disabled={dlBusy}
+                      className="w-full py-2 rounded-xl border border-emerald-300 text-emerald-800 font-bold disabled:opacity-50">
+                      {dlBusy ? `بنزّل… ${dlPct}٪` : 'نزّل المدى ده (اختياري)'}
+                    </button>
+                    {dlBusy && (
+                      <button type="button" onClick={() => dlAbort.current?.abort()} className="w-full text-xs text-accent-600 underline">وقّف التحميل</button>
+                    )}
+                    {dlMsg && <p className="text-xs text-accent-700">{dlMsg}</p>}
+                  </>
+                )}
+              </div>
             )}
             <button onClick={startRound} disabled={!canStart} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">تمام، سيف</button>
           </>

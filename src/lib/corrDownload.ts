@@ -242,3 +242,38 @@ export function planRangeReciters(startGlobal: number, endGlobal: number): Range
   }
   return parts;
 }
+
+// ---- Range downloads (2026-11-10): the user downloads only the range he picked ----
+const RANGE_KEY = (f: string, s: number, e: number) => `quran-corr-dl-range-${f}-${s}-${e}`;
+
+/** Approximate size of one reciter over a global ayah range (inclusive). */
+export function rangeSizeMb(folder: string, startG: number, endG: number): number {
+  const n = Math.max(0, endG - startG + 1);
+  return Math.max(1, Math.round(((CORR_SIZE_MB[folder] || 0) * n) / TOTAL_AYAHS));
+}
+export function isRangeDownloaded(folder: string, startG: number, endG: number): boolean {
+  if (isDownloaded(folder)) return true;
+  try { return localStorage.getItem(RANGE_KEY(folder, startG, endG)) === '1'; } catch { return false; }
+}
+
+/** Downloads one reciter's audio for a global ayah range (inclusive). */
+export async function downloadRange(
+  folder: string, startG: number, endG: number,
+  onProgress: (d: number, t: number) => void, signal: AbortSignal,
+): Promise<'done' | 'aborted' | 'partial'> {
+  const list: [number, number][] = [];
+  let g = 0;
+  for (let s = 1; s <= 114; s++) {
+    for (let a = 1; a <= SURAH_AYAH_COUNTS[s - 1]; a++) {
+      g++;
+      if (g >= startG && g <= endG) list.push([s, a]);
+    }
+  }
+  const r = await fetchList(folder, list, onProgress, signal);
+  if (signal.aborted) return 'aborted';
+  if (r.failed === 0 && r.done === list.length) {
+    try { localStorage.setItem(RANGE_KEY(folder, startG, endG), '1'); } catch { /* ignore */ }
+    return 'done';
+  }
+  return 'partial';
+}
