@@ -199,7 +199,13 @@ function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalErro
   onLoad?: (e: { currentTarget: HTMLImageElement }) => void;
   onFinalError: () => void;
 }) {
+  // FLASH FIX 2026-11-10: the element is no longer remounted per page
+  // (that dropped the old frame and showed a blank beat on every turn).
+  // It keeps its node and only swaps src, so the previous picture stays
+  // painted until the new one is ready; retry attempts reset per src.
   const [attempt, setAttempt] = useState(0);
+  const [attemptSrc, setAttemptSrc] = useState(src);
+  if (attemptSrc !== src) { setAttemptSrc(src); setAttempt(0); }
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
   const fallback = madinahFallbackSrc(src);
@@ -3138,11 +3144,15 @@ export default function QuranMushafPage({
     const pw = (pr - pl) / 100;
     const ph = (pb - pt) / 100;
     if (pw <= 0 || ph <= 0) return null;
-    const s = Math.min(1 / pw, 1 / ph);
+    // CROP FIX 2026-11-10: the image now fills the wrapper's full height
+    // (s = 1), so the top and bottom ornaments and hizb/quarter markers
+    // are never cut. Horizontal placement stays paper-centered, so the
+    // frame still lands on the same rect on both gutter parities.
+    const s = 1;
     const imgW = s * 100; // % of wrapper width
     const imgH = s * 100; // % of wrapper height
     const imgL = 50 - ((pl + pr) / 2) * s; // % of wrapper width
-    const imgT = -pt * s; // % of wrapper height
+    const imgT = 0; // % of wrapper height
     return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
   };
   const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;
@@ -3163,8 +3173,15 @@ export default function QuranMushafPage({
   // image lags the requested page, the image AND its geometry must
   // follow the displayed page together — otherwise the old image would
   // sit at the new page's (parity-flipped) position during the lag.
-  const fullscreenNorm = useMadinahCover && displayedPage !== currentPage
-    ? coverNormForPaperBox(MADINAH_PAPER_BOXES[displayedPage - 1], viewportAspect, madinahFrameBand(displayedPage))
+  // DESKTOP SHIFT FIX 2026-11-10: the fit branch used to keep the
+  // CURRENT page's norm while the DISPLAYED (older) image was still
+  // on screen, so during a lag the old image jumped to the new page's
+  // gutter side (odd frame left, even frame right) and back. Both
+  // branches now take the displayed page's own geometry.
+  const fullscreenNorm = displayedPage !== currentPage && edition.id === 'madinah'
+    ? (useMadinahCover
+      ? coverNormForPaperBox(MADINAH_PAPER_BOXES[displayedPage - 1], viewportAspect, madinahFrameBand(displayedPage))
+      : normForPaperBox(MADINAH_PAPER_BOXES[displayedPage - 1]))
     : madinahNorm;
   // Book-slide animation for the fullscreen flip (RTL: next page
   // slides in from the left, previous from the right). The image
@@ -4168,7 +4185,7 @@ export default function QuranMushafPage({
                       page straight into the error block (see
                       RetryPageImg above). Key remounts per page, so
                       attempts reset on every turn. */}
-                  <RetryPageImg key={`${edition.id}-${displayedPage}`} src={edition.imageUrl(displayedPage)} alt={`صفحة ${displayedPage}`}
+                  <RetryPageImg key={edition.id} src={edition.imageUrl(displayedPage)} alt={`صفحة ${displayedPage}`}
                     className={`${fullscreenNorm ? 'absolute touch-none max-w-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
                     style={fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%`, animation: slideAnim } : { animation: slideAnim }}
                     onLoad={(e) => {
