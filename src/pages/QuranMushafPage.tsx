@@ -17,7 +17,7 @@ import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
-import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT } from '../lib/madinahPaperBoxes';
+import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT, MADINAH_MARK_MARGIN } from '../lib/madinahPaperBoxes';
 import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { parseHash } from '../lib/shareLinks';
 import { HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
@@ -3148,11 +3148,16 @@ export default function QuranMushafPage({
     // (s = 1), so the top and bottom ornaments and hizb/quarter markers
     // are never cut. Horizontal placement stays paper-centered, so the
     // frame still lands on the same rect on both gutter parities.
-    const s = 1;
+    // MARGIN MARKS FIX 2026-11-10: paper-centering shifts the image
+    // ~5% sideways, which pushed the outer-margin hizb/juz medallions
+    // (up to 11.86 image-% beyond the frame) partly out of the wrapper.
+    // Scale so frame + mark margin on both sides fits the width; pages
+    // 1-2 (full-width title pages) keep s = 1.
+    const s = Math.min(1, 100 / ((pr - pl) + 2 * MADINAH_MARK_MARGIN));
     const imgW = s * 100; // % of wrapper width
     const imgH = s * 100; // % of wrapper height
     const imgL = 50 - ((pl + pr) / 2) * s; // % of wrapper width
-    const imgT = 0; // % of wrapper height
+    const imgT = (100 - imgH) / 2; // % of wrapper height
     return { pl, pt, pr, pw, ph, imgW, imgH, imgL, imgT };
   };
   const madinahPaperBox = edition.id === 'madinah' ? MADINAH_PAPER_BOXES[currentPage - 1] : undefined;

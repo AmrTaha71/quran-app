@@ -679,7 +679,16 @@ export const MADINAH_NORMALIZED_ASPECT = 0.7070;
 // to image-y 5.2% on rare pages) can clip at aspects above ~0.65
 // — inherent to any edge-to-edge geometry, and unchanged from the
 // previous cover. Quran text and the frame band itself never clip.
-export const MADINAH_COVER_K = 0.94;
+// MARGIN MARKS FIX 2026-11-10: the hizb / quarter / juz medallions sit in
+// the OUTER margin, outside the frame. Measured on the page scans (578
+// pages, 240 with a mark): they reach x = 95.97% on odd pages (frame
+// edge 84.19) and x = 3.95% on even pages (frame edge 15.81), i.e. up to
+// 11.86 image-% beyond the frame. With the paper at 94% of the screen
+// width those marks were off screen. The frame now takes the share that
+// leaves 12.1 image-% on BOTH sides (both, so the frame still lands on
+// the same screen rect on odd and even pages: no sideways jump).
+export const MADINAH_MARK_MARGIN = 12.1;
+export const MADINAH_COVER_K = 78.71 / (78.71 + 2 * MADINAH_MARK_MARGIN);
 export const MADINAH_COVER_MAX_ASPECT = 0.90;
 export const MADINAH_IMAGE_ASPECT = 1240 / 1754;
 export const MADINAH_FRAME_BAND_DEFAULT: [number, number] = [8.352, 92.987];
