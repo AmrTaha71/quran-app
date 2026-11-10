@@ -2,6 +2,7 @@
 // download / delete each one's whole-Quran ayah files for offline
 // recitation. Shared by Settings and the first-time prompt in سمّع لنفسك.
 import { useRef, useState } from 'react';
+import Hint from './Hint';
 import { Download, Trash2, Check, Square } from 'lucide-react';
 import { CORR_RECITERS, getCorrReciter, setCorrReciter } from '../lib/juhaniCorr';
 import {
@@ -80,10 +81,10 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
 
   return (
     <div dir="rtl" className="space-y-3">
-      <p className="text-sm text-accent-700">
+      <Hint id="corr-reciters"><p className="text-sm text-accent-700">
         اختار القارئ اللي يصحّحلك وإنت بتسمّع. ولو نزّلت تسجيلاته على جهازك، تقدر تسمّع معاه <b>من غير إنترنت</b>.
         تقدر تنزّل واحد أو اتنين أو كلهم، وتمسح أي واحد وقت ما تحب.
-      </p>
+      </p></Hint>
       <p className="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
         عشان التنزيل يفضل محفوظ على الآيفون والآيباد: ثبّت التطبيق على الشاشة الرئيسية الأول (الإعدادات ← تثبيت التطبيق).
       </p>
@@ -92,6 +93,9 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
         const count = prog[r.folder] ?? downloadedCount(r.folder);
         const pct = Math.round((count / TOTAL_AYAHS) * 100);
         const isBusy = busy === r.folder;
+        // Download controls show for the chosen reciter only (and one
+        // that is downloading right now): eight rows of buttons was a wall.
+        const open = chosen === r.folder || isBusy || (juzBusy !== null && juzBusy.f === r.folder);
         return (
           <div key={r.folder} className={`rounded-xl border p-3 space-y-2 ${chosen === r.folder ? 'border-emerald-500 bg-emerald-50' : 'border-hairline bg-white'}`}>
             <div className="flex items-center justify-between gap-2">
@@ -101,7 +105,9 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 </span>
                 <span className="font-bold text-accent-900">{r.name}</span>
               </button>
-              <span className="text-xs text-accent-600">{formatSize(CORR_SIZE_MB[r.folder] || 0)}</span>
+              <span className="text-xs text-accent-600">
+                {!open && done ? '✓ على جهازك' : !open && count > 0 ? `نزل ${pct}%` : formatSize(CORR_SIZE_MB[r.folder] || 0)}
+              </span>
             </div>
             {askFor === r.folder && (
               <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 space-y-2">
@@ -116,6 +122,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 </div>
               </div>
             )}
+            {open && (<>
             <button type="button" onClick={() => setOpenJuz(openJuz === r.folder ? null : r.folder)}
               className="text-sm font-semibold text-emerald-700 underline">
               {openJuz === r.folder ? 'اقفل الأجزاء' : `نزّل بالجزء (${downloadedJuzCount(r.folder)} من 30 على جهازك)`}
@@ -157,6 +164,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 </>
               )}
             </div>
+            </>)}
           </div>
         );
       })}

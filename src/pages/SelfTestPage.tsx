@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { IMLA_ALT, IMLA_PAIR_ALT } from '../lib/imlaAlt';
+import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
@@ -20,7 +22,7 @@ import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
-  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniAyahStartTime, wholeAyahPlan, corrAyahUrl, loadCorrReciter, setCorrReciter, getCorrReciter, CORR_RECITERS,
+  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniAyahStartTime, wholeAyahPlan, corrAyahUrl, loadCorrReciter, setCorrReciter, getCorrReciter, preloadCorrTimings, CORR_RECITERS,
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
@@ -402,6 +404,12 @@ function assimilatedPairForms(a: string, b: string): string[] {
 // to it. A boundary ا+ا may collapse to one ا: ها + أنتم is spoken
 // for هأنتم, where the mushaf merges ها's ا with أنتم's أ.
 function splitMatches(parts: string[], expected: string): boolean {
+  if (splitMatchesExact(parts, expected)) return true;
+  const alts = IMLA_ALT[expected];
+  if (alts) for (const a of alts) if (splitMatchesExact(parts, a)) return true;
+  return false;
+}
+function splitMatchesExact(parts: string[], expected: string): boolean {
   const collapsible = parts.slice(0, -1).map((p, b) => p.endsWith('ا') && parts[b + 1].startsWith('ا'));
   const total = 1 << Math.max(0, parts.length - 1);
   for (let mask = 0; mask < total; mask++) {
@@ -489,25 +497,60 @@ function muqattaatMatchAt(expected: string[], i: number, spoken: string[], j: nu
   return null;
 }
 
-// Tolerant equality (beginner level, 2026-11-08): the device's offline
-// dictation drops long-vowel alifs and a final «ها» (يغشاها -> يغشها,
-// جلاها -> جلا), which used to trap the reciter in a correction loop on a
-// word he said right. Only those two shapes are forgiven: a different
-// consonant (يخشاها for يغشاها) is still a mistake.
+// Same-word equality across spellings (rewritten 2026-11-10).
+// Measured on a word-perfect recitation of all 6236 ayahs typed in
+// everyday spelling, the old rule (delete every ا/ى/ي, collapse any
+// doubled letter, forgive a final ه) still failed 510 ayahs at the
+// strict levels AND accepted different words as equal (الدنيا for
+// الدين, الله for لله, فيها for فيه, على for عليه). Now:
+//   1. exact match, or the word's own known spelling in the other
+//      scripts (IMLA_ALT, generated from the three full texts);
+//   2. else a narrow dictation tolerance against any of those
+//      spellings: a dropped long alif INSIDE the word (يغشها for
+//      يغشاها), a doubled ي or ل, and a dropped final «ها» after a long
+//      alif (جلا for جلاها). A different consonant, a missing prefix or
+//      a different ending is a different word.
+// Same measurement after the change: 24 ayahs (all multi-word joins).
+const softSkeleton = (w: string) => w.replace(/ة/g, 'ه').replace(/(?<=.)ا(?=.)/g, '').replace(/يي+/g, 'ي').replace(/لل+/g, 'ل');
 function softWordEq(spoken: string, expected: string): boolean {
   if (spoken === expected) return true;
+  const alts = IMLA_ALT[expected];
+  if (alts && alts.includes(spoken)) return true;
   if (spoken.length < 3) return false;
-  // Skeleton without long-vowel letters (expected norms spell alif
-  // maqsura as ي: جَلَّىٰهَا -> جليها).
-  // ة -> ه (ناقة/ناقه), drop long-vowel letters, collapse doubled letters
-  // (the Uthmani «واليل» vs dictation «والليل»).
-  const sk = (w: string) => w.replace(/ة/g, 'ه').replace(/[اىي]/g, '').replace(/(.)\1+/g, '$1');
-  const e = sk(expected);
-  const sp = sk(spoken);
-  if (sp === e) return true;
-  // Dropped final «ها»: جلا for جليها.
-  if (e.endsWith('ه') && sp === e.slice(0, -1)) return true;
+  const sp = softSkeleton(spoken);
+  const cands = alts ? [expected, ...alts] : [expected];
+  for (const c of cands) {
+    if (sp === softSkeleton(c)) return true;
+    if (c.length >= 5 && c.endsWith('اها') && spoken === c.slice(0, -2)) return true;
+  }
   return false;
+}
+
+// A later occurrence of the word must not be credited to an earlier,
+// skipped one (2026-11-10). Greedy first-match used to jump ahead: with
+// the first «عليهم» of 1:7 skipped, it matched the second one, then
+// marked «غير المغضوب عليهم» wrong although they were recited. When the
+// very next spoken word is one of the next three expected words, the
+// reciter has moved on: this expected word was skipped.
+function skippedAhead(expected: string[], i: number, spoken: string[], j: number, found: number): boolean {
+  if (found <= j) return false;
+  for (let t = i + 1; t <= i + 3 && t < expected.length; t++) {
+    if (softWordEq(spoken[j], expected[t]) && !softWordEq(spoken[j], expected[i])) return true;
+  }
+  return false;
+}
+
+// Two mushaf tokens that are one spoken word (the IndoPak in-word iqlab
+// space, «اَنۭۡ بِيَآءَ» = أنبياء): index of that spoken word at or after
+// j, or -1. Checked before the single-word match, because the first half
+// alone («ان») is a common word that would otherwise match further on
+// and leave the second half "missing".
+function pairAltAt(expected: string[], i: number, spoken: string[], j: number): number {
+  if (i + 1 >= expected.length) return -1;
+  const alts = IMLA_PAIR_ALT[`${expected[i]} ${expected[i + 1]}`];
+  if (!alts) return -1;
+  for (let k = j; k < spoken.length; k++) if (alts.includes(spoken[k])) return k;
+  return -1;
 }
 
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
@@ -528,6 +571,11 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
     let found = -1;
     for (let k = j; k < spoken.length; k++) {
       if (softWordEq(spoken[k], expected[i])) { found = k; break; }
+    }
+    if (found >= 0 && skippedAhead(expected, i, spoken, j, found)) found = -1;
+    {
+      const kp = pairAltAt(expected, i, spoken, j);
+      if (kp >= 0 && (found < 0 || kp <= found)) { matched[i] = true; matched[i + 1] = true; positions[i] = kp; positions[i + 1] = kp; j = kp + 1; i += 2; continue; }
     }
     if (found >= 0) { matched[i] = true; positions[i] = found; j = found + 1; i++; continue; }
     let joined = -1;
@@ -575,9 +623,10 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
       const forms = assimilatedPairForms(expected[i], expected[i + 1]);
+      const pairAlts = IMLA_PAIR_ALT[`${expected[i]} ${expected[i + 1]}`];
       let foundPair = -1;
       for (let k = j; k < spoken.length; k++) {
-        if (spoken[k] === pair || forms.includes(spoken[k])) { foundPair = k; break; }
+        if (spoken[k] === pair || forms.includes(spoken[k]) || softWordEq(spoken[k], pair) || (pairAlts && pairAlts.includes(spoken[k]))) { foundPair = k; break; }
       }
       if (foundPair >= 0) { matched[i] = true; matched[i + 1] = true; positions[i] = foundPair; positions[i + 1] = foundPair; j = foundPair + 1; i += 2; continue; }
     }
@@ -608,6 +657,11 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
     let found = -1;
     for (let k = j; k < spoken.length; k++) {
       if (softWordEq(spoken[k], expected[i])) { found = k; break; }
+    }
+    if (found >= 0 && skippedAhead(expected, i, spoken, j, found)) found = -1;
+    {
+      const kp = pairAltAt(expected, i, spoken, j);
+      if (kp >= 0 && (found < 0 || kp <= found)) { consumeThrough(kp, 1); matched[i] = true; matched[i + 1] = true; positions[i] = kp; positions[i + 1] = kp; i += 2; continue; }
     }
     if (found >= 0) { consumeThrough(found, 1); matched[i] = true; positions[i] = found; i++; continue; }
     let joined = -1;
@@ -646,9 +700,10 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
     if (i + 1 < expected.length) {
       const pair = expected[i] + expected[i + 1];
       const forms = assimilatedPairForms(expected[i], expected[i + 1]);
+      const pairAlts = IMLA_PAIR_ALT[`${expected[i]} ${expected[i + 1]}`];
       let foundPair = -1;
       for (let k = j; k < spoken.length; k++) {
-        if (spoken[k] === pair || forms.includes(spoken[k])) { foundPair = k; break; }
+        if (spoken[k] === pair || forms.includes(spoken[k]) || softWordEq(spoken[k], pair) || (pairAlts && pairAlts.includes(spoken[k]))) { foundPair = k; break; }
       }
       if (foundPair >= 0) { consumeThrough(foundPair, 1); matched[i] = true; matched[i + 1] = true; positions[i] = foundPair; positions[i + 1] = foundPair; i += 2; continue; }
     }
@@ -991,6 +1046,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [index, setIndex] = useState(0);
   // Switch the reader per ayah when the range is split (2026-11-10). corrAyahUrl and the
   // timing loader both follow getCorrReciter(), so changing it here is enough.
+  // Every part's word timings are loaded up front (2026-11-10), so the
+  // first ayah after a reciter switch already has its timings.
+  useEffect(() => {
+    if (mixedPlan) preloadCorrTimings(Array.from(new Set(mixedPlan.map((p) => p.folder))));
+  }, [mixedPlan]);
   useEffect(() => {
     if (!mixedPlan || !ayahs[index]) return;
     const a = ayahs[index];
@@ -1434,6 +1494,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const corrAudioRef = useRef<HTMLAudioElement | null>(null);
   // Juhani window player: ONE reusable <audio>, unlocked in the mic-start tap (iOS).
   const juhaniPlayerRef = useRef<JuhaniPlayer | null>(null);
+  // Word indices the last ayah-mode correction audio covered (so the
+  // replay button plays the same window, not the whole rest of the ayah).
+  const corrAudioIdxRef = useRef<number[]>([]);
   // Segmentation pilot (v0, Al-Mulk only): sequential word-file
   // player for the reference 3-word unit. Separate from corrAudio
   // so the current correction path is untouched; stopped whenever
@@ -1866,7 +1929,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       });
     };
     const ayReplay = ayahs[index];
-    if (ayReplay && wrongIndices.length > 0 && startJuhaniCorrection(ayReplay, expectedWordList(ayReplay.ayah_text).length, wrongIndices, fbReplay)) return;
+    const replayIdx = corrAudioIdxRef.current.length > 0 && corrAudioIdxRef.current.every((i) => wrongIndices.includes(i)) ? corrAudioIdxRef.current : wrongIndices;
+    if (ayReplay && wrongIndices.length > 0 && startJuhaniCorrection(ayReplay, expectedWordList(ayReplay.ayah_text).length, replayIdx, fbReplay)) return;
     fbReplay();
   };
 
@@ -2619,7 +2683,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         }, resumeAfterCorrection);
       };
       const wrongIdxAll = expected.map((_, i) => i).filter((i) => !result.matched[i]);
-      if (!startJuhaniCorrection(ayah, expected.length, wrongIdxAll, fallbackCorrection, resumeAfterCorrection)) fallbackCorrection();
+      // The audio corrects what he actually reached (2026-11-10): every
+      // unmatched word up to the last word heard, or just the first
+      // missing word when he stopped there. Before, every word he had
+      // not reached yet counted too, so one slip at word 3 of a 20-word
+      // ayah played the reciter through to the end of the ayah. The red
+      // words on screen still show everything unmatched.
+      const lastHeardIdx = result.matched.lastIndexOf(true);
+      const wrongIdxHeard = wrongIdxAll.filter((i) => i <= Math.max(lastHeardIdx, wrongIdxAll[0] ?? -1));
+      corrAudioIdxRef.current = wrongIdxHeard;
+      if (!startJuhaniCorrection(ayah, expected.length, wrongIdxHeard, fallbackCorrection, resumeAfterCorrection)) fallbackCorrection();
       liveRef.current.micState = 'done-wrong';
       setMicState('done-wrong');
     }
@@ -3290,11 +3363,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Juhani: unlock the reusable <audio> and the buzz context INSIDE this
     // tap (iOS only lets timer-started playback run if a gesture started
     // the element), and warm the surah file's audio at this ayah.
-    if (juhaniEnabledForCurrent()) {
+    // The unlock itself is unconditional (2026-11-10): it used to be
+    // skipped when this ayah had no word timings yet (file still
+    // loading, or an untimed ayah), which left the element locked on
+    // iOS, so every later timer-started correction was rejected.
+    {
       warmErrorBuzz();
       if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
       juhaniPlayerRef.current.unlock(
-        corrAyahUrl(ayah.surah_no, ayah.ayah_no),
+        ayah.id > 0 ? corrAyahUrl(ayah.surah_no, ayah.ayah_no) : undefined,
         juhaniAyahStartTime(ayah.surah_no, ayah.ayah_no) ?? undefined,
       );
     }
@@ -3387,8 +3464,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           liveRef.current.finals = `${liveRef.current.finals} ${chosen}`.trim();
           setTranscript(liveRef.current.finals);
           // Spoken enough words to cover the ayah? Judge at once.
-          const expectedLen = expectedWordList(liveRef.current.ayah?.ayah_text || '').length;
-          if (spokenTokens(liveRef.current.finals).length >= expectedLen) {
+          // Judge at once only when the ayah's LAST word was heard
+          // (2026-11-10). Counting tokens fired early whenever speech
+          // had more tokens than the mushaf has words («يا أيها» is two
+          // tokens for one word; a basmala; a repeated word) and opened
+          // a correction before he finished the ayah.
+          const expectedLen = expectedNorms.length;
+          const spokenNow = spokenTokens(liveRef.current.finals);
+          if (expectedLen > 0 && spokenNow.length >= expectedLen && alignWords(expectedNorms, spokenNow).matched[expectedLen - 1]) {
             evaluateNow();
           } else {
             scheduleQuietEvaluate();
@@ -3407,6 +3490,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         lastInterimRef.current = interimText.trim();
         setInterim(interimText.trim());
         diagPush('result', { final: false, text: interimText.trim() });
+        // Still speaking (2026-11-10): a pending quiet-judgement is
+        // pushed back. It used to be armed by finals only, so it fired
+        // 1.5s after a mid-ayah final while he was still reciting and
+        // judged half an ayah.
+        if (quietTimerRef.current) scheduleQuietEvaluate();
         // Batch 1: fluent-substitution fast path — a stable interim
         // miss with downstream matches opens the correction window
         // now instead of waiting for finals (grading stays
@@ -3604,12 +3692,31 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // as missed (forGrade).
   const contGaveUpRef = useRef<Set<number>>(new Set());
   const contPromptCountRef = useRef<Map<string, number>>(new Map());
-  const contEffectiveMatched = (forGrade = false): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
+  // Ayah (index in the range) whose correction file is already warmed.
+  const contWarmAyahRef = useRef(-1);
+  // `record` = false for a look at INTERIM text (2026-11-10): an interim
+  // word that the recognizer later revises must not stay credited as
+  // recited. Only finals record credit.
+  const contEffectiveMatched = (forGrade = false, record = true): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
     const raw = contRawAlignment();
     const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i) || (!forGrade && contGaveUpRef.current.has(i)));
-    raw.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
+    if (record) raw.matched.forEach((m, i) => { if (m) contCreditedRef.current.add(i); });
     let lastMatchedIdx = -1;
     matched.forEach((m, i) => { if (m) lastMatchedIdx = i; });
+    // Warm the reciter's file of the ayah he is entering, so a mistake
+    // there starts sounding without first paying for the download. Each
+    // ayah is its own file; only the first one used to be warmed.
+    try {
+      const exp = liveRef.current.contExpected;
+      const nextAyahIdx = exp[Math.min(lastMatchedIdx + 1, exp.length - 1)]?.ayahIdx;
+      if (nextAyahIdx != null && nextAyahIdx !== contWarmAyahRef.current && liveRef.current.contListening && !contPromptingRef.current) {
+        const wa = ayahsRef.current[nextAyahIdx];
+        if (wa && wa.id > 0 && juhaniPlayerRef.current) {
+          contWarmAyahRef.current = nextAyahIdx;
+          juhaniPlayerRef.current.prewarm(corrAyahUrl(wa.surah_no, wa.ayah_no), juhaniAyahStartTime(wa.surah_no, wa.ayah_no) ?? undefined);
+        }
+      }
+    } catch { /* warming is best-effort */ }
     return { matched, lastMatchedIdx, positions: raw.positions, consumed: raw.consumed };
   };
   // Live (interim-aware) alignment for the continuous pointer and
@@ -4628,7 +4735,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     let lastMatchedIdx = -1;
     try {
       liveRef.current.contFinals = `${saved} ${interimText}`.trim();
-      const r = contEffectiveMatched();
+      const r = contEffectiveMatched(false, false);
       matched = r.matched;
       lastMatchedIdx = r.lastMatchedIdx;
     } finally {
@@ -4841,8 +4948,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // calls via resumeAfterPrompt are safe.
     {
       const firstAyah = ayahsRef.current[0];
-      if (firstAyah && isJuhaniCorrEnabled(firstAyah.surah_no, firstAyah.ayah_no, expectedWordList(firstAyah.ayah_text).length)) {
+      if (firstAyah) {
         warmErrorBuzz();
+        contWarmAyahRef.current = 0;
         if (!juhaniPlayerRef.current) juhaniPlayerRef.current = createJuhaniPlayer();
         juhaniPlayerRef.current.unlock(
           corrAyahUrl(firstAyah.surah_no, firstAyah.ayah_no),
@@ -5529,18 +5637,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </button>
                   </div>
                 </div>
-                <p className="col-span-2 text-xs text-accent-600 leading-snug">
+                <Hint id="st-level"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {verifyLevel === 'beginner'
                     ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه.'
                     : verifyLevel === 'intermediate'
                     ? 'يوقف عند أي خطأ في الكلمات: ناقصة أو مختلفة أو زائدة.'
                     : 'نفس تدقيق المتوسط — والسرعة دلوقتي بتتظبط من فترة التريث وسرعة النطق تحت.'}
-                </p>
-                <p className="col-span-2 text-xs text-accent-600 leading-snug">
+                </p></Hint>
+                <Hint id="st-mode"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
-                </p>
+                </p></Hint>
                 <TajwidSkillPicker />
                 {!micSupported && (
                   <p className="col-span-2 text-xs text-amber-link leading-snug">{micAbsentSetupNote}</p>
@@ -5590,13 +5698,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ))}
                   </div>
                 </div>
-                <p className="col-span-2 text-xs text-accent-600 leading-snug">
+                <Hint id="st-wait"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   فترة التريث هي المهلة اللي بتاخدها تصلح لنفسك قبل ما البرنامج ينطق التصحيح (في آية آية)، أو مدة سكوتك قبل ما ينبهك (في المتصل). أما المقاطعة الفورية للغلطة المؤكدة وانت ماشي فبتفضل فورية — دي الرد التلقائي.
-                </p>
+                </p></Hint>
               </div>
-              <p className="text-xs text-accent-600 leading-snug">
+              <Hint id="st-words-note"><p className="text-xs text-accent-600 leading-snug">
                 ملحوظة بأمانة: التدقيق كله على مستوى الكلمات — البرنامج بيسمع الكلمات مش الأصوات، فما بيقيس أحكام التجويد (اللحن الخفي).
-              </p>
+              </p></Hint>
             </div>
             )}
 
@@ -5850,9 +5958,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             permission is caught in the lobby instead of mid-test. */}
             <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 space-y-3">
               <h2 className="font-semibold text-accent-800">جرّب الميكروفون قبل ما تبدأ</h2>
-              <p className="text-sm text-accent-600 leading-relaxed">
+              <Hint id="st-miccheck"><p className="text-sm text-accent-600 leading-relaxed">
                 اضغط الزر واتكلم بصوت عادي لمدة ثانيتين — الفحص بيفتح الميكروفون، يقيس صوتك، ويقفله تاني على طول، فمفيش ميكروفون بيفضل شغال، ومفيش أي تسجيل بيتحفظ أو بيترفع.
-              </p>
+              </p></Hint>
               <button onClick={runMicCheck} disabled={micCheckState === 'checking'}
                 className="w-full py-3 grad-emerald-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                 {micCheckState === 'checking' ? 'جارٍ فحص الميكروفون…' : '🎤 جرّب الميكروفون'}
@@ -5934,7 +6042,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                         {loading ? 'جارٍ تحميل الآيات…' : `ابدأ تسميع الآيات الضعيفة (${weakAyahs.length.toLocaleString('ar-EG')} آية)`}
                       </button>
-                      <p className="text-xs text-accent-600 leading-relaxed">التسميع بنفس إعداداتك المحفوظة — ولو وقفت في النص، تقدر تكمل من مكانك بعدين.</p>
+                      <Hint id="st-weak"><p className="text-xs text-accent-600 leading-relaxed">التسميع بنفس إعداداتك المحفوظة — ولو وقفت في النص، تقدر تكمل من مكانك بعدين.</p></Hint>
                     </>
                   )}
                 </div>

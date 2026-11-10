@@ -25,7 +25,7 @@
 
 import { refUnitForWord } from './refWordUnits';
 import { hadrAudioUrl } from './hadr';
-import { JUHANI_TIMINGS_JUZ30, JUHANI_RANGE_OK_SURAHS_JUZ30 } from './juhaniManifestJuz30';
+import { JUHANI_RANGE_OK_SURAHS_JUZ30 } from './juhaniManifestJuz30';
 
 // ------------------------------------------------------------------
 // Correction timing setting (replaces the 2-10s stepper).
@@ -131,6 +131,11 @@ export const CORR_RECITER_DEFAULT = 'Minshawy_Murattal_128kbps';
 
 let activeCorr: { folder: string; map: Record<string, number[]> } | null = null;
 let loadingFolder: string | null = null;
+// Loaded timing maps, kept per reciter (2026-11-10): switching reciter
+// (the user's choice, or a split range that changes reciter per ayah)
+// re-activates a loaded map at once instead of refetching ~880 KB and
+// leaving the first ayahs after the switch with no word timings.
+const corrMaps = new Map<string, Record<string, number[]>>();
 
 export function getCorrReciter(): string {
   try {
@@ -143,11 +148,14 @@ export function getCorrReciter(): string {
 /** Loads (once) and activates the chosen reciter's timings. */
 export async function loadCorrReciter(folder: string = getCorrReciter()): Promise<void> {
   if (activeCorr?.folder === folder || loadingFolder === folder) return;
+  const cached = corrMaps.get(folder);
+  if (cached) { activeCorr = { folder, map: cached }; return; }
   loadingFolder = folder;
   try {
     const res = await fetch(`/corr-timings/${folder}.json`);
     if (!res.ok) { if (loadingFolder === folder) activeCorr = { folder, map: {} }; return; }
     const map = (await res.json()) as Record<string, number[]>;
+    corrMaps.set(folder, map);
     if (loadingFolder === folder) activeCorr = { folder, map };
   } catch { /* offline: whole-ayah fallback still uses this reciter */ } finally {
     if (loadingFolder === folder) loadingFolder = null;
@@ -156,8 +164,21 @@ export async function loadCorrReciter(folder: string = getCorrReciter()): Promis
 
 export function setCorrReciter(folder: string): void {
   try { localStorage.setItem(CORR_RECITER_KEY, folder); } catch { /* ignore */ }
-  activeCorr = null;
-  void loadCorrReciter(folder);
+  const cached = corrMaps.get(folder);
+  activeCorr = cached ? { folder, map: cached } : null;
+  if (!cached) void loadCorrReciter(folder);
+}
+
+/** Load several reciters' timings ahead of a test whose range changes
+ *  reciter part-way, so no switch waits on the network. */
+export function preloadCorrTimings(folders: string[]): void {
+  for (const f of folders) {
+    if (corrMaps.has(f)) continue;
+    void fetch(`/corr-timings/${f}.json`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((m) => { if (m && !corrMaps.has(f)) corrMaps.set(f, m as Record<string, number[]>); })
+      .catch(() => { /* offline: loadCorrReciter retries on switch */ });
+  }
 }
 
 /** EveryAyah per-ayah file of the chosen correction reciter. */
@@ -167,22 +188,45 @@ export function corrAyahUrl(surah: number, ayah: number): string {
 }
 
 function timingsFor(surah: number, ayah: number): number[] | null {
-  if (activeCorr) return activeCorr.map[key(surah, ayah)] ?? null;
-  const t = JUHANI_TIMINGS_JUZ30[key(surah, ayah)];
-  return t ?? null;
+  // The audio is ALWAYS the chosen reciter's per-ayah file (corrAyahUrl),
+  // so only that reciter's own timings may cut it. Before this guard
+  // (2026-11-10), while the timing file was still loading — at startup,
+  // right after a reciter switch, or after a failed fetch — the Juhani
+  // surah-file timings were applied to another reciter's per-ayah file:
+  // the wrong words, or silence, in Juz 30. No timings now means the
+  // caller's whole-ayah fallback, in the right voice.
+  if (activeCorr && activeCorr.folder === getCorrReciter()) return activeCorr.map[key(surah, ayah)] ?? null;
+  return null;
 }
 
+/** Ayah-level gate: the timing row must have exactly one [start,end]
+ *  pair per app word, all finite. Ordering is checked per WINDOW
+ *  (windowShapeOk), so one bad pair elsewhere in a long ayah no longer
+ *  throws away every good window of that ayah (2026-11-10). */
 function timingsShapeOk(t: number[], wordCount: number): boolean {
   if (t.length !== wordCount * 2) return false;
-  let prev = 0;
   for (let i = 0; i < t.length; i++) {
     const v = t[i];
     if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return false;
-    if (v < prev) return false; // starts/ends must be non-decreasing
-    prev = v;
   }
-  for (let w = 0; w < wordCount; w++) {
-    if (t[2 * w + 1] <= t[2 * w]) return false; // each word has positive length
+  return true;
+}
+
+/** A word longer than this is an alignment failure, not a word. */
+const MAX_WORD_S = 15;
+
+/** Words start..end (inclusive) are in order, each of positive and
+ *  plausible length. */
+function windowShapeOk(t: number[], start: number, end: number): boolean {
+  let prev = start > 0 ? t[2 * start - 1] : 0;
+  // The previous word's end may legitimately equal this start.
+  if (!(prev <= t[2 * start] + 0.001)) prev = t[2 * start];
+  for (let w = start; w <= end; w++) {
+    const a = t[2 * w];
+    const b = t[2 * w + 1];
+    if (a + 0.001 < prev) return false;
+    if (!(b > a) || b - a > MAX_WORD_S) return false;
+    prev = b;
   }
   return true;
 }
@@ -235,9 +279,17 @@ export interface WordSpan {
 }
 
 export interface JuhaniSegment extends WordSpan {
-  tStart: number; // seconds in the surah file
+  tStart: number; // seconds in the audio file
   tEnd: number;
+  /** Silence after this segment before the next one (default
+   *  SEGMENT_GAP_MS). Short when the cut is the reciter's own pause. */
+  gapAfterMs?: number;
 }
+
+const PRE_ROLL_S = 0.06;
+const LAST_WORD_TAIL_S = 1.5;
+const PAUSE_SPLIT_S = 0.7;
+const INNER_PAUSE_GAP_MS = 220;
 
 export interface JuhaniPlan {
   segments: JuhaniSegment[];
@@ -283,10 +335,27 @@ export function planJuhaniWindows(
   const used = spans.slice(0, MAX_JUHANI_SEGMENTS);
   const segments: JuhaniSegment[] = [];
   for (const s of used) {
-    const tStart = t[2 * s.start];
-    const tEnd = t[2 * s.end + 1];
-    if (!(tEnd - tStart >= MIN_WINDOW_S)) return null;
-    segments.push({ start: s.start, end: s.end, tStart, tEnd });
+    if (!windowShapeOk(t, s.start, s.end)) return null;
+    if (!(t[2 * s.end + 1] - t[2 * s.start] >= MIN_WINDOW_S)) return null;
+    // Cut the window wherever the reciter himself pauses inside it (a
+    // breath, a waqf, sometimes followed by a repeat): playing straight
+    // through made a 3-word correction last 10+ seconds for the slow
+    // murattal reciters. Each piece plays, then a short beat instead of
+    // the long silence.
+    let from = s.start;
+    for (let w = s.start; w <= s.end; w++) {
+      const lastOfSpan = w === s.end;
+      const pauseAfter = !lastOfSpan && t[2 * (w + 1)] - t[2 * w + 1] > PAUSE_SPLIT_S;
+      if (!lastOfSpan && !pauseAfter) continue;
+      // Pre-roll: the dataset's word starts are late as often as early
+      // (mean error ~70ms), and a late start clips the first consonant.
+      const tStart = Math.max(0, t[2 * from] - PRE_ROLL_S);
+      // The ayah's last word runs to the end of the file (the player
+      // stops on `ended`), so its final madd is never cut.
+      const tEnd = w === wordCount - 1 ? t[2 * w + 1] + LAST_WORD_TAIL_S : t[2 * w + 1];
+      segments.push({ start: from, end: w, tStart, tEnd, ...(pauseAfter ? { gapAfterMs: INNER_PAUSE_GAP_MS } : {}) });
+      from = w + 1;
+    }
   }
   return { segments, truncated };
 }
@@ -317,7 +386,7 @@ const SEGMENT_GAP_MS = 800;
 
 export interface JuhaniPlayArgs {
   url: string;
-  segments: { tStart: number; tEnd: number }[];
+  segments: { tStart: number; tEnd: number; gapAfterMs?: number }[];
   rate: number;
   onStart?: () => void;
   onDone: () => void;
@@ -516,7 +585,7 @@ export function createJuhaniPlayer(): JuhaniPlayer {
               try { a.pause(); } catch { /* ignore */ }
               i++;
               if (i >= segs.length) finish();
-              else later(playSegment, SEGMENT_GAP_MS);
+              else later(playSegment, seg.gapAfterMs ?? SEGMENT_GAP_MS);
             }
           }, POLL_MS);
           // Whole-segment guard: media time / rate + slack.
@@ -536,9 +605,13 @@ export function createJuhaniPlayer(): JuhaniPlayer {
       a.onloadedmetadata = () => { a.onloadedmetadata = null; playSegment(); };
       a.onerror = () => fail('load-error');
       later(() => { if (a.readyState < 1) fail('load-timeout'); }, LOAD_TIMEOUT_MS);
-      if (a.src !== args.url) a.src = args.url;
+      // Do not restart a load that prewarm already has in flight for
+      // this same file: load() again throws the fetched bytes away and
+      // the correction starts later, not sooner.
+      const sameSrc = a.src === args.url;
+      if (!sameSrc) a.src = args.url;
       a.preload = 'auto';
-      a.load();
+      if (!sameSrc || a.error || a.networkState === 3 /* NETWORK_NO_SOURCE */) a.load();
     };
     begin();
   };

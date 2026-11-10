@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
+import { resetHints } from '../lib/hints';
+import Hint from '../components/Hint';
 import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
@@ -56,6 +58,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // the id of the open door. All section state lives in this
   // component, so switching hub<->detail never loses a control.
   const [openDoor, setOpenDoor] = useState<string | null>(null);
+  const [hintsBack, setHintsBack] = useState(false);
   // Shared back button (2026-11-06): while a Settings door is open,
   // the shell BackButton goes back to the hub instead of الرئيسية.
   // Cleanup on close/unmount clears it, so no stale target survives.
@@ -611,11 +614,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     return (
       <div className="border-t border-hairline mt-5 pt-4">
         <p className="font-semibold text-accent-800 mb-1">{isTafsir ? 'تفسير الآيات (صوت)' : 'ملفات الجهني (حدر)'}</p>
-        <p className="text-sm text-accent-600 mb-3">
+        <Hint id="set-audio-kind"><p className="text-sm text-accent-600 mb-3">
           {isTafsir
             ? 'مقاطع تفسير الميسر — تسجيل مجمع الملك فهد، مقطع لكل آية. المقطع الواحد حوالي ٢٥٠ كيلوبايت — سورة الفاتحة حوالي ٢ ميجابايت، والبقرة حوالي ٧٠ ميجابايت.'
             : 'ملف السورة كامل بصوت الجهني — للاستماع الحدر، ولتصحيحات التسميع (من جهازك بدل النت فتبقى أسرع). سور جزء عم (٧٨–١١٤) هي اللي التصحيح بيستخدمها دلوقتي، بس أي سورة تنفع للحدر. ملف البقرة حوالي ٩٦ ميجابايت.'}
-        </p>
+        </p></Hint>
         {isTafsir && !tafsirConfigured() ? (
           <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
             مقاطع التفسير لم تُرفع بعد — سيُتاح التحميل هنا بعد رفع المقاطع.
@@ -774,7 +777,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <CalendarDays className="w-5 h-5 text-amber-600" /> وردك اليومي
           </h2>
-          <p className="text-sm text-accent-600 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p>
+          <Hint id="set-wird"><p className="text-sm text-accent-600 mb-4">حدّد أجزاء ورد اليوم الثلاثة هنا — عدد الصفحات لكل جزء (0 يعني لا ورد من هذا النوع اليوم) — وبعدين اضغط حفظ مرة واحدة.</p></Hint>
           {(Object.keys(WIRD_TYPE_LABEL) as WirdType[]).map((k) => (
             <div key={k} className="flex items-center justify-between gap-3 mb-3">
               <p className="text-sm font-semibold text-accent-700">{WIRD_TYPE_LABEL[k]}</p>
@@ -815,7 +818,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Sparkles className="w-5 h-5 text-amber-link" /> اختر شكل الصفحة بنفسك
           </h2>
-          <p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p>
+          <Hint id="set-edition"><p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p></Hint>
           <div className="grid gap-3 sm:grid-cols-2">
             {EDITIONS.map((ed, i) => (
               <button key={ed.id} onClick={() => pickEdition(i)}
@@ -948,9 +951,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
           </h2>
-          <p className="text-sm text-accent-600 mb-4">
+          <Hint id="set-pages"><p className="text-sm text-accent-600 mb-4">
             مصحف المدينة هو الافتراضي: حمّل صفحاته الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي. مفيش حاجة تانية بتتحمل لوحدها.
-          </p>
+          </p></Hint>
           {!dlSupported ? (
             <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
               جهازك مش بيدعم تحميل الصفحات على الجهاز — الصفحات هتفضل تتحمل من النت زي قبل كده.
@@ -1029,7 +1032,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   edition's size first (confirm box). */}
               <div className="border-t border-hairline mt-5 pt-4">
                 <p className="font-semibold text-accent-800 mb-1">مصاحف إضافية — اختياري</p>
-                <p className="text-sm text-accent-600 mb-3">مفيش مصحف بيتحمل لوحده — كل واحد بيتحمل بس لو اخترته من هنا، وبحجمه قبل ما تدوس تحميل.</p>
+                <Hint id="set-extra-editions"><p className="text-sm text-accent-600 mb-3">مفيش مصحف بيتحمل لوحده — كل واحد بيتحمل بس لو اخترته من هنا، وبحجمه قبل ما تدوس تحميل.</p></Hint>
                 <div className="grid gap-3">
                   {EDITION_DOWNLOADS.filter((e) => e.id !== 'madinah').map((ed) => {
                     const st = optDl[ed.id] ?? emptyOpt();
@@ -1129,9 +1132,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Headphones className="w-5 h-5 text-emerald-600" /> التنزيلات الصوتية
           </h2>
-          <p className="text-sm text-accent-600 mb-4">
+          <Hint id="set-audio"><p className="text-sm text-accent-600 mb-4">
             حمّل الصوت على جهازك واسمعه من غير نت — سورة سورة، مش كله مرة واحدة. اللي تحمّله هنا بيشتغل من جهازك حتى لو النت مقطوع، واللي ما تحمّلش بيفضل يشتغل من النت زي قبل كده. مفيش حاجة بتتحمل لوحدها.
-          </p>
+          </p></Hint>
           {!audioSupported ? (
             <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
               جهازك مش بيدعم التحميل على الجهاز — الصوت هيفضل يشتغل من النت زي قبل كده.
@@ -1173,9 +1176,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                 )}
               </div>
-              <p className="text-xs text-accent-600 mt-5 leading-relaxed">
+              <Hint id="set-audio-note"><p className="text-xs text-accent-600 mt-5 leading-relaxed">
                 ملحوظة: التسميع بالميكروفون نفسه بيحتاج نت — دي حدود المتصفح، مش التطبيق. اللي بيشتغل دون نت هنا هو الاستماع (الختمة والتفسير والحدر)، وملفات الجهني المحملة بتخلي تصحيحات التسميع أسرع لأنها من جهازك بدل النت.
-              </p>
+              </p></Hint>
               <p className="text-xs text-accent-600 mt-2 leading-relaxed">
                 {audioStorage?.persisted === true
                   ? 'التخزين محمي من المسح التلقائي على جهازك ✓ — والقوائم هنا هتبين الناقص لو حصل أي مسح، وتحميله تاني بيرجّعه.'
@@ -1252,9 +1255,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
             <Compass className="w-5 h-5 text-emerald-600" /> جولة تعريفية
           </h2>
-          <p className="text-sm text-accent-600 mb-4 leading-relaxed">
+          <Hint id="set-tour"><p className="text-sm text-accent-600 mb-4 leading-relaxed">
             جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسمّع لي، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
-          </p>
+          </p></Hint>
           <button
             onClick={() => {
               clearOnboardingDone();
@@ -1264,6 +1267,14 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             onPointerDown={pressFeedback}
             className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
             إعادة الجولة التعريفية
+          </button>
+          {/* Explanations retire after three views (lib/hints.ts); this
+              brings them all back. */}
+          <button
+            onClick={() => { resetHints(); setHintsBack(true); }}
+            onPointerDown={pressFeedback}
+            className="w-full mt-3 py-3 bg-white border-2 border-emerald-700 text-emerald-800 text-base font-bold rounded-xl polish-press polish-focus">
+            {hintsBack ? 'رجّعنا الشرح ✓' : 'رجّع الشرح المختصر في كل الصفحات'}
           </button>
         </section>
             </>)}

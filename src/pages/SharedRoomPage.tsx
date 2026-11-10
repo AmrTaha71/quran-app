@@ -1,4 +1,5 @@
 import { roomLabel } from '../lib/roomLabel';
+import Hint from '../components/Hint';
 import { useEffect, useRef, useState } from 'react';
 import type { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -527,9 +528,9 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
           <Users className="w-6 h-6" /> {roomLabel()}
         </h1>
-        <p className="text-slate-600 text-sm">
+        <Hint id="room-intro"><p className="text-slate-600 text-sm">
           افتحوا نفس الآية مع بعض، وتكلموا بالصوت أو بالكتابة، من غير ما تحتاجوا حساب.
-        </p>
+        </p></Hint>
 
         <button
           onPointerDown={pressFeedback}

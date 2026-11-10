@@ -3,6 +3,7 @@
 // matching page opens. Not understood -> shows what was heard and
 // asks again; nothing opens by guess. (2026-11-08)
 import { useState } from 'react';
+import Hint from './Hint';
 import { parseVoiceCommand, surahGlobalRange, surahName, type VoiceAction } from '../lib/voiceCommand';
 import { pressFeedback } from '../lib/pressFeedback';
 
@@ -107,7 +108,7 @@ export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }:
         </div>
       )}
       {state !== 'listening' && !note && !askSurah && (
-        <p className="text-center text-xs text-accent-600">قول: «اقرأ الكهف» • «اسمع الملك» • «سمّعلي الشمس» • «المتشابهات» — أو قول اسم السورة بس وأنا أسألك</p>
+        <Hint id="orderme-examples"><p className="text-center text-xs text-accent-600">قول: «اقرأ الكهف» • «اسمع الملك» • «سمّعلي الشمس» • «المتشابهات» — أو قول اسم السورة بس وأنا أسألك</p></Hint>
       )}
       {note && <p className="text-center text-sm text-accent-700 bg-white/80 rounded-xl px-3 py-2">{note}</p>}
     </div>

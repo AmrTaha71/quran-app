@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio, ExternalLink as HubExternal } from 'lucide-react';
+import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
 import {
   Check,
@@ -2409,8 +2411,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         {hubView === 'hub' && (
         <div className="mb-4">
           <p className="font-semibold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
-          <p className="text-sm text-accent-600 mb-4">اضغط على كارت لاختيار التفاصيل والبدء.</p>
-          <p className="text-xs text-accent-600 mb-4">لتوفير البطارية، يمكنك قفل الشاشة.</p>
+          <Hint id="listen-free"><p className="text-sm text-accent-600 mb-4">اضغط على كارت لاختيار التفاصيل والبدء. ولتوفير البطارية، يمكنك قفل الشاشة.</p></Hint>
           {/* Saved journey resumes first, so a returning journey
               user continues in one tap without entering a card. */}
           {THREE_MODES.map((m) => {
@@ -2461,11 +2462,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   }}
                   className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
                 >
+                  <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true">{m.id === 'single' ? <HubUser className="w-6 h-6" /> : m.id === 'varied' ? <HubShuffle className="w-6 h-6" /> : <HubLight className="w-6 h-6" />}</span><span className="flex-1 min-w-0">
                   <span className="block text-lg">{m.name}</span>
-                  <span className="block text-sm font-normal text-amber-100 mt-1">{m.description}</span>
+                  <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">{m.description}</span></Hint>
                   {m.id === 'tadabbur' && !tafsirConfigured() && (
                     <span className="block text-xs font-normal text-amber-100 mt-2">مقاطع التفسير لم تُرفع بعد — سيُتاح هذا النمط بعد رفع المقاطع.</span>
                   )}
+                  </span></span>
                 </button>
               );
             })}
@@ -2474,8 +2477,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               onClick={() => setHubView('free')}
               className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
             >
+              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true"><HubList className="w-6 h-6" /></span><span className="flex-1 min-w-0">
               <span className="block text-lg">سماع حر</span>
-              <span className="block text-sm font-normal text-amber-100 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span>
+              <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span></Hint>
+              </span></span>
             </button>
             <button
               disabled={locked}
@@ -2490,8 +2495,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               }}
               className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
             >
+              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true"><HubRadio className="w-6 h-6" /></span><span className="flex-1 min-w-0">
               <span className="block text-lg">إذاعة التطبيق</span>
-              <span className="block text-sm font-normal text-amber-100 mt-1">تلاوات متواصلة من كل القراء بترتيب عشوائي. اضغط ابدأ بالداخل.</span>
+              <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">تلاوات متواصلة من كل القراء بترتيب عشوائي. اضغط ابدأ بالداخل.</span></Hint>
+              </span></span>
             </button>
             <a
               href="https://makkahlive.net/en/radio/quran-cairo"
@@ -2499,9 +2506,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               rel="noopener noreferrer"
               className="block w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 shadow-sm polish-hub-item"
             >
+              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-emerald-50 shrink-0" aria-hidden="true"><HubExternal className="w-6 h-6 text-emerald-700" /></span><span className="flex-1 min-w-0">
               <span className="block text-lg">إذاعة القرآن الكريم</span>
               <span className="block text-sm font-normal text-accent-800 mt-1">من القاهرة</span>
               <span className="block text-sm font-normal text-accent-600 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
+              </span></span>
             </a>
           </div>
         </div>

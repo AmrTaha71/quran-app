@@ -15,6 +15,7 @@ import './alive-ripple.css';
 import './alive-transitions.css';
 // 2026-11-07: water-glass sheen on doors + gently waving door icons.
 import './alive-glass.css';
+import './alive-tiles.css';
 // Elderly mode (2026-11-06): imported LAST so it wins the cascade —
 // its ~2x text / high-contrast / large-target rules must beat every
 // stylesheet above, including the alive files.

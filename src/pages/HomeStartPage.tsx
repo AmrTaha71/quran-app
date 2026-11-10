@@ -1,10 +1,11 @@
 import { roomLabel } from '../lib/roomLabel';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, Mic, MicVocal, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast } from 'lucide-react';
+import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast } from 'lucide-react';
+import { useHint } from '../lib/hints';
 import BigScreenSheet from '../components/BigScreenSheet';
 import BottomNav from '../components/BottomNav';
 import QRCodeSection from '../components/QRCodeSection';
@@ -105,6 +106,31 @@ function writeLinkOfDayCache(data: LinkOfDay): void {
   }
 }
 
+// One Home tile: a raised 3D medallion with the icon, the door's name,
+// and (first visits only) a three-or-four-word caption.
+function HomeTile({ icon, glaze, title, hint, small, expanded, onClick }: {
+  icon: ReactNode;
+  glaze: 'emerald' | 'gold' | 'night' | 'plain';
+  title: string;
+  hint?: string;
+  small?: boolean;
+  expanded?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onPointerDown={pressFeedback}
+      onClick={onClick}
+      aria-expanded={expanded}
+      className={`home-tile ${small ? 'home-tile-small' : ''} polish-focus`}
+    >
+      <span className={`tile-medal tile-medal-${glaze}`} aria-hidden="true">{icon}</span>
+      <span className="home-tile-title">{title}</span>
+      {hint && <span className="home-tile-hint">{hint}</span>}
+    </button>
+  );
+}
+
 export default function HomeStartPage({ session, onNavigate }: {
   session: import('@supabase/supabase-js').Session | null;
   onNavigate: (r: Route) => void;
@@ -150,17 +176,28 @@ export default function HomeStartPage({ session, onNavigate }: {
   const [mapOpen, setMapOpen] = useState(false);
   const [mutOpen, setMutOpen] = useState(false);
   const [bigOpen, setBigOpen] = useState(false);
-  const [quizOpen, setQuizOpen] = useState(false);
   const [tarteelOpen, setTarteelOpen] = useState(false);
   const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
-  // الحفظ door: expands to 3 start choices (resume / pick a place / from
-  // the beginning). Collapsed by default — the door looks exactly like
-  // the other Home doors.
-  const [hifzOpen, setHifzOpen] = useState(false);
-  // سمّع لنفسك door: expands to 4 range choices (by surah / by juz /
-  // by page / a passage). Collapsed by default — same pattern as the
-  // الحفظ door above; the door itself never navigates.
-  const [testOpen, setTestOpen] = useState(false);
+  // Home doors with choices (الحفظ / سمّع لي / اختبر نفسك): one panel
+  // open at a time, shown right under the tile grid and scrolled into
+  // view so the choices are never hidden below the fold.
+  const [panel, setPanel] = useState<null | 'hifz' | 'test' | 'quiz'>(null);
+  const hifzOpen = panel === 'hifz';
+  const testOpen = panel === 'test';
+  const quizOpen = panel === 'quiz';
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  function togglePanel(which: 'hifz' | 'test' | 'quiz'): void {
+    setPanel((p) => (p === which ? null : which));
+  }
+  useEffect(() => {
+    if (!panel) return;
+    const t = window.setTimeout(() => {
+      try { panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch { /* ignore */ }
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [panel]);
+  // Tile captions: shown the first three visits, then icon + title only.
+  const showHints = useHint('home-tiles');
   const [showPicker, setShowPicker] = useState(false);
   // "ابدأ من مكان معين" picker: chosen surah + ayah. The surah number
   // input and the name dropdown stay in sync through this state.
@@ -307,60 +344,43 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-5">
-        {/* App mark: the artwork itself, sized so the greeting and
-            the resume action stay visible without scrolling. */}
-        <div className="flex justify-center mb-5">
-          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" className="w-56 h-56 object-contain drop-shadow-md polish-hero-medal" />
+      <main className="max-w-5xl mx-auto px-4 py-4">
+        {/* Hero: the mark beside the greeting, compact, so the doors are
+            on screen at once (2026-11-10: was a 224px mark that pushed
+            every door below the fold). */}
+        <div className="rounded-2xl glass-card polish-card polish-fade-up p-3 mb-4 flex items-center gap-3">
+          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="" className="w-20 h-20 object-contain drop-shadow-md polish-hero-medal shrink-0" />
+          <div className="min-w-0">
+            <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}</p>
+            <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">
+              {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
+            </p>
+          </div>
         </div>
-        {/* «اعرض على الشاشة الكبيرة» (2026-11-09) */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => setBigOpen(true)}
-          className="w-full max-w-md mx-auto mb-4 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-emerald-700 bg-white text-emerald-800 font-bold text-lg polish-press"
-        >
-          <Cast className="w-6 h-6" /> اعرض على الشاشة الكبيرة
-        </button>
-        {bigOpen && <BigScreenSheet onClose={() => setBigOpen(false)} onRemote={() => { setBigOpen(false); onNavigate('room'); }} />}
-        {/* «اؤمرني»: voice command door, right under the app mark. */}
-        <div className="mb-5">
+
+        {/* «اؤمرني»: voice command door. */}
+        <div className="mb-4">
           <OrderMeButton onNavigate={onNavigate}
             onMutashabihat={() => setMutOpen(true)}
             onElderly={() => setElderlyMode(true)} />
         </div>
 
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-5 mb-4 text-center">
-          <p className="text-xl md:text-2xl font-bold text-ink">{ISLAMIC_GREETING}</p>
-          <p className="text-sm md:text-base text-ink-2 mt-1">
-            {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
-          </p>
+        {/* The four main doors. A tile with choices opens its panel right
+            under the grid; only one panel is open at a time. */}
+        <div className="home-tiles mb-3">
+          <HomeTile icon={<BookMarked />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
+            expanded={hifzOpen} onClick={() => { togglePanel('hifz'); setShowPicker(false); }} />
+          <HomeTile icon={<MicVocal />} glaze="gold" title="سمّع لي" hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
+            expanded={testOpen} onClick={() => togglePanel('test')} />
+          <HomeTile icon={<Award />} glaze="gold" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
+            expanded={quizOpen} onClick={() => togglePanel('quiz')} />
+          <HomeTile icon={<AudioLines />} glaze="emerald" title="الحق الإمام" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
+            onClick={() => onNavigate('follow')} />
         </div>
 
-        {/* المراجعة المستحقة moved to لوحتي (2026-11-07). */}
-
-
-        {/* الحفظ: a uniform door like the others (سمّع لنفسك / الحق الإمام /
-            استمع للقرآن). Tap to expand 3 start choices below it; tap
-            again to collapse. */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => { setHifzOpen(!hifzOpen); setShowPicker(false); }}
-          aria-expanded={hifzOpen}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '60ms' }}
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <BookOpen className="w-5 h-5 text-white" />
-          </span>
-          الحفظ
-          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${hifzOpen ? 'rotate-180' : ''}`} />
-        </button>
-
         {hifzOpen && (
-          // Sub-doors use grad-amber-door (gold): the level below the
-          // emerald main doors, so the two levels read apart at a glance.
-          // .alive-subdoors (alive-transitions.css): cascade entrance.
-          <div className="px-4 mb-4 alive-subdoors">
+          <div ref={panelRef} className="home-panel mb-4 alive-subdoors">
+            <p className="home-panel-title">الحفظ</p>
             {/* (a) resume from the saved position — hidden when the user
                 never opened the Mushaf (nothing to resume from). */}
             {lastPage.visited && (
@@ -385,11 +405,9 @@ export default function HomeStartPage({ session, onNavigate }: {
               aria-expanded={showPicker}
               className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
-                <MapPin className="w-4 h-4 text-white" />
-              </span>
+              <MapPin className="w-5 h-5 text-white" />
               ابدأ من مكان معين
-              <ChevronDown className={`w-4 h-4 text-white transition-transform ${showPicker ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-white alive-chevron ${showPicker ? 'rotate-180' : ''}`} />
             </button>
             {showPicker && (
               <div className="rounded-2xl glass-card polish-card p-4 mb-3">
@@ -453,30 +471,21 @@ export default function HomeStartPage({ session, onNavigate }: {
                 </p>
               </div>
             )}
-            {/* (c) from the very beginning: الفاتحة آية ١. */}
-            {/* 2026-11-06: «ابدأ من أول المصحف» removed here — it lives inside the الحفظ door. */}
-            {/* خريطة حفظي moved inside الحفظ (2026-11-08). */}
-            {/* خريطة حفظي (feature #1): an emerald door like the others,
-                right after الحفظ — it is about memorization. Tap to expand
-                the 30-Juz map (gold = memorized, amber tint = in progress,
-                grey = not yet); tapping a Juz jumps to it in the Mushaf.
-                No BottomNav tab. */}
+            {/* خريطة حفظي (feature #1): the 30-Juz map (gold = memorized,
+                amber tint = in progress, grey = not yet); tapping a Juz
+                jumps to it in the Mushaf. */}
             <button
               onPointerDown={pressFeedback}
               onClick={() => setMapOpen(!mapOpen)}
               aria-expanded={mapOpen}
-              className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-              style={{ animationDelay: '90ms' }}
+              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
             >
-              <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-                <Map className="w-5 h-5 text-white" />
-              </span>
+              <Map className="w-5 h-5 text-white" />
               خريطة حفظي
-              <ChevronDown className={`w-5 h-5 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
             </button>
-
             {mapOpen && (
-              <div className="px-4 mb-4 alive-subdoors">
+              <div className="mt-3">
                 <MemorizationMap
                   run={memorizedRun}
                   onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
@@ -486,179 +495,82 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* سمّع لنفسك: directly after the resume card, above استمع للقرآن.
-            Tap to expand 4 range choices below it; tap again to collapse.
-            Only a choice tap navigates (to 'test', with the chosen range
-            stored for SelfTestPage to open on mount). */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => setTestOpen(!testOpen)}
-          aria-expanded={testOpen}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '120ms' }}
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <MicVocal className="w-5 h-5 text-white" />
-          </span>
-          سمّع لي
-          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${testOpen ? 'rotate-180' : ''}`} />
-        </button>
-
+        {/* سمّع لي: 4 range choices. Only a choice tap navigates (to
+            'test', with the chosen range stored for SelfTestPage). */}
         {testOpen && (
-          // Sub-doors use grad-amber-door (gold): the level below the
-          // emerald main doors, so the two levels read apart at a glance.
-          // .alive-subdoors (alive-transitions.css): cascade entrance.
-          <div className="px-4 mb-4 alive-subdoors">
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => openTestRange('surah', onNavigate)}
-              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              بالسورة
-            </button>
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => openTestRange('juz', onNavigate)}
-              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              بالجزء
-            </button>
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => openTestRange('page', onNavigate)}
-              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              بالصفحة
-            </button>
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => openTestRange('passage', onNavigate)}
-              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              فقرة معينة
-            </button>
+          <div ref={panelRef} className="home-panel mb-4">
+            <p className="home-panel-title">سمّع لي — اختار المدى</p>
+            <div className="grid grid-cols-2 gap-3 alive-subdoors">
+              {([['surah', 'بالسورة'], ['juz', 'بالجزء'], ['page', 'بالصفحة'], ['passage', 'فقرة معينة']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onPointerDown={pressFeedback}
+                  onClick={() => openTestRange(id, onNavigate)}
+                  className="py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* اختبر نفسك: directly under سمّع لنفسك. Expands to two sub-doors:
-            ترتيل (right) then المتشابهات (left). */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => setQuizOpen(!quizOpen)}
-          aria-expanded={quizOpen}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus"
-        >
-          اختبر نفسك
-          <ChevronDown className={`w-5 h-5 text-white alive-chevron ${quizOpen ? 'rotate-180' : ''}`} />
-        </button>
+        {/* اختبر نفسك: ترتيل, المتشابهات, and the comprehensive test. */}
         {quizOpen && (
-          <div className="px-4 mb-4 flex gap-3 alive-subdoors">
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => setTarteelOpen(true)}
-              className="flex-1 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-            >
-              ترتيل
-            </button>
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => setMutOpen(true)}
-              className="flex-1 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-            >
-              المتشابهات
-            </button>
+          <div ref={panelRef} className="home-panel mb-4">
+            <p className="home-panel-title">اختبر نفسك</p>
+            <div className="grid grid-cols-2 gap-3 alive-subdoors">
+              <button
+                onPointerDown={pressFeedback}
+                onClick={() => setTarteelOpen(true)}
+                className="py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+              >
+                ترتيل
+              </button>
+              <button
+                onPointerDown={pressFeedback}
+                onClick={() => setMutOpen(true)}
+                className="py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+              >
+                المتشابهات
+              </button>
+              <button
+                onPointerDown={pressFeedback}
+                onClick={() => setComprehensiveOpen(true)}
+                className="col-span-2 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
+              >
+                اختبار شامل (١٠٠ درجة)
+              </button>
+            </div>
           </div>
         )}
-        {quizOpen && (
-          <div className="px-4 mb-4 alive-subdoors">
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => setComprehensiveOpen(true)}
-              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-            >
-              اختبار شامل (100 درجة)
-            </button>
-          </div>
-        )}
 
-        {/* الحق الإمام: directly under سمّع لنفسك (user order 2026-11-04). */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => onNavigate('follow')}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '180ms' }}
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Mic className="w-5 h-5 text-white" />
-          </span>
-          الحق الإمام
-        </button>
+        {/* Listening + modes: smaller tiles, one glance. */}
+        <div className="home-tiles home-tiles-small mb-4">
+          <HomeTile small icon={<Headphones />} glaze="night" title="استمع للقرآن" hint={showHints ? 'والشاشة مقفولة' : undefined}
+            onClick={() => onNavigate('listen')} />
+          <HomeTile small icon={<SunMoon />} glaze="night" title="الأذكار" hint={showHints ? 'صباح ومساء' : undefined}
+            onClick={() => onNavigate('adhkar')} />
+          <HomeTile small icon={<Users />} glaze="emerald" title={roomLabel()} hint={showHints ? 'راجعوا مع بعض' : undefined}
+            onClick={() => onNavigate('room')} />
+          <HomeTile small icon={<Glasses />} glaze="plain" title="صفحة جدو" hint={showHints ? 'خط كبير وبسيط' : undefined}
+            onClick={() => setElderlyMode(true)} />
+          <HomeTile small icon={<Cast />} glaze="plain" title="الشاشة الكبيرة" hint={showHints ? 'على التلفزيون' : undefined}
+            onClick={() => setBigOpen(true)} />
+          <HomeTile small icon={<Settings />} glaze="plain" title="الإعدادات"
+            onClick={() => onNavigate('settings')} />
+        </div>
+        {bigOpen && <BigScreenSheet onClose={() => setBigOpen(false)} onRemote={() => { setBigOpen(false); onNavigate('room'); }} />}
 
-
-
-        {/* استمع للقرآن: full door, same size as الحق الإمام. */}
         {listeningWird && (
-          <p className="text-sm text-emerald-800 font-semibold text-center mb-2">
-            لديك ورد استماع محفوظ: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {listeningWird.ayah}
-          </p>
+          <button
+            onPointerDown={pressFeedback}
+            onClick={() => onNavigate('listen')}
+            className="w-full text-sm text-emerald-800 font-semibold text-center mb-4 py-2 rounded-xl bg-emerald-50/80 border border-emerald-200 polish-press polish-focus"
+          >
+            ورد الاستماع: سورة {SURAHS.find((s) => s.no === listeningWird.surah)?.name || listeningWird.surah} — آية {toArabicIndic(listeningWird.ayah)}
+          </button>
         )}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => onNavigate('listen')}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '240ms' }}
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <Headphones className="w-5 h-5 text-white" />
-          </span>
-          استمع للقرآن
-          <span className="text-xs font-semibold text-emerald-900 bg-amber-100/95 rounded-full px-2 py-0.5">اقفل الشاشة لو عايز</span>
-        </button>
-
-        {/* أذكار الصباح والمساء: LIVE — generated-voice clips
-            (46 clips, male/female toggle in the player). Placed
-            directly after the listen card: the audio hub. */}
-        {/* استمع للأذكار: full door, same size as الحق الإمام. */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => onNavigate('adhkar')}
-          className="w-full py-4 mb-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '300ms' }}
-        >
-          <span className="flex items-center justify-center w-9 h-9 rounded-full bg-white/20">
-            <SunMoon className="w-5 h-5 text-white" />
-          </span>
-          استمع للأذكار
-          <span className="text-xs font-semibold text-emerald-900 bg-amber-100/95 rounded-full px-2 py-0.5">(اقفل الشاشة لو عايز)</span>
-        </button>
-
-
-
-        {/* Mode doors at the bottom of Home: «راجع مع الرفيق» (shared room, left) and «صفحة جدو» (right).
-            Elderly / low-vision switches the same persisted mode as Settings. Children door removed. */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <button
-            onPointerDown={pressFeedback}
-            onClick={() => onNavigate('room')}
-            className="py-4 px-3 bg-white border-2 border-emerald-600 text-emerald-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base polish-press polish-focus"
-          >
-            <Users className="w-8 h-8" />
-            <span>{roomLabel()}</span>
-          </button>
-          <button
-            onPointerDown={pressFeedback}
-            onClick={() => setElderlyMode(true)}
-            className="py-4 px-3 bg-white border-2 border-emerald-600 text-emerald-800 font-bold rounded-xl flex flex-col items-center justify-center gap-2 text-base polish-press polish-focus"
-          >
-            <Glasses className="w-8 h-8" />
-            صفحة جدو
-          </button>
-        </div>
-
-        {/* Share app (moved from لوحتي, 2026-11-04): after the adhkar card. */}
-        <div className="mb-4 qr-home">
-          <QRCodeSection />
-        </div>
 
         {/* تربيط اليوم: real approved link only; hidden on any failure */}
         {linkOfDay && (
@@ -687,16 +599,10 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* الإعدادات: standalone button, kept on Home (user decision
-            2026-11-04); الحق الإمام moved to directly under سمّع لنفسك. */}
-        <button
-          onPointerDown={pressFeedback}
-          onClick={() => onNavigate('settings')}
-          className="w-full py-3.5 mb-4 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press polish-press-depth polish-focus door-enter"
-          style={{ animationDelay: '360ms' }}
-        >
-          <Settings className="w-5 h-5 text-white" /> الإعدادات
-        </button>
+        {/* Share app: last, out of the way of the daily doors. */}
+        <div className="mb-4 qr-home">
+          <QRCodeSection />
+        </div>
 
         <p className="text-center text-sm text-emerald-800 font-semibold mt-6">
           معك في كل آية، حتى نُتمّ حفظ كتاب الله

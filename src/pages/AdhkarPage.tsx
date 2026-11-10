@@ -22,6 +22,7 @@
 // in the description.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Hint from '../components/Hint';
 import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle, Timer } from 'lucide-react';
 import {
   setSleepTimer,
@@ -949,9 +950,9 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           ))}
         </div>
 
-        <p className="text-center text-xs text-stone-500 mt-4">
+        <Hint id="adhkar-voices"><p className="text-center text-xs text-stone-500 mt-4">
           آيات القرآن تُتلى بصوت قارئ، والأدعية بصوت مولّد بالذكاء الاصطناعي. التكرار يتم في المشغّل.
-        </p>
+        </p></Hint>
       </div>
       {blackScreen && (
         <div
