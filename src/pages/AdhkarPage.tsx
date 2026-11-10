@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Hint from '../components/Hint';
-import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle, Timer } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, RotateCcw, SunMoon, AlertCircle } from 'lucide-react';
 import {
   setSleepTimer,
   clearSleepTimer,
@@ -769,54 +769,6 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
 
   const pct = progress.d > 0 ? Math.min(100, (progress.t / progress.d) * 100) : 0;
 
-  // Sleep timer (#10): always visible (not only while playing) so
-  // the user can arm it before starting, and so a timer running
-  // after playback stopped stays visible and cancellable.
-  // Emerald/gold only — no new hue.
-  const sleepTimerBlock = (
-    <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mt-4">
-      <p className="font-semibold text-accent-800 flex items-center gap-2">
-        <Timer className="w-5 h-5 text-emerald-700" />
-        مؤقت النوم
-      </p>
-      {sleepRemainingMs !== null ? (
-        <div>
-          <p className="text-sm text-accent-800 mt-2">
-            سيتوقف التشغيل بعد{' '}
-            <span className="font-bold">{formatSleepRemaining(sleepRemainingMs)}</span>
-          </p>
-          <p className="text-xs text-accent-600 mt-1">
-            يعمل حتى لو انتقلت لصفحة تانية — لكنه لا يعمل بعد إغلاق التطبيق.
-          </p>
-          <button
-            onClick={() => clearSleepTimer()}
-            className="mt-3 w-full py-2.5 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-          >
-            إلغاء المؤقت
-          </button>
-        </div>
-      ) : (
-        <div>
-          <p className="text-sm text-accent-600 mt-2">اختار بعد قد إيه يتوقف التشغيل لوحده:</p>
-          <div className="grid grid-cols-3 gap-2 mt-2" role="group" aria-label="مؤقت النوم">
-            {SLEEP_TIMER_OPTIONS.map((m) => (
-              <button
-                key={m}
-                onClick={() => setSleepTimer(m)}
-                className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-              >
-                {SLEEP_TIMER_LABELS[m]}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-accent-600 mt-2">
-            مؤقت واحد مشترك لكل أنواع الاستماع؛ لو ظبطت واحد جديد يلغي القديم.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-
   return (
     <main className="min-h-screen page-bg pb-24 px-4 pt-6" dir="rtl">
       <div className="max-w-2xl mx-auto">
@@ -927,7 +879,6 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           )}
         </div>
 
-        {sleepTimerBlock}
 
         {/* List: tap to jump */}
         <div className="bg-white rounded-2xl border border-hairline shadow-sm p-3 mt-4">

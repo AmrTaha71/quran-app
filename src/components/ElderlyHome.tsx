@@ -145,7 +145,7 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
           onClick={() => onNavigate('listen')}
           className={`${BIG_BTN} bg-emerald-600 text-white`}
         >
-          <Headphones className="w-7 h-7" /> استمع للورد
+          <Headphones className="w-7 h-7" /> الورد
         </button>
       </div>
 

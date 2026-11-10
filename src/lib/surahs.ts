@@ -68,3 +68,9 @@ export function getGlobalAyahNumber(surahNo: number, ayahNo: number): number {
   for (let i = 0; i < surahNo - 1; i++) total += SURAH_AYAH_COUNTS[i];
   return total + ayahNo;
 }
+
+// Madani surahs as labelled in the Madinah mushaf; every other surah is Makki.
+const MADANI_SURAHS = new Set([2, 3, 4, 5, 8, 9, 13, 22, 24, 33, 47, 48, 49, 55, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 76, 98, 99, 110]);
+export function surahPlace(no: number): 'مكية' | 'مدنية' {
+  return MADANI_SURAHS.has(no) ? 'مدنية' : 'مكية';
+}

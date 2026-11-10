@@ -188,7 +188,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                   className={`py-3 rounded-xl text-sm font-bold ${level === l.id ? 'grad-amber-door text-white' : 'bg-gray-100 text-accent-600'}`}>{l.name}</button>
               ))}
             </div>
-            <button onClick={start} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">تمام، سيف</button>
+            <button onClick={start} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">احفظ وابدأ</button>
 
             {history.length > 0 && (
               <div className="mt-6">

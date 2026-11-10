@@ -15,7 +15,7 @@ import { useUserLists } from '../components/UserLists';
 import { memorizedFromStart } from '../lib/homeFeatures';
 import { pressFeedback } from '../lib/pressFeedback';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
-import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, surahPlace } from '../lib/surahs';
 import { readListeningWird } from '../lib/listenPlayback';
 import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { getJuzFromPage } from '../lib/quranIndex';
@@ -443,7 +443,7 @@ export default function HomeStartPage({ session, onNavigate }: {
                   >
                     {SURAHS.map((s) => (
                       <option key={s.no} value={s.no}>
-                        {toArabicIndic(s.no)} — {s.name}
+                        {toArabicIndic(s.no)} — {s.name} ({surahPlace(s.no)})
                       </option>
                     ))}
                   </select>
