@@ -499,7 +499,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             'test', with the chosen range stored for SelfTestPage). */}
         {testOpen && (
           <div ref={panelRef} className="home-panel mb-4">
-            <p className="home-panel-title">سمّع لي — اختار المدى</p>
+            <p className="home-panel-title">سمّع لي — اختار النطاق</p>
             <div className="grid grid-cols-2 gap-3 alive-subdoors">
               {([['surah', 'بالسورة'], ['juz', 'بالجزء'], ['page', 'بالصفحة'], ['passage', 'فقرة معينة']] as const).map(([id, label]) => (
                 <button

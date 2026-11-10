@@ -142,7 +142,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 {checks[c] ? '✓ ' : '○ '}{c}
               </button>
             ))}
-            <p className="text-sm text-accent-600">الدرجة المقترحة من القائمة: {suggested} من {max}</p>
+            <p className="text-sm text-accent-600">الدرجة: {suggested} من {max}</p>
           </div>
         )}
         <div className="flex flex-wrap gap-2">
@@ -152,7 +152,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
           ))}
         </div>
         <button onClick={() => goNext(id, suggested)}
-          className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">حفظ الدرجة المقترحة ({suggested})</button>
+          className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">احفظ الدرجة ({suggested})</button>
       </div>
     );
   }

@@ -953,7 +953,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => {
     if (phase !== 'setup') { setBackTarget(null); return () => setBackTarget(null); }
     if (lobbyDoor === 'range' && rangeChoice !== null) {
-      setBackTarget({ label: 'عودة لاختيار المدى', onBack: () => setRangeChoice(null) });
+      setBackTarget({ label: 'عودة لاختيار النطاق', onBack: () => setRangeChoice(null) });
       return () => setBackTarget(null);
     }
     if (lobbyDoor !== null) {
@@ -1153,7 +1153,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `rel` is ms since the current test started (performance.now);
   // `t` is the wall-clock epoch ms. Timestamps come from the same
   // clock the watchdog uses, so log order matches engine order.
-  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; errBody?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number; playbackRate?: number; corrRate?: string };
+  type DiagEvent = { k: string; t: number; rel: number; text?: string; final?: boolean; code?: string; label?: string; ok?: boolean; msFromPrompt?: number; fetchMs?: number; timeoutMs?: number; hit?: boolean; hits?: number; misses?: number; hitRatio?: number; entries?: number; skipped?: number; storageBytes?: number | null; reason?: string; errBody?: string; words?: string[]; indices?: number[]; trigger?: string; ayah?: number; gen?: number; playbackRate?: number; corrRate?: string; ms?: number; audioMs?: number; backend?: string };
   const DIAG_EVENT_CAP = 2000;
   const DIAG_DISPLAY_CAP = 500;
   const diagEventsRef = useRef<DiagEvent[]>([]);
@@ -2277,7 +2277,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (availNow.length === 0) {
       const parts = planRangeReciters(startGlobal, endGlobal);
       if (parts) {
-        setReciterNote(`المدى متقسم بين ${parts.length} ${parts.length === 1 ? 'قارئ' : 'قراء'}`);
+        setReciterNote(`النطاق متقسم بين ${parts.length} ${parts.length === 1 ? 'قارئ' : 'قراء'}`);
         setTimeout(() => setReciterNote(''), 4000);
       }
     }
@@ -4125,7 +4125,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     contPromptingRef.current = true;
     setContPrompting(true);
     userStopRef.current = true;
-    try { recRef.current?.stop(); } catch {}
+    // On-device ear: abort, not stop. Its results are ignored from here on
+    // anyway (recRef is cleared), and stop() left every queued segment
+    // running in the shared worker, so the session that resumes after this
+    // correction waited behind them and heard nothing (diag 2026-11-11).
+    try {
+      const r = recRef.current;
+      if (r instanceof QuranModelRecognition) r.abort(); else r?.stop();
+    } catch {}
     recRef.current = null;
     liveRef.current.contListening = false;
     setContListening(false);
@@ -4931,6 +4938,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (allOk) playCorrectChime(); else playWrongBuzzer();
   };
 
+  const repairCutLastWord = (chosen: string): string => {
+    try {
+      const raw = chosen.trim().split(/\s+/).filter(Boolean);
+      const toks = spokenTokens(chosen);
+      if (toks.length === 0 || raw.length !== toks.length) return chosen;
+      const last = toks[toks.length - 1];
+      if (last.length < 2) return chosen;
+      const expected = liveRef.current.contExpected;
+      const norms = expected.map((w) => w.norm);
+      const before = spokenTokens(`${liveRef.current.contFinals} ${raw.slice(0, -1).join(' ')}`);
+      const al = liveRef.current.contStrict ? alignWordsStrict(norms, before) : alignWords(norms, before);
+      let lastIdx = -1;
+      al.matched.forEach((m, i) => { if (m) lastIdx = i; });
+      const next = norms[lastIdx + 1];
+      if (!next || next === last) return chosen;
+      if (next.length - last.length !== 1 || !next.startsWith(last)) return chosen;
+      return [...raw.slice(0, -1), next].join(' ');
+    } catch { return chosen; }
+  };
+
   const startContinuousMic = () => {
     // DIAG: tap (button text is ابدأ vs كمّل by transcript state;
     // silent restarts route through trySilentRestart, which logs
@@ -5031,8 +5058,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (res.isFinal || r.isFinal) {
           sawFinal = true;
           // [P5] Narrow alternative-rescue (see helpers).
-          const chosen = pickFinalTranscript(res, expectedNorms);
-          diagPush('result', { final: true, text: chosen });
+          let chosen = pickFinalTranscript(res, expectedNorms);
+          // On-device ear: a segment is cut at a short pause, and the cut
+          // can fall one letter before the end of a word (diag 2026-11-11:
+          // «لا ريب في» | «هدى للمتقين» — «فيه» was marked wrong). When the
+          // segment's last word is the next expected word minus its last
+          // letter, take the expected word.
+          if (useModelEar) {
+            const fixed = repairCutLastWord(chosen);
+            if (fixed !== chosen) { diagPush('result', { final: true, text: chosen, reason: 'cut-word-repaired' }); chosen = fixed; }
+          }
+          diagPush('result', { final: true, text: chosen, ms: e.ms, audioMs: e.audioMs, backend: e.backend });
           diagFinalsRef.current.push(chosen);
           liveRef.current.contFinals = `${liveRef.current.contFinals} ${chosen}`.trim();
           setTranscript(liveRef.current.contFinals);
@@ -5548,7 +5584,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
                       <ListOrdered className="w-6 h-6 text-emerald-800" />
                     </span>
-                    <span className="block text-base font-semibold text-ink">اختر المدى</span>
+                    <span className="block text-base font-semibold text-ink">اختر النطاق</span>
                     <span className="block text-xs text-ink-2 mt-1">سورة {surahName} — من آية {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى آية {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}</span>
                   </button>
                   <button onClick={() => setLobbyDoor('settings')}

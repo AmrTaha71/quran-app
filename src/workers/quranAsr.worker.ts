@@ -12,6 +12,25 @@ const MODEL = 'iqbalaesthetic/Basira';
 type Asr = (audio: Float32Array, opts?: Record<string, unknown>) => Promise<{ text: string } | { text: string }[]>;
 let asr: Asr | null = null;
 let backend = '';
+let benchMs = 0;
+
+// Device speed check (2026-11-11). A diag from an Intel Mac showed about
+// 15s of model time per recited segment, which makes live correction
+// useless. Whisper always works on a padded 30s window, so one short run
+// is a fair measure of the device. The page uses benchMs to decide whether
+// this device can use the on-device ear at all.
+const SLOW_MS = 2500;
+async function bench(p: Asr): Promise<number> {
+  const audio = new Float32Array(16000 * 3);
+  for (let i = 0; i < audio.length; i++) audio[i] = (Math.random() - 0.5) * 0.002;
+  const t0 = performance.now();
+  try { await p(audio, { chunk_length_s: 30, stride_length_s: 5, max_new_tokens: 8 }); }
+  catch { await p(new Float32Array(16000 * 3), { chunk_length_s: 30, stride_length_s: 5 }); }
+  return Math.round(performance.now() - t0);
+}
+async function dispose(p: Asr | null) {
+  try { await (p as unknown as { dispose?: () => Promise<void> } | null)?.dispose?.(); } catch { /* ignore */ }
+}
 
 async function load() {
   if (asr) return;
@@ -19,15 +38,30 @@ async function load() {
     if (p.status === 'progress') self.postMessage({ type: 'progress', file: p.file, progress: p.progress });
   };
   const hasGpu = typeof (self as unknown as { navigator?: { gpu?: unknown } }).navigator?.gpu !== 'undefined';
+  let gpu: Asr | null = null;
+  let gpuMs = Infinity;
   if (hasGpu) {
     try {
-      asr = (await pipeline('automatic-speech-recognition', MODEL, { device: 'webgpu', dtype: 'q4', progress_callback: progress })) as unknown as Asr;
-      backend = 'webgpu-q4';
-      return;
-    } catch { asr = null; }
+      gpu = (await pipeline('automatic-speech-recognition', MODEL, { device: 'webgpu', dtype: 'q4', progress_callback: progress })) as unknown as Asr;
+      await bench(gpu); // first run pays for shader compilation
+      gpuMs = await bench(gpu);
+    } catch { await dispose(gpu); gpu = null; gpuMs = Infinity; }
   }
-  asr = (await pipeline('automatic-speech-recognition', MODEL, { device: 'wasm', dtype: 'q8', progress_callback: progress })) as unknown as Asr;
-  backend = 'wasm-q8';
+  if (gpu && gpuMs <= SLOW_MS) { asr = gpu; backend = 'webgpu-q4'; benchMs = gpuMs; return; }
+  // No GPU, or a GPU slower than the limit (weak integrated graphics):
+  // measure the CPU path too and keep whichever is faster.
+  let cpu: Asr | null = null;
+  let cpuMs = Infinity;
+  try {
+    cpu = (await pipeline('automatic-speech-recognition', MODEL, { device: 'wasm', dtype: 'q8', progress_callback: progress })) as unknown as Asr;
+    await bench(cpu);
+    cpuMs = await bench(cpu);
+  } catch (err) {
+    await dispose(cpu); cpu = null; cpuMs = Infinity;
+    if (!gpu) throw err;
+  }
+  if (cpu && cpuMs <= gpuMs) { await dispose(gpu); asr = cpu; backend = 'wasm-q8'; benchMs = cpuMs; }
+  else { await dispose(cpu); asr = gpu; backend = 'webgpu-q4'; benchMs = gpuMs; }
 }
 
 self.onmessage = async (e: MessageEvent) => {
@@ -35,7 +69,7 @@ self.onmessage = async (e: MessageEvent) => {
   try {
     if (msg.type === 'load') {
       await load();
-      self.postMessage({ type: 'ready', backend });
+      self.postMessage({ type: 'ready', backend, benchMs });
     } else if (msg.type === 'run') {
       await load();
       const t0 = performance.now();

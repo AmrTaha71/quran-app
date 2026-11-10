@@ -823,7 +823,6 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="flex items-center gap-2 mt-3">
           <SunMoon className="w-6 h-6 text-emerald-700" />
           <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">أذكار الصباح والمساء</h1>
-          <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-1 rounded-full">تلاوة وصوت مولّد</span>
         </div>
 
         {/* Wird tabs */}

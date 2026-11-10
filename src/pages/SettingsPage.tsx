@@ -583,15 +583,15 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // detail view, unchanged. The admin door renders only when its
   // section would (admin error or admin user), exactly as before.
   const doors = [
-    { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: 'أجزاء الورد الثلاثة وعدد الصفحات', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف والإطار الذهبي', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: 'الموقع والتنبيهات والصوت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'download', icon: Download, title: 'صفحات المصحف على جهازك', sub: 'تحميل الصفحات للقراءة دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'reciters', icon: Headphones, title: 'عايز مين يسمّعلك؟', sub: 'قارئ التصحيح والتسميع من غير نت', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
-    { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير والجهني دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ والجنس وصوت اللمس', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: 'لغة واجهة التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'download', icon: Download, title: 'تحميل المصحف', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'reciters', icon: Headphones, title: 'عايز مين يسمّعلك؟', sub: 'قارئ التصحيح والتسميع', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
+    { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -761,7 +761,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <d.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 text-emerald-800" />
                 </span>
                 <span className="block text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-ink">{d.title}</span>
-                <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>
+                {d.sub && <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>}
               </button>
             ))}
           </div>
@@ -949,7 +949,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             on any connection, even offline. Madinah edition only. */}
         <section id="sec-download" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Download className="w-5 h-5 text-emerald-600" /> صفحات المصحف على جهازك
+            <Download className="w-5 h-5 text-emerald-600" /> تحميل المصحف
           </h2>
           <Hint id="set-pages"><p className="text-sm text-accent-600 mb-4">
             مصحف المدينة هو الافتراضي: حمّل صفحاته الـ ٦٠٤ مرة واحدة على جهازك — بعدها تقليب الصفحات بيبقى فوري ومن غير نت، حتى لو الاتصال ضعيف. الحجم الكلي حوالي ٢٤٠ ميجابايت، ويفضل واي فاي. مفيش حاجة تانية بتتحمل لوحدها.

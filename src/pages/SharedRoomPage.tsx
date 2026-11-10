@@ -528,20 +528,23 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         <h1 className="text-2xl font-bold text-emerald-800 flex items-center gap-2">
           <Users className="w-6 h-6" /> {roomLabel()}
         </h1>
-        <Hint id="room-intro"><p className="text-slate-600 text-sm">
-          افتحوا نفس الآية مع بعض، وتكلموا بالصوت أو بالكتابة، من غير ما تحتاجوا حساب.
-        </p></Hint>
+        <p className="text-slate-600 text-base">صوت أو كتابة</p>
 
-        <button
-          onPointerDown={pressFeedback}
-          onClick={createRoom}
-          className="w-full py-4 bg-emerald-600 text-white font-bold rounded-xl text-lg"
-        >
-          ابدأ غرفة جديدة
-        </button>
+        <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
+          <p className="font-semibold text-emerald-900">لو إنت اللي هتبدأ</p>
+          <button
+            onPointerDown={pressFeedback}
+            onClick={createRoom}
+            className="w-full py-4 bg-emerald-600 text-white font-bold rounded-xl text-lg"
+          >
+            ابدأ
+          </button>
+          <p className="text-sm text-emerald-800">هيطلع لك كود — ابعته لصديقك</p>
+        </div>
 
-        <div className="bg-white rounded-xl border p-4 space-y-3">
-          <p className="font-semibold text-slate-800">أو ادخل بكود الغرفة</p>
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-3">
+          <p className="font-semibold text-amber-900">لو صديقك هو اللي بدأ</p>
+          <p className="text-sm text-amber-800">خليه يبعت لك الكود ودخّله هنا</p>
           <input
             aria-label="كود الغرفة"
             value={joinInput}
@@ -549,7 +552,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             maxLength={CODE_LENGTH}
             placeholder="مثال: K7P2QX"
             dir="ltr"
-            className="w-full border rounded-lg px-3 py-3 text-center text-xl tracking-widest uppercase"
+            className="w-full border rounded-lg px-3 py-3 text-center text-xl tracking-widest uppercase bg-white"
           />
           {joinError && <p className="text-sm text-red-600">{joinError}</p>}
           <button
@@ -557,7 +560,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             onClick={joinRoom}
             className="w-full py-3 bg-slate-800 text-white font-bold rounded-xl"
           >
-            ادخل الغرفة
+            ادخل
           </button>
         </div>
         {audioEl}

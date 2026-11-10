@@ -13,16 +13,48 @@ export type EarKind = 'model' | 'browser';
 
 const EAR_READY_KEY = 'quran-ear-ready';
 
+// Device too slow for the on-device ear (2026-11-11): set from the
+// worker's speed check at load, or after two recited segments in a row
+// that each took the model more than SLOW_SEGMENT_MS. The value carries a
+// version so a faster build can re-measure every device.
+const EAR_SLOW_KEY = 'quran-ear-slow';
+const EAR_SLOW_VERSION = 'v1';
+const SLOW_BENCH_MS = 2500;
+const SLOW_SEGMENT_MS = 3000;
+let slowStreak = 0;
+
+export function earIsSlow(): boolean {
+  try { return (localStorage.getItem(EAR_SLOW_KEY) || '').startsWith(`${EAR_SLOW_VERSION}:`); } catch { return false; }
+}
+function markEarSlow(ms: number): void {
+  try { localStorage.setItem(EAR_SLOW_KEY, `${EAR_SLOW_VERSION}:${Math.round(ms)}`); } catch { /* ignore */ }
+}
+function clearEarSlow(): void {
+  slowStreak = 0;
+  try { localStorage.removeItem(EAR_SLOW_KEY); } catch { /* ignore */ }
+}
+function browserEarUsable(): boolean {
+  try {
+    const w = window as any;
+    return !!(w.SpeechRecognition || w.webkitSpeechRecognition) && navigator.onLine !== false;
+  } catch { return false; }
+}
+
 /** The on-device ear is the default once it has loaded on this device;
- *  an explicit choice in the card always wins (2026-11-09). */
+ *  an explicit choice in the card wins (2026-11-09) — except on a device
+ *  measured too slow for it, where the browser's ear is used whenever it
+ *  is available and online (2026-11-11). */
 export function getEar(): EarKind {
   try {
+    if (earIsSlow() && browserEarUsable()) return 'browser';
     const v = localStorage.getItem(EAR_KEY);
     if (v === 'model' || v === 'browser') return v;
     return localStorage.getItem(EAR_READY_KEY) === '1' ? 'model' : 'browser';
   } catch { return 'browser'; }
 }
 export function setEar(k: EarKind): void {
+  // Choosing the on-device ear again asks for a fresh measurement.
+  if (k === 'model') clearEarSlow();
   try { localStorage.setItem(EAR_KEY, k); } catch { /* ignore */ }
 }
 
@@ -64,7 +96,7 @@ export function loadEar(): Promise<string> {
   if (loadPromise) return loadPromise;
   loadPromise = new Promise<string>((resolve, reject) => {
     const off = onEarMessage((m) => {
-      if (m.type === 'ready') { readyBackend = m.backend; try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
+      if (m.type === 'ready') { readyBackend = m.backend; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
       else if (m.type === 'error' && m.id === undefined) { off(); loadPromise = null; reject(new Error(m.message)); }
     });
     getWorker().postMessage({ type: 'load' });
@@ -251,8 +283,14 @@ export class QuranModelRecognition {
     this.inflight++;
     // Keep results in order: chain each transcription.
     this.queue = this.queue.then(async () => {
+      // A session that already ended must not keep the shared worker busy:
+      // its queued segments used to run to the end (about 15s each on a slow
+      // device) while the NEXT session's audio waited behind them and never
+      // came back (diag 2026-11-11: 42s of recitation, no result).
+      if (this.ended) { this.inflight--; return; }
       const r = await transcribe(audio);
       this.inflight--;
+      if (r) { slowStreak = r.ms > SLOW_SEGMENT_MS ? slowStreak + 1 : 0; if (slowStreak >= 2) markEarSlow(r.ms); }
       let text = (r?.text || '').trim();
       // Known Whisper hallucinations on noise/silence: never feed them in.
       if (/اشترك|القناة|ترجمة|موسيقى|شكرا للمشاهدة|subscribe/i.test(text)) text = '';
@@ -261,7 +299,8 @@ export class QuranModelRecognition {
         const result: any = [alt];
         result.isFinal = true;
         result.length = 1;
-        this.onresult?.({ resultIndex: 0, results: [result] });
+        // ms/backend/audioMs: how long the model took, for the diag file.
+        this.onresult?.({ resultIndex: 0, results: [result], ms: r?.ms, backend: readyBackend, audioMs: Math.round((n / TARGET_RATE) * 1000) });
       }
       if (this.stopped && this.inflight === 0) this.finishEnd();
     });

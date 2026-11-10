@@ -206,11 +206,11 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
               </>
             )}
             {options.length === 0 && mixed === null && (
-              <p className="text-sm text-amber-700 mb-4">ما فيش قارئ عنده توقيت كلمات لجزء من المدى ده. اختار مدى تاني.</p>
+              <p className="text-sm text-amber-700 mb-4">ما فيش قارئ عنده توقيت كلمات لجزء من النطاق ده. اختار نطاق تاني.</p>
             )}
             {options.length === 0 && mixed !== null && (
               <div className="text-sm text-accent-700 mb-4 space-y-1">
-                <p>ما فيش قارئ واحد عنده المدى ده كله، فهيتقسم بين أكتر من قارئ:</p>
+                <p>ما فيش قارئ واحد عنده النطاق ده كله، فهيتقسم بين أكتر من قارئ:</p>
                 {mixed.map((p) => <p key={`${p.start}-${p.folder}`} className="text-xs text-accent-600">{partLabel(p)}</p>)}
               </div>
             )}
@@ -225,13 +225,13 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             {canStart && (
               <div className="mb-4 space-y-2">
                 {dlDone ? (
-                  <p className="text-sm text-emerald-700">المدى ده محمّل على جهازك ✓</p>
+                  <p className="text-sm text-emerald-700">النطاق ده محمّل على جهازك ✓</p>
                 ) : (
                   <>
-                    <p className="text-xs text-accent-600">حجم المدى تقريباً {formatSize(dlSizeMb)}</p>
+                    <p className="text-xs text-accent-600">حجم النطاق تقريباً {formatSize(dlSizeMb)}</p>
                     <button type="button" onClick={() => void runRangeDownload()} disabled={dlBusy}
                       className="w-full py-2 rounded-xl border border-emerald-300 text-emerald-800 font-bold disabled:opacity-50">
-                      {dlBusy ? `بنزّل… ${dlPct}٪` : 'نزّل المدى ده (اختياري)'}
+                      {dlBusy ? `بنزّل… ${dlPct}٪` : 'نزّل النطاق ده (اختياري)'}
                     </button>
                     {dlBusy && (
                       <button type="button" onClick={() => dlAbort.current?.abort()} className="w-full text-xs text-accent-600 underline">وقّف التحميل</button>
