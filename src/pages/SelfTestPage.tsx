@@ -22,7 +22,7 @@ import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
-  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniAyahStartTime, wholeAyahPlan, corrAyahUrl, loadCorrReciter, setCorrReciter, getCorrReciter, preloadCorrTimings, CORR_RECITERS,
+  isJuhaniCorrEnabled, planJuhaniWindows, createJuhaniPlayer, juhaniAyahStartTime, wholeAyahPlan, corrAyahUrl, loadCorrReciter, setCorrReciter, getCorrReciter, preloadCorrTimings, preloadCorrStandIns, CORR_RECITERS,
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
@@ -1051,6 +1051,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => {
     if (mixedPlan) preloadCorrTimings(Array.from(new Set(mixedPlan.map((p) => p.folder))));
   }, [mixedPlan]);
+  // Stand-in reciters for the few ayahs the chosen reciter has no word
+  // timings for: their timing files load with the test, not at the mistake.
+  useEffect(() => {
+    if (ayahs.length > 0) preloadCorrStandIns(ayahs);
+  }, [ayahs, corrReciter]);
   useEffect(() => {
     if (!mixedPlan || !ayahs[index]) return;
     const a = ayahs[index];

@@ -26,6 +26,8 @@
 import { refUnitForWord } from './refWordUnits';
 import { hadrAudioUrl } from './hadr';
 import { JUHANI_RANGE_OK_SURAHS_JUZ30 } from './juhaniManifestJuz30';
+import { CORR_TIMING_RUNS } from './corrTimingCoverage';
+import { getGlobalAyahNumber } from './surahs';
 
 // ------------------------------------------------------------------
 // Correction timing setting (replaces the 2-10s stepper).
@@ -181,10 +183,43 @@ export function preloadCorrTimings(folders: string[]): void {
   }
 }
 
-/** EveryAyah per-ayah file of the chosen correction reciter. */
+// ---- Stand-in reciter for the few untimed ayahs (owner, 2026-11-10) ----
+// Every reciter's timing file lacks a handful of ayahs (9 to 26 of 6236).
+// For exactly those ayahs the correction comes from the first other
+// reciter (list order) who has word timings for the ayah, so the reciter
+// still hears three words, not the whole ayah. No ayah is untimed for
+// every reciter, so a stand-in always exists.
+function hasTimingRun(folder: string, g: number): boolean {
+  const runs = CORR_TIMING_RUNS[folder];
+  if (!runs) return false;
+  for (const [a, b] of runs) if (a <= g && g <= b) return true;
+  return false;
+}
+/** The reciter whose file and timings serve this ayah when `chosen` is
+ *  the user's reciter: `chosen` itself, or its stand-in for an untimed ayah. */
+export function corrSourceFolder(chosen: string, surah: number, ayah: number): string {
+  const g = getGlobalAyahNumber(surah, ayah);
+  if (hasTimingRun(chosen, g)) return chosen;
+  for (const r of CORR_RECITERS) if (r.folder !== chosen && hasTimingRun(r.folder, g)) return r.folder;
+  return chosen;
+}
+/** Stand-in reciters a test over these ayahs will need: load their
+ *  timings before the test instead of at the first mistake. */
+export function preloadCorrStandIns(ayahs: { surah_no: number; ayah_no: number }[]): void {
+  const chosen = getCorrReciter();
+  const need = new Set<string>();
+  for (const a of ayahs) {
+    const f = corrSourceFolder(chosen, a.surah_no, a.ayah_no);
+    if (f !== chosen) need.add(f);
+  }
+  if (need.size > 0) preloadCorrTimings(Array.from(need));
+}
+
+/** EveryAyah per-ayah file of the correction reciter for this ayah (the
+ *  chosen one, or his stand-in for an ayah he has no timings for). */
 export function corrAyahUrl(surah: number, ayah: number): string {
   const p3 = (n: number) => String(n).padStart(3, '0');
-  return `https://everyayah.com/data/${getCorrReciter()}/${p3(surah)}${p3(ayah)}.mp3`;
+  return `https://everyayah.com/data/${corrSourceFolder(getCorrReciter(), surah, ayah)}/${p3(surah)}${p3(ayah)}.mp3`;
 }
 
 function timingsFor(surah: number, ayah: number): number[] | null {
@@ -195,7 +230,16 @@ function timingsFor(surah: number, ayah: number): number[] | null {
   // surah-file timings were applied to another reciter's per-ayah file:
   // the wrong words, or silence, in Juz 30. No timings now means the
   // caller's whole-ayah fallback, in the right voice.
-  if (activeCorr && activeCorr.folder === getCorrReciter()) return activeCorr.map[key(surah, ayah)] ?? null;
+  const chosen = getCorrReciter();
+  const src = corrSourceFolder(chosen, surah, ayah);
+  if (src !== chosen) {
+    // Untimed ayah for the chosen reciter: the stand-in's timings (the
+    // URL is the stand-in's file too, see corrAyahUrl).
+    const m = corrMaps.get(src);
+    if (!m) { preloadCorrTimings([src]); return null; }
+    return m[key(surah, ayah)] ?? null;
+  }
+  if (activeCorr && activeCorr.folder === chosen) return activeCorr.map[key(surah, ayah)] ?? null;
   return null;
 }
 

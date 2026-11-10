@@ -7,7 +7,7 @@
 // 'no-cors' and stored opaque (same as the Juhani downloads).
 import { CORR_TIMING_RUNS } from './corrTimingCoverage';
 import { SURAH_AYAH_COUNTS } from './surahs';
-import { CORR_RECITERS } from './juhaniCorr';
+import { CORR_RECITERS, corrSourceFolder } from './juhaniCorr';
 import { JUZ_STARTS } from './quranBoundaries';
 
 export const CORR_AUDIO_CACHE = 'quran-audio-corr';
@@ -87,7 +87,7 @@ async function fetchList(folder: string, list: [number, number][], onProgress: (
   const worker = async () => {
     while (i < list.length && !signal.aborted) {
       const [s, a] = list[i++];
-      const url = ayahUrl(folder, s, a);
+      const url = ayahUrl(corrSourceFolder(folder, s, a), s, a); // stand-in reciter's file for an untimed ayah
       try {
         if (!(await cache.match(url))) {
           const res = await fetch(url, { mode: 'no-cors', signal });
@@ -147,7 +147,7 @@ export async function downloadReciter(
   const worker = async () => {
     while (i < list.length && !signal.aborted) {
       const [s, a] = list[i++];
-      const url = ayahUrl(folder, s, a);
+      const url = ayahUrl(corrSourceFolder(folder, s, a), s, a); // stand-in reciter's file for an untimed ayah
       try {
         if (!(await cache.match(url))) {
           const res = await fetch(url, { mode: 'no-cors', signal });
@@ -214,8 +214,22 @@ export function juzOfRange(startGlobal: number, endGlobal: number): number[] {
 export function recitersForRange(startGlobal: number, endGlobal: number): string[] {
   const lo = Math.min(startGlobal, endGlobal);
   const hi = Math.max(startGlobal, endGlobal);
-  return CORR_RECITERS.map((r) => r.folder).filter((f) =>
-    (CORR_TIMING_RUNS[f] || []).some(([a, b]) => a <= lo && hi <= b));
+  // A reciter is offered when he has word timings for the whole range,
+  // apart from a FEW ayahs (owner, 2026-11-10): those are corrected by a
+  // stand-in reciter (corrSourceFolder). "Few" = at most 3 ayahs, or 1%
+  // of a long range. Before, one untimed ayah removed the reciter from
+  // every range containing it, so most whole-juz ranges had no reciter.
+  const len = hi - lo + 1;
+  const allowed = Math.max(3, Math.floor(len / 100));
+  return CORR_RECITERS.map((r) => r.folder).filter((f) => {
+    let covered = 0;
+    for (const [a, b] of CORR_TIMING_RUNS[f] || []) {
+      const from = Math.max(a, lo);
+      const to = Math.min(b, hi);
+      if (to >= from) covered += to - from + 1;
+    }
+    return len - covered <= allowed;
+  });
 }
 
 /** When no single reciter has timings for the whole range, split the range
