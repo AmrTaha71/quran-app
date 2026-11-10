@@ -4,9 +4,9 @@ import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import TajwidSkillPicker from '../components/TajwidSkillPicker';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
-import { hasChosenReciter, markChosenReciter, recitersForRange } from '../lib/corrDownload';
+import { hasChosenReciter, markChosenReciter, recitersForRange, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
-import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
 import { RangePoint, unitStartGlobal, unitEndGlobal, unitStartPoint, unitEndPoint, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { resolvePageRange, TOTAL_MUSHAF_PAGES } from '../lib/mushafPageRange';
@@ -829,6 +829,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // First visit: ask «عايز مين يسمّعلك؟» once (2026-11-08).
   const [askReciter, setAskReciter] = useState<boolean>(() => !hasChosenReciter());
   const [reciterAsk, setReciterAsk] = useState<{ options: string[]; run: (f: string) => void } | null>(null);
+  // 2026-11-10: range with no single reciter -> split between readers, switched per ayah.
+  const [mixedPlan, setMixedPlan] = useState<RangeReciterPart[] | null>(null);
   const [reciterNote, setReciterNote] = useState('');
   // Warm the on-device ear as soon as the page opens when it is chosen.
   useEffect(() => { if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
@@ -987,6 +989,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // rebuild the same list (see resumeTest).
   const explicitAyahIdsRef = useRef<number[] | null>(null);
   const [index, setIndex] = useState(0);
+  // Switch the reader per ayah when the range is split (2026-11-10). corrAyahUrl and the
+  // timing loader both follow getCorrReciter(), so changing it here is enough.
+  useEffect(() => {
+    if (!mixedPlan || !ayahs[index]) return;
+    const a = ayahs[index];
+    const g = getGlobalAyahNumber(a.surah_no, a.ayah_no);
+    const f = mixedPlan.find((p) => g >= p.start && g <= p.end)?.folder;
+    if (f && f !== getCorrReciter()) { setCorrReciter(f); setCorrReciterState(f); }
+  }, [index, mixedPlan, ayahs]);
   const [revealed, setRevealed] = useState(false);
   const [grades, setGrades] = useState<boolean[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2192,8 +2203,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // «تسمّع مع مين؟» (2026-11-08): reciters downloaded for this range.
     // Several -> ask; exactly one -> use it and say so; none -> keep the
     // chosen reciter (it streams online).
+    const availNow = recitersForRange(startGlobal, endGlobal);
+    setMixedPlan(availNow.length === 0 ? planRangeReciters(startGlobal, endGlobal) : null);
+    if (availNow.length === 0) {
+      const parts = planRangeReciters(startGlobal, endGlobal);
+      if (parts) {
+        setReciterNote(`المدى متقسم بين ${parts.length} ${parts.length === 1 ? 'قارئ' : 'قراء'}`);
+        setTimeout(() => setReciterNote(''), 4000);
+      }
+    }
     if (!opts?.reciterChosen && !restore) {
-      const avail = recitersForRange(startGlobal, endGlobal);
+      const avail = availNow;
       if (avail.length > 1) {
         setReciterAsk({ options: avail, run: (f: string) => { setCorrReciter(f); setCorrReciterState(f); setReciterAsk(null); void startTestGlobal(startGlobal, endGlobal, restore, forceMode, settingsOverride, { ...(opts || {}), reciterChosen: true }); } });
         return;
