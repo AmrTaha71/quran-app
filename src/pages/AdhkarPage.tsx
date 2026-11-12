@@ -774,7 +774,7 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-2 mt-3">
           <SunMoon className="w-6 h-6 text-emerald-700" />
-          <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">أذكار الصباح والمساء</h1>
+          <h1 className="text-3xl md:text-4xl font-bold font-display-ar text-accent-900">أذكار الصباح والمساء</h1>
         </div>
 
         {/* Wird tabs */}
@@ -797,13 +797,13 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         <div className="grid grid-cols-2 gap-2 mt-2">
           <button
             onClick={() => switchVoice('male')}
-            className={`py-2 font-semibold rounded-xl text-sm polish-press ${voice === 'male' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-3 font-bold rounded-xl text-base polish-press ${voice === 'male' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت رجالي
           </button>
           <button
             onClick={() => switchVoice('female')}
-            className={`py-2 font-semibold rounded-xl text-sm polish-press ${voice === 'female' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
+            className={`py-3 font-bold rounded-xl text-base polish-press ${voice === 'female' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             صوت نسائي
           </button>
@@ -816,24 +816,24 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
           {completed ? (
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">تم وردك ✓</p>
-              <p className="text-sm text-accent-600 mt-1">أذكار {wird === 'morning' ? 'الصباح' : 'المساء'} كاملة — تقبّل الله.</p>
+              <p className="text-base text-accent-700 mt-1">أذكار {wird === 'morning' ? 'الصباح' : 'المساء'} كاملة — تقبّل الله.</p>
               <button onClick={restart} className="mt-4 px-5 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus">
                 إعادة من الأول
               </button>
             </div>
           ) : (
             <>
-              <p className="text-sm text-accent-500 font-semibold">
+              <p className="text-base text-accent-700 font-semibold">
                 الذكر {index + 1} من {list.length} — التكرار {rep} من {clip.count}
               </p>
               <p className="mt-1">
                 {isRecitation(clip, voice) ? (
-                  <span className="text-xs font-medium bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة — {adhkarReciterLabel(clip, reciter)}</span>
+                  <span className="text-sm font-semibold bg-emerald-100 text-emerald-900 px-3 py-1 rounded-full">تلاوة — {adhkarReciterLabel(clip, reciter)}</span>
                 ) : (
-                  <span className="text-xs font-medium bg-amber-100 text-amber-800 px-2 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
+                  <span className="text-sm font-semibold bg-amber-100 text-amber-900 px-3 py-1 rounded-full">صوت مولّد بالذكاء الاصطناعي</span>
                 )}
               </p>
-              <p className="text-lg leading-relaxed text-accent-800 font-semibold mt-2">{clip.display}</p>
+              <p className="text-2xl md:text-3xl leading-loose text-accent-900 font-bold mt-2">{clip.display}</p>
               <div className="h-2 bg-stone-200 rounded-full mt-4 overflow-hidden" dir="ltr">
                 <div className="h-full bg-emerald-600 rounded-full" style={{ width: `${pct}%` }} />
               </div>
@@ -888,19 +888,19 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
               onClick={() => jumpTo(i, playing)}
               className={`w-full text-right flex items-center gap-3 px-3 py-2.5 rounded-xl relative polish-listen-row ${i === index && !completed ? 'bg-amber-50 border border-hairline-amber' : ''}${playing && i === index && !completed ? ' is-playing' : ''}`}
             >
-              <span className={`text-xs font-bold w-6 text-center ${i < index ? 'text-emerald-700' : i === index ? 'text-amber-link' : 'text-stone-400'}`}>
+              <span className={`text-xs font-bold w-6 text-center ${i < index ? 'text-emerald-700' : i === index ? 'text-amber-link' : 'text-stone-600'}`}>
                 {i < index ? '✓' : i === index && !completed ? '▶' : i + 1}
               </span>
-              <span className="flex-1 text-sm text-accent-800">{preview(item.display)}</span>
+              <span className="flex-1 text-base text-accent-900">{preview(item.display)}</span>
               {isRecitation(item, voice) && (
-                <span className="text-xs font-medium bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">تلاوة</span>
+                <span className="text-sm font-semibold bg-emerald-100 text-emerald-900 px-3 py-1 rounded-full">تلاوة</span>
               )}
-              <span className="text-xs font-bold bg-stone-100 text-stone-600 px-2 py-1 rounded-full">×{item.count}</span>
+              <span className="text-sm font-bold bg-stone-100 text-stone-800 px-3 py-1 rounded-full">×{item.count}</span>
             </button>
           ))}
         </div>
 
-        <Hint id="adhkar-voices"><p className="text-center text-xs text-stone-500 mt-4">
+        <Hint id="adhkar-voices"><p className="text-center text-sm text-stone-700 mt-4">
           آيات القرآن تُتلى بصوت قارئ، والأدعية بصوت مولّد بالذكاء الاصطناعي. التكرار يتم في المشغّل.
         </p></Hint>
       </div>

@@ -3,6 +3,7 @@
 // Recitation and recall parts are graded by the user against a checklist
 // (the app cannot grade voice yet). Results are kept locally so the user
 // can see the score and its change over time.
+import WheelPicker from './WheelPicker';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { SURAHS } from '../lib/surahs';
@@ -176,11 +177,17 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                   className={`py-2 rounded-lg text-sm font-bold ${scope === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600'}`}>{SCOPE_LABEL[k]}</button>
               ))}
             </div>
-            <select value={num} onChange={(e) => setNum(Number(e.target.value))} className="w-full border border-emerald-200 rounded-lg p-2 mb-4">
-              {Array.from({ length: SCOPE_COUNT[scope] }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>{scope === 'surah' ? `${n} - ${surahName(n)}` : `${SCOPE_LABEL[scope]} ${n}`}</option>
-              ))}
-            </select>
+            <div className="mb-4">
+              <WheelPicker
+                label="اختيار النطاق"
+                value={num}
+                onChange={(n) => setNum(n)}
+                options={Array.from({ length: SCOPE_COUNT[scope] }, (_, i) => i + 1).map((n) => ({
+                  value: n,
+                  label: scope === 'surah' ? `${n} - ${surahName(n)}` : `${SCOPE_LABEL[scope]} ${n}`,
+                }))}
+              />
+            </div>
             <p className="text-sm text-accent-600 mb-2">المستوى</p>
             <div className="grid grid-cols-3 gap-2 mb-5">
               {LEVELS.map((l) => (
