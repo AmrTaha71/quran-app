@@ -73,50 +73,8 @@ export function DrumReel({
 
   const go = (i: number) => ref.current?.scrollTo({ top: i * DRUM_ITEM_H, behavior: 'smooth' });
 
-  // Knurled gold side rods spin with the drum (stripe offset follows scroll).
-  const rodShift = `${(pos * DRUM_ITEM_H * 0.6) % 12}px`;
-  const rod = (side: 'left' | 'right') => (
-    <div
-      className="absolute top-0 bottom-0 pointer-events-none"
-      style={{
-        [side]: 0,
-        width: 14,
-        backgroundImage:
-          'linear-gradient(90deg, rgba(0,0,0,0.35), transparent 30%, rgba(255,255,255,0.55) 50%, transparent 70%, rgba(0,0,0,0.35)),' +
-          'repeating-linear-gradient(180deg, #8C6A24 0 2px, #E9C978 2px 6px, #C9A24A 6px 12px)',
-        backgroundPosition: `0 0, 0 ${rodShift}`,
-        borderRadius: side === 'left' ? '14px 0 0 14px' : '0 14px 14px 0',
-      } as React.CSSProperties}
-    />
-  );
-
   return (
-    <div
-      className={`relative min-w-0 overflow-hidden rounded-2xl select-none ${className}`}
-      style={{
-        height: VIEW_H,
-        // the drum: cream parchment lit from the front, dark where it turns away
-        background:
-          'linear-gradient(180deg, #3a2c12 0%, #b9a06a 14%, #efe3c0 32%, #fffaf0 50%, #efe3c0 68%, #b9a06a 86%, #3a2c12 100%)',
-        boxShadow: '0 10px 24px -10px rgba(40,30,10,0.6), inset 0 0 0 1px rgba(140,106,36,0.6)',
-      }}
-    >
-      {/* faint manuscript ruling on the drum */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.07]" style={{ backgroundImage: 'repeating-linear-gradient(180deg, #5a4316 0 1px, transparent 1px 9px)', backgroundPosition: `0 ${-pos * DRUM_ITEM_H}px` }} />
-      {/* the selection: a surah-title cartouche, like the frames in the Madinah mushaf */}
-      <svg className="absolute inset-x-4 top-1/2 -translate-y-1/2 pointer-events-none drop-shadow-[0_4px_6px_rgba(40,30,10,0.45)]" style={{ height: DRUM_ITEM_H + 6, width: 'calc(100% - 2rem)' }} viewBox="0 0 300 58" preserveAspectRatio="none" aria-hidden>
-        <defs>
-          <linearGradient id="dr-gold" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#FFF0B8" /><stop offset="0.45" stopColor="#D9B25A" /><stop offset="1" stopColor="#8C6A24" />
-          </linearGradient>
-          <linearGradient id="dr-em" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#13704f" /><stop offset="1" stopColor="#063522" />
-          </linearGradient>
-        </defs>
-        <path d="M22 3 H278 Q292 3 297 29 Q292 55 278 55 H22 Q8 55 3 29 Q8 3 22 3 Z" fill="url(#dr-gold)" />
-        <path d="M26 8 H274 Q285 8 289 29 Q285 50 274 50 H26 Q15 50 11 29 Q15 8 26 8 Z" fill="url(#dr-em)" />
-        <path d="M30 12 H270 Q279 12 282 29 Q279 46 270 46 H30 Q21 46 18 29 Q21 12 30 12 Z" fill="none" stroke="#E9C978" strokeWidth="0.8" opacity="0.8" />
-      </svg>
+    <div className={`relative min-w-0 overflow-hidden select-none ${className}`} style={{ height: VIEW_H, background: '#FBF7EE' }}>
       {/* the drum rows */}
       <div className="absolute inset-0 pointer-events-none" style={{ perspective: 800 }} aria-hidden>
         <div className="absolute inset-x-0 top-1/2" style={{ transformStyle: 'preserve-3d' }}>
@@ -128,18 +86,18 @@ export function DrumReel({
             return (
               <div
                 key={`${i}-${l}`}
-                className="absolute inset-x-4 flex items-center justify-center whitespace-nowrap px-6"
+                className="absolute inset-x-0 flex items-center justify-center whitespace-nowrap px-2"
                 style={{
                   top: -DRUM_ITEM_H / 2,
                   height: DRUM_ITEM_H,
-                  transform: `rotateX(${-d * STEP_DEG}deg) translateZ(${RADIUS}px) scale(${1 + 0.12 * near})`,
+                  transform: `rotateX(${-d * STEP_DEG}deg) translateZ(${RADIUS}px)`,
                   backfaceVisibility: 'hidden',
                   fontFamily: "'Noto Naskh Arabic', 'Amiri', serif",
-                  fontSize: '1.15rem',
-                  fontWeight: sel ? 800 : 700,
-                  color: sel ? '#FCE9A8' : '#4a3a17',
-                  opacity: sel ? 1 : Math.max(0.15, 0.85 - 0.22 * Math.abs(d)),
-                  textShadow: sel ? '0 1px 0 #6b4f17, 0 2px 4px rgba(0,0,0,0.45)' : '0 1px 0 rgba(255,255,255,0.6)',
+                  fontSize: `${1 + 0.45 * near}rem`,
+                  fontWeight: sel ? 800 : 500,
+                  color: sel ? '#8B1E1E' : '#8E8E88',
+                  opacity: sel ? 1 : Math.max(0.35, 1 - 0.22 * Math.abs(d)),
+                  
                 }}
               >
                 {l}
@@ -148,8 +106,8 @@ export function DrumReel({
           })}
         </div>
       </div>
-      {rod('left')}
-      {rod('right')}
+      {/* soft fade where the drum turns away */}
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, #FBF7EE 0%, rgba(251,247,238,0) 34%, rgba(251,247,238,0) 66%, #FBF7EE 100%)' }} />
       {/* input layer */}
       <div
         ref={ref}
@@ -206,7 +164,7 @@ export function DrumRange({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2" aria-label={label}>
       <DrumReel labels={labels} index={from} label={`${label}: من`} onIndex={(i) => { f.current = i; onChange(i, Math.max(i, t.current)); }} />
-      <span className="text-base font-bold text-amber-600">إلى</span>
+      <span className="text-base font-bold text-[#9A9A94]">إلى</span>
       <DrumReel labels={labels} index={to} label={`${label}: إلى`} onIndex={(i) => { t.current = i; onChange(Math.min(f.current, i), i); }} />
     </div>
   );

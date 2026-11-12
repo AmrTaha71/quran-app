@@ -27,10 +27,10 @@ export default function ClockWheel({ initial, onChange }: { initial: string; onC
   }
 
   return (
-    <div className="rounded-3xl p-2 border border-amber-400/70" style={{ background: "linear-gradient(160deg,#0f5a3f,#083B27 70%)" }} dir="ltr">
+    <div className="rounded-2xl p-1" style={{ background: "#FBF7EE" }} dir="ltr">
       <div className="flex items-stretch gap-1" dir="ltr">
         <DrumReel className="flex-1" labels={hours} index={hIdx} label="ساعة" onIndex={(i) => { setHIdx(i); emit(i, mIdx, pIdx); }} />
-        <span className="self-center text-2xl font-extrabold text-amber-300">:</span>
+        <span className="self-center text-2xl font-extrabold text-[#8B1E1E]">:</span>
         <DrumReel className="flex-[1.2]" labels={minutes} index={mIdx} label="دقيقة" onIndex={(i) => { setMIdx(i); emit(hIdx, i, pIdx); }} />
         <DrumReel className="flex-[0.8]" labels={periods} index={pIdx} label="ص أو م" onIndex={(i) => { setPIdx(i); emit(hIdx, mIdx, i); }} />
       </div>
