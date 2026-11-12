@@ -3,7 +3,7 @@ import { LayoutDashboard, BookOpen, Home, AudioLines, Settings } from 'lucide-re
 import { supabase } from '../lib/supabase';
 import { pressFeedback } from '../lib/pressFeedback';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 // Remember the kunya label per user so each page's nav starts with the
 // right label instead of flashing 'لوحتي'. 'quran-uid' is mirrored by App.

@@ -39,7 +39,7 @@ import {
   Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
 } from 'lucide-react';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 interface TestAyah {
   id: number;
@@ -6037,7 +6037,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <ul className="space-y-2">
                   {history.slice(0, 5).map((h, i) => (
                     <li key={i} className="flex items-center justify-between text-sm gap-2">
-                      <span className="text-accent-700">{h.endSurahName && h.endSurah !== h.surah ? <>من سورة {h.surahName} آية {formatAr(h.from)} إلى سورة {h.endSurahName} آية {formatAr(h.endAyah)}</> : <>سورة {h.surahName} — آيات {formatAr(h.from)} إلى {formatAr(h.to)}</>}</span>
+                      <span className="text-accent-700">{h.endSurahName && h.endSurah !== h.surah ? <>من سورة {h.surahName} آية {formatAr(h.from)} إلى سورة {h.endSurahName} آية {formatAr(h.endAyah ?? 0)}</> : <>سورة {h.surahName} — آيات {formatAr(h.from)} إلى {formatAr(h.to ?? 0)}</>}</span>
                       <span className="font-bold text-emerald-700 whitespace-nowrap">{formatAr(h.correct)}/{formatAr(h.total)} ({h.total > 0 ? formatAr(Math.round((h.correct / h.total) * 100)) : formatAr(0)}٪)</span>
                       <span className="text-accent-400 whitespace-nowrap">{h.date}</span>
                     </li>

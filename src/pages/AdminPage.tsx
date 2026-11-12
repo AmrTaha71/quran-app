@@ -16,7 +16,7 @@ import {
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 const PAGE_SIZE = 25;
 

@@ -25,7 +25,7 @@ import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 const PAGE_SIZE = 15;
 
 export default function UserAppPage({ session, onNavigate }: { session: import('@supabase/supabase-js').Session | null; onNavigate: (r: Route) => void }) {
@@ -169,7 +169,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       const { data, error } = await supabase.from('user_profiles').select('username, preferred_name, gender').eq('user_id', userId).single();
       const profile = error ? (await supabase.from('user_profiles').select('username, gender').eq('user_id', userId).single()).data : data;
       if (profile?.gender === 'male' || profile?.gender === 'female') setProfileGender(profile.gender);
-      if ((profile as { preferred_name?: string | null } | null)?.preferred_name) setPreferredName((profile as { preferred_name: string }).preferred_name);
+      if ((profile as { preferred_name?: string | null } | null)?.preferred_name) setPreferredName((profile as unknown as { preferred_name: string }).preferred_name);
     };
     loadGender();
   }, [session]);

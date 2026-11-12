@@ -56,7 +56,7 @@ export function loadWird(): WirdState {
         // Old shape (single type + target): migrate into parts.
         if (typeof p.target === 'number') {
           const parts: Record<WirdType, number> = { sabaq: 0, murajaa: 0, manzil: 0 };
-          const t = (p.type === 'murajaa' || p.type === 'manzil') ? p.type : 'sabaq';
+          const t: WirdType = (p.type === 'murajaa' || p.type === 'manzil') ? p.type : 'sabaq';
           parts[t] = Math.min(10, Math.max(0, Math.floor(p.target)));
           return { ...normalizeMirrors(parts), parts, streak: p.streak, lastDone: p.lastDone || '', doneDays: p.doneDays };
         }

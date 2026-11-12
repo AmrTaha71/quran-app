@@ -32,7 +32,7 @@ import {
   LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText,
 } from 'lucide-react';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
 
@@ -445,7 +445,7 @@ export default function QuranMushafPage({
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestText, setSuggestText] = useState('');
   const [suggestTitle, setSuggestTitle] = useState('');
-  const [suggestType, setSuggestType] = useState(LINK_TYPES[0]?.value ?? 'wajih');
+  const [suggestType, setSuggestType] = useState<string>(LINK_TYPES[0]?.value ?? 'wajih');
   const [suggestSending, setSuggestSending] = useState(false);
   const [suggestSent, setSuggestSent] = useState(false);
   const [suggestError, setSuggestError] = useState('');
@@ -4361,7 +4361,7 @@ export default function QuranMushafPage({
                 {/* FACING STRIP REMOVED 2026-10-27 per user ("الغي الهوامش"):
                     no side sliver in fullscreen — the main page only, so
                     no second page's text ever overlaps its left edge. */}
-                {false && hasFacingPage && (
+                {false && facingNorm !== null && facingNorm !== undefined && (
                   <div className="absolute top-1/2 -translate-y-1/2 right-0 overflow-hidden pointer-events-none border-r border-black/30 shadow-[0_0_24px_rgba(0,0,0,0.45)]" style={{ width: FACING_STRIP_W, height: facingNorm ? (useMadinahCover ? '100svh' : `calc(min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`) : '100%' }} title="الصفحة المقابلة">
                     <FacingStripImg key={`facing-${facingPage}`} src={edition.imageUrl(facingPage)} pageNo={facingPage}
                       // Madinah: a window into the facing page at the
@@ -4385,19 +4385,19 @@ export default function QuranMushafPage({
                       // Other editions keep the old centered sliver.
                       className={`absolute ${facingNorm ? '' : 'top-1/2 -translate-y-1/2 right-0'} ${!facingNorm ? (edition.id === 'madinah' ? 'h-[115vh]' : 'h-screen') : ''} w-auto max-w-none opacity-100 [-webkit-touch-callout:none]`}
                       style={facingNorm ? (useMadinahCover ? {
-                        width: `${facingNorm.imgW}vw`,
-                        height: `${facingNorm.imgH}svh`,
+                        width: `${facingNorm!.imgW}vw`,
+                        height: `${facingNorm!.imgH}svh`,
                         left: facingOnLeft
-                          ? `calc(${FACING_STRIP_W} - ${((facingNorm.pr * facingNorm.imgW) / 100).toFixed(4)}vw)`
-                          : `calc(0px - ${((facingNorm.pl * facingNorm.imgW) / 100).toFixed(4)}vw)`,
-                        top: `calc(${coverMainPaperTop.toFixed(4)}svh - ${((facingNorm.pt * facingNorm.imgH) / 100).toFixed(4)}svh)`,
+                          ? `calc(${FACING_STRIP_W} - ${((facingNorm!.pr * facingNorm!.imgW) / 100).toFixed(4)}vw)`
+                          : `calc(0px - ${((facingNorm!.pl * facingNorm!.imgW) / 100).toFixed(4)}vw)`,
+                        top: `calc(${coverMainPaperTop.toFixed(4)}svh - ${((facingNorm!.pt * facingNorm!.imgH) / 100).toFixed(4)}svh)`,
                       } : {
-                        width: `calc(${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
-                        height: `calc(${(facingNorm.imgH / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                        width: `calc(${(facingNorm!.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
+                        height: `calc(${(facingNorm!.imgH / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
                         left: facingOnLeft
-                          ? `calc(${FACING_STRIP_W} - ${((facingNorm.pr) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`
-                          : `calc(0px - ${((facingNorm.pl) / 100).toFixed(4)} * ${(facingNorm.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
-                        top: `calc(0px - ${(facingNorm.pt / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
+                          ? `calc(${FACING_STRIP_W} - ${((facingNorm!.pr) / 100).toFixed(4)} * ${(facingNorm!.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`
+                          : `calc(0px - ${((facingNorm!.pl) / 100).toFixed(4)} * ${(facingNorm!.imgW / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh))`,
+                        top: `calc(0px - ${(facingNorm!.pt / 100).toFixed(4)} * min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}svh) / ${MADINAH_NORMALIZED_ASPECT})`,
                       }) : undefined} />
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>

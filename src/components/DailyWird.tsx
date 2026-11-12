@@ -3,7 +3,7 @@ import { CalendarDays, Flame, Check, Settings } from 'lucide-react';
 import { loadWird, saveWird, type WirdState } from '../lib/wird';
 import { playSuccessCue } from '../lib/pressFeedback';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 function todayStr(d = new Date()): string {
   return d.toLocaleDateString('en-CA');

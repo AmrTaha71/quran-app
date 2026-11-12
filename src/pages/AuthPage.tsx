@@ -9,7 +9,7 @@ import {
   Globe, ArrowRight, Shield, Heart, RotateCcw,
 } from 'lucide-react';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 type AuthMode = 'login' | 'signup' | 'recover' | 'reset';
 
 export default function AuthPage({
