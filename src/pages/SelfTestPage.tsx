@@ -567,12 +567,24 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
   // the start — anchoring at the start counted a match's own
   // fragments (letter names, split pieces) as new words.
   const consumed = new Array(expected.length).fill(1);
+  const breathAll = breathRepeats(expected, spoken);
   let j = 0;
   let i = 0;
   while (i < expected.length) {
     let found = -1;
-    for (let k = j; k < spoken.length; k++) {
-      if (softWordEq(spoken[k], expected[i])) { found = k; break; }
+    {
+      // Reach limit (2026-11-12 diag): once he is under way, a word may
+      // only match near where he is. Unlimited reach let a short common
+      // word («هم» of 2:4, misheard locally) match far ahead inside 2:5,
+      // which then marked all of 2:5 wrong. Breath repeats do not count
+      // toward the distance. Before the first match (isti'adha, basmala)
+      // the reach stays unlimited.
+      const limit = j === 0 ? Infinity : (expected[i].length <= 3 ? 6 : 14);
+      let dist = 0;
+      for (let k = j; k < spoken.length; k++) {
+        if (softWordEq(spoken[k], expected[i])) { found = k; break; }
+        if (!breathAll.has(k) && ++dist > limit) break;
+      }
     }
     if (found >= 0 && skippedAhead(expected, i, spoken, j, found)) found = -1;
     {
@@ -676,6 +688,7 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
   const consumed = new Array(expected.length).fill(1);
   const extras: string[] = [];
   const breath = breathRepeats(expected, spoken);
+  const breathAll = breath;
   let j = 0;
   let i = 0;
   const consumeThrough = (k: number, count: number) => {
@@ -684,8 +697,19 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
   };
   while (i < expected.length) {
     let found = -1;
-    for (let k = j; k < spoken.length; k++) {
-      if (softWordEq(spoken[k], expected[i])) { found = k; break; }
+    {
+      // Reach limit (2026-11-12 diag): once he is under way, a word may
+      // only match near where he is. Unlimited reach let a short common
+      // word («هم» of 2:4, misheard locally) match far ahead inside 2:5,
+      // which then marked all of 2:5 wrong. Breath repeats do not count
+      // toward the distance. Before the first match (isti'adha, basmala)
+      // the reach stays unlimited.
+      const limit = j === 0 ? Infinity : (expected[i].length <= 3 ? 6 : 14);
+      let dist = 0;
+      for (let k = j; k < spoken.length; k++) {
+        if (softWordEq(spoken[k], expected[i])) { found = k; break; }
+        if (!breathAll.has(k) && ++dist > limit) break;
+      }
     }
     if (found >= 0 && skippedAhead(expected, i, spoken, j, found)) found = -1;
     {
