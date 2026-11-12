@@ -359,7 +359,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <span className="text-xs font-bold">الشاشة</span>
           </button>
           <div className="min-w-0 flex items-center gap-3 justify-center">
-            <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="" className="w-20 h-20 object-contain drop-shadow-md polish-hero-medal shrink-0" />
+            <img src="/brand/tarbitat-logo.webp" alt="تربيطات آيات القرآن" className="w-24 h-24 object-contain drop-shadow-md polish-hero-medal shrink-0" />
             <div className="min-w-0">
               <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}</p>
               <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">
