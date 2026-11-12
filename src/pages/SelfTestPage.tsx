@@ -591,8 +591,15 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
   let j = openingSkip(expected, spoken);
   let i = 0;
   let started = false;
+  let gap = 0;
   while (i < expected.length) {
-    if (i > 0 && matched[i - 1]) started = true;
+    if (i > 0 && matched[i - 1]) { started = true; gap = 0; }
+    // Expected-side limit (2026-11-12 diag 57654b7): a leftover spoken word
+    // («هدى» said twice in 2:2) must not be matched by the same word 25
+    // expected words further on (2:5) — that jumped the pointer to ayah 5
+    // and played a 17s correction of all of 2:4. Once under way, matching
+    // stops after 10 expected words in a row with no match.
+    if (started && gap++ > 10) break;
     let found = -1;
     {
       // Reach limit (2026-11-12 diag): once he is under way, a word may
@@ -714,12 +721,19 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
   let j = openingSkip(expected, spoken);
   let i = 0;
   let started = false;
+  let gap = 0;
   const consumeThrough = (k: number, count: number) => {
     for (let t = j; t < k; t++) if (!breath.has(t)) extras.push(spoken[t]);
     j = k + count;
   };
   while (i < expected.length) {
-    if (i > 0 && matched[i - 1]) started = true;
+    if (i > 0 && matched[i - 1]) { started = true; gap = 0; }
+    // Expected-side limit (2026-11-12 diag 57654b7): a leftover spoken word
+    // («هدى» said twice in 2:2) must not be matched by the same word 25
+    // expected words further on (2:5) — that jumped the pointer to ayah 5
+    // and played a 17s correction of all of 2:4. Once under way, matching
+    // stops after 10 expected words in a row with no match.
+    if (started && gap++ > 10) break;
     let found = -1;
     {
       // Reach limit (2026-11-12 diag): once he is under way, a word may
