@@ -4919,6 +4919,25 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   const checkContMissInterrupt = () => {
     if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
+    // One correction per mistake (2026-11-12 diag): when he was corrected
+    // and carried on past the corrected words without repeating them, the
+    // old correction stops blocking. Its words stay missed in grading
+    // (gave-up), and a NEW mistake further on is corrected again — before
+    // this, «يوقنون» after an unrepeated «أنزل» correction got no voice.
+    {
+      const aw = contAwaitingRef.current;
+      if (aw && aw.indices.length > 0) {
+        const awaitedLast = Math.max(...aw.indices);
+        const em = contEffectiveMatched(false, false);
+        let movedOn = 0;
+        for (let i = awaitedLast + 1; i < em.matched.length; i++) if (em.matched[i]) movedOn++;
+        if (movedOn >= 2) {
+          aw.indices.forEach((i) => contGaveUpRef.current.add(i));
+          contAwaitingRef.current = null;
+          diagPush('corr-moved-on', { label: 'cont', reason: `indices=${aw.indices.join('.')}` });
+        }
+      }
+    }
     const owed = contOwedWords();
     // Two confirmation signals, strongest first. (1) A confirmed
     // passed-over miss: a later word matched, so he demonstrably
