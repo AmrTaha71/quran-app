@@ -3736,6 +3736,36 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // `record` = false for a look at INTERIM text (2026-11-10): an interim
   // word that the recognizer later revises must not stay credited as
   // recited. Only finals record credit.
+  // «ياخد بآخر قراءة» (2026-11-12, Dr. Amr): when he goes back 3+ words
+  // and recites again, the words from that point are judged on the NEW
+  // reading only. Older credit for them is dropped, so a word skipped in
+  // the second reading counts as missed even if the first reading had it.
+  // (Going back 1–2 words is a breath restart and changes nothing.)
+  const applyContReread = (segment: string) => {
+    try {
+      const toks = spokenTokens(segment);
+      if (toks.length < 3) return;
+      const exp = liveRef.current.contExpected.map((w) => w.norm);
+      const raw = contRawAlignment();
+      const eff = raw.matched.map((m, i) => m || contCreditedRef.current.has(i));
+      let last = -1;
+      eff.forEach((m, i) => { if (m) last = i; });
+      if (last < 3) return;
+      const starts = (b: number) => b + 2 < exp.length && softWordEq(toks[0], exp[b]) && softWordEq(toks[1], exp[b + 1]) && softWordEq(toks[2], exp[b + 2]);
+      // Continuing forward (or a short breath restart) wins.
+      for (let b = last - 2; b <= last + 1; b++) if (b >= 0 && starts(b)) return;
+      let back = -1;
+      for (let b = last - 3; b >= 0; b--) if (starts(b)) { back = b; break; }
+      if (back < 0) return;
+      const sp = raw.spoken;
+      let cut = sp.length;
+      for (let i = back; i < raw.positions.length; i++) if (raw.positions[i] >= 0) { cut = Math.min(cut, raw.positions[i]); }
+      liveRef.current.contFinals = sp.slice(0, cut).join(' ');
+      for (const i of Array.from(contCreditedRef.current)) if (i >= back) contCreditedRef.current.delete(i);
+      for (const i of Array.from(contGaveUpRef.current)) if (i >= back) contGaveUpRef.current.delete(i);
+      diagPush('reread', { label: 'cont', reason: `from=${back};was=${last};cut=${cut}` });
+    } catch { /* best-effort */ }
+  };
   const contEffectiveMatched = (forGrade = false, record = true): { matched: boolean[]; lastMatchedIdx: number; positions: number[]; consumed: number[] } => {
     const raw = contRawAlignment();
     const matched = raw.matched.map((m, i) => m || contCreditedRef.current.has(i) || (!forGrade && contGaveUpRef.current.has(i)));
@@ -5100,6 +5130,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (fixed !== chosen) { diagPush('result', { final: true, text: chosen, reason: 'cut-word-repaired' }); chosen = fixed; }
       }
       const e = meta;
+      applyContReread(chosen);
           diagPush('result', { final: true, text: chosen, ms: e.ms, audioMs: e.audioMs, backend: e.backend });
           diagFinalsRef.current.push(chosen);
           liveRef.current.contFinals = `${liveRef.current.contFinals} ${chosen}`.trim();
