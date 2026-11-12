@@ -31,17 +31,20 @@ export default {
           800: '#0D47A1',
           900: '#0A3D7C',
         },
+        // 2026-11-12: was a blue-grey scale that clashed with the emerald
+        // and gold brand. Now a green-grey that matches it. 400 and lighter
+        // fail AA as text on white, so body text should use 500 or darker.
         accent: {
-          50: '#F0F4F8',
-          100: '#D9E2EC',
-          200: '#BCCCDC',
-          300: '#9FB3C8',
-          400: '#829AB1',
-          500: '#627D98',
-          600: '#486581',
-          700: '#334E68',
-          800: '#243B53',
-          900: '#102A43',
+          50: '#F2F7F4',
+          100: '#DCE8E1',
+          200: '#B9CFC3',
+          300: '#91B0A0',
+          400: '#5E7F70',
+          500: '#4A6D5F',
+          600: '#3B5B4E',
+          700: '#2D463C',
+          800: '#213631',
+          900: '#13221E',
         },
         ink: {
           DEFAULT: '#1c2b26',
