@@ -3,6 +3,7 @@ import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
 import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info } from 'lucide-react';
 import ShareSheet from '../components/ShareSheet';
+import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
@@ -599,7 +600,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'share', icon: Share2, title: 'شارك التطبيق', sub: 'شاركنا الأجر', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
-    { id: 'about', icon: Info, title: 'عن التطبيق', sub: 'وتواصل معنا', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'about', icon: Info, title: 'تواصل معنا', sub: 'وعن التطبيق', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'account-delete', icon: Shield, title: 'حسابي', sub: 'مسح الحساب والبيانات', box: 'bg-red-50 border-red-200', fg: 'text-red-700' },
   ];
 
@@ -1250,7 +1251,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </h2>
           <p className="text-base text-accent-800 leading-relaxed">تربيطات آيات القرآن: تطبيق مجاني لحفظ القرآن بالتربيطات والتسميع. من غير إعلانات ولا اشتراكات.</p>
           <p className="text-sm text-accent-700 leading-relaxed mt-3">تنبيه: تصحيح التسميع بيتم آليًا وممكن يغلط، وهو مش بديل عن شيخ أو معلّم متقن.</p>
-          <p className="text-sm text-accent-700 leading-relaxed mt-3">تواصل معنا: قريبًا إن شاء الله.</p>
+          <ContactForm />
         </section>
             )}
             {openDoor === 'onboarding' && (<>
