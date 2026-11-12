@@ -6,7 +6,15 @@ import { pipeline, env } from '@huggingface/transformers';
 env.allowLocalModels = false;
 // ORT runtime from our own origin (public/ort/), not the jsDelivr CDN, so
 // the service worker caches it and the ear works offline.
-if (env.backends?.onnx?.wasm) env.backends.onnx.wasm.wasmPaths = '/ort/';
+if (env.backends?.onnx?.wasm) {
+  env.backends.onnx.wasm.wasmPaths = '/ort/';
+  // 2026-11-12 latency: multithreaded WASM when the page is cross-origin
+  // isolated (COOP/COEP headers in vercel.json). Safari/iOS is not
+  // isolated, so it stays single-threaded exactly as before.
+  const iso = (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated === true;
+  const cores = (self as unknown as { navigator?: { hardwareConcurrency?: number } }).navigator?.hardwareConcurrency ?? 1;
+  env.backends.onnx.wasm.numThreads = iso ? Math.max(1, Math.min(4, cores - 1)) : 1;
+}
 const MODEL = 'iqbalaesthetic/Basira';
 
 type Asr = (audio: Float32Array, opts?: Record<string, unknown>) => Promise<{ text: string } | { text: string }[]>;
@@ -75,7 +83,13 @@ self.onmessage = async (e: MessageEvent) => {
       const t0 = performance.now();
       // The fine-tuned model is Arabic-only and its generation config is not
       // marked multilingual, so no language/task options (they throw).
-      const out = await asr!(msg.audio, { chunk_length_s: 30, stride_length_s: 5 });
+      // 2026-11-12 latency: cap the decoder by the audio length. A segment is
+      // at most ~7s (≈ 25 words); without a cap a looping decode could run
+      // to the model's 448-token limit, which is the ~15s stalls in the
+      // diagnostics. One pass, no chunking: segments are far below 30s.
+      const sec = msg.audio.length / 16000;
+      const maxTok = Math.max(16, Math.min(110, Math.ceil(sec * 12) + 10));
+      const out = await asr!(msg.audio, { max_new_tokens: maxTok, no_repeat_ngram_size: 4 });
       const text = Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text;
       self.postMessage({ type: 'result', id: msg.id, text: text.trim(), ms: Math.round(performance.now() - t0), backend });
     }

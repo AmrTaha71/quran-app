@@ -4635,6 +4635,7 @@ export default function QuranMushafPage({
                       {popupTab === 'irab' && (
                         <div className="space-y-3">
                           <iframe
+                            {...{ credentialless: '' }}
                             key={`${selectedVerse.surah_no}:${selectedVerse.ayah_no}`}
                             src={`https://quranpedia.net/embed?surah=${selectedVerse.surah_no}&ayah=${selectedVerse.ayah_no}&type=e3rab&lock=1&ayah_text=0`}
                             title={`إعراب ${selectedVerse.surah_name} — آية ${selectedVerse.ayah_no}`}

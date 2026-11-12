@@ -1618,6 +1618,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // wall clock at the last newly matched word), and the one-shot
   // auto-retry marker for a prompt whose audio failed unheard.
   const contNoMatchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // On-device ear (2026-11-12): the last word of each segment is held until
+  // the next segment (or ~0.9s of quiet), so a word split by a pause is
+  // judged whole and never interrupts him as a false mistake.
+  const heldTailRef = useRef<{ text: string; timer: ReturnType<typeof setTimeout> | null }>({ text: '', timer: null });
   const contPromptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contLastMatchedCountRef = useRef(0);
   const contLastMatchAtRef = useRef(0);
@@ -3763,6 +3767,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
 
   const stopContinuousMic = () => {
+    {
+      const h = heldTailRef.current;
+      if (h.timer) { clearTimeout(h.timer); h.timer = null; }
+      if (h.text) {
+        liveRef.current.contFinals = `${liveRef.current.contFinals} ${h.text}`.trim();
+        diagFinalsRef.current.push(h.text);
+        h.text = '';
+      }
+    }
     cancelContPrompt();
     if (contNoMatchTimerRef.current) { clearTimeout(contNoMatchTimerRef.current); contNoMatchTimerRef.current = null; }
     stopRec();
@@ -5037,37 +5050,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // [P5] N-best hypotheses (degrades to top hypothesis if ignored).
     try { rec.maxAlternatives = 3; } catch {}
     // DIAG: record-only lifecycle handlers (see the ayah path).
-    rec.onstart = () => { if (recRef.current !== rec) return; diagPush('onstart'); };
-    rec.onaudiostart = () => { if (recRef.current !== rec) return; diagPush('onaudiostart'); };
-    rec.onspeechstart = () => { if (recRef.current !== rec) return; diagPush('onspeechstart'); };
-    rec.onresult = (e: any) => {
-      // [P4] Stale-recognizer guard (see ayah path).
-      if (recRef.current !== rec) return;
-      noteRecResult();
-      // S4: any result re-arms the no-result watchdog.
-      noteWatchdogResult();
-      setMicError('');
-      let interimText = '';
-      let sawFinal = false;
-      const expectedNorms = liveRef.current.contExpected.map((w) => w.norm);
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        // Same isFinal fix as the ayah path: it lives on the result.
-        const res = e.results[i];
-        const r = res[0];
-        if (!r) continue;
-        if (res.isFinal || r.isFinal) {
-          sawFinal = true;
-          // [P5] Narrow alternative-rescue (see helpers).
-          let chosen = pickFinalTranscript(res, expectedNorms);
-          // On-device ear: a segment is cut at a short pause, and the cut
-          // can fall one letter before the end of a word (diag 2026-11-11:
-          // «لا ريب في» | «هدى للمتقين» — «فيه» was marked wrong). When the
-          // segment's last word is the next expected word minus its last
-          // letter, take the expected word.
-          if (useModelEar) {
-            const fixed = repairCutLastWord(chosen);
-            if (fixed !== chosen) { diagPush('result', { final: true, text: chosen, reason: 'cut-word-repaired' }); chosen = fixed; }
-          }
+    // One confirmed piece of recitation (2026-11-12: extracted so the held
+    // tail can be committed later from a timer). `repair` = the piece is a
+    // lone held tail: try the cut-letter repair on it.
+    const commitContFinal = (text: string, meta: { ms?: number; audioMs?: number; backend?: string }, repair: boolean) => {
+      let chosen = text;
+      if (repair) {
+        const fixed = repairCutLastWord(chosen);
+        if (fixed !== chosen) { diagPush('result', { final: true, text: chosen, reason: 'cut-word-repaired' }); chosen = fixed; }
+      }
+      const e = meta;
           diagPush('result', { final: true, text: chosen, ms: e.ms, audioMs: e.audioMs, backend: e.backend });
           diagFinalsRef.current.push(chosen);
           liveRef.current.contFinals = `${liveRef.current.contFinals} ${chosen}`.trim();
@@ -5091,6 +5083,62 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             // once, even if he never pauses (see checkContMissInterrupt).
             checkContMissInterrupt();
           }
+    };
+    rec.onstart = () => { if (recRef.current !== rec) return; diagPush('onstart'); };
+    rec.onaudiostart = () => { if (recRef.current !== rec) return; diagPush('onaudiostart'); };
+    rec.onspeechstart = () => { if (recRef.current !== rec) return; diagPush('onspeechstart'); };
+    rec.onresult = (e: any) => {
+      // [P4] Stale-recognizer guard (see ayah path).
+      if (recRef.current !== rec) return;
+      noteRecResult();
+      // S4: any result re-arms the no-result watchdog.
+      noteWatchdogResult();
+      setMicError('');
+      let interimText = '';
+      let sawFinal = false;
+      const expectedNorms = liveRef.current.contExpected.map((w) => w.norm);
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        // Same isFinal fix as the ayah path: it lives on the result.
+        const res = e.results[i];
+        const r = res[0];
+        if (!r) continue;
+        if (res.isFinal || r.isFinal) {
+          sawFinal = true;
+          // [P5] Narrow alternative-rescue (see helpers).
+          let chosen = pickFinalTranscript(res, expectedNorms);
+          if (useModelEar) {
+            // Held tail (see heldTailRef): join it to this segment; if the
+            // two halves make one expected word, glue them.
+            const h = heldTailRef.current;
+            if (h.timer) { clearTimeout(h.timer); h.timer = null; }
+            if (h.text) {
+              const first = chosen.trim().split(/\s+/)[0] ?? '';
+              const norms = liveRef.current.contExpected.map((w) => w.norm);
+              const alone = spokenTokens(h.text)[0];
+              const glued = spokenTokens(`${h.text}${first}`)[0];
+              if (first && glued && !norms.includes(alone) && norms.includes(glued)) {
+                diagPush('result', { final: true, text: `${h.text}|${first}`, reason: 'split-word-joined' });
+                chosen = `${h.text}${chosen.trim()}`;
+              } else {
+                chosen = `${h.text} ${chosen}`;
+              }
+              h.text = '';
+            }
+            const parts = chosen.trim().split(/\s+/).filter(Boolean);
+            h.text = parts.pop() ?? '';
+            const meta = { ms: e.ms, audioMs: e.audioMs, backend: e.backend };
+            h.timer = setTimeout(() => {
+              h.timer = null;
+              if (recRef.current !== rec || !liveRef.current.contListening || !h.text) return;
+              const t = h.text;
+              h.text = '';
+              commitContFinal(t, meta, true);
+            }, 900);
+            if (parts.length === 0) continue;
+            commitContFinal(parts.join(' '), meta, false);
+            continue;
+          }
+          commitContFinal(chosen, { ms: e.ms, audioMs: e.audioMs, backend: e.backend }, false);
         } else {
           interimText += `${r.transcript} `;
         }
