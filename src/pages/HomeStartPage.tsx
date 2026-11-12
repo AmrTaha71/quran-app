@@ -179,7 +179,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   const [bigOpen, setBigOpen] = useState(false);
   const [tarteelOpen, setTarteelOpen] = useState(false);
   const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
-  // Home doors with choices (الحفظ / سمّع لي / اختبر نفسك): one panel
+  // Home doors with choices (الحفظ / سـمّع لي / اختبر نفسك): one panel
   // open at a time, shown right under the tile grid and scrolled into
   // view so the choices are never hidden below the fold.
   const [panel, setPanel] = useState<null | 'hifz' | 'test' | 'quiz'>(null);
@@ -318,7 +318,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
                 <Mic className="w-7 h-7 text-white" />
               </span>
-              سمّع لي
+              سـمّع لي
             </button>
             <button
               onPointerDown={pressFeedback}
@@ -351,35 +351,29 @@ export default function HomeStartPage({ session, onNavigate }: {
             every door below the fold). */}
         {/* 2026-11-12 (agreed): «صفحة جدو» on the right of the logo and the
             «الشاشة الكبيرة» on the left, one matching pair around the mark. */}
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-3 mb-4 grid grid-cols-[auto_1fr_auto] items-center gap-2">
-          <button type="button" onPointerDown={pressFeedback} onClick={() => setBigOpen(true)}
-            aria-label="الشاشة الكبيرة"
-            className="flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-xl bg-white/70 border border-hairline text-accent-800 polish-press polish-focus">
-            <Cast className="w-6 h-6" />
-            <span className="text-xs font-bold">الشاشة</span>
-          </button>
-          <div className="min-w-0 flex items-center gap-3 justify-center">
-            <img src="/brand/tarbitat-logo.webp" alt="تربيطات آيات القرآن" className="w-24 h-24 object-contain drop-shadow-md polish-hero-medal shrink-0" />
-            <div className="min-w-0">
-              <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}</p>
-              <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">
-                {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
-              </p>
-            </div>
+        <div className="rounded-2xl glass-card polish-card polish-fade-up p-3 mb-4 flex items-center gap-3 justify-center">
+          <img src="/brand/tarbitat-logo.webp" alt="تربيطات آيات القرآن" className="w-20 h-20 object-contain drop-shadow-md polish-hero-medal shrink-0" />
+          <div className="min-w-0">
+            <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}{preferredName ? ` يا ${preferredName}` : ''}</p>
+            <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">{dailyDua()}</p>
           </div>
-          <button type="button" onPointerDown={pressFeedback} onClick={() => setElderlyMode(true)}
-            aria-label="صفحة جدو"
-            className="flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-xl bg-white/70 border border-hairline text-accent-800 polish-press polish-focus">
-            <GrandpaIcon className="w-6 h-6" />
-            <span className="text-xs font-bold">جدو</span>
-          </button>
         </div>
 
-        {/* «اؤمرني»: voice command door. */}
-        <div className="mb-4">
+        {/* 2026-11-13: «الشاشة» and «جدو» as big doors on both sides of «اؤمرني». */}
+        <div className="mb-4 grid grid-cols-[1fr_2.4fr_1fr] gap-3 items-stretch">
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setElderlyMode(true)} aria-label="صفحة جدو"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-gold" aria-hidden="true"><GrandpaIcon /></span>
+            <span className="home-tile-title">صفحة جدو</span>
+          </button>
           <OrderMeButton onNavigate={onNavigate}
             onMutashabihat={() => setMutOpen(true)}
             onElderly={() => setElderlyMode(true)} />
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setBigOpen(true)} aria-label="الشاشة الكبيرة"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-night" aria-hidden="true"><Cast /></span>
+            <span className="home-tile-title">الشاشة الكبيرة</span>
+          </button>
         </div>
 
         {/* The four main doors. A tile with choices opens its panel right
@@ -387,7 +381,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="home-tiles mb-3">
           <HomeTile icon={<BookMarked />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
             expanded={hifzOpen} onClick={() => { togglePanel('hifz'); setShowPicker(false); }} />
-          <HomeTile icon={<MicVocal />} glaze="gold" title="سمّع لي" hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
+          <HomeTile icon={<MicVocal />} glaze="gold" title="سـمّع لي" hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             expanded={testOpen} onClick={() => togglePanel('test')} />
           <HomeTile icon={<Award />} glaze="gold" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             expanded={quizOpen} onClick={() => togglePanel('quiz')} />
@@ -512,11 +506,11 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        {/* سمّع لي: 4 range choices. Only a choice tap navigates (to
+        {/* سـمّع لي: 4 range choices. Only a choice tap navigates (to
             'test', with the chosen range stored for SelfTestPage). */}
         {testOpen && (
           <div ref={panelRef} className="home-panel mb-4">
-            <p className="home-panel-title">سمّع لي — اختار النطاق</p>
+            <p className="home-panel-title">سـمّع لي — اختار النطاق</p>
             <div className="grid grid-cols-2 gap-3 alive-subdoors">
               {([['surah', 'بالسورة'], ['juz', 'بالجزء'], ['page', 'بالصفحة'], ['passage', 'فقرة معينة']] as const).map(([id, label]) => (
                 <button
@@ -563,14 +557,14 @@ export default function HomeStartPage({ session, onNavigate }: {
         )}
 
         {/* Listening + modes: smaller tiles, one glance. */}
-        <div className="home-tiles home-tiles-small mb-4">
-          <HomeTile small icon={<Headphones />} glaze="night" title="استمع للقرآن" hint={showHints ? 'والشاشة مقفولة' : undefined}
-            onClick={() => onNavigate('listen')} />
-          <HomeTile small icon={<SunMoon />} glaze="night" title="الأذكار" hint={showHints ? 'صباح ومساء' : undefined}
-            onClick={() => onNavigate('adhkar')} />
-          <HomeTile small icon={<Users />} glaze="emerald" title={roomLabel()} hint={showHints ? 'راجعوا مع بعض' : undefined}
+        <div className="home-tiles mb-4">
+          <HomeTile icon={<Users />} glaze="emerald" title={roomLabel()} hint={showHints ? 'راجعوا مع بعض' : undefined}
             onClick={() => onNavigate('room')} />
-          <HomeTile small icon={<Settings />} glaze="plain" title="الإعدادات"
+          <HomeTile icon={<Headphones />} glaze="night" title="استمع للقرآن" hint={showHints ? 'والشاشة مقفولة' : undefined}
+            onClick={() => onNavigate('listen')} />
+          <HomeTile icon={<SunMoon />} glaze="night" title="الأذكار" hint={showHints ? 'صباح ومساء' : undefined}
+            onClick={() => onNavigate('adhkar')} />
+          <HomeTile icon={<Settings />} glaze="plain" title="الإعدادات"
             onClick={() => onNavigate('settings')} />
         </div>
         {bigOpen && <BigScreenSheet onClose={() => setBigOpen(false)} onRemote={() => { setBigOpen(false); onNavigate('room'); }} />}

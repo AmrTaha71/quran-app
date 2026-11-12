@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useEscapeClose } from '../lib/useEscape';
-import { QrCode, X, Apple, Smartphone, Monitor, Download } from 'lucide-react';
+import { QrCode, X, Apple, Smartphone, Monitor, Download, Share2 } from 'lucide-react';
+import ShareSheet from './ShareSheet';
 
 // QR is generated in the browser so the app URL never goes to a third party.
 function LocalQr({ url, alt, fallback }: { url: string; alt: string; fallback: string }) {
@@ -26,6 +27,7 @@ function LocalQr({ url, alt, fallback }: { url: string; alt: string; fallback: s
 
 export default function QRCodeSection() {
   const [open, setOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   useEscapeClose(open, () => setOpen(false));
 
   // 2026-11-06: the app is NOT on any store yet, so every QR/button
@@ -34,23 +36,29 @@ export default function QRCodeSection() {
   // `url` per device and restore the store names.
   const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://rawabit-alziker-alhakim.vercel.app';
   const stores = [
-    { icon: <Monitor className="w-7 h-7" />, label: 'على الكمبيوتر', desc: 'Chrome أو Edge ← أيقونة التثبيت في شريط العنوان', url: appUrl, color: 'grad-emerald-door' },
+    { icon: <Monitor className="w-7 h-7" />, label: 'على الكمبيوتر (ويندوز أو ماك)', desc: 'Chrome أو Edge ← أيقونة التثبيت في شريط العنوان. على ماك Safari: ملف ← إضافة إلى Dock', url: appUrl, color: 'grad-emerald-door' },
     { icon: <Apple className="w-7 h-7" />, label: 'على آيفون وآيباد', desc: 'Safari ← مشاركة ← إضافة إلى الشاشة الرئيسية', url: appUrl, color: 'grad-emerald-door' },
     { icon: <Smartphone className="w-7 h-7" />, label: 'على أندرويد', desc: 'Chrome ← القائمة ⋮ ← تثبيت التطبيق', url: appUrl, color: 'grad-emerald-door' },
   ];
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-accent-600 to-accent-800 hover:from-accent-700 hover:to-accent-900 text-white font-bold rounded-2xl shadow-lg hover:shadow-xl transition-smooth"
-      >
-        <QrCode className="w-6 h-6 shrink-0" />
-        <span className="text-right">
-          <span className="block font-bold">حمّل التطبيق</span>
-          <span className="block text-sm font-medium text-white/85">شارك التطبيق مع غيرك</span>
-        </span>
-      </button>
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={() => setOpen(true)}
+          className="flex items-center justify-center gap-3 px-4 py-4 grad-emerald-door glass-door-highlight text-white font-bold rounded-2xl shadow-lg polish-press">
+          <QrCode className="w-6 h-6 shrink-0" />
+          <span className="text-lg">حمّل التطبيق</span>
+        </button>
+        <button onClick={() => setShareOpen(true)}
+          className="flex items-center justify-center gap-3 px-4 py-4 grad-amber-door glass-door-highlight text-white font-bold rounded-2xl shadow-lg polish-press">
+          <Share2 className="w-6 h-6 shrink-0" />
+          <span className="text-right leading-tight">
+            <span className="block text-lg">شاركنا الأجر</span>
+            <span className="block text-xs font-medium text-white/90">شارك التطبيق مع غيرك</span>
+          </span>
+        </button>
+      </div>
+      {shareOpen && <ShareSheet title="شارك التطبيق" text="تربيطات آيات القرآن — تطبيق مجاني لحفظ القرآن بالتربيطات والتسميع" url={appUrl} onClose={() => setShareOpen(false)} />}
 
       {open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setOpen(false)}>

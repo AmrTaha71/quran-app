@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info } from 'lucide-react';
+import ShareSheet from '../components/ShareSheet';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
@@ -597,6 +598,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'diag', icon: Activity, title: 'سجل تشخيص الاستماع', sub: 'آخر ٣٠ حدثًا (مؤقت)', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'share', icon: Share2, title: 'شارك التطبيق', sub: 'شاركنا الأجر', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
+    { id: 'about', icon: Info, title: 'عن التطبيق', sub: 'وتواصل معنا', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'account-delete', icon: Shield, title: 'حسابي', sub: 'مسح الحساب والبيانات', box: 'bg-red-50 border-red-200', fg: 'text-red-700' },
   ];
 
@@ -842,7 +845,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-accent-600 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
               ) : (
                 <>
-                  <img key={EDITIONS[editionIdx].id} src={EDITIONS[editionIdx].imageUrl(2)} alt="معاينة صفحة المصحف"
+                  <img key={EDITIONS[editionIdx].id} src={EDITIONS[editionIdx].imageUrl(EDITIONS[editionIdx].id === 'madinah' ? 3 : 2)} alt="معاينة صفحة المصحف"
                     onError={() => setPreviewFailed(true)}
                     className="w-full block" style={{ aspectRatio: '0.707' }} />
                   {goldFrame && (
@@ -852,18 +855,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </>
               )}
             </div>
-            <p className="text-xs text-accent-600 text-center mt-2">صفحة الفاتحة — نفس الشكل اللي هيتفتح بيه المصحف</p>
+            <p className="text-xs text-accent-600 text-center mt-2">نفس الشكل اللي هيتفتح بيه المصحف</p>
           </div>
-          <button onClick={toggleGold}
-            className={`mt-4 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${goldFrame ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
-            <span className="text-right">
-              <span className="block font-medium text-accent-800">إطار ذهبي حول الصفحة</span>
-              <span className="block text-sm text-accent-600">إطار ذهبي أنيق فوق صورة الصفحة في المصحف</span>
-            </span>
-            <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${goldFrame ? 'bg-amber-500' : 'bg-gray-300'}`}>
-              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${goldFrame ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
-            </span>
-          </button>
           <button onClick={toggleNight}
             className={`mt-3 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${mushafNight ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
             <span className="text-right">
@@ -1247,6 +1240,19 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </div>
         </section>
             </>)}
+            {openDoor === 'share' && (
+              <ShareSheet title="شارك التطبيق" text="تربيطات آيات القرآن — تطبيق مجاني لحفظ القرآن بالتربيطات والتسميع" url={window.location.origin} onClose={() => setOpenDoor(null)} />
+            )}
+            {openDoor === 'about' && (
+        <section id="sec-about" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
+          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-2">
+            <Info className="w-5 h-5 text-emerald-600" /> عن التطبيق
+          </h2>
+          <p className="text-base text-accent-800 leading-relaxed">تربيطات آيات القرآن: تطبيق مجاني لحفظ القرآن بالتربيطات والتسميع. من غير إعلانات ولا اشتراكات.</p>
+          <p className="text-sm text-accent-700 leading-relaxed mt-3">تنبيه: تصحيح التسميع بيتم آليًا وممكن يغلط، وهو مش بديل عن شيخ أو معلّم متقن.</p>
+          <p className="text-sm text-accent-700 leading-relaxed mt-3">تواصل معنا: قريبًا إن شاء الله.</p>
+        </section>
+            )}
             {openDoor === 'onboarding' && (<>
         {/* Re-play the first-run onboarding (2026-11-06, feature #7):
             clears the done flag, tells App to open the overlay, and
@@ -1256,7 +1262,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Compass className="w-5 h-5 text-emerald-600" /> جولة تعريفية
           </h2>
           <Hint id="set-tour"><p className="text-sm text-accent-600 mb-4 leading-relaxed">
-            جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسمّع لي، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
+            جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسـمّع لي، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
           </p></Hint>
           <button
             onClick={() => {

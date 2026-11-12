@@ -29,8 +29,8 @@ import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText,
-} from 'lucide-react';
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, AlertTriangle } from 'lucide-react';
+import { useUserLists } from '../components/UserLists';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
@@ -245,6 +245,7 @@ export default function QuranMushafPage({
   startInFollow?: boolean;
 }) {
   const { t, lang, setLang } = useLang();
+  const userLists = useUserLists();
   const [currentPage, setCurrentPage] = useState(readStoredPage);
   // SHAKE FIX 2026-10-28: the fullscreen image follows displayedPage
   // (the page whose image has actually loaded), not currentPage, so a
@@ -4503,6 +4504,21 @@ export default function QuranMushafPage({
                         <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
                         <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
                       </button>
+                      {/* 2026-11-13: tag the ayah for the «لوحتي» filters. */}
+                      {session && (
+                        <div className="grid grid-cols-2 gap-2 mb-3">
+                          <button onClick={() => { void userLists.toggleList(selectedVerse.id, 'read_later'); }}
+                            aria-pressed={userLists.lists.read_later.has(selectedVerse.id)}
+                            className={`py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 polish-press ${userLists.lists.read_later.has(selectedVerse.id) ? 'grad-emerald-door text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>
+                            <Bookmark className="w-5 h-5" /> ارجع لها بعدين
+                          </button>
+                          <button onClick={() => { void userLists.toggleList(selectedVerse.id, 'difficult'); }}
+                            aria-pressed={userLists.lists.difficult.has(selectedVerse.id)}
+                            className={`py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 polish-press ${userLists.lists.difficult.has(selectedVerse.id) ? 'grad-amber-door text-white' : 'bg-white border border-hairline-amber text-accent-800'}`}>
+                            <AlertTriangle className="w-5 h-5" /> صعبة
+                          </button>
+                        </div>
+                      )}
                       {/* Share only here now (2026-11-04): اقترح تربيط
                           moved to the very bottom of the popup, after
                           استمع للآية, per the user's decision.

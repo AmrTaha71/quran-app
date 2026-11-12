@@ -25,7 +25,7 @@ import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow' | 'test';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 const PAGE_SIZE = 15;
 
 export default function UserAppPage({ session, onNavigate }: { session: import('@supabase/supabase-js').Session | null; onNavigate: (r: Route) => void }) {
@@ -621,14 +621,19 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           <DailyWird onNavigate={onNavigate} />
           <div className="glass-card rounded-2xl shadow-sm p-5 flex flex-col">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-3">
               <Mic className="w-5 h-5 text-emerald-700" />
-              <h2 className="font-semibold text-ink">سمّع لي</h2>
+              <h2 className="font-semibold text-ink">سـمّع لي</h2>
             </div>
+            <p className="text-sm font-semibold text-emerald-700 mb-4">اقرأ من حفظك، والقارئ يصحّح لك</p>
             <button onClick={() => onNavigate('test')}
-              className="mt-4 md:mt-auto w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus">
-              ابدأ التسميع
+              className="w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
+              <Mic className="w-5 h-5" /> ابدأ التسميع
             </button>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <button onClick={() => onNavigate('listen')} className="py-2.5 bg-white border border-hairline-emerald text-accent-800 font-bold rounded-xl polish-press">استمع للقرآن</button>
+              <button onClick={() => onNavigate('room')} className="py-2.5 bg-white border border-hairline-emerald text-accent-800 font-bold rounded-xl polish-press">راجع مع صديقك</button>
+            </div>
           </div>
         </div>
 
