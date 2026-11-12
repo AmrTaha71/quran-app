@@ -27,6 +27,14 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+// 2026-11-12 (agreed UI rule): Arabic count forms, not "2 آيات".
+export function countAyat(n: number): string {
+  if (n === 1) return 'آية واحدة';
+  if (n === 2) return 'آيتين';
+  if (n >= 3 && n <= 10) return `${n} آيات`;
+  return `${n} آية`;
+}
+
 export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [level, setLevel] = useState<Level | null>(null);
   const [queue, setQueue] = useState<BankItem[]>([]);
@@ -146,7 +154,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
             <div className="rounded-xl bg-emerald-50 p-4 text-center">
               <p className="text-2xl leading-loose font-display-ar text-ink">{current.clue}</p>
             </div>
-            <p className="text-ink font-semibold">الجملة دي في {current.answers.length} آيات. اكتب كل آية.</p>
+            <p className="text-ink font-semibold">الجملة دي في {countAyat(current.answers.length)}. سمّع كل آية.</p>
 
             <div className="flex flex-wrap gap-2 min-h-[32px]">
               {current.answers.map((k) => found.has(k) ? (
