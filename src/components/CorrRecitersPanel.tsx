@@ -82,8 +82,8 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
   return (
     <div dir="rtl" className="space-y-3">
       <Hint id="corr-reciters"><p className="text-sm text-accent-700">
-        اختار القارئ اللي يصحّحلك وإنت بتسمّع. ولو نزّلت تسجيلاته على جهازك، تقدر تسمّع معاه <b>من غير إنترنت</b>.
-        تقدر تنزّل واحد أو اتنين أو كلهم، وتمسح أي واحد وقت ما تحب.
+        اختار القارئ اللي يصحّحلك وإنت بتسمّع. التصحيح <b>بيشتغل بالنت مباشرة</b> ومن غير تحميل.
+        ولو عايز تسمّع من غير نت، تقدر تنزّل <b>جزء أو أكتر</b> (اختياري)، وتمسحه وقت ما تحب.
       </p></Hint>
       <p className="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
         عشان التنزيل يفضل محفوظ على الآيفون والآيباد: ثبّت التطبيق على الشاشة الرئيسية الأول (الإعدادات ← تثبيت التطبيق).
@@ -106,7 +106,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 <span className="font-bold text-accent-900">{r.name}</span>
               </button>
               <span className="text-xs text-accent-600">
-                {!open && done ? '✓ على جهازك' : !open && count > 0 ? `نزل ${pct}%` : formatSize(CORR_SIZE_MB[r.folder] || 0)}
+                {!open && done ? '✓ على جهازك' : !open && count > 0 ? `نزل ${pct}%` : 'بالنت'}
               </span>
             </div>
             {askFor === r.folder && (
@@ -115,8 +115,6 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button type="button" onClick={() => { setAskFor(null); setOpenJuz(r.folder); }}
                     className="min-h-[44px] rounded-lg bg-emerald-600 text-white text-sm font-bold">جزء أو أكتر (من {juzSizeMb(r.folder, 1)} ميجا للجزء)</button>
-                  <button type="button" disabled={!!busy} onClick={() => { setAskFor(null); void download(r.folder); }}
-                    className="min-h-[44px] rounded-lg bg-amber-500 text-white text-sm font-bold disabled:opacity-40">القرآن كله ({formatSize(CORR_SIZE_MB[r.folder] || 0)})</button>
                   <button type="button" onClick={() => setAskFor(null)}
                     className="min-h-[44px] rounded-lg border text-sm">بالنت بس دلوقتي</button>
                 </div>
@@ -158,8 +156,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 </>
               ) : (
                 <>
-                  <span className="text-xs text-accent-600 flex-1">{count > 0 ? `نزل ${pct}% — كمّل` : 'بيشتغل بالنت بس'}</span>
-                  <button type="button" disabled={!!busy} onClick={() => void download(r.folder)} className="min-h-[40px] px-3 rounded-lg bg-emerald-600 text-white text-sm flex items-center gap-1 disabled:opacity-40"><Download className="w-4 h-4" /> نزّل القرآن كله</button>
+                  <span className="text-xs text-accent-600 flex-1">{count > 0 ? `نزل ${pct}% — كمّل` : 'بيشتغل بالنت'}</span>
                   {count > 0 && <button type="button" disabled={!!busy} onClick={() => remove(r.folder)} className="min-h-[40px] px-2 rounded-lg border border-red-200 text-red-700"><Trash2 className="w-4 h-4" /></button>}
                 </>
               )}
@@ -168,10 +165,6 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
           </div>
         );
       })}
-      <button type="button" disabled={!!busy} onClick={() => void downloadAll()}
-        className="w-full min-h-[48px] rounded-xl grad-amber-door text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40">
-        <Download className="w-5 h-5" /> نزّلهم كلهم ({formatSize(ALL_SIZE_MB)}) — تسمّع مع أي قارئ من غير نت
-      </button>
       {msg && <p className="text-xs text-amber-800">{msg}</p>}
     </div>
   );
