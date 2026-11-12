@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-// Branded launch screen for "روابط الذكر الحكيم" — the artwork
+// Branded launch screen for "تربيطات آيات القرآن" — the artwork
 // ITSELF, not a redraw: the centerpiece is the hosted icon-512.png,
 // the very image that is also the app icon (winner logo, served
 // from Supabase Storage bucket app-icons). The artwork already carries
@@ -158,7 +158,7 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
       <div className="rq-splash-inner">
         <div className="rq-splash-glow" />
         <div className="rq-splash-logo">
-          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="روابط الذكر الحكيم" />
+          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="تربيطات آيات القرآن" />
         </div>
         <div className="rq-splash-divider"><i /></div>
         <p className="rq-splash-tagline">{message || 'احفظ القرآن بالتربيطات'}</p>

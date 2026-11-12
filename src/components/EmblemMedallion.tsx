@@ -74,7 +74,7 @@ export default function EmblemMedallion({
 
   if (variant === 'splash') {
     return (
-      <svg viewBox="0 0 240 300" className={className} role="img" aria-label="روابط الذكر الحكيم">
+      <svg viewBox="0 0 240 300" className={className} role="img" aria-label="تربيطات آيات القرآن">
         <defs>
           <linearGradient id={goldId} x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="#f9e08a" />
@@ -92,14 +92,14 @@ export default function EmblemMedallion({
         <line x1="84" y1="256" x2="156" y2="256" stroke="#f0c85a" strokeWidth="2" />
         <rect x="116.5" y="252.5" width="7" height="7" fill="#f0c85a" transform="rotate(45 120 256)" />
         <text x="120" y="284" textAnchor="middle" fontSize="21" fill="#f0c85a" fontFamily={displayFont}>
-          روابط الذكر الحكيم
+          تربيطات آيات القرآن
         </text>
       </svg>
     );
   }
 
   return (
-    <svg viewBox="0 0 240 240" className={className} role="img" aria-label="روابط الذكر الحكيم">
+    <svg viewBox="0 0 240 240" className={className} role="img" aria-label="تربيطات آيات القرآن">
       <defs>
         <linearGradient id={goldId} x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#f9e08a" />

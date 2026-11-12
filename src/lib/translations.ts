@@ -70,7 +70,7 @@ type TR = Record<Lang, Record<TK, string>>;
 
 export const T: TR = {
   ar: {
-    appName: 'روابط الذكر الحكيم', appTagline: 'معك في كل آية، حتى نُتمّ حفظ كتاب الله',
+    appName: 'تربيطات آيات القرآن', appTagline: 'معك في كل آية، حتى نُتمّ حفظ كتاب الله',
     login: 'تسجيل الدخول', signup: 'إنشاء حساب', logout: 'خروج', email: 'البريد الإلكتروني',
     password: 'كلمة المرور', username: 'اسم المستخدم', phone: 'رقم الهاتف',
     birthDate: 'تاريخ الميلاد', gender: 'الجنس', male: 'ذكر', female: 'أنثى',
@@ -107,7 +107,7 @@ export const T: TR = {
     splashLoading: 'جارٍ التحميل...', myLists: 'قوائمي', shareVerse: 'مشاركة الآية', copyLink: 'نسخ الرابط',
   },
   'ar-EG': {
-    appName: 'روابط الذكر الحكيم', appTagline: 'معاك في كل آية، لحد ما تُتم حفظ كتاب الله',
+    appName: 'تربيطات آيات القرآن', appTagline: 'معاك في كل آية، لحد ما تُتم حفظ كتاب الله',
     login: 'دخول', signup: 'اعمل حساب', logout: 'خروج', email: 'الإيميل',
     password: 'كلمة السر', username: 'اسم المستخدم', phone: 'رقم الموبايل',
     birthDate: 'تاريخ الميلاد', gender: 'النوع', male: 'ذكر', female: 'أنثى',

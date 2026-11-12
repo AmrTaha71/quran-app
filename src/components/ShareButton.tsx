@@ -33,8 +33,8 @@ export default function ShareButton({
     ? APP_URL
     : buildShareUrl({ surah: surahNo, ayah: ayahNo, page: pageNo });
   const shareText = isGenericAppShare
-    ? `روابط الذكر الحكيم\n\nاحفظ القرآن بالتربيطات:\n${shareUrl}`
-    : `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق روابط الذكر الحكيم:\n${shareUrl}`;
+    ? `تربيطات آيات القرآن\n\nاحفظ القرآن بالتربيطات:\n${shareUrl}`
+    : `${surahName} — آية ${ayahNo}\n\n${verseText}\n\nحمّل تطبيق تربيطات آيات القرآن:\n${shareUrl}`;
   const encodedText = encodeURIComponent(shareText);
   const encodedUrl = encodeURIComponent(shareUrl);
 
@@ -140,7 +140,7 @@ export default function ShareButton({
       icon: <Mail className="w-8 h-8" />,
       label: 'بريد',
       color: 'bg-amber-500 hover:bg-amber-600',
-      url: `mailto:?subject=${encodeURIComponent('روابط الذكر الحكيم')}&body=${encodedText}`,
+      url: `mailto:?subject=${encodeURIComponent('تربيطات آيات القرآن')}&body=${encodedText}`,
     },
     {
       icon: <Phone className="w-8 h-8" />,
@@ -242,7 +242,7 @@ export default function ShareButton({
               <button
                 onClick={async () => {
                   try {
-                    await navigator.share({ title: 'روابط الذكر الحكيم', text: shareText, url: shareUrl });
+                    await navigator.share({ title: 'تربيطات آيات القرآن', text: shareText, url: shareUrl });
                   } catch { /* user cancelled */ }
                 }}
                 className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 bg-gray-50 hover:bg-gray-100 text-accent-700 text-sm font-semibold rounded-xl transition-smooth"

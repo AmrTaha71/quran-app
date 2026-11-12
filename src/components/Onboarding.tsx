@@ -155,7 +155,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
               {step === SCREENS.length - 1 ? 'جهّز التطبيق' : 'التالي'}
               <ChevronLeft className="w-5 h-5" />
             </button>
-            <p className="text-xs text-ink-3 mt-3">روابط الذكر الحكيم — احفظ القرآن بالتربيطات</p>
+            <p className="text-xs text-ink-3 mt-3">تربيطات آيات القرآن — احفظ القرآن بالتربيطات</p>
           </div>
         ) : (
           <div key="setup" className="px-6 pb-6 pt-2 polish-fade-up">

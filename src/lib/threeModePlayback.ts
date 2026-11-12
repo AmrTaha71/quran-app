@@ -1679,13 +1679,13 @@ export class JourneyEngine {
         ms.metadata = new MediaMetadataCtor({
           title: isJuhani ? `سورة ${surahName} — حدر (الجهني)` : `سورة ${surahName} — آية ${cur.ayah}`,
           artist: reciterName,
-          album: 'روابط الذكر الحكيم',
+          album: 'تربيطات آيات القرآن',
         });
       } else {
         ms.metadata = new MediaMetadataCtor({
           title: `تفسير سورة ${surahName} آية ${cur.ayah}`,
           artist: 'التفسير الميسر',
-          album: 'روابط الذكر الحكيم',
+          album: 'تربيطات آيات القرآن',
         });
       }
     } catch {

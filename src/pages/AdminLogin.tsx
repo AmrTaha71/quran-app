@@ -38,7 +38,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
               <BookOpen className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">لوحة الإدارة</h1>
-            <p className="text-sm text-accent-600 mt-1">روابط الذكر الحكيم</p>
+            <p className="text-sm text-accent-600 mt-1">تربيطات آيات القرآن</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">

@@ -382,7 +382,7 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
         ms.metadata = new MediaMetadata({
           title: RADIO_TITLE,
           artist: 'إذاعة القرآن الكريم',
-          album: 'روابط الذكر الحكيم',
+          album: 'تربيطات آيات القرآن',
         });
         ms.setActionHandler('play', playStream);
         ms.setActionHandler('pause', stopStream);

@@ -1264,7 +1264,7 @@ export class ListenEngine {
       ms.metadata = new MediaMetadataCtor({
         title: `سورة ${surahName} — آية ${this.ayah}`,
         artist: reciterName,
-        album: 'روابط الذكر الحكيم',
+        album: 'تربيطات آيات القرآن',
       });
     } catch {
       // Media Session is entirely best-effort.

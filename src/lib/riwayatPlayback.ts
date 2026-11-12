@@ -635,7 +635,7 @@ export class RiwayaEngine {
       ms.metadata = new MediaMetadataCtor({
         title: `سورة ${surahName}`,
         artist: riwayaName,
-        album: 'روابط الذكر الحكيم',
+        album: 'تربيطات آيات القرآن',
       });
     } catch {
       // Media Session is entirely best-effort.

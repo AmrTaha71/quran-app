@@ -98,7 +98,7 @@ export default function ShareProgressCard({ memorizedFromStart }: { memorizedFro
 
   const shareText =
     `${stats.headline} — ${formatAr(memorizedFromStart)} آية من أول المصحف (${formatAr(stats.pct)}٪ من القرآن الكريم)\n` +
-    `احفظ القرآن بالتربيطات — روابط الذكر الحكيم:\n${APP_URL}`;
+    `احفظ القرآن بالتربيطات — تربيطات آيات القرآن:\n${APP_URL}`;
 
   // Draws the card onto a 1080×1350 canvas (portrait, WhatsApp-friendly).
   const renderCanvas = (): HTMLCanvasElement => {
@@ -128,7 +128,7 @@ export default function ShareProgressCard({ memorizedFromStart }: { memorizedFro
     // App name + tagline.
     ctx.fillStyle = GOLD_LIGHT;
     ctx.font = `700 64px ${serif}`;
-    ctx.fillText('روابط الذكر الحكيم', W / 2, 190);
+    ctx.fillText('تربيطات آيات القرآن', W / 2, 190);
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
     ctx.font = `400 44px ${serif}`;
     ctx.fillText('احفظ القرآن بالتربيطات', W / 2, 268);
@@ -270,7 +270,7 @@ export default function ShareProgressCard({ memorizedFromStart }: { memorizedFro
         <div className="rounded-2xl border-2 border-[rgba(212,175,55,0.85)] p-5 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
             <BadgeCheck className="w-5 h-5 text-amber-300" />
-            <p className="font-bold font-display-ar text-lg text-amber-200">روابط الذكر الحكيم</p>
+            <p className="font-bold font-display-ar text-lg text-amber-200">تربيطات آيات القرآن</p>
           </div>
           <p className="text-2xl font-bold font-display-ar leading-relaxed">{stats.headline}</p>
           <p className="text-amber-100 mt-1">

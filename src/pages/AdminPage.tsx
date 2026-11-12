@@ -591,7 +591,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               <BookOpen className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-base font-bold text-accent-800">روابط الذكر الحكيم</h1>
+              <h1 className="text-base font-bold text-accent-800">تربيطات آيات القرآن</h1>
               <p className="text-xs text-accent-600">لوحة الإدارة — {session.user.email}</p>
             </div>
           </div>
