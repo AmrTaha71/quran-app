@@ -553,6 +553,8 @@ function pairAltAt(expected: string[], i: number, spoken: string[], j: number): 
   return -1;
 }
 
+const WARMED_CORR_URLS = new Set<string>();
+
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   // E2: spoken index each expected word matched at (-1 if unmatched).
@@ -2006,14 +2008,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     cancelCorrectionSpeech();
     stopCorrAudio();
     const rate = maxRate != null ? Math.min(CORR_RATE_VALUE[liveRef.current.corrRate], maxRate) : CORR_RATE_VALUE[liveRef.current.corrRate];
-    diagPush('corr-source', { label: 'juhani-window', reason: `mode=${liveRef.current.corrDelayMode};rate=${rate};segs=${plan.segments.length}${plan.truncated ? ';truncated' : ''}` });
+    diagPush('corr-source', { label: 'juhani-window', reason: `mode=${liveRef.current.corrDelayMode};rate=${rate};segs=${plan.segments.length}${plan.truncated ? ';truncated' : ''};plan=${wordPlan ? 'words' : 'whole-ayah'};win=${plan.segments.map((g) => `${g.start}-${g.end}@${g.tStart.toFixed(2)}-${g.tEnd.toFixed(2)}`).join(',')};wrong=${wrongIdx.join('.')};${ayah.surah_no}:${ayah.ayah_no}` });
+    const corrT0 = Date.now();
     setCorrWindowPlaying(true);
     player.play({
       url: playUrlForPlan,
       segments: plan.segments,
       rate,
       onStart: () => { diagPush('tts-start', { label: 'juhani-window' }); },
-      onDone: () => { setCorrWindowPlaying(false); diagPush('tts-end', { label: 'juhani-window' }); try { onDone?.(); } catch {} },
+      onDone: () => { setCorrWindowPlaying(false); diagPush('tts-end', { label: 'juhani-window', reason: `totalMs=${Date.now() - corrT0}` }); try { onDone?.(); } catch {} },
       onFail: (reason) => { setCorrWindowPlaying(false); diagPush('tts-error', { label: 'juhani-window', reason }); onFallback(); },
     });
     return true;
@@ -3750,6 +3753,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (wa && wa.id > 0 && juhaniPlayerRef.current) {
           contWarmAyahRef.current = nextAyahIdx;
           juhaniPlayerRef.current.prewarm(corrAyahUrl(wa.surah_no, wa.ayah_no), juhaniAyahStartTime(wa.surah_no, wa.ayah_no) ?? undefined);
+        }
+        // 2026-11-12: also pull the next two ayahs' files into the HTTP
+        // cache, so a correction there never waits on the network.
+        for (let d = 0; d <= 2; d++) {
+          const na = ayahsRef.current[nextAyahIdx + d];
+          if (!na || na.id <= 0) continue;
+          const u = corrAyahUrl(na.surah_no, na.ayah_no);
+          if (WARMED_CORR_URLS.has(u)) continue;
+          WARMED_CORR_URLS.add(u);
+          void fetch(u, { mode: 'no-cors' }).catch(() => { WARMED_CORR_URLS.delete(u); });
         }
       }
     } catch { /* warming is best-effort */ }

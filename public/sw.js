@@ -212,6 +212,19 @@ function isDownloadedAudioUrl(url) {
   );
 }
 
+let corrKeys = null;
+let corrKeysAt = 0;
+function refreshCorrKeys() {
+  const now = Date.now();
+  if (now - corrKeysAt < 5000) return;
+  corrKeysAt = now;
+  caches.open(AUDIO_CORR_CACHE)
+    .then((c) => c.keys())
+    .then((ks) => { corrKeys = new Set(ks.map((r) => r.url)); })
+    .catch(() => {});
+}
+refreshCorrKeys();
+
 async function serveDownloadedAudio(req) {
   try {
     const cached = await caches.match(req);
@@ -339,6 +352,15 @@ self.addEventListener('fetch', (event) => {
   // body cannot be read is returned whole instead (the element
   // buffers the full file, so seeks inside it stay local).
   if (isDownloadedAudioUrl(url)) {
+    // 2026-11-12: reciter files that were NOT downloaded go straight to
+    // the network, untouched by the SW. Proxying a streamed media
+    // request through the SW made Safari stall on the seek into the
+    // word window (an 11.6s correction in the 2026-11-12 diag). Only
+    // URLs known to be in the download cache are served from here.
+    if (url.hostname === 'everyayah.com') {
+      refreshCorrKeys();
+      if (!corrKeys || !corrKeys.has(url.href)) return;
+    }
     event.respondWith(serveDownloadedAudio(req));
     return;
   }
