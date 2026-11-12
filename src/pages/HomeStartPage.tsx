@@ -1,6 +1,7 @@
 import { roomLabel } from '../lib/roomLabel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
+import GrandpaIcon from '../components/GrandpaIcon';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
@@ -348,14 +349,30 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* Hero: the mark beside the greeting, compact, so the doors are
             on screen at once (2026-11-10: was a 224px mark that pushed
             every door below the fold). */}
-        <div className="rounded-2xl glass-card polish-card polish-fade-up p-3 mb-4 flex items-center gap-3">
-          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="" className="w-20 h-20 object-contain drop-shadow-md polish-hero-medal shrink-0" />
-          <div className="min-w-0">
-            <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}</p>
-            <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">
-              {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
-            </p>
+        {/* 2026-11-12 (agreed): «صفحة جدو» on the right of the logo and the
+            «الشاشة الكبيرة» on the left, one matching pair around the mark. */}
+        <div className="rounded-2xl glass-card polish-card polish-fade-up p-3 mb-4 grid grid-cols-[auto_1fr_auto] items-center gap-2">
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setBigOpen(true)}
+            aria-label="الشاشة الكبيرة"
+            className="flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-xl bg-white/70 border border-hairline text-accent-800 polish-press polish-focus">
+            <Cast className="w-6 h-6" />
+            <span className="text-xs font-bold">الشاشة</span>
+          </button>
+          <div className="min-w-0 flex items-center gap-3 justify-center">
+            <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="" className="w-20 h-20 object-contain drop-shadow-md polish-hero-medal shrink-0" />
+            <div className="min-w-0">
+              <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}</p>
+              <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">
+                {preferredName ? `${dailyDua()} يا ${preferredName}` : dailyDua()}
+              </p>
+            </div>
           </div>
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setElderlyMode(true)}
+            aria-label="صفحة جدو"
+            className="flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-xl bg-white/70 border border-hairline text-accent-800 polish-press polish-focus">
+            <GrandpaIcon className="w-6 h-6" />
+            <span className="text-xs font-bold">جدو</span>
+          </button>
         </div>
 
         {/* «اؤمرني»: voice command door. */}
@@ -553,10 +570,6 @@ export default function HomeStartPage({ session, onNavigate }: {
             onClick={() => onNavigate('adhkar')} />
           <HomeTile small icon={<Users />} glaze="emerald" title={roomLabel()} hint={showHints ? 'راجعوا مع بعض' : undefined}
             onClick={() => onNavigate('room')} />
-          <HomeTile small icon={<Glasses />} glaze="plain" title="صفحة جدو" hint={showHints ? 'خط كبير وبسيط' : undefined}
-            onClick={() => setElderlyMode(true)} />
-          <HomeTile small icon={<Cast />} glaze="plain" title="الشاشة الكبيرة" hint={showHints ? 'على التلفزيون' : undefined}
-            onClick={() => setBigOpen(true)} />
           <HomeTile small icon={<Settings />} glaze="plain" title="الإعدادات"
             onClick={() => onNavigate('settings')} />
         </div>
