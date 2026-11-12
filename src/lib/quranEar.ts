@@ -204,14 +204,6 @@ export class QuranModelRecognition {
   private src: MediaStreamAudioSourceNode | null = null;
   private seg: Float32Array[] = [];
   private segRms: number[] = [];
-  // Overlap (2026-11-12, Fable): a cut can still land inside a word (the
-  // silent part of a stop consonant: «رزقْـ|ناهم», «مآ |أنزل»). The last
-  // ~1.2s of a segment is therefore replayed at the head of the next one
-  // when speech continues right away, so the split word is heard whole
-  // the second time. The page drops the first hearing of that word.
-  private lastTail: Float32Array[] = [];
-  private lastFlushAt = 0;
-  private overlapSamples = 0;
   // Pre-roll (2026-11-12): the last quiet chunks before speech starts, so a
   // soft first letter (the و of «والذين») is not cut off.
   private pre: Float32Array[] = [];
@@ -275,10 +267,6 @@ export class QuranModelRecognition {
     if (loud && !this.inSpeech) {
       this.inSpeech = true;
       this.silenceMs = 0;
-      if (this.lastTail.length > 0 && Date.now() - this.lastFlushAt < 700) {
-        for (const p of this.lastTail) { this.seg.push(p); this.segRms.push(Infinity); this.segSamples += p.length; this.overlapSamples += p.length; }
-      }
-      this.lastTail = [];
       for (const p of this.pre) { this.seg.push(p); this.segRms.push(rms); this.segSamples += p.length; }
       this.pre = [];
       this.onspeechstart?.();
@@ -335,28 +323,12 @@ export class QuranModelRecognition {
     const restRms = whole ? [] : this.segRms.slice(cutAt! + 1);
     let n = 0;
     for (const p of parts) n += p.length;
-    const overlap = this.overlapSamples;
-    // Tail for the next segment's overlap: the last ~1.2s of this one.
-    const tail: Float32Array[] = [];
-    let tailN = 0;
-    for (let i = parts.length - 1; i >= 0 && tailN < 1.2 * TARGET_RATE; i--) { tail.unshift(parts[i]); tailN += parts[i].length; }
-    if (whole) {
-      this.seg = [];
-      this.segRms = [];
-      this.segSamples = 0;
-      this.overlapSamples = 0;
-      this.lastTail = tail;
-      this.lastFlushAt = Date.now();
-    } else {
-      this.seg = [...tail, ...rest];
-      this.segRms = [...tail.map(() => Infinity), ...restRms];
-      this.segSamples = this.seg.reduce((a, p) => a + p.length, 0);
-      this.overlapSamples = tailN;
-      this.lastTail = [];
-    }
-    this.inSpeech = !whole;
+    this.seg = rest;
+    this.segRms = restRms;
+    this.segSamples = rest.reduce((a, p) => a + p.length, 0);
+    this.inSpeech = rest.length > 0;
     this.silenceMs = 0;
-    if (n - overlap < MIN_SEGMENT_S * TARGET_RATE) return;
+    if (n < MIN_SEGMENT_S * TARGET_RATE) return;
     const audio = new Float32Array(n);
     let o = 0;
     for (const p of parts) { audio.set(p.subarray(0, Math.min(p.length, n - o)), o); o += p.length; if (o >= n) break; }
@@ -380,7 +352,7 @@ export class QuranModelRecognition {
         result.isFinal = true;
         result.length = 1;
         // ms/backend/audioMs: how long the model took, for the diag file.
-        this.onresult?.({ resultIndex: 0, results: [result], ms: r?.ms, backend: readyBackend, audioMs: Math.round(((n - overlap) / TARGET_RATE) * 1000), overlap: overlap > 0 });
+        this.onresult?.({ resultIndex: 0, results: [result], ms: r?.ms, backend: readyBackend, audioMs: Math.round((n / TARGET_RATE) * 1000) });
       }
       if (this.stopped && this.inflight === 0) this.finishEnd();
     });
