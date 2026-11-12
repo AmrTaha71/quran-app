@@ -1,24 +1,43 @@
-// Outline icon for «صفحة جدو» (2026-11-11): an elderly man — white hair,
-// white beard, glasses, no eyes. Drawn with strokes only, in the current
-// colour, so it sits with the lucide icons around it.
-export default function GrandpaIcon({ className }: { className?: string }) {
+// صفحة جدو — flat colour portrait (2026-11-13, replaces the outline
+// drawing): a kindly old man, bald on top, white hair at the sides, full
+// white beard and moustache, round glasses, no eyes. App palette.
+export default function GrandpaIcon({ className = '' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
-      {/* hair: thin on top, fuller at the sides */}
-      <path d="M6.2 9.2C5.2 6 7.6 3 12 3s6.8 3 5.8 6.2" />
-      <path d="M8.6 4.6c.8.5 1.6.7 2.4.6M13 5.2c.9.1 1.7-.1 2.4-.6" />
-      {/* face sides and ears */}
-      <path d="M6.2 9.2v3.2M17.8 9.2v3.2" />
-      <path d="M6.2 10.2c-1 .1-1.2 1.9 0 2.2M17.8 10.2c1 .1 1.2 1.9 0 2.2" />
-      {/* glasses */}
-      <circle cx="9.4" cy="10.6" r="1.9" />
-      <circle cx="14.6" cy="10.6" r="1.9" />
-      <path d="M11.3 10.4c.4-.4 1-.4 1.4 0" />
-      {/* moustache */}
-      <path d="M9.6 14.4c.9-.7 1.6-.7 2.4 0 .8-.7 1.5-.7 2.4 0" />
-      {/* beard */}
-      <path d="M6.2 12.4c0 5 2.4 8.6 5.8 8.6s5.8-3.6 5.8-8.6" />
-      <path d="M9.4 17.2v1.6M12 17.6v2M14.6 17.2v1.6" />
+    <svg viewBox="0 0 120 120" className={className} role="img" aria-label="جدو">
+      <defs>
+        <linearGradient id="gp-bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#1B8A62" /><stop offset="1" stopColor="#0B4D33" />
+        </linearGradient>
+        <clipPath id="gp-clip"><circle cx="60" cy="60" r="58" /></clipPath>
+      </defs>
+      <circle cx="60" cy="60" r="58" fill="url(#gp-bg)" />
+      <g clipPath="url(#gp-clip)">
+        {/* shoulders */}
+        <path d="M14 122 Q16 92 60 90 Q104 92 106 122 Z" fill="#F4EBD3" />
+        <path d="M50 92 L60 104 L70 92 Z" fill="#E2C46E" />
+        {/* side hair */}
+        <ellipse cx="33" cy="50" rx="8" ry="15" fill="#F7F7F2" />
+        <ellipse cx="87" cy="50" rx="8" ry="15" fill="#F7F7F2" />
+        {/* ears */}
+        <ellipse cx="34" cy="60" rx="4.5" ry="6.5" fill="#E9A888" />
+        <ellipse cx="86" cy="60" rx="4.5" ry="6.5" fill="#E9A888" />
+        {/* head */}
+        <path d="M36 54 Q36 20 60 20 Q84 20 84 54 L84 70 Q84 84 60 84 Q36 84 36 70 Z" fill="#F3BFA0" />
+        {/* cheeks */}
+        <ellipse cx="45" cy="66" rx="5" ry="3" fill="#EFA58E" opacity="0.7" />
+        <ellipse cx="75" cy="66" rx="5" ry="3" fill="#EFA58E" opacity="0.7" />
+        {/* beard */}
+        <path d="M36 64 Q34 100 60 110 Q86 100 84 64 Q80 76 60 76 Q40 76 36 64 Z" fill="#F7F7F2" />
+        <path d="M60 78 Q57 96 60 110 Q72 104 78 90 Q70 82 60 78 Z" fill="#E4E7E2" />
+        {/* moustache */}
+        <path d="M42 72 Q50 62 60 68 Q70 62 78 72 Q68 76 60 72 Q52 76 42 72 Z" fill="#FFFFFF" />
+        {/* glasses */}
+        <g fill="rgba(255,255,255,0.35)" stroke="#5E3208" strokeWidth="2.2">
+          <circle cx="49" cy="54" r="8" /><circle cx="71" cy="54" r="8" />
+        </g>
+        <path d="M57 54 Q60 51 63 54" fill="none" stroke="#5E3208" strokeWidth="2.2" />
+      </g>
+      <circle cx="60" cy="60" r="57" fill="none" stroke="#E2C46E" strokeWidth="2" />
     </svg>
   );
 }

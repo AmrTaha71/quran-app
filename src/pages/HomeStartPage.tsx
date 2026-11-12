@@ -363,7 +363,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="mb-4 grid grid-cols-[1fr_2.4fr_1fr] gap-3 items-stretch">
           <button type="button" onPointerDown={pressFeedback} onClick={() => setElderlyMode(true)} aria-label="صفحة جدو"
             className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-gold" aria-hidden="true"><GrandpaIcon /></span>
+            <GrandpaIcon className="w-[4.5rem] h-[4.5rem] drop-shadow-md" />
             <span className="home-tile-title">صفحة جدو</span>
           </button>
           <OrderMeButton onNavigate={onNavigate}
