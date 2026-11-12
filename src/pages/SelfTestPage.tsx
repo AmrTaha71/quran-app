@@ -5264,6 +5264,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             // two halves make one expected word, glue them.
             const h = heldTailRef.current;
             if (h.timer) { clearTimeout(h.timer); h.timer = null; }
+            if (e.overlap) {
+              // This segment re-hears the last ~1.2s of the previous one
+              // (see quranEar overlap): the held tail word is in it again,
+              // whole this time, so the first hearing is dropped. A first
+              // token that is neither a word just said nor a word of the
+              // range is the front half of a cut word: dropped too.
+              if (h.text) { diagPush('result', { final: true, text: h.text, reason: 'tail-reheard' }); h.text = ''; }
+              const rawW = chosen.trim().split(/\s+/).filter(Boolean);
+              const t0 = rawW.length > 1 ? spokenTokens(rawW[0])[0] : undefined;
+              if (t0) {
+                const recent = spokenTokens(liveRef.current.contFinals).slice(-4);
+                const known = recent.some((w) => softWordEq(t0, w)) || liveRef.current.contExpected.some((w) => softWordEq(t0, w.norm));
+                if (!known) { diagPush('result', { final: true, text: rawW[0], reason: 'overlap-head-dropped' }); chosen = rawW.slice(1).join(' '); }
+              }
+            }
             if (h.text) {
               const first = chosen.trim().split(/\s+/)[0] ?? '';
               const norms = liveRef.current.contExpected.map((w) => w.norm);
