@@ -159,6 +159,26 @@ function downsample(input: Float32Array, fromRate: number): Float32Array {
   return out;
 }
 
+// One mic stream shared across sessions (2026-11-12): reopening the mic
+// after every correction cost time and the first word of the resumed
+// recitation was lost. Tracks stop 20s after the last session ends.
+let micStream: MediaStream | null = null;
+let micTimer: ReturnType<typeof setTimeout> | null = null;
+async function getMicStream(): Promise<MediaStream> {
+  if (micTimer) { clearTimeout(micTimer); micTimer = null; }
+  if (micStream && micStream.getAudioTracks().some((t) => t.readyState === 'live')) return micStream;
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  return micStream;
+}
+function releaseMicStreamLater() {
+  if (micTimer) clearTimeout(micTimer);
+  micTimer = setTimeout(() => {
+    micTimer = null;
+    try { micStream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    micStream = null;
+  }, 20000);
+}
+
 export class QuranModelRecognition {
   lang = 'ar';
   continuous = true;
@@ -181,6 +201,9 @@ export class QuranModelRecognition {
   private node: ScriptProcessorNode | null = null;
   private src: MediaStreamAudioSourceNode | null = null;
   private seg: Float32Array[] = [];
+  // Pre-roll (2026-11-12): the last quiet chunks before speech starts, so a
+  // soft first letter (the و of «والذين») is not cut off.
+  private pre: Float32Array[] = [];
   private segSamples = 0;
   private inSpeech = false;
   private silenceMs = 0;
@@ -200,7 +223,7 @@ export class QuranModelRecognition {
     try {
       await loadEar();
       if (this.stopped) { this.finishEnd(); return; }
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      this.stream = await getMicStream();
       if (this.stopped) { this.release(); this.finishEnd(); return; }
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       this.ctx = new AC();
@@ -241,7 +264,13 @@ export class QuranModelRecognition {
     if (loud && !this.inSpeech) {
       this.inSpeech = true;
       this.silenceMs = 0;
+      for (const p of this.pre) { this.seg.push(p); this.segSamples += p.length; }
+      this.pre = [];
       this.onspeechstart?.();
+    }
+    if (!this.inSpeech) {
+      this.pre.push(downsample(buf, rate));
+      if (this.pre.length > 3) this.pre.shift();
     }
     if (this.inSpeech) {
       this.seg.push(downsample(buf, rate));
@@ -324,7 +353,7 @@ export class QuranModelRecognition {
   private release() {
     try { this.node?.disconnect(); } catch { /* ignore */ }
     try { this.src?.disconnect(); } catch { /* ignore */ }
-    try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    releaseMicStreamLater();
     try { void this.ctx?.close(); } catch { /* ignore */ }
     this.node = null; this.src = null; this.stream = null; this.ctx = null;
   }

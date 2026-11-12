@@ -5146,6 +5146,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           sawFinal = true;
           // [P5] Narrow alternative-rescue (see helpers).
           let chosen = pickFinalTranscript(res, expectedNorms);
+          if (useModelEar && typeof e.audioMs === 'number' && e.audioMs < 900) {
+            // Noise guard (2026-11-12 diag: «والمسلم» from 0.5s, «والأم» from
+            // 0.8s of breath/noise). A very short segment counts only if it
+            // is one of the next expected words; otherwise it is dropped.
+            const toks = spokenTokens(chosen);
+            const exp = liveRef.current.contExpected;
+            const done = alignWords(exp.map((w) => w.norm), spokenTokens(liveRef.current.contFinals)).matched;
+            let first = done.findIndex((m) => !m);
+            if (first < 0) first = exp.length;
+            const ahead = exp.slice(Math.max(0, first - 1), first + 4).map((w) => w.norm);
+            if (toks.length <= 2 && !toks.some((t) => ahead.some((a) => softWordEq(t, a)))) {
+              diagPush('result', { final: true, text: chosen, reason: 'short-noise-dropped', audioMs: e.audioMs });
+              continue;
+            }
+          }
           if (useModelEar) {
             // Held tail (see heldTailRef): join it to this segment; if the
             // two halves make one expected word, glue them.
