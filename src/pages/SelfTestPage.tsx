@@ -555,6 +555,38 @@ function pairAltAt(expected: string[], i: number, spoken: string[], j: number): 
 
 const WARMED_CORR_URLS = new Set<string>();
 
+// Misheard-word tolerance (2026-11-12, Fable; beginner alignment only).
+// The on-device model sometimes returns a NON-word that sounds like the
+// expected word («المفلقون» for «المفلحون»). Such a token, sitting exactly
+// where the expected word should be, is the model's mishearing, not his
+// mistake. It is accepted only when ALL hold: it is not itself a word of
+// the tested range (a swap with a real nearby word — «يؤمنون» for
+// «يوقنون» — stays a mistake), both words are long enough, and the
+// sound-weighted similarity is high. Letters that sound alike cost less.
+const SOUND_CLASSES = ['زذظض', 'سصث', 'تط', 'دض', 'قك', 'هحخ', 'ءعاأإآ', 'غق', 'فق', 'بم', 'نم', 'حق'];
+function soundCost(a: string, b: string): number {
+  if (a === b) return 0;
+  for (const c of SOUND_CLASSES) if (c.includes(a) && c.includes(b)) return 0.35;
+  return 1;
+}
+function soundSim(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0 || n === 0) return 0;
+  let prev: number[] = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur: number[] = [i];
+    for (let j = 1; j <= n; j++) cur.push(Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + soundCost(a[i - 1], b[j - 1])));
+    prev = cur;
+  }
+  return 1 - prev[n] / Math.max(m, n);
+}
+export function misheardAs(spoken: string, expected: string, rangeWords: Set<string>): boolean {
+  if (!spoken || spoken.length < 4 || expected.length < 4) return false;
+  if (rangeWords.has(spoken)) return false;
+  if (Math.abs(spoken.length - expected.length) > 1) return false;
+  return soundSim(spoken, expected) >= 0.8;
+}
+
 // Opening (2026-11-12, Dr. Amr): «أعوذ بالله من الشيطان الرجيم» and/or
 // «بسم الله الرحمن الرحيم» said before the first word are a preface —
 // never a mistake, never corrected, never an extra. A phrase counts when
@@ -591,6 +623,7 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
   let j = openingSkip(expected, spoken);
   let i = 0;
   let started = false;
+  let rangeWords: Set<string> | null = null;
   while (i < expected.length) {
     if (i > 0 && matched[i - 1]) started = true;
     let found = -1;
@@ -665,6 +698,11 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
         if (spoken[k] === pair || forms.includes(spoken[k]) || softWordEq(spoken[k], pair) || (pairAlts && pairAlts.includes(spoken[k]))) { foundPair = k; break; }
       }
       if (foundPair >= 0) { matched[i] = true; matched[i + 1] = true; positions[i] = foundPair; positions[i + 1] = foundPair; j = foundPair + 1; i += 2; continue; }
+    }
+    if (started) {
+      let k = j;
+      while (k < spoken.length && breathAll.has(k)) k++;
+      if (k < spoken.length && misheardAs(spoken[k], expected[i], (rangeWords ??= new Set(expected)))) { matched[i] = true; positions[i] = k; j = k + 1; i++; continue; }
     }
     i++;
   }

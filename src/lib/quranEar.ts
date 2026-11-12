@@ -142,6 +142,8 @@ export async function transcribeBlob(blob: Blob): Promise<string | null> {
 const TARGET_RATE = 16000;
 const SILENCE_END_MS = 300;
 const MAX_SEGMENT_S = 7;
+const SOFT_SEGMENT_S = 4;
+const SOFT_SILENCE_MS = 160;
 const KEEPALIVE_MS = 400;
 const MIN_SEGMENT_S = 0.35;
 
@@ -201,6 +203,7 @@ export class QuranModelRecognition {
   private node: ScriptProcessorNode | null = null;
   private src: MediaStreamAudioSourceNode | null = null;
   private seg: Float32Array[] = [];
+  private segRms: number[] = [];
   // Pre-roll (2026-11-12): the last quiet chunks before speech starts, so a
   // soft first letter (the و of «والذين») is not cut off.
   private pre: Float32Array[] = [];
@@ -264,7 +267,7 @@ export class QuranModelRecognition {
     if (loud && !this.inSpeech) {
       this.inSpeech = true;
       this.silenceMs = 0;
-      for (const p of this.pre) { this.seg.push(p); this.segSamples += p.length; }
+      for (const p of this.pre) { this.seg.push(p); this.segRms.push(rms); this.segSamples += p.length; }
       this.pre = [];
       this.onspeechstart?.();
     }
@@ -273,11 +276,26 @@ export class QuranModelRecognition {
       if (this.pre.length > 3) this.pre.shift();
     }
     if (this.inSpeech) {
-      this.seg.push(downsample(buf, rate));
-      this.segSamples += Math.floor(buf.length / (rate / TARGET_RATE));
+      const ds = downsample(buf, rate);
+      this.seg.push(ds);
+      this.segRms.push(rms);
+      this.segSamples += ds.length;
       this.silenceMs = loud ? 0 : this.silenceMs + chunkMs;
-      if (this.silenceMs >= SILENCE_END_MS || this.segSamples >= MAX_SEGMENT_S * TARGET_RATE) {
+      // 2026-11-12 (Fable): every forced 7s cut in the diag files fell in
+      // the middle of a word and the model garbled it («وما أنزل» ->
+      // «وما منزلم», «رزقناهم» -> «رزقنا | أهم»). Now: after 4s a shorter
+      // pause is enough to cut; at the hard limit the cut goes to the
+      // quietest moment of the last ~1.7s and the audio after it starts
+      // the next segment, so no word is split.
+      const longRun = this.segSamples >= SOFT_SEGMENT_S * TARGET_RATE;
+      if (this.silenceMs >= SILENCE_END_MS || (longRun && this.silenceMs >= SOFT_SILENCE_MS)) {
         this.flushSegment();
+      } else if (this.segSamples >= MAX_SEGMENT_S * TARGET_RATE) {
+        const n = this.segRms.length;
+        let cut = n - 1;
+        let min = Infinity;
+        for (let i = Math.max(1, n - 20); i < n - 1; i++) if (this.segRms[i] < min) { min = this.segRms[i]; cut = i; }
+        this.flushSegment(cut);
       }
     }
     this.keepalive();
@@ -298,12 +316,17 @@ export class QuranModelRecognition {
     this.onresult?.({ resultIndex: 0, results: [result] });
   }
 
-  private flushSegment() {
-    const parts = this.seg;
-    const n = this.segSamples;
-    this.seg = [];
-    this.segSamples = 0;
-    this.inSpeech = false;
+  private flushSegment(cutAt?: number) {
+    const whole = cutAt == null || cutAt >= this.seg.length - 1;
+    const parts = whole ? this.seg : this.seg.slice(0, cutAt! + 1);
+    const rest = whole ? [] : this.seg.slice(cutAt! + 1);
+    const restRms = whole ? [] : this.segRms.slice(cutAt! + 1);
+    let n = 0;
+    for (const p of parts) n += p.length;
+    this.seg = rest;
+    this.segRms = restRms;
+    this.segSamples = rest.reduce((a, p) => a + p.length, 0);
+    this.inSpeech = rest.length > 0;
     this.silenceMs = 0;
     if (n < MIN_SEGMENT_S * TARGET_RATE) return;
     const audio = new Float32Array(n);
