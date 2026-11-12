@@ -1,6 +1,7 @@
 import { roomLabel } from '../lib/roomLabel';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
+import GrandpaIcon from '../components/GrandpaIcon';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
@@ -553,7 +554,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             onClick={() => onNavigate('adhkar')} />
           <HomeTile small icon={<Users />} glaze="emerald" title={roomLabel()} hint={showHints ? 'راجعوا مع بعض' : undefined}
             onClick={() => onNavigate('room')} />
-          <HomeTile small icon={<Glasses />} glaze="plain" title="صفحة جدو" hint={showHints ? 'خط كبير وبسيط' : undefined}
+          <HomeTile small icon={<GrandpaIcon />} glaze="plain" title="صفحة جدو" hint={showHints ? 'خط كبير وبسيط' : undefined}
             onClick={() => setElderlyMode(true)} />
           <HomeTile small icon={<Cast />} glaze="plain" title="الشاشة الكبيرة" hint={showHints ? 'على التلفزيون' : undefined}
             onClick={() => setBigOpen(true)} />

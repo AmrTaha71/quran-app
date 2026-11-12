@@ -1,6 +1,6 @@
 // الاختبار الشامل (2026-11-07): scoring rules, levels, ranges and the
 // locally saved results history. 100 points in five parts:
-// تسميع 40 · متشابهات 25 · ربط 15 · تجويد 10 · تلاوة 10.
+// (old: تسميع 40 · متشابهات 25 · ربط 15 · تجويد 10 · تلاوة 10).
 import { SURAH_AYAH_COUNTS, getGlobalAyahNumber } from './surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from './quranBoundaries';
 
@@ -13,12 +13,15 @@ export const LEVELS: { id: TestLevel; name: string; positions: number; minAyat: 
   { id: 'advanced', name: 'متقدم', positions: 4, minAyat: 6, maxAyat: 7, mutQuestions: 5 },
 ];
 
+// 2026-11-11: the test is now recitation only — 4 random places, 10 points
+// each, graded by the app (memorisation + fluency). Tajwid and waqf are
+// added when the engine can detect them; «الربط» was dropped by the owner.
+export const EXAM_POSITIONS = 4;
+export const POSITION_MAX = 10;
+export const EXAM_MAX = EXAM_POSITIONS * POSITION_MAX;
+
 export const PARTS = [
-  { id: 'tasmee', name: 'التسميع العشوائي', max: 40, kind: 'self' as const },
-  { id: 'mutashabihat', name: 'المتشابهات', max: 25, kind: 'quiz' as const },
-  { id: 'rabt', name: 'الربط والاستحضار', max: 15, kind: 'self' as const },
-  { id: 'tajweed', name: 'التجويد', max: 10, kind: 'self' as const },
-  { id: 'tilawa', name: 'التلاوة', max: 10, kind: 'self' as const },
+  { id: 'tasmee', name: 'التسميع', max: EXAM_MAX, kind: 'self' as const },
 ] as const;
 
 export type PartId = (typeof PARTS)[number]['id'];
@@ -56,8 +59,16 @@ export type SavedResult = {
   scope: RangeScope;
   num: number;
   level: TestLevel;
-  scores: Record<PartId, number>;
+  scores: Record<string, number>;
   total: number;
+  /** Full mark of this result; results saved before 2026-11-11 are out of 100. */
+  max?: number;
+  /** Score of each place (0..10). */
+  positions?: number[];
+  /** Whole test time in seconds. */
+  seconds?: number;
+  /** False when the test was closed before the last place. */
+  completed?: boolean;
 };
 
 const RESULTS_KEY = 'quran-comprehensive-results';
@@ -75,8 +86,4 @@ export function readResults(): SavedResult[] {
 export function saveResult(r: SavedResult): void {
   const all = [...readResults(), r].slice(-200);
   try { localStorage.setItem(RESULTS_KEY, JSON.stringify(all)); } catch { /* ignore */ }
-}
-
-export function totalOf(scores: Record<PartId, number>): number {
-  return PARTS.reduce((sum, p) => sum + Math.min(p.max, Math.max(0, scores[p.id] ?? 0)), 0);
 }

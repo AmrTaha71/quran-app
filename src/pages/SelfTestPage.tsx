@@ -294,7 +294,7 @@ function corrPositionsForRange(
   return out;
 }
 
-function spokenTokens(text: string): string[] {
+export function spokenTokens(text: string): string[] {
   const out: string[] = [];
   for (const w of normalizeWords(text)) {
     const c = cleanToken(w);
@@ -553,7 +553,7 @@ function pairAltAt(expected: string[], i: number, spoken: string[], j: number): 
   return -1;
 }
 
-function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
+export function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   // E2: spoken index each expected word matched at (-1 if unmatched).
   // Recording only — the match decisions below are untouched.
