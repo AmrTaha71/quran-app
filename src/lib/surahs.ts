@@ -74,3 +74,10 @@ const MADANI_SURAHS = new Set([2, 3, 4, 5, 8, 9, 13, 22, 24, 33, 47, 48, 49, 55,
 export function surahPlace(no: number): 'مكية' | 'مدنية' {
   return MADANI_SURAHS.has(no) ? 'مدنية' : 'مكية';
 }
+
+// 2026-11-12 (agreed UI rule): every screen that shows a surah name also
+// shows its place, e.g. «البقرة (مدنية)».
+export function surahLabel(no: number): string {
+  const name = SURAHS.find((s) => s.no === no)?.name ?? `سورة ${no}`;
+  return `${name} (${surahPlace(no)})`;
+}

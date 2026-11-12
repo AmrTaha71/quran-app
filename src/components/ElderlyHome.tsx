@@ -1,10 +1,9 @@
 import { roomLabel } from '../lib/roomLabel';
 import { useEffect, useState } from 'react';
-import { Clock, Headphones, RotateCcw, Users, MoonStar, Hand } from 'lucide-react';
+import { Clock, Headphones, RotateCcw, Users, Hand } from 'lucide-react';
 import { pressFeedback } from '../lib/pressFeedback';
 import { ADHAN_PRAYERS, AdhanDay, ensureAdhanDay, loadAdhanSettings, timeInTimezone } from '../lib/adhan';
 import { loadWird, wirdTotal, formatPages } from '../lib/wird';
-import { setSleepTimer } from '../lib/sleepTimer';
 
 // «صفحة جدو» extras: the simple home for elderly mode. Six helpers, each
 // one big, plain card: next prayer, continue reading, today's wird,
@@ -69,7 +68,6 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
   const [day, setDay] = useState<AdhanDay | null>(null);
   const [tasbih, setTasbih] = useState(readTasbih);
   const [flash, setFlash] = useState(0);
-  const [sleepSet, setSleepSet] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,11 +101,6 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
     writeTasbih(v);
   };
 
-  const listenUntilSleep = () => {
-    setSleepTimer(60);
-    setSleepSet(true);
-    onNavigate('listen');
-  };
 
   return (
     <div className="flex flex-col gap-5" dir="rtl">
@@ -185,15 +178,15 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
       </div>
 
 
-      {/* 6. Listen until sleep */}
+      {/* 6. Listen (one door). The sleep timer is a wheel on the listen
+          page itself (2026-11-12: merged with «استمع وأنا نايم»). */}
       <button
         onPointerDown={pressFeedback}
-        onClick={listenUntilSleep}
+        onClick={() => onNavigate('listen')}
         className={`${BIG_BTN} bg-slate-800 text-white`}
       >
-        <MoonStar className="w-7 h-7" /> استمع وأنا نايم (ساعة)
+        <Headphones className="w-7 h-7" /> استمع
       </button>
-      {sleepSet && <p className="text-lg text-ink-2 text-center">المؤقت اتظبط على ساعة، شغّل التلاوة من الصفحة.</p>}
     </div>
   );
 }

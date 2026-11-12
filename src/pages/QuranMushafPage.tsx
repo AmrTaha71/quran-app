@@ -4,7 +4,7 @@ import { AyahSimilar, AyahAsbab } from '../components/AyahSimilarAsbab';
 import AyahMeanings from '../components/AyahMeanings';
 import { supabase } from '../lib/supabase';
 import { signOut } from '../lib/auth';
-import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, surahLabel } from '../lib/surahs';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import { formatAr, normalizeDigits } from '../lib/numerals';
 import { RECITERS, DEFAULT_RECITER_ID, type Reciter } from '../lib/reciters';
@@ -570,7 +570,7 @@ export default function QuranMushafPage({
 
   const edition = EDITIONS[selectedEdition];
   const currentSurah = getPageSurah(currentPage);
-  const currentSurahName = SURAHS.find((s) => s.no === currentSurah)?.name || '';
+  const currentSurahName = SURAHS.find((s) => s.no === currentSurah) ? surahLabel(currentSurah) : '';
   // Facing-page peek (printed Mushaf spread, RTL): odd pages sit on the
   // right of the spread, even pages on the left — so the facing page is
   // the next page for odd pages, the previous page for even pages.

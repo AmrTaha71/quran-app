@@ -3,7 +3,7 @@
 // public/similar/{surah}.json and public/asbab/{surah}.json, loaded once.
 // Source: quranpedia.net (free to use in apps, link appreciated).
 import { useEffect, useState } from 'react';
-import { SURAHS } from '../lib/surahs';
+import { SURAHS, surahLabel } from '../lib/surahs';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 
 type Ref = { s: number; a: number };
@@ -58,7 +58,7 @@ function Spinner() {
   );
 }
 
-const surahName = (n: number) => SURAHS.find((x) => x.no === n)?.name ?? `سورة ${n}`;
+const surahName = (n: number) => surahLabel(n);
 
 export function AyahSimilar({ surah, ayah }: { surah: number; ayah: number }) {
   const st = useLoaded<SimilarEntry>(`/similar/${surah}.json`, surah, ayah, (items) => items.find((x) => x.a === ayah));

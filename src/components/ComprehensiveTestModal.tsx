@@ -6,7 +6,7 @@
 import WheelPicker from './WheelPicker';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
-import { SURAHS } from '../lib/surahs';
+import { SURAHS, surahLabel } from '../lib/surahs';
 import BANK from '../data/mutashabihat-famous.json';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import {
@@ -126,7 +126,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     }
   }
 
-  const surahName = (n: number) => SURAHS.find((x) => x.no === n)?.name ?? `سورة ${n}`;
+  const surahName = (n: number) => surahLabel(n);
   const textOf = (s: number, a: number) => text?.get(`${s}:${a}`) ?? '';
 
   // Self-graded parts: user taps a points value from 0 to max.

@@ -8,7 +8,7 @@ import TajwidSkillPicker from '../components/TajwidSkillPicker';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import { hasChosenReciter, markChosenReciter, recitersForRange, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
-import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
 import { RangePoint, unitStartGlobal, unitEndGlobal, unitStartPoint, unitEndPoint, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { resolvePageRange, TOTAL_MUSHAF_PAGES } from '../lib/mushafPageRange';
@@ -2112,7 +2112,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   });
 
   const surahCount = SURAH_AYAH_COUNTS[surah - 1] || 1;
-  const surahName = SURAHS.find((s) => s.no === surah)?.name || '';
+  const surahName = SURAHS.find((s) => s.no === surah) ? surahLabel(surah) : '';
 
   const clearTimers = () => {
     if (quietTimerRef.current) { clearTimeout(quietTimerRef.current); quietTimerRef.current = null; }

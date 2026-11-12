@@ -4,7 +4,7 @@
 // ayah so the user can compare. Nothing is generated: audio comes from
 // the reciter sources in src/lib/reciters.ts.
 import { useEffect, useRef, useState } from 'react';
-import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber } from '../lib/surahs';
+import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange, ayahUrl, planRangeReciters, downloadRange, isRangeDownloaded, rangeSizeMb, formatSize, type RangeReciterPart } from '../lib/corrDownload';
@@ -156,7 +156,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     setPlaying(false);
   }
 
-  const surahNameOf = (s: number) => SURAHS.find((x) => x.no === s)?.name ?? `سورة ${s}`;
+  const surahNameOf = (s: number) => surahLabel(s);
   const fromText = round ? text?.get(`${round.from.s}:${round.from.a}`) : undefined;
 
   return (

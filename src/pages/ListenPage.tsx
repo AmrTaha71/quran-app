@@ -22,7 +22,7 @@ import {
   handleInterruptionHidden,
   recLog,
 } from '../lib/listenRecovery';
-import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS } from '../lib/quranBoundaries';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
@@ -261,7 +261,7 @@ function readPersistedRate(): number {
 }
 
 function surahName(no: number): string {
-  return SURAHS.find((s) => s.no === no)?.name || `سورة ${no}`;
+  return surahLabel(no);
 }
 
 function surahCount(no: number): number {

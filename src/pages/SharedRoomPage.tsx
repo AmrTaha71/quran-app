@@ -3,7 +3,7 @@ import Hint from '../components/Hint';
 import { useEffect, useRef, useState } from 'react';
 import type { Session, RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
+import { SURAHS, SURAH_AYAH_COUNTS, surahLabel } from '../lib/surahs';
 import { pressFeedback } from '../lib/pressFeedback';
 import QRCode from 'qrcode';
 import { editionPageUrl } from '../lib/pageDownload';
@@ -480,7 +480,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   };
 
   const ayahCount = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 1;
-  const surahName = SURAHS.find((s) => s.no === pos.surah)?.name ?? '';
+  const surahName = SURAHS.find((s) => s.no === pos.surah) ? surahLabel(pos.surah) : '';
 
   const moveAyah = (delta: number) => {
     let s = pos.surah;
