@@ -555,6 +555,26 @@ function pairAltAt(expected: string[], i: number, spoken: string[], j: number): 
 
 const WARMED_CORR_URLS = new Set<string>();
 
+// Opening (2026-11-12, Dr. Amr): «أعوذ بالله من الشيطان الرجيم» and/or
+// «بسم الله الرحمن الرحيم» said before the first word are a preface —
+// never a mistake, never corrected, never an extra. A phrase counts when
+// most of its words are heard in order (the ear may mishear one). The
+// basmala is NOT skipped when the range itself starts with it (1:1).
+const ISTIADHA = ['اعوذ', 'بالله', 'من', 'الشيطان', 'الرجيم'];
+const BASMALA = ['بسم', 'الله', 'الرحمن', 'الرحيم'];
+function phraseAt(spoken: string[], at: number, phrase: string[], need: number): number {
+  let hit = 0;
+  for (let t = 0; t < phrase.length && at + t < spoken.length; t++) if (softWordEq(spoken[at + t], phrase[t])) hit++;
+  return hit >= need ? phrase.length : 0;
+}
+function openingSkip(expected: string[], spoken: string[]): number {
+  let at = 0;
+  at += phraseAt(spoken, at, ISTIADHA, 4);
+  const rangeStartsWithBasmala = expected.length > 0 && softWordEq(expected[0], 'بسم');
+  if (!rangeStartsWithBasmala) at += phraseAt(spoken, at, BASMALA, 3);
+  return Math.min(at, spoken.length);
+}
+
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   // E2: spoken index each expected word matched at (-1 if unmatched).
@@ -568,9 +588,11 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
   // fragments (letter names, split pieces) as new words.
   const consumed = new Array(expected.length).fill(1);
   const breathAll = breathRepeats(expected, spoken);
-  let j = 0;
+  let j = openingSkip(expected, spoken);
   let i = 0;
+  let started = false;
   while (i < expected.length) {
+    if (i > 0 && matched[i - 1]) started = true;
     let found = -1;
     {
       // Reach limit (2026-11-12 diag): once he is under way, a word may
@@ -579,7 +601,7 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
       // which then marked all of 2:5 wrong. Breath repeats do not count
       // toward the distance. Before the first match (isti'adha, basmala)
       // the reach stays unlimited.
-      const limit = j === 0 ? Infinity : (expected[i].length <= 3 ? 6 : 14);
+      const limit = !started ? Infinity : (expected[i].length <= 3 ? 6 : 14);
       let dist = 0;
       for (let k = j; k < spoken.length; k++) {
         if (softWordEq(spoken[k], expected[i])) { found = k; break; }
@@ -689,13 +711,15 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
   const extras: string[] = [];
   const breath = breathRepeats(expected, spoken);
   const breathAll = breath;
-  let j = 0;
+  let j = openingSkip(expected, spoken);
   let i = 0;
+  let started = false;
   const consumeThrough = (k: number, count: number) => {
     for (let t = j; t < k; t++) if (!breath.has(t)) extras.push(spoken[t]);
     j = k + count;
   };
   while (i < expected.length) {
+    if (i > 0 && matched[i - 1]) started = true;
     let found = -1;
     {
       // Reach limit (2026-11-12 diag): once he is under way, a word may
@@ -704,7 +728,7 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
       // which then marked all of 2:5 wrong. Breath repeats do not count
       // toward the distance. Before the first match (isti'adha, basmala)
       // the reach stays unlimited.
-      const limit = j === 0 ? Infinity : (expected[i].length <= 3 ? 6 : 14);
+      const limit = !started ? Infinity : (expected[i].length <= 3 ? 6 : 14);
       let dist = 0;
       for (let k = j; k < spoken.length; k++) {
         if (softWordEq(spoken[k], expected[i])) { found = k; break; }
