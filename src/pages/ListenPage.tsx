@@ -3086,12 +3086,8 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <p className="text-xs font-semibold text-amber-700">
                   الآية الجارية الآن — سورة {surahName(surah)} ﴿{currentAyah}﴾
                 </p>
-                <p
-                  className="mt-1 leading-loose text-accent-800"
-                  style={{ fontFamily: "'Noto Naskh Arabic', serif", fontSize: '1.2rem' }}
-                >
-                  {nowPlayingRow.ayah_text}
-                </p>
+                {/* 2026-11-12 (agreed UI rule): no written ayah text
+                    under a listening page; listening is by ear. */}
               </div>
             )}
             {/* Grant attribution, visible WHILE a tafsir clip plays
