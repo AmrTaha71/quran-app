@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio, ExternalLink as HubExternal } from 'lucide-react';
 import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
+import ClockWheel from '../components/ClockWheel';
 import {
   Check,
   Download,
@@ -456,7 +457,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // 2026-11-07: khatma timer stop-at-unit (juz / hizb / surah end) and clock time.
   const [unitTarget, setUnitTarget] = useState<number | null>(null);
   const [unitLabel, setUnitLabel] = useState('');
-  const [clockAt, setClockAt] = useState('');
+  const [clockAt, setClockAt] = useState(() => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  });
   const [sleepRemainingMs, setSleepRemainingMs] = useState<number | null>(() =>
     getSleepTimerRemainingMs(),
   );
@@ -2267,10 +2271,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             className="w-full py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl polish-press">ابدأ المؤقت</button>
           <p className="text-xs font-semibold text-accent-700">بالساعة</p>
           <div className="flex gap-2">
-            <input type="time" value={clockAt} onChange={(e) => setClockAt(e.target.value)}
-              className="flex-1 min-h-[44px] rounded-xl border border-hairline-emerald px-2 bg-white" />
-            <button disabled={!clockAt} onClick={() => armTimerAtClock(clockAt)}
-              className="px-4 min-h-[44px] bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press disabled:opacity-50">ابدأ</button>
+            <div className="flex-1 min-w-0"><ClockWheel initial={clockAt} onChange={setClockAt} /></div>
+            <button onClick={() => armTimerAtClock(clockAt)}
+              className="self-center px-4 min-h-[44px] bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press">ابدأ</button>
           </div>
           <p className="text-xs font-semibold text-accent-700">بالجزء أو الحزب أو السورة</p>
           <div className="grid grid-cols-3 gap-2" role="group" aria-label="بالوحدة">
