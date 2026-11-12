@@ -16,8 +16,8 @@ const RADIUS = Math.round(DRUM_ITEM_H / 2 / Math.tan((STEP_DEG / 2) * (Math.PI /
 // 'clock' = iOS-style dark drum with a soft grey band, for timers.
 export type DrumVariant = 'range' | 'clock';
 const LOOK = {
-  range: { bg: '#FBF7EE', band: 'rgba(139,30,30,0.07)', sel: '#8B1E1E', rest: '#8E8E88' },
-  clock: { bg: 'transparent', band: 'transparent', sel: '#F5F5F7', rest: '#8A8A8E' },
+  range: { bg: '#FBF7EE', band: '#E3EEE7', sel: '#0B4D33', rest: '#91B0A0' },
+  clock: { bg: 'transparent', band: 'transparent', sel: '#FBF3DC', rest: '#7FA593' },
 } as const;
 
 let sharedCtx: AudioContext | null = null;
@@ -170,7 +170,7 @@ export function DrumRange({
   return (
     <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4" aria-label={label}>
       <DrumReel labels={labels} index={from} label={`${label}: من`} onIndex={(i) => { f.current = i; onChange(i, Math.max(i, t.current)); }} />
-      <span className="text-sm font-bold text-[#8E8E88] font-ui">إلى</span>
+      <span className="text-sm font-bold text-[#B98C36] font-ui">إلى</span>
       <DrumReel labels={labels} index={to} label={`${label}: إلى`} onIndex={(i) => { t.current = i; onChange(Math.min(f.current, i), i); }} />
     </div>
   );

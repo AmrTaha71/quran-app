@@ -27,11 +27,11 @@ export default function ClockWheel({ initial, onChange }: { initial: string; onC
   }
 
   return (
-    <div className="relative rounded-2xl px-3" style={{ background: "#1C1C1E" }} dir="ltr">
-      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[38px] rounded-xl pointer-events-none" style={{ background: '#2C2C2E' }} />
+    <div className="relative rounded-2xl px-3" style={{ background: 'linear-gradient(180deg,#062B1D,#0A3B28 50%,#062B1D)' }} dir="ltr">
+      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[38px] rounded-xl pointer-events-none" style={{ background: '#145C41', boxShadow: 'inset 0 0 0 1px rgba(226,196,110,0.35)' }} />
 <div className="flex items-stretch gap-1" dir="ltr">
         <DrumReel variant="clock" className="flex-1" labels={hours} index={hIdx} label="ساعة" onIndex={(i) => { setHIdx(i); emit(i, mIdx, pIdx); }} />
-        <span className="self-center text-2xl font-extrabold text-[#F5F5F7]">:</span>
+        <span className="self-center text-2xl font-extrabold text-[#E2C46E]">:</span>
         <DrumReel variant="clock" className="flex-[1.2]" labels={minutes} index={mIdx} label="دقيقة" onIndex={(i) => { setMIdx(i); emit(hIdx, i, pIdx); }} />
         <DrumReel variant="clock" className="flex-[0.8]" labels={periods} index={pIdx} label="ص أو م" onIndex={(i) => { setPIdx(i); emit(hIdx, mIdx, i); }} />
       </div>
