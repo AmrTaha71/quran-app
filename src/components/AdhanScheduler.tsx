@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ADHAN_PRAYERS,
   adhanAlreadyFired,
+  adhanDueNow,
   ensureAdhanDay,
   loadAdhanSettings,
   markAdhanFired,
@@ -38,7 +39,7 @@ export default function AdhanScheduler() {
       for (const p of ADHAN_PRAYERS) {
         const t = day.timings[p.key];
         if (!t) continue;
-        if (t === now && !adhanAlreadyFired(day.dateKey, p.key)) {
+        if (adhanDueNow(now, t) && !adhanAlreadyFired(day.dateKey, p.key)) {
           markAdhanFired(day.dateKey, p.key);
           audioRef.current?.pause();
           audioRef.current = playAdhanSound(settings.sound);

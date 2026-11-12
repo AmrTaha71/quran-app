@@ -376,3 +376,24 @@ export function playAdhanSound(sound: AdhanSound, voiceId?: string): HTMLAudioEl
     return null;
   }
 }
+
+// 2026-11-12 (review D1): grace window. The 30-second foreground pulse is
+// throttled by iOS and can skip the exact minute, so a prayer counts as due
+// for GRACE minutes after its time (not only in the exact minute).
+export const ADHAN_GRACE_MINUTES = 5;
+
+// Minutes from `prayer` (HH:MM) to `now` (HH:MM), wrapped to (-720, 720].
+// Returns true when `now` is in [prayer, prayer + grace].
+export function adhanDueNow(now: string, prayer: string, grace = ADHAN_GRACE_MINUTES): boolean {
+  const toMin = (s: string) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+    return m ? Number(m[1]) * 60 + Number(m[2]) : NaN;
+  };
+  const n = toMin(now);
+  const p = toMin(prayer);
+  if (Number.isNaN(n) || Number.isNaN(p)) return false;
+  let diff = n - p;
+  if (diff > 720) diff -= 1440;
+  if (diff < -720) diff += 1440;
+  return diff >= 0 && diff <= grace;
+}
