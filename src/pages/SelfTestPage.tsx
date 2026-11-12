@@ -641,16 +641,43 @@ function alignWords(expected: string[], spoken: string[]): { matched: boolean[];
 // start) are collected as extras instead of being silently ignored.
 // Joined-word merges consume their spoken tokens, so they are never
 // extras. A strict pass needs allMatched AND zero extras.
+// Breath restarts (2026-11-12, agreed: normal, never a mistake). After a
+// breath a reciter often goes back one to a few words and continues:
+// «لا ريب فيه | فيه هدى», «ذلك الكتاب لا ريب | الكتاب لا ريب فيه».
+// A run of 1–8 spoken words that repeats the run just before it is a
+// restart, unless the mushaf text itself repeats that run at this point
+// («كلا سوف تعلمون ثم كلا سوف تعلمون», «فإن مع العسر يسرا إن مع العسر يسرا»).
+// Returns the spoken indices of the repeated copy; they are never extras.
+export function breathRepeats(expected: string[], spoken: string[]): Set<number> {
+  const out = new Set<number>();
+  const expJoined = ` ${expected.join(' ')} `;
+  for (let k = 1; k < spoken.length; k++) {
+    if (out.has(k)) continue;
+    for (let n = Math.min(8, k); n >= 1; n--) {
+      if (k + n > spoken.length) continue;
+      let same = true;
+      for (let t = 0; t < n; t++) if (!softWordEq(spoken[k + t], spoken[k - n + t])) { same = false; break; }
+      if (!same) continue;
+      const run = spoken.slice(k - n, k).join(' ');
+      if (expJoined.includes(` ${run} ${run} `)) continue;
+      for (let t = 0; t < n; t++) out.add(k + t);
+      break;
+    }
+  }
+  return out;
+}
+
 function alignWordsStrict(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; extras: string[]; positions: number[]; consumed: number[] } {
   const matched = new Array(expected.length).fill(false);
   const positions = new Array(expected.length).fill(-1);
   // F1: consumed counts, same sites as alignWords (see above).
   const consumed = new Array(expected.length).fill(1);
   const extras: string[] = [];
+  const breath = breathRepeats(expected, spoken);
   let j = 0;
   let i = 0;
   const consumeThrough = (k: number, count: number) => {
-    for (let t = j; t < k; t++) extras.push(spoken[t]);
+    for (let t = j; t < k; t++) if (!breath.has(t)) extras.push(spoken[t]);
     j = k + count;
   };
   while (i < expected.length) {
@@ -710,7 +737,7 @@ function alignWordsStrict(expected: string[], spoken: string[]): { matched: bool
     i++;
   }
   // Trailing spoken words after the last match are extras too.
-  for (let t = j; t < spoken.length; t++) extras.push(spoken[t]);
+  for (let t = j; t < spoken.length; t++) if (!breath.has(t)) extras.push(spoken[t]);
   // P1: opaque numeral tokens are never extras — they are ASR
   // artifacts (Safari wrote "2", the user did not say it), so
   // counting one as an extra would penalize the engine's rendering,
