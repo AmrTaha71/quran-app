@@ -3,7 +3,7 @@
 // Recitation and recall parts are graded by the user against a checklist
 // (the app cannot grade voice yet). Results are kept locally so the user
 // can see the score and its change over time.
-import WheelPicker from './WheelPicker';
+import DrumPicker from './DrumReel';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { SURAHS, surahLabel } from '../lib/surahs';
@@ -178,7 +178,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
               ))}
             </div>
             <div className="mb-4">
-              <WheelPicker
+              <DrumPicker
                 label="اختيار النطاق"
                 value={num}
                 onChange={(n) => setNum(n)}
