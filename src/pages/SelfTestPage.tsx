@@ -3481,7 +3481,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Ayah-by-ayah uses the on-device Quran ear too when chosen (2026-11-09).
     // Batch 4 fallback (2026-11-10): no browser speech API (e.g. iOS Chrome) -> the on-device ear,
     // automatically. Nothing is uploaded, so no consent prompt is needed for this path.
-    const useModelEarAyah = getEar() === 'model' || !SR;
+    const useLabEarAyah = earLabOn();
+    const useModelEarAyah = useLabEarAyah || getEar() === 'model' || !SR;
     if (!SR && !useModelEarAyah) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
       return;
@@ -3507,8 +3508,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setWrongIndices([]);
     userStopRef.current = false;
     lastInterimRef.current = '';
-    const rec: any = useModelEarAyah ? new QuranModelRecognition() : new SR();
-    diagPush('ear', { label: useModelEarAyah ? 'quran-model' : 'browser' });
+    const labStartAyah = 0;
+    const rec: any = useLabEarAyah
+      ? new QuranLabRecognition(expectedWordList(ayah.ayah_text).map((w) => ({ norm: w.norm, ayahIdx: 0 })), labStartAyah)
+      : useModelEarAyah ? new QuranModelRecognition() : new SR();
+    diagPush('ear', { label: useLabEarAyah ? `quranlab-ayah@${labStartAyah}` : useModelEarAyah ? 'quran-model' : 'browser' });
     // [P7] Fixed test locale (see helpers): Quranic recitation,
     // not the UI language, decides the model.
     rec.lang = TEST_SPEECH_LOCALE;
