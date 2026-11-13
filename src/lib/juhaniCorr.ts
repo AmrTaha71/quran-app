@@ -119,9 +119,9 @@ const key = (surah: number, ayah: number): string => `${surah}:${ayah}`;
 // engine is unchanged.
 // ------------------------------------------------------------------
 export const CORR_RECITERS: { folder: string; name: string }[] = [
-  { folder: 'Minshawy_Murattal_128kbps', name: 'المنشاوي (مرتل)' },
-  { folder: 'Husary_64kbps', name: 'الحصري (مرتل)' },
-  { folder: 'Abdul_Basit_Murattal_64kbps', name: 'عبد الباسط (مرتل)' },
+  { folder: 'Minshawy_Murattal_128kbps', name: 'المنشاوي' },
+  { folder: 'Husary_64kbps', name: 'الحصري' },
+  { folder: 'Abdul_Basit_Murattal_64kbps', name: 'عبد الباسط' },
   { folder: 'Alafasy_128kbps', name: 'العفاسي' },
   { folder: 'Mohammad_al_Tablaway_128kbps', name: 'الطبلاوي' },
   { folder: 'Saood_ash-Shuraym_128kbps', name: 'الشريم' },
