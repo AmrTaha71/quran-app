@@ -37,7 +37,7 @@ import { isMushafNight, setMushafNight } from '../lib/mushafNight';
 import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import { setBackTarget } from '../lib/backTarget';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 const EDITION_NOTES: Record<string, string> = {
   madinah: 'الصفحات المصورة الكاملة بالخط العثماني والإطار المزخرف',

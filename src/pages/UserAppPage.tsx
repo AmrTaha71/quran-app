@@ -170,7 +170,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
       const { data, error } = await supabase.from('user_profiles').select('username, preferred_name, gender').eq('user_id', userId).single();
       const profile = error ? (await supabase.from('user_profiles').select('username, gender').eq('user_id', userId).single()).data : data;
       if (profile?.gender === 'male' || profile?.gender === 'female') setProfileGender(profile.gender);
-      if ((profile as { preferred_name?: string | null } | null)?.preferred_name) setPreferredName((profile as { preferred_name: string }).preferred_name);
+      if ((profile as { preferred_name?: string | null } | null)?.preferred_name) setPreferredName((profile as unknown as { preferred_name: string }).preferred_name);
     };
     loadGender();
   }, [session]);
