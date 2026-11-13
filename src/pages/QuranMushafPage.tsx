@@ -469,16 +469,22 @@ export default function QuranMushafPage({
   }, [session]);
   useEffect(() => { setSuggestOpen(false); setSuggestSent(false); setSuggestError(''); }, [selectedVerse?.id]);
   const submitSuggestion = async () => {
-    if (!selectedVerse || !session) return;
+    if (!selectedVerse) return;
     const text = suggestText.trim();
     if (!text) { setSuggestError('اكتب التربيط الأول'); return; }
     setSuggestSending(true); setSuggestError('');
-    const { error } = await supabase.from('ayah_links').insert({
-      verse_id: selectedVerse.id, link_content: text, link_title: suggestTitle.trim() || null,
-      link_types: [suggestType], status: 'pending', created_by: session.user.id, is_ai_draft: false,
-    });
+    // Signed-in users also land in the admin review queue; everyone
+    // gets a ready email to the admin (no mail server secret needed).
+    if (session) {
+      await supabase.from('ayah_links').insert({
+        verse_id: selectedVerse.id, link_content: text, link_title: suggestTitle.trim() || null,
+        link_types: [suggestType], status: 'pending', created_by: session.user.id, is_ai_draft: false,
+      });
+    }
     setSuggestSending(false);
-    if (error) { setSuggestError('تعذّر إرسال الاقتراح — حاول تاني'); return; }
+    const subject = `اقتراح تربيط — ${selectedVerse.surah_name} آية ${selectedVerse.ayah_no}`;
+    const body = `${selectedVerse.surah_name} — آية ${selectedVerse.ayah_no}\n${selectedVerse.ayah_text}\n\n${suggestTitle.trim() ? suggestTitle.trim() + '\n' : ''}${text}`;
+    window.location.href = `mailto:amrgabermousa@yahoo.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     setSuggestSent(true); setSuggestText(''); setSuggestTitle('');
   };
   // Ayah recitation (open audio CDNs, see lib/reciters.ts),
@@ -4466,9 +4472,9 @@ export default function QuranMushafPage({
               {selectedVerse && (
                 <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/40 polish-scrim-enter"
                   onClick={(e) => { e.stopPropagation(); setSelectedVerse(null); }}>
-                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[75vh] flex flex-col polish-modal-enter"
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col polish-modal-enter"
                     onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
                       <div className="flex items-center gap-2">
                         <span className="flex items-center justify-center w-9 h-9 bg-emerald-100 text-emerald-700 text-base font-bold rounded-lg">
                           {selectedVerse.ayah_no}
@@ -4482,7 +4488,7 @@ export default function QuranMushafPage({
                         <X className="w-5 h-5" />
                       </button>
                     </div>
-                    <div className="p-4 overflow-y-auto min-h-0 flex-1">
+                    <div className="p-3 overflow-y-auto min-h-0 flex-1">
                       {hifzMode && !hifzRevealed ? (
                         <div className="mb-3 text-center bg-amber-50 border border-amber-200 rounded-xl p-4">
                           <p className="text-sm font-bold text-amber-800">الآية مخفية في وضع الحفظ — سمّعها من حفظك الأول</p>
@@ -4495,65 +4501,67 @@ export default function QuranMushafPage({
                       ) : (
                         <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
                       )}
-                      {/* الروابط first and above everything: the app is
-                          about the links, so it gets its own full-width
-                          green button on top, not just a tab. Tapping it
-                          always shows the links; the ring marks it active. */}
-                      <button onClick={() => setPopupTab('links')}
-                        className={`w-full mb-3 py-3 rounded-xl transition-smooth flex flex-col items-center justify-center gap-0.5 polish-press ${popupTab === 'links' ? 'grad-amber-door text-white ring-2 ring-amber-300' : 'grad-amber-door text-white'}`}>
-                        <span className="text-base font-bold flex items-center gap-2"><Link className="w-5 h-5" /> روابط الحفظ</span>
-                        <span className="text-xs text-white/85 font-semibold">تربيطات تثبّت الآية دي في ذهنك</span>
-                      </button>
-                      {/* 2026-11-13: tag the ayah for the «لوحتي» filters. */}
-                      {session && (
-                        <div className="grid grid-cols-2 gap-2 mb-3">
+                      {/* Row 1 (2026-11-13): روابط الحفظ (gold, right-most in RTL),
+                          ارجع لها بعدين, صعبة, اقترح تربيط — one compact row. */}
+                      <div className="flex gap-1.5 mb-2">
+                        <button onClick={() => setPopupTab('links')}
+                          className={`flex-[1.3] py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 grad-amber-door text-white polish-press ${popupTab === 'links' ? 'ring-2 ring-amber-300' : ''}`}>
+                          <Link className="w-4 h-4" /> روابط الحفظ
+                        </button>
+                        {session && (<>
                           <button onClick={() => { void userLists.toggleList(selectedVerse.id, 'read_later'); }}
                             aria-pressed={userLists.lists.read_later.has(selectedVerse.id)}
-                            className={`py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 polish-press ${userLists.lists.read_later.has(selectedVerse.id) ? 'grad-emerald-door text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>
-                            <Bookmark className="w-5 h-5" /> ارجع لها بعدين
+                            className={`flex-1 py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${userLists.lists.read_later.has(selectedVerse.id) ? 'grad-emerald-door text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>
+                            <Bookmark className="w-4 h-4" /> ارجع لها بعدين
                           </button>
                           <button onClick={() => { void userLists.toggleList(selectedVerse.id, 'difficult'); }}
                             aria-pressed={userLists.lists.difficult.has(selectedVerse.id)}
-                            className={`py-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 polish-press ${userLists.lists.difficult.has(selectedVerse.id) ? 'grad-amber-door text-white' : 'bg-white border border-hairline-amber text-accent-800'}`}>
-                            <AlertTriangle className="w-5 h-5" /> صعبة
+                            className={`flex-1 py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${userLists.lists.difficult.has(selectedVerse.id) ? 'grad-amber-door text-white' : 'bg-white border border-hairline-amber text-accent-800'}`}>
+                            <AlertTriangle className="w-4 h-4" /> صعبة
                           </button>
+                        </>)}
+                        <button onClick={() => setSuggestOpen(!suggestOpen)}
+                          className="flex-1 py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 polish-press">
+                          <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيط' : 'اقترح تربيط'}
+                        </button>
+                      </div>
+                      {suggestOpen && (
+                        <div className="mb-2">
+                          <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
+                            {suggestSent ? (
+                              <p className="text-sm font-bold text-emerald-700">تم إرسال اقتراحك للإدارة (وبريد جاهز للإرسال). جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
+                            ) : (
+                              <>
+                                <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يوصل للإدارة بالبريد للمراجعة قبل النشر.</p>
+                                <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+                                <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+                                <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
+                                  {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
+                                </select>
+                                {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
+                                <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl text-sm polish-press">
+                                  {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح بالبريد'}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       )}
-                      {/* Share only here now (2026-11-04): اقترح تربيط
-                          moved to the very bottom of the popup, after
-                          استمع للآية, per the user's decision.
-                          Balance fix (2026-11-04): the share row is
-                          full-width like the other popup action
-                          buttons. ShareButton itself is shared with
-                          Landing/UserApp, so the stretch is applied
-                          here via the wrapper — the share panel is
-                          portalled to document.body, so these
-                          selectors only hit the trigger button. */}
-                      <div className="mb-3 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-center">
+                      <div className="mb-2 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-center [&>div>button]:py-2 [&>div>button]:text-sm">
                         <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} surahNo={selectedVerse.surah_no} />
                       </div>
-                      <div className="flex gap-2 mb-4">
-                        <button onClick={() => setPopupTab('mutashabihat')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'mutashabihat' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          المتشابهات
-                        </button>
-                        <button onClick={() => setPopupTab('irab')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'irab' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          الإعراب
-                        </button>
-                        <button onClick={() => setPopupTab('meanings')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'meanings' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          <Languages className="inline w-4 h-4 ml-1" />معاني الكلمات
-                        </button>
-                        <button onClick={() => setPopupTab('asbab')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'asbab' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          <ScrollText className="inline w-4 h-4 ml-1" />أسباب النزول
-                        </button>
-                        <button onClick={() => setPopupTab('tafsir')}
-                          className={`flex-1 py-2 rounded-lg text-sm font-bold transition-smooth ${popupTab === 'tafsir' ? 'grad-emerald-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
-                          التفسير
-                        </button>
+                      <div className="flex gap-1.5 mb-1.5">
+                        {([['mutashabihat','المتشابهات'],['irab','الإعراب'],['meanings','معاني الكلمات'],['asbab','أسباب النزول']] as const).map(([k,l]) => (
+                          <button key={k} onClick={() => setPopupTab(k as any)}
+                            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-smooth polish-press ${popupTab === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                            {l}
+                          </button>
+                        ))}
                       </div>
+                      <button onClick={() => setPopupTab('tafsir')}
+                        className={`w-full mb-3 py-2 rounded-lg text-sm font-bold transition-smooth polish-press ${popupTab === 'tafsir' ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                        التفسير
+                      </button>
                       {popupTab === 'mutashabihat' && (
                         <div className="mb-3"><AyahSimilar surah={selectedVerse.surah_no} ayah={selectedVerse.ayah_no} /></div>
                       )}
@@ -4693,77 +4701,33 @@ export default function QuranMushafPage({
                         </div>
                       )}
                     </div>
-                    <div className="p-3 border-t border-gray-100">
-                      <button onClick={() => setSelectedVerse(null)}
-                        className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-lg transition-smooth">
-                        إغلاق
-                      </button>
-                    </div>
-                      {/* ترتيب القائمة (قرار المستخدم 2026-11-04):
-                          إغلاق ← استمع للآية ← اقترح تربيط (آخر حاجة).
-                          زر تكرار مخفي من القائمة فقط: منطق التكرار
-                          (reciteLoop) باقٍ في الكود لكن لا يمكن تشغيله
-                          من الواجهة حاليًا، وافتراضيًا مغلق (false).
-                          شرائح القرّاء تتفتح تحت زر الاستماع مباشرة
-                          لأنها جزء منه، ورسالة الخطأ تحتها. */}
-                      <div className="mt-2 mb-3 px-3">
-                        <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
-                          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciting ? 'grad-amber-door text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
-                          {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                          {reciting ? `إيقاف التلاوة — ${reciter.name}` : 'استمع للآية'}
-                        </button>
-                      </div>
+                    <div className="p-2.5 border-t border-gray-100">
                       {showReciters && (
-                        <div className="mb-4 px-3">
-                          <p className="text-xs text-accent-600 text-center mb-2">اختر القارئ</p>
-                          <div className="flex flex-wrap gap-1.5">
+                        <div className="mb-2">
+                          <p className="text-xs text-accent-600 text-center mb-1">اختر القارئ</p>
+                          <div className="flex flex-wrap gap-1.5 justify-center">
                             {RECITERS.map((r) => (
                               <button key={r.id} onClick={() => selectedVerse && startRecitation(selectedVerse, r)}
-                                className={`px-3 py-1.5 rounded-full text-sm font-bold transition-smooth ${r.id === reciterId ? 'grad-amber-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
+                                className={`px-3 py-1 rounded-full text-xs font-bold transition-smooth ${r.id === reciterId ? 'grad-amber-door text-white polish-press' : 'bg-gray-100 text-accent-600 hover:bg-gray-200 polish-press'}`}>
                                 {r.name}
                               </button>
                             ))}
                           </div>
                         </div>
                       )}
-                      {reciteError && <p className="text-xs text-red-500 text-center mb-3 px-3">{reciteError}</p>}
-                      {/* اقترح تربيط LAST (user decision 2026-11-04):
-                          moved here from the share row, after
-                          استمع للآية. Its form expands below it. */}
-                      <div className="mt-2 mb-3 px-3">
-                        <button onClick={() => setSuggestOpen(!suggestOpen)}
-                          className="w-full py-2.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-sm hover:bg-emerald-100 transition-smooth flex items-center justify-center gap-1.5">
-                          <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيط' : 'اقترح تربيط'}
+                      {reciteError && <p className="text-xs text-red-500 text-center mb-2">{reciteError}</p>}
+                      <div className="flex gap-2">
+                        <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-sm font-bold transition-smooth polish-press ${reciting ? 'grad-amber-door text-white' : 'bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200'}`}>
+                          {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          {reciting ? 'إيقاف' : 'استمع للآية'}
+                        </button>
+                        <button onClick={() => setSelectedVerse(null)}
+                          className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-accent-700 text-sm font-semibold rounded-lg transition-smooth">
+                          إغلاق
                         </button>
                       </div>
-                      {suggestOpen && (
-                        <div className="mb-4 px-3">
-                          <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
-                            {suggestSent ? (
-                              <p className="text-sm font-bold text-emerald-700">تم إرسال اقتراحك — هيتراجع من الإدارة قبل النشر. جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
-                            ) : session ? (
-                              <>
-                                <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يظهر للإدارة للمراجعة قبل النشر.</p>
-                                <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
-                                <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
-                                <label className="block text-xs font-semibold text-accent-600 mb-1">نوع التربيط</label>
-                                <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
-                                  {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
-                                </select>
-                                {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
-                                <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl text-sm polish-press">
-                                  {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح'}
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <p className="text-sm font-semibold text-accent-700 mb-2">سجّل دخولك الأول عشان نقدر نراجع اقتراحك.</p>
-                                <button onClick={() => onNavigate('auth')} className="w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl text-sm polish-press">تسجيل الدخول</button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                    </div>
                   </div>
                 </div>
               )}
