@@ -31,33 +31,81 @@ export function loadFajrTone(): string {
 }
 export function saveFajrTone(id: string): void { try { localStorage.setItem(FAJR_TONE_KEY, id); } catch { /* ignore */ } }
 
+// ---- Audio engine (2026-11-13) ------------------------------------------
+// The alarm is an <audio> element playing a generated WAV loop (not WebAudio),
+// because iOS keeps a playing <audio> alive with the screen locked. "Night
+// mode": a silent loop plays all night on ONE element (unlocked by the user's
+// tap); at Fajr the same element swaps to the tone, no gesture needed.
+const SR = 22050;
+const urlCache = new Map<string, string>();
+function wavBlobUrl(samples: Float32Array): string {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const w = (o: number, t: string) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, SR, true); v.setUint32(28, SR * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+function toneUrl(id: string): string {
+  const hit = urlCache.get(id); if (hit) return hit;
+  const tone = ALARM_TONES.find((t) => t.id === id) ?? ALARM_TONES[0];
+  const out = new Float32Array(Math.round(tone.period * SR));
+  for (const [t, f, d, type, gain, glide] of tone.notes) {
+    const n0 = Math.round(t * SR), n = Math.round(d * SR);
+    let phase = 0;
+    for (let i = 0; i < n && n0 + i < out.length; i++) {
+      const fr = glide ? f + (glide - f) * (i / n) : f;
+      phase += fr / SR; const ph = phase % 1;
+      const x = type === 'square' ? (ph < 0.5 ? 1 : -1) : type === 'sawtooth' ? 2 * ph - 1 : type === 'triangle' ? 4 * Math.abs(ph - 0.5) - 1 : Math.sin(2 * Math.PI * ph);
+      const env = Math.min(1, i / (0.02 * SR)) * Math.pow(1 - i / n, 1.5);
+      out[n0 + i] += x * env * gain * 0.8;
+    }
+  }
+  const u = wavBlobUrl(out); urlCache.set(id, u); return u;
+}
+function silentUrl(): string {
+  const hit = urlCache.get('silent'); if (hit) return hit;
+  const u = wavBlobUrl(new Float32Array(SR)); urlCache.set('silent', u); return u;
+}
+
+let shared: HTMLAudioElement | null = null;
+export const isNightMode = (): boolean => shared !== null;
+/** Call from a tap. Keeps the page alive with the screen locked (best effort). */
+export function startNightMode(): boolean {
+  try {
+    shared?.pause();
+    const a = new Audio(silentUrl()); a.loop = true; a.volume = 1;
+    void a.play();
+    shared = a;
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: 'منبه الفجر شغّال', artist: 'تربيطات آيات القرآن' });
+    }
+    return true;
+  } catch { shared = null; return false; }
+}
+export function stopNightMode(): void {
+  try { shared?.pause(); } catch { /* ignore */ }
+  shared = null;
+}
+
 /** Looping alarm tone (not an adhan). Returns a stop function. */
 export function startAlarmTone(toneId: string = loadFajrTone()): () => void {
-  let ctx: AudioContext | null = null;
-  let timer = 0;
+  const night = shared;
+  let el: HTMLAudioElement;
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return () => {};
-    ctx = new Ctx();
-    void ctx.resume();
-    const c = ctx;
-    const tone = ALARM_TONES.find((t) => t.id === toneId) ?? ALARM_TONES[0];
-    const burst = () => {
-      const now = c.currentTime;
-      for (const [t, f, d, type, gain, glide] of tone.notes) {
-        const osc = c.createOscillator(); const g = c.createGain();
-        osc.type = type; osc.frequency.setValueAtTime(f, now + t);
-        if (glide) osc.frequency.linearRampToValueAtTime(glide, now + t + d);
-        g.gain.setValueAtTime(0.0001, now + t);
-        g.gain.exponentialRampToValueAtTime(gain, now + t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, now + t + d);
-        osc.connect(g).connect(c.destination); osc.start(now + t); osc.stop(now + t + d + 0.05);
-      }
-    };
-    burst();
-    timer = window.setInterval(burst, tone.period * 1000);
-  } catch { /* best effort */ }
-  return () => { window.clearInterval(timer); try { void ctx?.close(); } catch { /* ignore */ } };
+    el = night ?? new Audio();
+    el.src = toneUrl(toneId); el.loop = true; el.volume = 1;
+    void el.play().catch(() => {});
+  } catch { return () => {}; }
+  return () => {
+    try {
+      if (night && shared === night) { el.src = silentUrl(); el.loop = true; void el.play().catch(() => {}); }
+      else el.pause();
+    } catch { /* ignore */ }
+  };
 }
 
 export type Challenge =

@@ -1,4 +1,4 @@
-import { ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
+import { isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
@@ -447,6 +447,7 @@ function AdhanVoicePicker() {
 function FajrAlarmSetting() {
   const [mode, setMode] = useState<FajrAlarmMode>(loadFajrAlarm());
   const [tone, setTone] = useState(loadFajrTone());
+  const [night, setNight] = useState(isNightMode());
   const previewStop = useRef<(() => void) | null>(null);
   const preview = (id: string) => {
     previewStop.current?.();
@@ -478,6 +479,15 @@ function FajrAlarmSetting() {
                   className={`py-2 rounded-lg text-xs font-bold polish-press ${tone === t.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-700'}`}>{t.name}</button>
               ))}
             </div>
+          </div>
+        )}
+        {mode !== 'off' && (
+          <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+            <button onClick={() => { if (night) { stopNightMode(); setNight(false); } else { setNight(startNightMode()); } }}
+              className={`w-full py-3 rounded-xl font-bold polish-press ${night ? 'grad-amber-door text-white' : 'bg-white border-2 border-amber-400 text-amber-800'}`}>
+              {night ? '🌙 وضع الليلة شغّال — اضغط للإيقاف' : '🌙 شغّل المنبه الليلة (آيفون والشاشة مقفولة)'}
+            </button>
+            <p className="text-xs text-accent-700 mt-2 leading-relaxed">قبل النوم: اضغط الزر، اشحن الجهاز، سيب التطبيق مفتوح في الخلفية (متقفلوش من شاشة التطبيقات)، وارفع صوت الوسائط. هتلاقي «منبه الفجر شغّال» على شاشة القفل. ده أفضل ما يمكن في الويب لكن آيفون ممكن يوقفه (وضع توفير الطاقة مثلًا)، فاحتفظ بمنبه الساعة كاحتياطي.</p>
           </div>
         )}
         {mode !== 'off' && (
