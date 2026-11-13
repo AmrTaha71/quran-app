@@ -121,7 +121,7 @@ export async function buildPhonWords(words: { norm: string; ayahIdx: number }[],
 }
 
 type Aligned = { cost: number; owner: Int32Array; firstW: number; lastW: number; per: Map<number, WordAl> };
-type WordAl = { bad: number; del: number; len: number; heard: string; touched: boolean; firstDel?: boolean; first: boolean; pre: string };
+type WordAl = { delL?: string; bad: number; del: number; len: number; heard: string; touched: boolean; firstDel?: boolean; first: boolean; pre: string };
 
 /** Semi-global alignment of heard skeleton H to the words near `pointer`.
  *  owner[i] = word index of heard letter i (-1 = before the first word). */
@@ -138,6 +138,10 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
   }
   const n = H.length, m = E.length;
   isBoundary[m] = 1;
+  // «ال» of hamzat wasl at word start or after a one-letter prefix (و ب ف ك ل): its letters
+  // may be elided by the reciter, so deleting them is not a lost sound.
+  const artAlef = (j: number) => E[j] === 'ا' && E[j + 1] === 'ل' && (isBoundary[j] === 1 || (j > 0 && isBoundary[j - 1] === 1 && 'وبفكل'.includes(E[j - 1])));
+  const artLam = (j: number) => E[j] === 'ل' && j > 0 && artAlef(j - 1);
   const LEAD = 0.6;
   const INF = 1e9;
   const d: Float32Array[] = [];
@@ -184,7 +188,7 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
       else { x.heard = H[i - 1] + x.heard; x.bad++; x.touched = true; }
       owner[i - 1] = w; i--;
     }
-    else { const xd = get(colWord[j - 1]); xd.del++; if (isBoundary[j - 1]) xd.firstDel = true; lastCol = j - 1; j--; }
+    else { const xd = get(colWord[j - 1]); xd.del++; if (isBoundary[j - 1]) xd.firstDel = true; if (!artAlef(j - 1) && !artLam(j - 1)) xd.delL = (xd.delL ?? '') + E[j - 1]; lastCol = j - 1; j--; }
   }
   return { cost: best, owner, firstW: j < m ? colWord[j] : hi - 1, lastW: colWord[bestJ - 1], per };
 }
@@ -256,6 +260,10 @@ function judge(words: PhonWord[], w: number, x0: WordAl | undefined): string | n
   // A wrong or swapped letter still counts (bad > 0).
   // After a restart the ear can clip two letters of a long word («فستبصر» → «تبصر»).
   if (x.bad === 0 && x.firstDel && x.len >= 4 && x.del <= (x.len >= 6 ? 2 : 1)) return pre + words[w].norm;
+  // 2026-11-14 (offline test): a consonant like ل ر ن م that the ear did not hear at all is
+  // not the same as a quiet sound missed: if the word is otherwise exact, the swap
+  // «ل→ر» hides exactly here. Strong consonants lost from inside/end of a word count.
+  if (x.bad === 0 && x.len >= 3 && x.delL && /[لرنم]/.test(x.delL) && x.del > 0) return `${pre}~${x.heard}`;
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
   // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
