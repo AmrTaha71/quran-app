@@ -1,7 +1,7 @@
 // صفحة جدو — flat colour portrait (2026-11-13, v6): the reference picture
 // (round badge, bald head, white tufts, moustache, big ROUND white beard, no
-// nose drawn) in the app palette, turned a little to the right, wearing his
-// glasses slid down the nose, so they sit low and away from his eyes.
+// nose drawn) in the app palette, turned a little to the right, wearing normal
+// round glasses, with a shorter round beard.
 // Hand-drawn SVG, no external assets.
 export default function GrandpaIcon({ className = '' }: { className?: string }) {
   return (
@@ -35,25 +35,25 @@ export default function GrandpaIcon({ className = '' }: { className?: string }) 
         {/* far-side tuft, small */}
         <path d="M84 28 Q92 32 91 44 Q90 52 85 55 Q86 42 84 28 Z" fill="#E9EDF2" />
         {/* big round beard, two tones like the reference */}
-        <path d="M42 56 Q34 84 46 102 Q60 118 78 106 Q94 92 88 56 Q80 70 64 70 Q48 70 42 56 Z" fill="#E4E8E1" />
-        <path d="M42 56 Q34 84 46 102 Q56 114 66 112 Q60 90 64 70 Q48 70 42 56 Z" fill="#F4F6F2" />
+        <path d="M42 56 Q36 76 46 90 Q60 102 76 92 Q92 80 88 56 Q80 70 64 70 Q48 70 42 56 Z" fill="#E4E8E1" />
+        <path d="M42 56 Q36 76 46 90 Q56 99 66 98 Q60 84 64 70 Q48 70 42 56 Z" fill="#F4F6F2" />
         {/* cheeks */}
-        <ellipse cx="52" cy="57" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
-        <ellipse cx="78" cy="57" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
-        {/* brows and eyes (small, high up, so the glasses read as slid down) */}
-        <path d="M54 37 Q59 34 64 37" fill="none" stroke="#F4F6F2" strokeWidth="2.6" strokeLinecap="round" />
-        <path d="M72 37 Q77 34 82 37" fill="none" stroke="#F4F6F2" strokeWidth="2.6" strokeLinecap="round" />
+        <ellipse cx="52" cy="60" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
+        <ellipse cx="78" cy="60" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
+        {/* brows and eyes */}
+        <path d="M52 32 Q58 29 64 32" fill="none" stroke="#F4F6F2" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M70 32 Q76 29 82 32" fill="none" stroke="#F4F6F2" strokeWidth="2.6" strokeLinecap="round" />
         <ellipse cx="59" cy="44" rx="1.9" ry="2.5" fill="#33261E" />
         <ellipse cx="77" cy="44" rx="1.7" ry="2.4" fill="#33261E" />
-        {/* glasses slid down toward the tip of the nose: low, a clear gap under the eyes */}
-        <g transform="rotate(4 66 58)">
-          <circle cx="57" cy="58" r="8.2" fill="#F4EBD3" opacity="0.25" />
-          <circle cx="77" cy="58" r="8.2" fill="#F4EBD3" opacity="0.25" />
-          <circle cx="57" cy="58" r="8.2" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
-          <circle cx="77" cy="58" r="8.2" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
-          <path d="M65 56.5 Q67 54.8 69 56.5" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
-          <path d="M48.8 56 L43 52" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
-          <path d="M85.2 56 L88 52" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
+        {/* normal glasses, worn on the eyes */}
+        <g>
+          <circle cx="57" cy="44" r="8.2" fill="#F4EBD3" opacity="0.25" />
+          <circle cx="77" cy="44" r="8.2" fill="#F4EBD3" opacity="0.25" />
+          <circle cx="57" cy="44" r="8.2" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
+          <circle cx="77" cy="44" r="8.2" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
+          <path d="M65 42.5 Q67 40.8 69 42.5" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
+          <path d="M48.8 43 L43 40" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
+          <path d="M85.2 43 L88 40" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
         </g>
         {/* moustache */}
         <path d="M66 68 Q58 63 50 68 Q46 74 50 80 Q57 78 62 74 Q66 72 70 72 Q74 72 78 75 Q84 79 88 76 Q90 70 84 67 Q75 62 66 68 Z" fill="#FFFFFF" />
