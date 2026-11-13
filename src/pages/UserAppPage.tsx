@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import Sama3 from '../components/Sama3';
 import { supabase } from '../lib/supabase';
 import { loadVerseIndex, loadLinkIndex, searchVerseIds } from '../lib/searchIndex';
 import { signOut } from '../lib/auth';
@@ -623,7 +624,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <div className="glass-card rounded-2xl shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <Mic className="w-5 h-5 text-emerald-700" />
-              <h2 className="font-semibold text-ink">سـمّع لي</h2>
+              <h2 className="font-semibold text-ink"><Sama3 /> لي</h2>
             </div>
             <p className="text-sm font-semibold text-emerald-700 mb-4">اقرأ من حفظك، والقارئ يصحّح لك</p>
             <button onClick={() => onNavigate('test')}

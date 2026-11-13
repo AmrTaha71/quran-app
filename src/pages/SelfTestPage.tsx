@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import Sama3 from '../components/Sama3';
 import { IMLA_ALT, IMLA_PAIR_ALT } from '../lib/imlaAlt';
 import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
@@ -5718,7 +5719,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <Mic className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">سـمّع لي</h1>
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800"><Sama3 /> لي</h1>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
           <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"

@@ -1,4 +1,5 @@
 import { roomLabel } from '../lib/roomLabel';
+import Sama3 from '../components/Sama3';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import GrandpaIcon from '../components/GrandpaIcon';
@@ -115,7 +116,7 @@ function writeLinkOfDayCache(data: LinkOfDay): void {
 function HomeTile({ icon, glaze, title, hint, small, expanded, onClick }: {
   icon: ReactNode;
   glaze: 'emerald' | 'gold' | 'night' | 'plain';
-  title: string;
+  title: ReactNode;
   hint?: string;
   small?: boolean;
   expanded?: boolean;
@@ -324,7 +325,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
                 <Mic className="w-7 h-7 text-white" />
               </span>
-              سـمّع لي
+              <Sama3 /> لي
             </button>
             <button
               onPointerDown={pressFeedback}
@@ -401,7 +402,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="home-tiles mb-3">
           <HomeTile icon={<BookMarked />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
             expanded={hifzOpen} onClick={() => { togglePanel('hifz'); setShowPicker(false); }} />
-          <HomeTile icon={<MicVocal />} glaze="gold" title="سـمّع لي" hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
+          <HomeTile icon={<MicVocal />} glaze="gold" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             expanded={testOpen} onClick={() => togglePanel('test')} />
           <HomeTile icon={<Award />} glaze="gold" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             expanded={quizOpen} onClick={() => togglePanel('quiz')} />
@@ -522,7 +523,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             'test', with the chosen range stored for SelfTestPage). */}
         {testOpen && (
           <div ref={panelRef} className="home-panel mb-4">
-            <p className="home-panel-title">سـمّع لي — اختار النطاق</p>
+            <p className="home-panel-title"><Sama3 /> لي — اختار النطاق</p>
             <div className="grid grid-cols-2 gap-3 alive-subdoors">
               {([['surah', 'بالسورة'], ['juz', 'بالجزء'], ['page', 'بالصفحة'], ['passage', 'فقرة معينة']] as const).map(([id, label]) => (
                 <button

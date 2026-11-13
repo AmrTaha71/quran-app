@@ -5,6 +5,7 @@
 // ONBOARDING_REOPEN_EVENT — App listens and re-opens it).
 // Palette is emerald + gold only (unified palette; no new hue), calm
 // transitions from the alive styles (push 204), no loud effects.
+import Sama3 from './Sama3';
 import { useState } from 'react';
 import { BookMarked, Mic, Headphones, ChevronLeft, X } from 'lucide-react';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
@@ -53,7 +54,7 @@ const SCREENS = [
   },
   {
     icon: Mic,
-    title: 'سـمّع لي',
+    title: <><Sama3 /> لي</>,
     line: 'سمّع بصوتك والتطبيق يصحح لك لحظيًا — من غير ما تحتاج حد يسمع لك.',
   },
   {
