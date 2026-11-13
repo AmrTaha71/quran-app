@@ -17,3 +17,7 @@ How to route:
 ## Library docs (Context7)
 
 Before using a library API (React, Tailwind, Supabase, Vite, Motion, etc.), fetch its current docs with the Context7 MCP tools (`resolve-library-id`, then the docs tool). Do not guess an API from memory.
+
+## Complex problems (Sequential Thinking)
+
+For complex, multi-step problems (debugging freezes, reconciling git branches, multi-step fixes), use the Sequential Thinking MCP tool: break the problem into steps, revise as you go, and do not jump to a fix before the reasoning is done.
