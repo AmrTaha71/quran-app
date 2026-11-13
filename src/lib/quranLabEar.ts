@@ -77,12 +77,24 @@ export class QuranLabRecognition {
   private ended = false;
   private heardAny = false;
   private lastKeepalive = 0;
+  private frames = 0;
 
   /** `expected`: the range's words (SelfTestPage contExpected). The
    *  stream starts aligning at `startWord` (the first word not yet said). */
   constructor(private expected: { norm: string; ayahIdx: number }[], private startWord = 0) {}
 
-  start(): void { void this.begin(); }
+  start(): void {
+    // iPad Safari only lets an AudioContext run if it is created/resumed inside
+    // the tap that started the test. Created after the awaits in begin() it
+    // stays «suspended» on repeat recordings: the mic light is on, no audio
+    // reaches the model, and the page waits for a first word forever.
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      this.ctx = new AC();
+      void this.ctx.resume().catch(() => {});
+    } catch { this.ctx = null; }
+    void this.begin();
+  }
 
   private async begin() {
     try {
@@ -97,17 +109,21 @@ export class QuranLabRecognition {
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
       if (this.stopped) { this.release(); this.finishEnd(); return; }
       const AC = window.AudioContext || (window as any).webkitAudioContext;
-      this.ctx = new AC();
+      if (!this.ctx) this.ctx = new AC();
       if (this.ctx.state !== 'running') await this.ctx.resume().catch(() => {});
       this.src = this.ctx.createMediaStreamSource(this.stream);
       this.node = this.ctx.createScriptProcessor(4096, 1, 1);
       const rate = this.ctx.sampleRate;
       this.node.onaudioprocess = (ev) => {
         if (this.stopped) return;
+        this.frames++;
         const s = downsample(ev.inputBuffer.getChannelData(0), rate);
         w.postMessage({ type: 'audio', samples: s }, [s.buffer]);
       };
+      this.frames = 0;
       this.src.connect(this.node);
+      const ctxRef = this.ctx;
+      setTimeout(() => { if (!this.stopped && this.frames === 0) { void ctxRef?.resume().catch(() => {}); } }, 1200);
       this.node.connect(this.ctx.destination);
       this.onstart?.();
       this.onaudiostart?.();
@@ -148,6 +164,7 @@ export class QuranLabRecognition {
         this.onresult?.({ resultIndex: 0, results: [r] });
       }
     } else if (m.type === 'flushed') {
+      if (!this.stopped) return; // reply to the previous session's flush
       if (this.ps) this.emit(this.ps.finish());
       this.finishEnd();
     } else if (m.type === 'error') {
