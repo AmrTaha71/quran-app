@@ -38,7 +38,7 @@ export default function VoiceSearchMic() {
     const place = (el: HTMLInputElement) => {
       const r = el.getBoundingClientRect();
       // Inside the field's left edge (RTL text sits on the right).
-      setPos({ top: r.top + r.height / 2 - 20, left: r.left + 4 });
+      setPos({ top: r.top + r.height / 2 - 24, left: r.left + 4 });
     };
     const onFocus = (e: FocusEvent) => {
       const el = e.target as Element;
@@ -95,9 +95,9 @@ export default function VoiceSearchMic() {
       // pointerdown + preventDefault keeps the field focused (no blur).
       onPointerDown={(e) => { e.preventDefault(); if (target && !listening) listen(target); }}
       style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000 }}
-      className={`w-10 h-10 rounded-lg flex items-center justify-center shadow ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white'}`}
+      className={`w-12 h-12 rounded-xl flex items-center justify-center shadow ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white'}`}
     >
-      <Mic className="w-5 h-5" />
+      <Mic className="w-6 h-6" />
     </button>
   );
 }

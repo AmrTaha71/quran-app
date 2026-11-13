@@ -1020,7 +1020,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // after surah — the memos read it (TDZ: no use before declare).
   const [surahSearch, setSurahSearch] = useState('');
   const manualSurahMatches = useMemo(() => {
-    const q = normSurahSearch(surahSearch);
+    // «سورة الملك» / «صورة الملك» (voice) = «الملك»
+    const q = normSurahSearch(surahSearch.replace(/^\s*(سورة|سوره|صورة|صوره)(\s+|$)/, ''));
     if (!q) return SURAHS;
     return SURAHS.filter((s) => normSurahSearch(s.name).includes(q));
   }, [surahSearch]);
@@ -5604,7 +5605,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   };
   const applySurahSearch = (text: string) => {
     setSurahSearch(text);
-    const q = normSurahSearch(text.replace(/^\s*(سورة|سوره|صورة|صوره)\s+/, ''));
+    const q = normSurahSearch(text.replace(/^\s*(سورة|سوره|صورة|صوره)(\s+|$)/, ''));
     if (!q) return;
     const names = SURAHS.map((x) => ({ no: x.no, n: normSurahSearch(x.name) }));
     const hit = names.find((x) => x.n === q) || names.find((x) => x.n.startsWith(q)) || names.find((x) => x.n.includes(q));
@@ -5638,11 +5639,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         <input type="text" value={surahSearch} dir="rtl" data-no-voice
           onChange={(e) => applySurahSearch(e.target.value)}
           placeholder="اكتب أو قول اسم السورة… مثال: الشمس"
-          className="w-full px-3 py-2.5 pl-12 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+          className="w-full px-3 py-3.5 pl-16 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
         <button type="button" onClick={(e) => { e.preventDefault(); surahVoiceSearch(); }}
           aria-label="ابحث بالصوت"
-          className={`absolute left-1.5 top-1/2 -translate-y-1/2 p-2 rounded-lg ${surahVoiceOn ? 'bg-red-500 text-white animate-pulse' : 'text-emerald-700 hover:bg-emerald-50'}`}>
-          <Mic className="w-5 h-5" />
+          className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-xl ${surahVoiceOn ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white shadow'}`}>
+          <Mic className="w-6 h-6" />
         </button>
       </div>
       {surahSearch.trim() !== '' && (
