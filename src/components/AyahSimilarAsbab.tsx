@@ -3,6 +3,7 @@
 // public/similar/{surah}.json and public/asbab/{surah}.json, loaded once.
 // Source: quranpedia.net (free to use in apps, link appreciated).
 import { useEffect, useState } from 'react';
+import { ASBAB_KNOWN } from '../data/asbabKnown';
 import { SURAHS, surahLabel } from '../lib/surahs';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 
@@ -94,10 +95,22 @@ export function AyahSimilar({ surah, ayah }: { surah: number; ayah: number }) {
 }
 
 export function AyahAsbab({ surah, ayah }: { surah: number; ayah: number }) {
+  const known = ASBAB_KNOWN[`${surah}:${ayah}`];
   const st = useLoaded<AsbabEntry>(`/asbab/${surah}.json`, surah, ayah, (items) => items.find((x) => x.a === ayah));
+  if (known) {
+    return (
+      <div className="space-y-2">
+        <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+          <p className="text-base text-accent-800 leading-loose">{known.t}</p>
+          <p className="text-xs text-accent-600 mt-1">{known.s}</p>
+        </div>
+        <p className="text-xs text-accent-600 text-center">ملخص مختصر لأشهر أسباب النزول الثابتة في كتب الحديث.</p>
+      </div>
+    );
+  }
   if (!st.loaded) return <Spinner />;
   if (st.error) return <p className="text-center py-6 text-accent-600">تعذر تحميل أسباب النزول الآن — حاول مجدداً</p>;
-  if (!st.entry || st.entry.b.length === 0) return <p className="text-center py-6 text-accent-600">مفيش أسباب نزول مسجلة للآية دي في المصدر.</p>;
+  if (!st.entry || st.entry.b.length === 0) return <p className="text-center py-6 text-accent-600">لا يوجد سبب نزول مشهور لهذه الآية.</p>;
 
   return (
     <div className="space-y-2">

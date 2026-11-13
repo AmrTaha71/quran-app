@@ -1,3 +1,4 @@
+import { loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
@@ -361,6 +362,8 @@ export default function AdhanSettingsSection() {
         </p>
       </div>
 
+      <FajrAlarmSetting />
+
       {/* Web Push — adhan notification even when the app is closed.
           The notification itself carries no audio (iOS cannot
           auto-play audio from a closed app): tapping it opens the
@@ -438,6 +441,34 @@ function AdhanVoicePicker() {
         className="mt-1 min-h-[44px] rounded-lg bg-emerald-600 text-white text-sm font-semibold disabled:opacity-70">
         {dl === 'yes' ? '✓ متنزّل، هيشتغل من غير إنترنت' : dl === 'busy' ? 'بينزّل…' : dl === 'fail' ? 'التنزيل فشل، جرّب تاني' : 'عجبك؟ نزّله يشتغل من غير إنترنت'}
       </button>
+    </div>
+  );
+}
+
+function FajrAlarmSetting() {
+  const [mode, setMode] = useState<FajrAlarmMode>(loadFajrAlarm());
+  const opts: [FajrAlarmMode, string, string][] = [
+    ['off', 'بدون منبه', 'أذان الفجر العادي'],
+    ['simple', 'منبه عادي', 'نغمة منبه بدل الأذان وزر إيقاف'],
+    ['smart', 'منبه ذكي', 'لو كتمته يرن تاني بعد دقيقة، ولا يقف إلا بعد حل ٣ أسئلة (حساب، رقم، شكل مختلف)'],
+  ];
+  return (
+    <div className="mt-4">
+      <p className="font-semibold text-accent-800 mb-2">⏰ منبه الفجر</p>
+      <div className="grid gap-2">
+        {opts.map(([k, t, d]) => (
+          <button key={k} onClick={() => { setMode(k); saveFajrAlarm(k); }}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${mode === k ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}>
+            <span className="block font-medium text-accent-800">{t}</span>
+            <span className="block text-sm text-accent-600">{d}</span>
+          </button>
+        ))}
+        {mode !== 'off' && (
+          <button onClick={() => window.dispatchEvent(new Event('fajr-alarm-test'))}
+            className="w-full py-3 bg-white border-2 border-emerald-500 text-emerald-700 font-bold rounded-xl polish-press">▶ جرّب المنبه الآن</button>
+        )}
+        <p className="text-xs text-accent-600">المنبه يرن والتطبيق مفتوح فقط (قيد iOS)، ويحتاج لمسة واحدة على التطبيق بعد فتحه. سيب التطبيق مفتوح والشاشة شغالة بالليل.</p>
+      </div>
     </div>
   );
 }
