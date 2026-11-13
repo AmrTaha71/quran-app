@@ -2,17 +2,18 @@
 
 ## Model routing (token policy)
 
-Standing rule for every session: use the cheapest model that can do the job well.
+Standing rule for every session: use the cheapest model that can do the job well. This replaces any earlier model-routing policy.
 
-- **Haiku** (fast, cheapest): simple, well-defined tasks. Examples: reading a file to answer a question, running a single command, simple text edits, listing files, quick lookups, formatting.
-- **Sonnet** (default): most work. Examples: writing and editing code, fixing normal bugs, implementing features, explaining, reviewing code. Start here.
-- **Opus** (most expensive): only for complex work. Examples: hard bugs Sonnet could not solve, architecture decisions, security review, multi-file refactors where correctness is critical, anything Sonnet tried and failed. Never use it for routine work.
+- **Haiku** (fast, cheapest): simple, well-defined tasks. Examples: reading a file to answer a question, running a single command, simple text edits, listing files, quick lookups, formatting. If the task is clear and small, use Haiku.
+- **Sonnet 5.5** (medium, default): most work. Examples: writing and editing code, fixing normal bugs, implementing features, explaining things, reviewing code. Start here.
+- **Opus 5.5** (powerful, expensive): complex work. Examples: hard bugs Sonnet 5.5 could not solve, architecture decisions, security review, multi-file refactors where correctness is critical, anything Sonnet 5.5 tried and failed. Use only when Sonnet 5.5 is not enough.
+- **Fable 5.2** (most capable for technical work, most expensive): ONLY for the hardest technical work: the most difficult bugs, large refactors, and architecture where Opus 5.5 is not enough. Free for Pro users until November 16, 2026 (up to 50% of weekly limits); after that it bills to usage credits. Use it while free, but never on routine work.
 
 How to route:
-- Start with Sonnet. Before each task, ask "Can Haiku do this?" If yes, delegate it to a Haiku subagent (Task tool, model=haiku). If the task is genuinely complex, or Sonnet already failed, escalate to Opus (Task tool, model=opus).
-- When delegating, say what Haiku will do, what Sonnet will do, and what would need Opus.
-- Never use Opus where Haiku or Sonnet can do the task. Never use Sonnet where Haiku can.
-- Keep replies short. Do not repeat the request. No extra explanation unless asked.
+- Start with Sonnet 5.5. Before each task, ask "Can Haiku do this?" If yes, delegate it to a Haiku subagent. If the task is genuinely complex or Sonnet 5.5 already failed, escalate to Opus 5.5. If Opus 5.5 is not enough for a very hard technical task, escalate to Fable 5.2.
+- When delegating, be explicit: what the Haiku subagent does, what Sonnet 5.5 does, and what would need Opus 5.5 or Fable 5.2. Example: "Haiku will read these 3 files and summarize them; I will implement the fix; Opus 5.5 will review it only if the fix is risky; Fable 5.2 only for the hardest part."
+- Never use a stronger model for a task a cheaper one can do: not Sonnet 5.5 where Haiku can, not Opus 5.5 where Sonnet 5.5 can, not Fable 5.2 where Opus 5.5 can.
+- Keep all replies short. Do not repeat the user's request back. No extra explanation unless asked.
 
 ## Library docs (Context7)
 
