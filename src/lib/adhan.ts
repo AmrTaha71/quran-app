@@ -338,19 +338,42 @@ export async function availableAdhanVoices(): Promise<string[]> {
   return ADHAN_VOICES.filter((_, i) => ok[i]).map((v) => v.id);
 }
 
-// «الله أكبر الله أكبر» only (2026-11-13): the voice file is NOT cut
-// (some are CC BY-ND) — playback simply stops after N seconds with a
-// short fade. Per-voice seconds can be tuned here by ear.
-export const TAKBIR_SECONDS: Record<string, number> = { default: 9 };
-function stopWithFade(audio: HTMLAudioElement, afterSec: number): void {
-  const t0 = window.setTimeout(() => {
+// Playback windows (seconds) — the files themselves are NOT cut (some are
+// CC BY-ND); we only seek and stop. Measured by the owner by ear.
+// takbir: «الله أكبر الله أكبر» only. fullStart: skip silent intros.
+export const TAKBIR_RANGE: Record<string, [number, number]> = {
+  makkah: [7, 31],
+  'c-madinah': [3, 35],
+  'c-beautiful': [0, 18],
+  'c-azan': [0, 18],
+  'c-aaqib': [2, 13],
+};
+export const TAKBIR_DEFAULT: [number, number] = [0, 9];
+export const FULL_START: Record<string, number> = { makkah: 6 };
+
+function applyWindow(audio: HTMLAudioElement, start: number, end: number | null): void {
+  let seeked = start <= 0;
+  const seek = () => {
+    if (seeked) return;
+    try { audio.currentTime = start; seeked = true; } catch { /* retry on next event */ }
+  };
+  audio.addEventListener('loadedmetadata', seek);
+  audio.addEventListener('canplay', seek);
+  audio.addEventListener('playing', seek);
+  if (end == null) return;
+  let fading = false;
+  audio.addEventListener('timeupdate', () => {
+    if (fading || audio.currentTime < end) return;
+    fading = true;
     const step = window.setInterval(() => {
-      if (audio.paused) { window.clearInterval(step); return; }
-      audio.volume = Math.max(0, audio.volume - 0.1);
-      if (audio.volume <= 0.02) { window.clearInterval(step); audio.pause(); audio.volume = 1; audio.dispatchEvent(new Event('ended')); }
+      audio.volume = Math.max(0, audio.volume - 0.15);
+      if (audio.volume <= 0.02) {
+        window.clearInterval(step);
+        audio.pause(); audio.volume = 1;
+        audio.dispatchEvent(new Event('ended'));
+      }
     }, 60);
-  }, afterSec * 1000);
-  audio.addEventListener('pause', () => window.clearTimeout(t0), { once: true });
+  });
 }
 
 export function playAdhanSound(sound: AdhanSound, voiceId?: string): HTMLAudioElement | null {
@@ -381,7 +404,8 @@ export function playAdhanSound(sound: AdhanSound, voiceId?: string): HTMLAudioEl
     const v = voiceId ? (ADHAN_VOICES.find((x) => x.id === voiceId) ?? getAdhanVoice()) : getAdhanVoice();
     const audio = new Audio(v.url);
     audio.onerror = () => { if (v.id !== 'makkah') { audio.src = ADHAN_AUDIO_URL; void audio.play().catch(() => {}); } };
-    if (sound === 'takbir') stopWithFade(audio, TAKBIR_SECONDS[v.id] ?? TAKBIR_SECONDS.default);
+    if (sound === 'takbir') { const [st, en] = TAKBIR_RANGE[v.id] ?? TAKBIR_DEFAULT; applyWindow(audio, st, en); }
+    else if (FULL_START[v.id]) applyWindow(audio, FULL_START[v.id], null);
     void audio.play().catch(() => {
       // iOS blocks playback without a prior user gesture in this
       // session — the banner still shows, and the next alert after
