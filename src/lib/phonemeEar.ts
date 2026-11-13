@@ -180,6 +180,8 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
   return { cost: best, owner, firstW: j < m ? colWord[j] : hi - 1, lastW: colWord[bestJ - 1], per };
 }
 
+const MUQATTAAT = new Set(['الم', 'المص', 'الر', 'المر', 'كهيعص', 'طه', 'طسم', 'طس', 'يس', 'ص', 'حم', 'عسق', 'ق', 'ن']);
+
 function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | null {
   if (!x || !x.touched) return null; // not heard → missing
   const pre = x.pre.length >= 5 ? `~${x.pre} ` : '';
@@ -188,7 +190,10 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   // the word's first letter was heard.
   // A leading hamza is often too soft to hear after a pause (أولئك), so
   // its absence alone does not cost the word its first letter.
-  const firstOk = x.first || (words[w].skel[0] === 'ء' && x.heard[0] === words[w].skel[1]);
+  // Same for a leading «و»: after a pause the ear often loses it («والذين» → «للذين»).
+  const firstOk = x.first || ((words[w].skel[0] === 'ء' || words[w].skel[0] === 'و') && x.heard[0] === words[w].skel[1]);
+  // Disjoint letters (الم، حم، طسم…) are spelled out, not words: the ear garbles them often.
+  if (MUQATTAAT.has(words[w].norm) && x.touched) return pre + words[w].norm;
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
   // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
