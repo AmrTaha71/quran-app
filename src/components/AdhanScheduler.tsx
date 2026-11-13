@@ -90,6 +90,7 @@ export default function AdhanScheduler() {
     const fireFromPush = (prayer: AdhanPrayerKey) => {
       const settings = loadAdhanSettings();
       audioRef.current?.pause();
+      if (prayer === 'Fajr' && loadFajrAlarm() !== 'off') { setAlarm(true); return; }
       audioRef.current = playAdhanSound(settings.sound);
       if (settings.alertType === 'both') {
         setBanner({ prayer, label: prayerLabel(prayer) });

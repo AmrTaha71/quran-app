@@ -498,6 +498,9 @@ function FajrAlarmSetting() {
             </div>
           </div>
         )}
+        {ALARM_CLIPS.find((c) => c.id === tone)?.credit && (
+          <p className="text-xs text-accent-600" dir="auto">{ALARM_CLIPS.find((c) => c.id === tone)?.credit}</p>
+        )}
         {mode !== 'off' && (
           <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3">
             <p className="font-semibold text-accent-800 text-sm mb-1">🎙 سجّل رسالتك بصوتك أو بصوت زوجتك</p>

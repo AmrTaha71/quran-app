@@ -1,0 +1,17 @@
+{
+	"appId": "app.tarbitat.quran",
+	"appName": "تربيطات آيات القرآن",
+	"webDir": "dist",
+	"android": {
+		"allowMixedContent": false
+	},
+	"plugins": {
+		"LocalNotifications": {
+			"smallIcon": "ic_stat_icon",
+			"iconColor": "#047857"
+		}
+	},
+	"packageClassList": [
+		"LocalNotificationsPlugin"
+	]
+}

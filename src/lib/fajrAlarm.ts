@@ -12,7 +12,14 @@ export function saveFajrAlarm(m: FajrAlarmMode): void { try { localStorage.setIt
 
 // Voice clips taken from an adhan recording by playback window (file is not cut).
 // Fill with the muezzin file + seconds of «الصلاة خير من النوم» once measured.
-export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number }[] = [];
+export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number; credit?: string }[] = [
+  {
+    id: 'hamed-khayr', name: '🕌 الصلاة خير من النوم — الشيخ حامد',
+    url: 'https://www.repository.cam.ac.uk/bitstreams/89e27493-5010-4d23-a754-d60b4584b016/download',
+    start: 145, end: 165, // 2:25 → 2:45 (measured by the owner); file itself is not edited (CC BY-NC-ND)
+    credit: 'أذان الفجر — الشيخ حامد، مسجد المحمودية، القاهرة. تسجيل: Anna Kipervaser / On Look Films — World Oral Literature Project، جامعة كامبريدج (CC BY-NC-ND 3.0)',
+  },
+];
 export const FAJR_TONE_KEY = 'quran-fajr-tone';
 export function loadFajrTone(): string {
   try { const v = localStorage.getItem(FAJR_TONE_KEY); return (ALARM_TONES.some((t) => t.id === v) || ALARM_CLIPS.some((c) => c.id === v) || isRecTone(v ?? '')) ? (v as string) : 'classic'; } catch { return 'classic'; }
