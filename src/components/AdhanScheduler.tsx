@@ -11,6 +11,7 @@ import {
   type AdhanPrayerKey,
 } from '../lib/adhan';
 import FajrAlarmOverlay from './FajrAlarmOverlay';
+import { loadRecordings } from '../lib/alarmRecordings';
 import { loadFajrAlarm, stopNightMode } from '../lib/fajrAlarm';
 import { isValidAdhanPrayerKey, prayerLabel } from '../lib/adhanPush';
 
@@ -24,6 +25,7 @@ export default function AdhanScheduler() {
   const [banner, setBanner] = useState<{ prayer: AdhanPrayerKey; label: string } | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [alarm, setAlarm] = useState(false);
+  useEffect(() => { void loadRecordings(); }, []);
   useEffect(() => {
     const on = () => setAlarm(true);
     window.addEventListener('fajr-alarm-test', on);

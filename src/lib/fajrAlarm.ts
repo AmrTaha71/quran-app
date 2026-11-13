@@ -1,5 +1,6 @@
 // Smart Fajr alarm (2026-11-13). 'off' | 'simple' (stop button) | 'smart'
 // (rings again every minute until 3 challenges are solved).
+import { isRecTone, recUrl } from './alarmRecordings';
 export type FajrAlarmMode = 'off' | 'simple' | 'smart';
 export const FAJR_ALARM_KEY = 'quran-fajr-alarm';
 export function loadFajrAlarm(): FajrAlarmMode {
@@ -30,7 +31,7 @@ export const ALARM_TONES: { id: string; name: string; period: number; notes: Not
 export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number }[] = [];
 export const FAJR_TONE_KEY = 'quran-fajr-tone';
 export function loadFajrTone(): string {
-  try { const v = localStorage.getItem(FAJR_TONE_KEY); return (ALARM_TONES.some((t) => t.id === v) || ALARM_CLIPS.some((c) => c.id === v)) ? (v as string) : 'classic'; } catch { return 'classic'; }
+  try { const v = localStorage.getItem(FAJR_TONE_KEY); return (ALARM_TONES.some((t) => t.id === v) || ALARM_CLIPS.some((c) => c.id === v) || isRecTone(v ?? '')) ? (v as string) : 'classic'; } catch { return 'classic'; }
 }
 export function saveFajrTone(id: string): void { try { localStorage.setItem(FAJR_TONE_KEY, id); } catch { /* ignore */ } }
 
@@ -109,7 +110,8 @@ export function startAlarmTone(toneId: string = loadFajrTone()): () => void {
       onTime = () => { if (el.currentTime >= clip.end) seek(); };
       el.addEventListener('timeupdate', onTime);
       el.addEventListener('ended', seek);
-    } else { el.src = toneUrl(toneId); el.loop = true; el.volume = 1; }
+    } else if (isRecTone(toneId) && recUrl(toneId.slice(4))) { el.src = recUrl(toneId.slice(4)) as string; el.loop = true; el.volume = 1; }
+    else { el.src = toneUrl(isRecTone(toneId) ? 'classic' : toneId); el.loop = true; el.volume = 1; }
     void el.play().catch(() => {});
   } catch { return () => {}; }
   return () => {

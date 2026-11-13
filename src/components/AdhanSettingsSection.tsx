@@ -1,3 +1,4 @@
+import { deleteRecording, loadRecordings, recToneId, saveRecording, startRecording, type AlarmRec } from '../lib/alarmRecordings';
 import { ALARM_CLIPS, isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
@@ -448,6 +449,20 @@ function FajrAlarmSetting() {
   const [mode, setMode] = useState<FajrAlarmMode>(loadFajrAlarm());
   const [tone, setTone] = useState(loadFajrTone());
   const [night, setNight] = useState(isNightMode());
+  const [recs, setRecs] = useState<AlarmRec[]>([]);
+  const [recName, setRecName] = useState('');
+  const [recording, setRecording] = useState<{ stop: () => Promise<Blob> } | null>(null);
+  const [recErr, setRecErr] = useState('');
+  useEffect(() => { void loadRecordings().then(setRecs); }, []);
+  const toggleRecord = async () => {
+    setRecErr('');
+    if (recording) {
+      const blob = await recording.stop(); setRecording(null);
+      await saveRecording(recName || 'تسجيلي', blob); setRecs(await loadRecordings()); setRecName('');
+      return;
+    }
+    try { setRecording(await startRecording()); } catch { setRecErr('لازم تسمح للميكروفون'); }
+  };
   const previewStop = useRef<(() => void) | null>(null);
   const preview = (id: string) => {
     previewStop.current?.();
@@ -474,11 +489,29 @@ function FajrAlarmSetting() {
           <div>
             <p className="font-semibold text-accent-800 mt-1 mb-1 text-sm">نغمة المنبه (اضغط للتجربة)</p>
             <div className="grid grid-cols-3 gap-1.5">
-              {[...ALARM_CLIPS, ...ALARM_TONES].map((t) => (
+              {[...recs.map((r) => ({ id: recToneId(r.id), name: '🎙 ' + r.name })), ...ALARM_CLIPS, ...ALARM_TONES].map((t) => (
                 <button key={t.id} onClick={() => { setTone(t.id); saveFajrTone(t.id); preview(t.id); }}
                   className={`py-2 rounded-lg text-xs font-bold polish-press ${tone === t.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-700'}`}>{t.name}</button>
               ))}
             </div>
+          </div>
+        )}
+        {mode !== 'off' && (
+          <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3">
+            <p className="font-semibold text-accent-800 text-sm mb-1">🎙 سجّل رسالتك بصوتك أو بصوت زوجتك</p>
+            <p className="text-xs text-accent-700 mb-2">مثلًا «قوم صلّي الفجر». الرسالة هتتكرر كمنبه، واختارها من النغمات فوق. التسجيل بيفضل على جهازك بس (لحد ٢٠ ثانية).</p>
+            <input value={recName} onChange={(e) => setRecName(e.target.value)} placeholder="اسم التسجيل (مثلًا: صوت أمي)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
+            <button onClick={() => void toggleRecord()} className={`w-full py-3 rounded-xl font-bold polish-press ${recording ? 'grad-amber-door text-white' : 'grad-emerald-door text-white'}`}>
+              {recording ? '⏹ إيقاف وحفظ التسجيل' : '⏺ ابدأ التسجيل'}
+            </button>
+            {recErr && <p className="text-xs text-red-600 font-bold mt-1">{recErr}</p>}
+            {recs.map((r) => (
+              <div key={r.id} className="flex items-center gap-2 mt-2 text-sm">
+                <span className="flex-1 truncate">🎙 {r.name}</span>
+                <button onClick={() => preview(recToneId(r.id))} className="px-3 py-1 bg-white border border-emerald-300 rounded-lg">تجربة</button>
+                <button onClick={() => { void deleteRecording(r.id).then(async () => { setRecs(await loadRecordings()); if (tone === recToneId(r.id)) { setTone('classic'); saveFajrTone('classic'); } }); }} className="px-3 py-1 bg-white border border-red-300 text-red-600 rounded-lg">حذف</button>
+              </div>
+            ))}
           </div>
         )}
         {mode !== 'off' && (
