@@ -12,6 +12,8 @@
 // letter in a word of 3+ letters is tolerated (breath cut). A substituted
 // or added letter is never tolerated (Dr. Amr's rule).
 
+import { IMLA_ALT } from './imlaAlt';
+
 export type PhonWord = { norm: string; skel: string };
 
 const REF_URL = '/models/quranlab/quran_text2phoneme.json';
@@ -150,8 +152,15 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
   }
   for (let i = 0; i <= n; i++) for (let j = 0; j <= m; j++) {
     if (i > 0 && j > 0) { const c = d[i - 1][j - 1] + (H[i - 1] === E[j - 1] ? 0 : 1); if (c < d[i][j]) { d[i][j] = c; bt[i][j] = 0; } }
-    if (i > 0) { const c = d[i - 1][j] + 1; if (c < d[i][j]) { d[i][j] = c; bt[i][j] = 1; } }
-    if (j > 0) { const c = d[i][j - 1] + 1; if (c < d[i][j]) { d[i][j] = c; bt[i][j] = 2; } }
+    // Cheap, harmless gaps (2026-11-14): a madd letter's hamza the ear adds
+    // («الشتاء»), and the «ال» of hamzat wasl the reciter elides inside a
+    // continued recitation («والصيف» → «وصيف»). They must not sink a whole line.
+    if (i > 0) { const c = d[i - 1][j] + (H[i - 1] === 'ء' && i > 1 && 'اوي'.includes(H[i - 2]) ? 0.4 : 1); if (c < d[i][j]) { d[i][j] = c; bt[i][j] = 1; } }
+    if (j > 0) {
+      const alefStart = E[j - 1] === 'ا' && E[j] === 'ل' && (isBoundary[j - 1] || (j > 1 && isBoundary[j - 2] && 'وبفكل'.includes(E[j - 2])));
+      const lamOfAl = E[j - 1] === 'ل' && j > 1 && E[j - 2] === 'ا' && m - j >= 2 && (isBoundary[j - 2] || (j > 2 && isBoundary[j - 3] && 'وبفكل'.includes(E[j - 3])));
+      const c = d[i][j - 1] + (alefStart || lamOfAl ? 0.4 : 1); if (c < d[i][j]) { d[i][j] = c; bt[i][j] = 2; }
+    }
   }
   let bestJ = -1, best = INF;
   for (let j = 1; j <= m; j++) if (isBoundary[j] && d[n][j] < best) { best = d[n][j]; bestJ = j; }
@@ -182,8 +191,41 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
 
 const MUQATTAAT = new Set(['الم', 'المص', 'الر', 'المر', 'كهيعص', 'طه', 'طسم', 'طس', 'يس', 'ص', 'حم', 'عسق', 'ق', 'ن']);
 
-function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | null {
-  if (!x || !x.touched) return null; // not heard → missing
+/** 2026-11-14 (offline test, 39 reciters × 28k words): the ear's spelling of a
+ *  perfectly read word often differs from the text's skeleton in ways that are
+ *  not mistakes. Returns the adjusted alignment, or the word's own norm when the
+ *  heard form is a known, harmless realisation of it. */
+function forgive(sk: string, norm: string, x: WordAl): { x: WordAl; ok: boolean } {
+  let heard = x.heard, bad = x.bad, del = x.del;
+  // A word-initial alif is said as a hamza after a pause («الذي» → «ءلذي»).
+  if (sk[0] === 'ا' && heard[0] === 'ء' && heard.slice(1) === sk.slice(1)) return { x, ok: true };
+  // Madd + hamza at the word's end («الشتاء») is spelled without the hamza in the text.
+  if (heard.length > 2 && heard.endsWith('ء') && 'اوي'.includes(heard[heard.length - 2]) && !sk.endsWith('ء')) {
+    heard = heard.slice(0, -1); bad = Math.max(0, bad - 1);
+  }
+  // Tā' marbūta read in wasl: «رحلة الشتاء» is said «رحلت», the text spells ه.
+  if (sk.length >= 3 && sk.endsWith('ه') && heard.length === sk.length && heard.endsWith('ت') && heard.slice(0, -1) === sk.slice(0, -1)) return { x, ok: true };
+  // Hamzat wasl «ال» is dropped inside a continued recitation («والصيف» → «وصيف»,
+  // «الشتاء» after a word → «شتاء»); the lām may also be assimilated.
+  if (sk.length >= 5 && heard.length >= 3) {
+    const at = sk.startsWith('ال') ? 0 : sk[1] === 'ا' && sk[2] === 'ل' ? 1 : -1;
+    if (at >= 0) {
+      const stem = sk.slice(0, at) + sk.slice(at + 2);
+      if (heard === stem || heard === stem.slice(at) || heard === sk.slice(at + 1)) return { x, ok: true };
+      if (bad === 0 && del <= 2 && x.firstDel && heard === stem.slice(at)) return { x, ok: true };
+    }
+  }
+  // Spelling alternatives of the same word (imlaAlt: الافهم ↔ ايلافهم).
+  const alts = IMLA_ALT[norm];
+  if (alts) for (const a of alts) { const t = phonSkel(textSkel(a)); if (heard === t || heard === t.slice(1) || 'اء'.includes(heard[0]) && heard.slice(1) === t.slice(1)) return { x, ok: true }; }
+  return { x: heard === x.heard ? x : { ...x, heard, bad, del }, ok: false };
+}
+
+function judge(words: PhonWord[], w: number, x0: WordAl | undefined): string | null {
+  if (!x0 || !x0.touched) return null; // not heard → missing
+  const f = forgive(words[w].skel, words[w].norm, x0);
+  if (f.ok) return (x0.pre.length >= 5 ? `~${x0.pre} ` : '') + words[w].norm;
+  const x = f.x;
   const pre = x.pre.length >= 5 ? `~${x.pre} ` : '';
   // No wrong or added letter: dropped letters are the ear missing quiet
   // sounds (or a breath cut), tolerated up to half the word as long as
@@ -260,6 +302,10 @@ export class PhonemeStream {
       if (final) { this.buf = ''; this.tbuf = []; }
       return '';
     }
+    // 2026-11-14: a few letters of a word still being spoken («بلمه» of «بالمهتدين»)
+    // can align to an EARLIER short word («بمن») and drag the pointer back, so the
+    // real word is never judged. Backward alignments need real evidence first.
+    if (!final && a.lastW < this.pointer - 1 && H.length < 14) return '';
     const upto = final ? a.lastW : a.lastW - 1;
     // A short sound can match a word far away by chance («هدى لـ» ≈ «هدى من»
     // in the next ayah). Never jump ahead on a few letters: wait for more.

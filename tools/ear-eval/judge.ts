@@ -42,6 +42,7 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
     if (t.startsWith('~')) { wrong++; continue; }
     for (let k = j; k < Math.min(ref.length, j + 4); k++) if (ref[k].norm === t) { ok[k] = true; j = k + 1; break; }
   }
+  if (process.env.DEBUG) console.log(m.f, JSON.stringify(emitted), ref.map(w=>w.norm).join(" "));
   const row: any = { f: m.f, n: ref.length, okN: ok.filter(Boolean).length, wrong, mut: mut ? mut.type : null };
   if (mut) row.mutAccepted = ok[mut.i];
   else { row.miss = ref.map((w, k) => (ok[k] ? null : w.norm)).filter(Boolean); row.wt = toks.filter(t => t.startsWith('~')); row.s = m.surah + ':' + m.a1; }
