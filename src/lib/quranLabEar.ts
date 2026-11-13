@@ -129,25 +129,10 @@ export class QuranLabRecognition {
       w.postMessage({ type: 'reset' });
       this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }));
       if (this.stopped) { this.release(); this.finishEnd(); return; }
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      if (!this.ctx) this.ctx = new AC();
-      if (this.ctx.state !== 'running') await this.ctx.resume().catch(() => {});
-      this.src = this.ctx.createMediaStreamSource(this.stream);
-      this.node = this.ctx.createScriptProcessor(4096, 1, 1);
-      const rate = this.ctx.sampleRate;
-      this.node.onaudioprocess = (ev) => {
-        if (this.stopped) return;
-        this.frames++;
-        const s = downsample(ev.inputBuffer.getChannelData(0), rate);
-        w.postMessage({ type: 'audio', samples: s }, [s.buffer]);
-      };
-      this.frames = 0;
-      this.src.connect(this.node);
-      const ctxRef = this.ctx;
-      setTimeout(() => { if (!this.stopped && this.frames === 0) { void ctxRef?.resume().catch(() => {}); } }, 1200);
-      this.node.connect(this.ctx.destination);
+      this.attach(w);
       this.onstart?.();
       this.onaudiostart?.();
+      this.watch(w);
     } catch (err) {
       const name = (err as { name?: string })?.name || '';
       const msg = String((err as Error)?.message || err);
@@ -155,6 +140,74 @@ export class QuranLabRecognition {
       this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : loadFail ? 'network' : 'audio-capture', message: msg });
       this.release();
       this.finishEnd();
+    }
+  }
+
+  private maxRms = 0;
+  private retries = 0;
+
+  /** Wire the current stream + context into the worker. */
+  private attach(w: Worker) {
+    const AC = window.AudioContext || (window as any).webkitAudioContext;
+    if (!this.ctx) this.ctx = new AC();
+    const ctx = this.ctx!;
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+    ctx.onstatechange = () => { if (!this.stopped && ctx.state !== 'running') void ctx.resume().catch(() => {}); };
+    this.src = ctx.createMediaStreamSource(this.stream!);
+    this.node = ctx.createScriptProcessor(4096, 1, 1);
+    const rate = ctx.sampleRate;
+    this.node.onaudioprocess = (ev) => {
+      if (this.stopped) return;
+      this.frames++;
+      const ch = ev.inputBuffer.getChannelData(0);
+      let sum = 0;
+      for (let i = 0; i < ch.length; i += 8) sum += ch[i] * ch[i];
+      const rms = Math.sqrt(sum / (ch.length / 8));
+      if (rms > this.maxRms) this.maxRms = rms;
+      const s = downsample(ch, rate);
+      w.postMessage({ type: 'audio', samples: s }, [s.buffer]);
+    };
+    this.frames = 0;
+    this.maxRms = 0;
+    this.src.connect(this.node);
+    this.node.connect(ctx.destination);
+  }
+
+  /** The mic light can be on while no sound arrives (iOS audio-session
+   *  glitch, ~half of the starts). If after 2.2 s there are no frames or
+   *  pure digital silence, rebuild the capture silently (up to 2 times);
+   *  only then report an error. */
+  private watch(w: Worker) {
+    setTimeout(() => {
+      if (this.stopped) return;
+      const track = this.stream?.getAudioTracks()[0];
+      const dead = this.frames === 0 || this.maxRms < 1e-6 || !track || track.readyState !== 'live' || track.muted;
+      if (!dead) return;
+      if (this.retries >= 2) {
+        this.onerror?.({ error: 'audio-capture', message: 'no-audio-signal' });
+        return;
+      }
+      this.retries++;
+      void this.rebuild(w);
+    }, 2200);
+  }
+
+  private async rebuild(w: Worker) {
+    try {
+      try { this.node?.disconnect(); } catch { /* ignore */ }
+      try { this.src?.disconnect(); } catch { /* ignore */ }
+      try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+      try { await this.ctx?.close(); } catch { /* ignore */ }
+      this.ctx = null; this.node = null; this.src = null;
+      await new Promise((r) => setTimeout(r, 250));
+      if (this.stopped) return;
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: this.retries < 2, noiseSuppression: false, autoGainControl: true } });
+      if (this.stopped) { this.release(); return; }
+      this.attach(w);
+      this.watch(w);
+    } catch (err) {
+      const name = (err as { name?: string })?.name || '';
+      this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture', message: String((err as Error)?.message || err) });
     }
   }
 
