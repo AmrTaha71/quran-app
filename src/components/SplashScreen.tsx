@@ -158,7 +158,7 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
       <div className="rq-splash-inner">
         <div className="rq-splash-glow" />
         <div className="rq-splash-logo">
-          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png" alt="تربيطات آيات القرآن" />
+          <img src="/brand/icon-512.png" alt="تربيطات آيات القرآن" />
         </div>
         <div className="rq-splash-divider"><i /></div>
         <p className="rq-splash-tagline">{message || 'احفظ القرآن بالتربيطات'}</p>

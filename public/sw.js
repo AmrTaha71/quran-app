@@ -1,4 +1,4 @@
-/* Offline service worker for روابط الذكر الحكيم (v2, hand-written —
+/* Offline service worker for تربيطات آيات القرآن (v2, hand-written —
    no build plugin, so the existing prebuild icon step is untouched).
    Strategy:
    - App shell (/, /index.html): cached on install; navigations are
@@ -36,7 +36,7 @@
    A new deploy ships a new file (new cache names on version bump), and
    skipWaiting + clients.claim make the update take effect promptly. */
 
-const SHELL_CACHE = 'quran-shell-v2';
+const SHELL_CACHE = 'quran-shell-v3';
 const IMG_CACHE = 'quran-pages-v2';
 // Full-download cache (Settings "صفحات المصحف على جهازك"): written
 // ONLY by the page's download UI, never by the fetch handler below
@@ -90,7 +90,7 @@ const MAX_IMG_ENTRIES = 150;
 // re-discovered at activate time for trimming (see trimShellCache).
 const PRECACHE_STATIC = [
   '/', '/index.html', '/manifest.webmanifest',
-  'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png', 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-512.png', 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-maskable-512.png',
+  '/brand/icon-192.png', '/brand/icon-512.png', '/icon-maskable-512.png',
   'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/apple-touch-icon.png', '/quran-icon.svg',
 ];
 
@@ -387,7 +387,7 @@ self.addEventListener('fetch', (event) => {
 // push tap is a deliberate user action.
 // ------------------------------------------------------------------
 
-const ADHAN_ICON_URL = 'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png';
+const ADHAN_ICON_URL = '/brand/icon-192.png';
 
 self.addEventListener('push', (event) => {
   let data = { title: '🕌 حان الآن وقت الصلاة', body: 'اضغط لفتح التطبيق وسماع الأذان', prayer: '', url: '/' };

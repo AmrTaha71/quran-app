@@ -345,7 +345,7 @@ export default function HomeStartPage({ session, onNavigate }: {
     <div className="min-h-screen page-bg pb-24 route-in">
       <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <img src="https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
+          <img src="/brand/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
           <div>
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-ink">تربيطات آيات القرآن</h1>
             <p className="text-sm text-ink-2">للحفظ بالتربيطات</p>
