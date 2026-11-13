@@ -121,7 +121,7 @@ export function DrumReel({
                   backfaceVisibility: 'hidden',
                   // Same size on every row: the cylinder alone shrinks and curves
                   // the far rows (as in the iOS picker). Only colour/weight mark the choice.
-                  fontSize: '1.45rem',
+                  fontSize: l.length > 22 ? `${Math.max(0.9, (1.45 * 22) / l.length).toFixed(2)}rem` : '1.45rem',
                   fontWeight: sel ? 700 : 600,
                   color: sel ? look.sel : look.rest,
                   opacity: sel ? 1 : Math.max(0.1, 1 - 0.27 * Math.abs(d)),

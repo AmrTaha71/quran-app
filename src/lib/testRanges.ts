@@ -51,7 +51,7 @@ export function unitMax(kind: UnitKind): number {
 
 export function unitLabel(kind: UnitKind, n: number): string {
   if (kind === 'surah') return `سورة ${surahName(n)}`;
-  if (kind === 'juz') return `الجزء ${n}`;
+  if (kind === 'juz') return `الجزء ${n.toLocaleString('ar-EG')}`;
   if (kind === 'hizb') return `الحزب ${n}`;
   return `الربع ${n}`;
 }
@@ -99,8 +99,8 @@ const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع'];
  *  «الربع الثالث — الحزب الأول — الجزء 16». */
 export function unitPickLabel(kind: UnitKind, n: number): string {
   if (kind === 'surah') return `${n} - ${surahName(n)}`;
-  if (kind === 'juz') return `الجزء ${n}`;
-  if (kind === 'hizb') return `الحزب ${ORD[(n - 1) % 2]} — الجزء ${Math.ceil(n / 2)}`;
+  if (kind === 'juz') return `الجزء ${n.toLocaleString('ar-EG')}`;
+  if (kind === 'hizb') return `الحزب ${ORD[(n - 1) % 2]} · جزء ${Math.ceil(n / 2).toLocaleString('ar-EG')}`;
   const hizb = Math.ceil(n / 4);
-  return `الربع ${ORD[(n - 1) % 4]} — الحزب ${ORD[(hizb - 1) % 2]} — الجزء ${Math.ceil(hizb / 2)}`;
+  return `الربع ${ORD[(n - 1) % 4]} · ${hizb % 2 ? 'الحزب الأول' : 'الحزب الثاني'} · جزء ${Math.ceil(hizb / 2).toLocaleString('ar-EG')}`;
 }
