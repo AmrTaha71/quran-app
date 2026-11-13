@@ -969,6 +969,28 @@ function cancelCorrectionSpeech() {
 // never read a stale ayah, index, or grade.
 type MicState = 'idle' | 'listening' | 'correcting' | 'done-correct' | 'done-wrong';
 
+// Concurrency limiter for generate-voice requests (see 2026-11-13 note in
+// requestCorrectionAudio): at most VOICE_MAX in flight, a 429 is retried
+// up to twice after 1.5s / 3s.
+const VOICE_MAX = 3;
+let voiceActive = 0;
+const voiceWaiters: Array<() => void> = [];
+async function limitedVoiceFetch(run: () => Promise<Response>): Promise<Response> {
+  if (voiceActive >= VOICE_MAX) await new Promise<void>((r) => voiceWaiters.push(r));
+  voiceActive++;
+  try {
+    let res = await run();
+    for (let i = 0; i < 2 && res.status === 429; i++) {
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+      res = await run();
+    }
+    return res;
+  } finally {
+    voiceActive--;
+    voiceWaiters.shift()?.();
+  }
+}
+
 export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [phase, setPhase] = useState<'setup' | 'testing' | 'done'>('setup');
   // Correction reciter (ready-made word timings, whole Quran): load the
@@ -1862,11 +1884,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const body = pos
         ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, rateMode: 'playback' })
         : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, rateMode: 'playback' });
-      const doFetch = (token: string) => fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
+      // 2026-11-13: generate-voice has a per-minute cap. A burst of ~20
+      // prefetches returned 429 nine times in one run (iPad diag), so
+      // corrections went silent. Cap concurrency at 3 and retry a 429
+      // up to twice after a short wait, via a module-level queue.
+      const doFetch = (token: string) => limitedVoiceFetch(() => fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-voice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body,
-      });
+      }));
       let res = await doFetch(await getCorrToken());
       let retried401 = false;
       if (res.status === 401) {
