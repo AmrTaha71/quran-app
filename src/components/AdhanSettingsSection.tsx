@@ -1,4 +1,4 @@
-import { enableNativeAlarms, isNativeApp, rescheduleNativeAlarms } from '../lib/nativeAlarm';
+import { enableNativeAlarms, isNativeApp, loadRingOnSilent, platformName, rescheduleNativeAlarms, saveRingOnSilent } from '../lib/nativeAlarm';
 import { deleteRecording, loadRecordings, recToneId, saveRecording, startRecording, type AlarmRec } from '../lib/alarmRecordings';
 import { ALARM_CLIPS, isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
@@ -451,6 +451,7 @@ function FajrAlarmSetting() {
   const [tone, setTone] = useState(loadFajrTone());
   const [night, setNight] = useState(isNightMode());
   const [recs, setRecs] = useState<AlarmRec[]>([]);
+  const [silent, setSilent] = useState(loadRingOnSilent());
   const [recName, setRecName] = useState('');
   const [recording, setRecording] = useState<{ stop: () => Promise<Blob> } | null>(null);
   const [recErr, setRecErr] = useState('');
@@ -519,6 +520,14 @@ function FajrAlarmSetting() {
           <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 p-3">
             <button onClick={() => { void enableNativeAlarms().then((r) => alert(r.ok ? 'تم تفعيل الأذان والمنبه حتى والتطبيق مقفول' : 'لازم تسمح بالإشعارات (وبالمنبهات الدقيقة في أندرويد)')); }}
               className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl polish-press">تفعيل الأذان والمنبه والتطبيق مقفول</button>
+            {platformName() === 'android' ? (
+              <label className="flex items-center gap-2 mt-3 text-sm font-semibold text-accent-800">
+                <input type="checkbox" checked={silent} onChange={(e) => { setSilent(e.target.checked); saveRingOnSilent(e.target.checked); void rescheduleNativeAlarms(); }} className="w-5 h-5" />
+                الأذان والمنبه يرنّوا حتى لو التليفون صامت
+              </label>
+            ) : (
+              <p className="text-xs text-amber-800 mt-3 leading-relaxed">على آيفون وآيباد: نظام iOS يكتم صوت الإشعارات في وضع الصامت ولا يسمح لتطبيق عادي بتجاوزه (تحتاج Critical Alerts بموافقة آبل). الأذان يرن لو الصامت مقفول.</p>
+            )}
             <p className="text-xs text-accent-700 mt-2 leading-relaxed">بيشتغل من نظام الجهاز نفسه فيرن حتى لو التطبيق مقفول أو الشاشة مقفولة. على آيفون النغمة بتتكرر كل دقيقة لحد ما تفتح التطبيق وتحل الأسئلة.</p>
           </div>
         )}

@@ -6,11 +6,26 @@
 //    notifications one minute apart (iOS keeps max 64 pending, so fewer days).
 // Sound files are baked by scripts/gen-alarm-sounds.mjs (alarm_<tone>.wav) and the
 // optional adhan clip adhan_short.* is dropped in by the owner (see docs/NATIVE_APPS.md).
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { ADHAN_PRAYERS, fetchDayFromApi, loadAdhanSettings } from './adhan';
 import { ALARM_TONES, loadFajrAlarm, loadFajrTone } from './fajrAlarm';
 import { isRecTone } from './alarmRecordings';
+
+interface AlarmSoundPlugin {
+  schedule(o: { items: { id: number; at: number; sound: string; title: string; body: string; type: string }[] }): Promise<void>;
+  cancelAll(): Promise<void>;
+  stop(): Promise<void>;
+  takePendingFajr(): Promise<{ pending: boolean }>;
+}
+const AlarmSound = registerPlugin<AlarmSoundPlugin>('AlarmSound');
+
+/** User setting: ring even when the phone is on silent. Android only (see docs). */
+export const SILENT_KEY = 'quran-ring-on-silent';
+export const loadRingOnSilent = (): boolean => { try { return localStorage.getItem(SILENT_KEY) === '1'; } catch { return false; } };
+export const saveRingOnSilent = (v: boolean): void => { try { localStorage.setItem(SILENT_KEY, v ? '1' : '0'); } catch { /* ignore */ } };
+export const platformName = (): string => { try { return Capacitor.getPlatform(); } catch { return 'web'; } };
+const useNativeStream = (): boolean => platformName() === 'android' && loadRingOnSilent();
 
 export const isNativeApp = (): boolean => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
 const isIOS = (): boolean => { try { return Capacitor.getPlatform() === 'ios'; } catch { return false; } };
@@ -56,6 +71,7 @@ export async function rescheduleNativeAlarms(): Promise<void> {
     const pending = await LocalNotifications.getPending();
     if (pending.notifications.length) await LocalNotifications.cancel({ notifications: pending.notifications.map((n) => ({ id: n.id })) });
   } catch { /* ignore */ }
+  try { await AlarmSound.cancelAll(); } catch { /* plugin only on Android */ }
   if (!settings.enabled || !settings.location) return;
   const mode = loadFajrAlarm();
   const tone = nativeToneId();
@@ -91,12 +107,22 @@ export async function rescheduleNativeAlarms(): Promise<void> {
       }
     });
   }
+  if (useNativeStream()) {
+    // Android «ring on silent»: exact alarms that play on the ALARM stream.
+    const items = list.map((n) => {
+      const type = (n.extra as { type: string }).type;
+      return { id: n.id, at: (n.schedule?.at as Date).getTime(), sound: type === 'fajr-alarm' ? `alarm_${tone}` : 'adhan_short', title: n.title, body: n.body, type };
+    });
+    if (items.length) await AlarmSound.schedule({ items });
+    return;
+  }
   if (list.length) await LocalNotifications.schedule({ notifications: list.slice(0, ios ? 60 : 400) });
 }
 
 /** User solved the challenges / stopped the alarm: cancel the remaining chain. */
 export async function cancelTodayAlarmChain(): Promise<void> {
   if (!isNativeApp()) return;
+  try { await AlarmSound.stop(); } catch { /* ignore */ }
   try {
     const pending = await LocalNotifications.getPending();
     const today = new Date().setHours(23, 59, 59, 999);
@@ -108,8 +134,11 @@ export async function cancelTodayAlarmChain(): Promise<void> {
 /** Tapping a Fajr-alarm notification opens the challenge screen. */
 export function listenNativeAlarmTaps(): () => void {
   if (!isNativeApp()) return () => {};
+  const check = () => { AlarmSound.takePendingFajr().then((r) => { if (r.pending) window.dispatchEvent(new Event('fajr-alarm-test')); }).catch(() => {}); };
+  check();
+  document.addEventListener('visibilitychange', check);
   const sub = LocalNotifications.addListener('localNotificationActionPerformed', (e) => {
     if ((e.notification.extra as { type?: string } | undefined)?.type === 'fajr-alarm') window.dispatchEvent(new Event('fajr-alarm-test'));
   });
-  return () => { void sub.then((s) => s.remove()); };
+  return () => { document.removeEventListener('visibilitychange', check); void sub.then((s) => s.remove()); };
 }
