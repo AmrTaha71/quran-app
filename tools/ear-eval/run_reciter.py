@@ -33,12 +33,13 @@ subprocess.run(['python3', f'{here}/decode.py', f'{root}/public/models/quranlab'
 mf = f'{work}/man.jsonl'; open(mf,'w').write('\n'.join(json.dumps(m, ensure_ascii=False) for m in man)+'\n')
 res = f'{work}/judge.jsonl'; open(res,'w').close()
 subprocess.run(['node', os.environ.get('JUDGE','/tmp/judge.mjs'), dec, mf, res], check=True, env={**os.environ,'APP_ROOT':root})
-agg = {}
+agg = {}; accs = []
 for l in open(res):
     r = json.loads(l); v = meta[r['f']]; g = agg.setdefault(v, {'files':0,'words':0,'ok':0,'wrongTok':0,'mut':{}})
     if r['mut'] is None: g['files']+=1; g['words']+=r['n']; g['ok']+=r['okN']; g['wrongTok']+=r['wrong']
     else:
         t = g['mut'].setdefault(r['mut'].split('#')[0], [0,0]); t[0]+=1; t[1]+= 0 if r['mutAccepted'] else 1  # [tested, caught]
+        if r['mutAccepted'] and 'acc' in r and v == 'clean': accs.append({'m': r['mut'], **r['acc']})
 decmap = {}
 for l in open(dec):
     j = json.loads(l); decmap[j['f']] = j['chunks']
@@ -46,5 +47,5 @@ det = []
 for l in open(res):
     x = json.loads(l)
     if x['mut'] is None and meta[x['f']]=='clean' and (x.get('miss') or x.get('wt')): det.append({'s': x['s'], 'miss': x['miss'], 'wt': x['wt'], **({'chunks': decmap[x['f']]} if len([d for d in det if 'chunks' in d]) < 8 and x['miss'] else {})})
-json.dump({'reciter': folder, 'detail': det, 'variants': agg}, open(f'{work}/result.json','w'), ensure_ascii=False)
+json.dump({'reciter': folder, 'acc': accs[:400], 'detail': det, 'variants': agg}, open(f'{work}/result.json','w'), ensure_ascii=False)
 print('done', folder)

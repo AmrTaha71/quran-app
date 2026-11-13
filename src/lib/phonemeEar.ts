@@ -331,6 +331,7 @@ export class PhonemeStream {
     }
     for (let w = a.firstW; w <= upto; w++) {
       let t = judge(this.words, w, a.per.get(w));
+      { const tr = (globalThis as { __trace?: unknown[] }).__trace; if (tr) tr.push({ w, t, skel: this.words[w].skel, per: a.per.get(w) }); }
       // 2026-11-13: ONE word the ear never heard between two heard words: if the
       // silent gap between its neighbours is long enough to have held the word,
       // the model missed a quiet word («طباقا» once in four reads); he did not

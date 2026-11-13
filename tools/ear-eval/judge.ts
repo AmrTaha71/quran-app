@@ -31,6 +31,7 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
   for (const mut of list) {
   const ref = words.map(w => ({ ...w }));
   if (mut) ref[mut.i].norm = mut.norm;
+  (globalThis as any).__trace = [];
   const pw = await buildPhonWords(ref, refKeySkel);
   const ps = new PhonemeStream(pw);
   const emitted: string[] = [];
@@ -44,7 +45,7 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
   }
   if (process.env.DEBUG) console.log(m.f, JSON.stringify(emitted), ref.map(w=>w.norm).join(" "));
   const row: any = { f: m.f, n: ref.length, okN: ok.filter(Boolean).length, wrong, mut: mut ? mut.type : null };
-  if (mut) row.mutAccepted = ok[mut.i];
+  if (mut) { row.mutAccepted = ok[mut.i]; if (ok[mut.i]) { const tr = ((globalThis as any).__trace as any[]).filter(e => e.w === mut.i && e.t === mut.norm).pop(); if (tr) row.acc = { skel: tr.skel, p: tr.per ? { bad: tr.per.bad, del: tr.per.del, heard: tr.per.heard, fd: tr.per.firstDel, len: tr.per.len } : null }; } }
   else { row.miss = ref.map((w, k) => (ok[k] ? null : w.norm)).filter(Boolean); row.wt = toks.filter(t => t.startsWith('~')); row.s = m.surah + ':' + m.a1; }
   appendFileSync(out, JSON.stringify(row) + '\n');
   }
