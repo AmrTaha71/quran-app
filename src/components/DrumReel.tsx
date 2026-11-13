@@ -16,8 +16,9 @@ const RADIUS = Math.round(DRUM_ITEM_H / 2 / Math.tan((STEP_DEG / 2) * (Math.PI /
 // 'clock' = iOS-style dark drum with a soft grey band, for timers.
 export type DrumVariant = 'range' | 'clock';
 const LOOK = {
-  range: { bg: '#FBF7EE', band: '#E3EEE7', sel: '#0B4D33', rest: '#91B0A0' },
-  clock: { bg: 'transparent', band: 'transparent', sel: '#FBF3DC', rest: '#7FA593' },
+  // range: cream face, lit gold bar (light on top, dark below) with dark-emerald choice.
+  range: { bg: '#FBF7EE', band: 'linear-gradient(180deg,#F6E3A1 0%,#E2B94F 52%,#C48F22 100%)', sel: '#06301F', rest: '#7E9F8E', fade: '#FBF7EE' },
+  clock: { bg: 'transparent', band: 'transparent', sel: '#FBF3DC', rest: '#7FA593', fade: '' },
 } as const;
 
 let sharedCtx: AudioContext | null = null;
@@ -86,7 +87,14 @@ export function DrumReel({
 
   return (
     <div className={`relative min-w-0 overflow-hidden select-none font-ui ${className}`} style={{ height: VIEW_H, background: look.bg }}>
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 rounded-xl pointer-events-none" style={{ height: DRUM_ITEM_H + 4, background: look.band }} />
+      <div
+        className="absolute inset-x-1 top-1/2 -translate-y-1/2 rounded-xl pointer-events-none"
+        style={{
+          height: DRUM_ITEM_H + 6,
+          background: look.band,
+          boxShadow: variant === 'range' ? '0 3px 10px rgba(122,84,10,.35), inset 0 1px 0 rgba(255,255,255,.65), inset 0 -2px 3px rgba(122,84,10,.35)' : undefined,
+        }}
+      />
       <div className="absolute inset-0 pointer-events-none" style={{ perspective: 600 }} aria-hidden>
         <div className="absolute inset-x-0 top-1/2" style={{ transformStyle: 'preserve-3d' }}>
           {labels.map((l, i) => {
@@ -102,7 +110,7 @@ export function DrumReel({
                   height: DRUM_ITEM_H,
                   transform: `rotateX(${-d * STEP_DEG}deg) translateZ(${RADIUS}px)`,
                   backfaceVisibility: 'hidden',
-                  fontSize: sel ? '1.45rem' : '1.2rem',
+                  fontSize: sel ? '1.55rem' : '1.1rem',
                   fontWeight: sel ? 700 : 500,
                   color: sel ? look.sel : look.rest,
                   opacity: sel ? 1 : Math.max(0.3, 1 - 0.17 * Math.abs(d)),
@@ -114,6 +122,12 @@ export function DrumReel({
           })}
         </div>
       </div>
+      {look.fade && (
+        <>
+          <div className="absolute inset-x-0 top-0 h-14 pointer-events-none" style={{ background: `linear-gradient(${look.fade}, ${look.fade}00)` }} />
+          <div className="absolute inset-x-0 bottom-0 h-14 pointer-events-none" style={{ background: `linear-gradient(${look.fade}00, ${look.fade})` }} />
+        </>
+      )}
       {/* input layer */}
       <div
         ref={ref}
