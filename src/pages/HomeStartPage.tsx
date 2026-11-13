@@ -1,4 +1,5 @@
 import StudioMic from '../components/StudioMic';
+import { MosqueIcon, ListenerMicIcon } from '../components/HomeIcons';
 import { roomLabel } from '../lib/roomLabel';
 import Sama3 from '../components/Sama3';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -117,7 +118,7 @@ function writeLinkOfDayCache(data: LinkOfDay): void {
 // and (first visits only) a three-or-four-word caption.
 function HomeTile({ icon, glaze, title, hint, small, expanded, onClick }: {
   icon: ReactNode;
-  glaze: 'emerald' | 'gold' | 'night' | 'plain';
+  glaze: 'emerald' | 'gold' | 'night' | 'plain' | 'red';
   title: ReactNode;
   hint?: string;
   small?: boolean;
@@ -390,9 +391,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="home-tiles mb-3">
           <HomeTile icon={<BookMarked />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
             expanded={hifzOpen} onClick={() => { togglePanel('hifz'); setShowPicker(false); }} />
-          <HomeTile icon={<MicVocal />} glaze="gold" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
+          <HomeTile icon={<ListenerMicIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             expanded={testOpen} onClick={() => togglePanel('test')} />
-          <HomeTile icon={<Award />} glaze="gold" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
+          <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             expanded={quizOpen} onClick={() => togglePanel('quiz')} />
           <HomeTile icon={<AudioLines />} glaze="emerald" title="الحق الإمام" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
@@ -563,7 +564,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             onClick={() => onNavigate('room')} />
           <HomeTile icon={<Headphones />} glaze="night" title="استمع للقرآن" hint={showHints ? 'والشاشة مقفولة' : undefined}
             onClick={() => onNavigate('listen')} />
-          <HomeTile icon={<SunMoon />} glaze="night" title="الأذكار" hint={showHints ? 'صباح ومساء' : undefined}
+          <HomeTile icon={<SunMoon />} glaze="night" title="استمع للأذكار" hint={showHints ? 'صباح ومساء' : undefined}
             onClick={() => onNavigate('adhkar')} />
           <HomeTile icon={<Settings />} glaze="plain" title="الإعدادات"
             onClick={() => onNavigate('settings')} />
@@ -579,7 +580,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
           <button type="button" onPointerDown={pressFeedback} onClick={openNearestMosque} aria-label="أقرب مسجد"
             className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-gold" aria-hidden="true"><Landmark /></span>
+            <span className="tile-medal tile-medal-gold" aria-hidden="true"><MosqueIcon /></span>
             <span className="home-tile-title !text-[0.8rem] !leading-tight">أقرب مسجد</span>
           </button>
           <button type="button" onPointerDown={pressFeedback} onClick={() => setQiblaOpen(true)} aria-label="اتجاه القبلة"

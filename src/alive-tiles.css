@@ -86,6 +86,7 @@
 
 .tile-medal-emerald { background: linear-gradient(160deg, #12996A 0%, #0B7448 40%, #074A30 100%); }
 .tile-medal-gold { background: linear-gradient(160deg, #D9A62B 0%, #B27C14 42%, #7E4F0B 100%); }
+.tile-medal-red { background: linear-gradient(160deg, #E0524A 0%, #B3261E 45%, #7A130E 100%); }
 .tile-medal-night { background: linear-gradient(160deg, #2C6A78 0%, #174652 45%, #0B2B36 100%); }
 .tile-medal-plain { background: linear-gradient(160deg, #6F8279 0%, #4C5F56 45%, #2E3D36 100%); }
 
