@@ -182,7 +182,7 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
 
 function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | null {
   if (!x || !x.touched) return null; // not heard → missing
-  const pre = x.pre.length >= 3 ? `~${x.pre} ` : '';
+  const pre = x.pre.length >= 5 ? `~${x.pre} ` : '';
   // No wrong or added letter: dropped letters are the ear missing quiet
   // sounds (or a breath cut), tolerated up to half the word as long as
   // the word's first letter was heard.
@@ -191,6 +191,15 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   const firstOk = x.first || (words[w].skel[0] === 'ء' && x.heard[0] === words[w].skel[1]);
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
+  // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
+  // then «ينفقون»): the whole word was heard; the fragment is not a mistake
+  // in the word. A fragment before it is kept apart like any extra sound.
+  const sk = words[w].skel, h = x.heard;
+  if (sk.length >= 3 && h.length > sk.length) {
+    if (h.startsWith(sk)) { const t = h.slice(sk.length); return (pre + words[w].norm + (t.length > 4 ? ` ~${t}` : '')); }
+    const tail = h.endsWith(sk) ? sk : sk[0] === 'ء' && h.endsWith(sk.slice(1)) ? sk.slice(1) : '';
+    if (tail) { const t = h.slice(0, h.length - tail.length); return pre + (t.length >= 3 ? `~${t} ` : '') + words[w].norm; }
+  }
   return `${pre}~${x.heard}`;
 }
 
@@ -214,6 +223,9 @@ export class PhonemeStream {
       return '';
     }
     const upto = final ? a.lastW : a.lastW - 1;
+    // A short sound can match a word far away by chance («هدى لـ» ≈ «هدى من»
+    // in the next ayah). Never jump ahead on a few letters: wait for more.
+    if (!final && a.firstW - this.pointer > 2 && H.length < 10) return '';
     if (upto < a.firstW) return '';
     const out: string[] = [];
     for (let w = a.firstW; w <= upto; w++) { const t = judge(this.words, w, a.per.get(w)); if (t) out.push(t); }
