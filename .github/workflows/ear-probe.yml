@@ -1,0 +1,37 @@
+name: ear-probe
+on: { workflow_dispatch: {} }
+permissions: { contents: write }
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q huggingface_hub datasets soundfile
+      - name: probe datasets
+        run: |
+          python3 - <<'PY'
+          import json, traceback
+          from huggingface_hub import HfApi, list_repo_files
+          out = {}
+          for repo in ['IqraEval/Iqra_QuranMB_v2','IqraEval/Iqra_train','IqraEval/Iqra_TTS','RetaSy/quranic_audio_dataset','tarteel-ai/everyayah','Salmamohammed/quran-recitation-errors']:
+              r = {}
+              try:
+                  files = list_repo_files(repo, repo_type='dataset'); r['files'] = files[:60]; r['nfiles'] = len(files)
+              except Exception as e: r['files_err'] = str(e)[:200]
+              try:
+                  from datasets import load_dataset
+                  ds = load_dataset(repo, streaming=True)
+                  r['splits'] = list(ds.keys())
+                  for sp in list(ds.keys())[:3]:
+                      row = next(iter(ds[sp]))
+                      r.setdefault('sample', {})[sp] = {k: (str(v)[:200] if k != 'audio' else 'audio:' + str({kk: (vv if kk != 'array' else 'array') for kk, vv in v.items()} )) for k, v in row.items()}
+              except Exception as e: r['load_err'] = str(e)[:300]
+              out[repo] = r
+          json.dump(out, open('/tmp/probe.json', 'w'), ensure_ascii=False, indent=1)
+          PY
+      - name: push probe to ear-results
+        run: |
+          git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
+          git fetch origin ear-results; git checkout -B ear-results origin/ear-results
+          mkdir -p probe; cp /tmp/probe.json probe/probe.json; git add probe; git commit -m "probe datasets" || true; git push origin ear-results
