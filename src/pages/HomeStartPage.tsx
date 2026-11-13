@@ -5,7 +5,9 @@ import GrandpaIcon from '../components/GrandpaIcon';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast } from 'lucide-react';
+import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast, Compass, Landmark } from 'lucide-react';
+import QiblaSheet from '../components/QiblaSheet';
+import { nearestMosqueUrl } from '../lib/qibla';
 import { useHint } from '../lib/hints';
 import BigScreenSheet from '../components/BigScreenSheet';
 import BottomNav from '../components/BottomNav';
@@ -177,6 +179,9 @@ export default function HomeStartPage({ session, onNavigate }: {
   const [mapOpen, setMapOpen] = useState(false);
   const [mutOpen, setMutOpen] = useState(false);
   const [bigOpen, setBigOpen] = useState(false);
+  const [qiblaOpen, setQiblaOpen] = useState(false);
+  // Opens synchronously (no await) so iOS does not block it; Maps uses the device location itself.
+  const openNearestMosque = () => { window.open(nearestMosqueUrl(), '_blank', 'noopener'); };
   const [tarteelOpen, setTarteelOpen] = useState(false);
   const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
   // Home doors with choices (الحفظ / سـمّع لي / اختبر نفسك): one panel
@@ -376,6 +381,20 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
         </div>
 
+        {/* 2026-11-13: for travellers — Qibla compass and the nearest mosque (Google Maps). */}
+        <div className="mb-4 grid grid-cols-2 gap-3 items-stretch">
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setQiblaOpen(true)} aria-label="اتجاه القبلة"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Compass /></span>
+            <span className="home-tile-title">اتجاه القبلة</span>
+          </button>
+          <button type="button" onPointerDown={pressFeedback} onClick={openNearestMosque} aria-label="أقرب مسجد"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-gold" aria-hidden="true"><Landmark /></span>
+            <span className="home-tile-title">أقرب مسجد</span>
+          </button>
+        </div>
+
         {/* The four main doors. A tile with choices opens its panel right
             under the grid; only one panel is open at a time. */}
         <div className="home-tiles mb-3">
@@ -567,6 +586,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           <HomeTile icon={<Settings />} glaze="plain" title="الإعدادات"
             onClick={() => onNavigate('settings')} />
         </div>
+        {qiblaOpen && <QiblaSheet onClose={() => setQiblaOpen(false)} />}
         {bigOpen && <BigScreenSheet onClose={() => setBigOpen(false)} onRemote={() => { setBigOpen(false); onNavigate('room'); }} />}
 
         {listeningWird && (
