@@ -191,7 +191,7 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   // A leading hamza is often too soft to hear after a pause (أولئك), so
   // its absence alone does not cost the word its first letter.
   // Same for a leading «و»: after a pause the ear often loses it («والذين» → «للذين»).
-  const firstOk = x.first || ((words[w].skel[0] === 'ء' || words[w].skel[0] === 'و') && x.heard[0] === words[w].skel[1]);
+  const firstOk = x.first || ((words[w].skel[0] === 'ء' || words[w].skel[0] === 'و' || words[w].skel[0] === 'ا') && x.heard[0] === words[w].skel[1]);
   // Disjoint letters (الم، حم، طسم…) are spelled out, not words: the ear garbles them often.
   if (MUQATTAAT.has(words[w].norm) && x.touched) return pre + words[w].norm;
   // One extra glide (ء ي و) inside a word is the ear's vowel spilling over («هدى» → «هءد», «هيد»).
