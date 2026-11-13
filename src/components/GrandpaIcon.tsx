@@ -1,7 +1,7 @@
-// صفحة جدو — flat colour portrait (2026-11-13, v5): same composition as the
-// reference (round badge, bald head with white tufts, big white beard and
-// moustache, shoulders), in the app palette (emerald, gold, cream). He is
-// turned to the right and holds his glasses a little way out from his face.
+// صفحة جدو — flat colour portrait (2026-11-13, v6): the reference picture
+// (round badge, bald head, white tufts, moustache, big ROUND white beard, no
+// nose drawn) in the app palette, turned a little to the right, wearing his
+// glasses slid down the nose, so they sit low and away from his eyes.
 // Hand-drawn SVG, no external assets.
 export default function GrandpaIcon({ className = '' }: { className?: string }) {
   return (
@@ -19,53 +19,44 @@ export default function GrandpaIcon({ className = '' }: { className?: string }) 
       <g clipPath="url(#gp-clip)">
         {/* soft paper shapes, as in the reference */}
         <g fill="#F4EBD3" opacity="0.14">
-          <rect x="8" y="20" width="16" height="12" rx="2" transform="rotate(-20 16 26)" />
-          <rect x="96" y="12" width="14" height="14" rx="2" transform="rotate(18 103 19)" />
-          <rect x="6" y="74" width="14" height="11" rx="2" transform="rotate(14 13 79)" />
-          <rect x="100" y="70" width="12" height="12" rx="2" transform="rotate(-12 106 76)" />
+          <rect x="8" y="22" width="16" height="12" rx="2" transform="rotate(-20 16 28)" />
+          <rect x="96" y="14" width="14" height="14" rx="2" transform="rotate(18 103 21)" />
+          <rect x="6" y="72" width="14" height="11" rx="2" transform="rotate(14 13 77)" />
+          <rect x="100" y="66" width="12" height="12" rx="2" transform="rotate(-12 106 72)" />
         </g>
         {/* shoulders and collar */}
-        <path d="M8 124 Q14 100 56 99 Q104 100 112 124 Z" fill="#0F4A37" />
-        <path d="M46 100 L58 116 L70 100 Z" fill="#F4EBD3" />
-        <g transform="translate(-9 4)">
-        {/* far-side hair tuft (small: he is turned right) */}
-        <path d="M80 30 Q90 32 90 44 Q90 52 84 56 Q82 46 80 30 Z" fill="#F4F6F2" />
-        {/* head: tall bald oval, shifted right */}
-        <path d="M38 46 Q36 14 62 13 Q88 14 86 46 Q86 66 72 74 Q56 80 44 68 Q38 60 38 46 Z" fill="#F6C9AC" />
-        {/* ear on the near side (left) */}
-        <ellipse cx="38" cy="50" rx="4.5" ry="7" fill="#EBAF92" />
-        <ellipse cx="38.5" cy="50.5" rx="2" ry="4" fill="#D99779" />
-        {/* near-side hair tuft over the ear */}
-        <path d="M40 26 Q28 30 29 46 Q30 58 38 62 Q42 54 43 42 Q43 32 40 26 Z" fill="#FFFFFF" />
-        <path d="M37 60 Q32 68 38 74 Q43 70 45 62 Z" fill="#E9ECE6" />
-        {/* beard */}
-        <path d="M40 58 Q34 92 52 108 Q64 118 76 108 Q92 94 86 58 Q82 70 62 70 Q46 70 40 58 Z" fill="#FFFFFF" />
-        <path d="M64 70 Q60 96 64 112 Q80 108 88 92 Q92 76 87 61 Q80 70 64 70 Z" fill="#E4E8E1" />
-        {/* nose, turned toward the right */}
-        <path d="M76 46 Q86 50 86 57 Q84 62 77 60 Q72 54 76 46 Z" fill="#EBAF92" />
-        {/* cheek */}
-        <ellipse cx="55" cy="57" rx="4" ry="2.6" fill="#F2A693" opacity="0.5" />
+        <path d="M10 126 Q16 100 60 99 Q106 100 112 126 Z" fill="#0F4A37" />
+        <path d="M49 101 L61 117 L73 101 Z" fill="#F4EBD3" />
+        {/* head: bald oval, turned a little right */}
+        <path d="M40 46 Q38 12 64 12 Q90 14 88 46 Q88 66 74 72 Q58 78 46 68 Q40 60 40 46 Z" fill="#F6C9AC" />
+        {/* near-side ear and white tuft */}
+        <ellipse cx="40" cy="50" rx="4.5" ry="7" fill="#EBAF92" />
+        <path d="M42 24 Q30 28 31 44 Q32 56 40 60 Q45 52 45 40 Q45 30 42 24 Z" fill="#E9EDF2" />
+        {/* far-side tuft, small */}
+        <path d="M84 28 Q92 32 91 44 Q90 52 85 55 Q86 42 84 28 Z" fill="#E9EDF2" />
+        {/* big round beard, two tones like the reference */}
+        <path d="M42 56 Q34 84 46 102 Q60 118 78 106 Q94 92 88 56 Q80 70 64 70 Q48 70 42 56 Z" fill="#E4E8E1" />
+        <path d="M42 56 Q34 84 46 102 Q56 114 66 112 Q60 90 64 70 Q48 70 42 56 Z" fill="#F4F6F2" />
+        {/* cheeks */}
+        <ellipse cx="52" cy="57" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
+        <ellipse cx="78" cy="57" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
+        {/* brows and eyes (small, high up, so the glasses read as slid down) */}
+        <path d="M54 37 Q59 34 64 37" fill="none" stroke="#F4F6F2" strokeWidth="2.6" strokeLinecap="round" />
+        <path d="M72 37 Q77 34 82 37" fill="none" stroke="#F4F6F2" strokeWidth="2.6" strokeLinecap="round" />
+        <ellipse cx="59" cy="44" rx="1.9" ry="2.5" fill="#33261E" />
+        <ellipse cx="77" cy="44" rx="1.7" ry="2.4" fill="#33261E" />
+        {/* glasses slid down toward the tip of the nose: low, a clear gap under the eyes */}
+        <g transform="rotate(4 66 58)">
+          <circle cx="57" cy="58" r="8.2" fill="#F4EBD3" opacity="0.25" />
+          <circle cx="77" cy="58" r="8.2" fill="#F4EBD3" opacity="0.25" />
+          <circle cx="57" cy="58" r="8.2" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
+          <circle cx="77" cy="58" r="8.2" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
+          <path d="M65 56.5 Q67 54.8 69 56.5" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
+          <path d="M48.8 56 L43 52" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
+          <path d="M85.2 56 L88 52" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
+        </g>
         {/* moustache */}
-        <path d="M66 62 Q58 57 50 63 Q46 69 50 75 Q57 73 62 69 Q66 67 69 67 Q73 67 77 70 Q83 74 87 71 Q89 65 83 62 Q74 56 66 62 Z" fill="#FFFFFF" />
-        {/* brows and eyes */}
-        <path d="M52 38 Q57 35 62 38" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" />
-        <path d="M71 38 Q76 35 81 38" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" />
-        <ellipse cx="58" cy="46" rx="2" ry="2.7" fill="#33261E" />
-        <ellipse cx="75" cy="46" rx="1.8" ry="2.6" fill="#33261E" />
-        {/* the glasses: lifted off the face, tilted, held by the arm */}
-        <g transform="rotate(-10 92 27)">
-          <circle cx="83" cy="27" r="7.5" fill="#F4EBD3" opacity="0.3" />
-          <circle cx="100" cy="27" r="7.5" fill="#F4EBD3" opacity="0.3" />
-          <circle cx="83" cy="27" r="7.5" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
-          <circle cx="100" cy="27" r="7.5" fill="none" stroke="url(#gp-gold)" strokeWidth="2.2" />
-          <path d="M90.5 25.5 Q91.5 24 92.5 25.5" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
-          <path d="M107.5 27 L109 40" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
-        </g>
-        {/* hand pinching the arm of the glasses */}
-        <ellipse cx="105" cy="45" rx="6.5" ry="5" fill="#F0B898" />
-        <path d="M99 42 Q103 38 108 40" fill="none" stroke="#E2A183" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M100 48 Q104 52 110 49" fill="none" stroke="#E2A183" strokeWidth="1.6" strokeLinecap="round" />
-        </g>
+        <path d="M66 68 Q58 63 50 68 Q46 74 50 80 Q57 78 62 74 Q66 72 70 72 Q74 72 78 75 Q84 79 88 76 Q90 70 84 67 Q75 62 66 68 Z" fill="#FFFFFF" />
       </g>
       <circle cx="60" cy="60" r="57" fill="none" stroke="url(#gp-gold)" strokeWidth="2" />
     </svg>
