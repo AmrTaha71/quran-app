@@ -22,7 +22,7 @@
      gold/amber-family (hue ~36-41 deg). Main doors stay emerald,
      sub-doors stay gold; the level distinction from push 203 is
      untouched. .grad-teal-door is intentionally NOT touched here:
-     it is used by no page (0 references in src/**/*.tsx) and the
+     it is used by no page (0 references in all .tsx files in src) and the
      brief is emerald + gold only.
 
    CONTRAST (white text, WCAG, computed, not eyeballed):
