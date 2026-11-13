@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       reciters: { description: 'comma list of reciter folders (empty = all in reciters.json)', required: false, default: '' }
+permissions:
+  contents: write
 jobs:
   plan:
     runs-on: ubuntu-latest
@@ -39,3 +41,19 @@ jobs:
         env: { APP_ROOT: '${{ github.workspace }}', JUDGE: /tmp/judge.mjs }
       - uses: actions/upload-artifact@v4
         with: { name: 'res-${{ matrix.reciter }}', path: /tmp/work/result.json }
+  publish:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: /tmp/res, pattern: 'res-*' }
+      - name: push small results table to branch ear-results
+        run: |
+          git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
+          git fetch origin ear-results || true
+          if git rev-parse origin/ear-results >/dev/null 2>&1; then git checkout -B ear-results origin/ear-results; else git checkout --orphan ear-results; git rm -rf . -q; fi
+          mkdir -p results; for d in /tmp/res/*/; do cp "$d/result.json" "results/$(basename $d).json"; done
+          git add results; git commit -m "ear-eval results $(date -u +%F-%H%M)" || true
+          git push origin ear-results
