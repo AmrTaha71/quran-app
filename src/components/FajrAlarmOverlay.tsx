@@ -3,6 +3,9 @@ import { makeChallenges, startAlarmTone, type FajrAlarmMode } from '../lib/fajrA
 
 // Full-screen Fajr alarm. 'smart': stopping only mutes for 60 s, then it
 // rings again; it ends only when all three challenges are solved.
+// Accept Arabic-Indic (٠-٩), Persian (۰-۹) and Latin digits.
+const normDigits = (v: string) => v.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) - 0x06F0)).replace(/\s+/g, '');
+
 export default function FajrAlarmOverlay({ mode, onDone }: { mode: FajrAlarmMode; onDone: () => void }) {
   const [chs, setChs] = useState(() => makeChallenges());
   const [step, setStep] = useState(0);
@@ -30,8 +33,8 @@ export default function FajrAlarmOverlay({ mode, onDone }: { mode: FajrAlarmMode
   };
   const fail = () => { setWrong(true); setChs(makeChallenges()); setVal(''); };
   const submit = () => {
-    if (ch.kind === 'math') return val.trim() === ch.answer ? next() : fail();
-    if (ch.kind === 'code') return val.trim() === ch.code ? next() : fail();
+    if (ch.kind === 'math') return normDigits(val) === ch.answer ? next() : fail();
+    if (ch.kind === 'code') return normDigits(val) === ch.code ? next() : fail();
   };
 
   return (
