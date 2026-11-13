@@ -245,6 +245,15 @@ export class PhonemeStream {
     // A short sound can match a word far away by chance («هدى لـ» ≈ «هدى من»
     // in the next ayah). Never jump ahead on a few letters: wait for more.
     if (!final && a.firstW - this.pointer > 2 && H.length < 10) return '';
+    // 2026-11-13: a short run of letters that exactly matches a word several
+    // words ahead («ارجع» of the next ayah after «تفاوت», when «فارجع» lost its
+    // ف) is not evidence he skipped them. A jump of more than 3 words needs
+    // at least 12 aligned letters, whether or not this is the final flush.
+    if (a.firstW - this.pointer > 3) {
+      let owned = 0;
+      for (let i = 0; i < a.owner.length; i++) if (a.owner[i] >= a.firstW) owned++;
+      if (owned < 12) return '';
+    }
     if (upto < a.firstW) return '';
     const out: string[] = [];
     for (let w = a.firstW; w <= upto; w++) { const t = judge(this.words, w, a.per.get(w)); if (t) out.push(t); }
