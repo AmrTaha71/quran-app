@@ -194,6 +194,15 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   const firstOk = x.first || ((words[w].skel[0] === 'ء' || words[w].skel[0] === 'و') && x.heard[0] === words[w].skel[1]);
   // Disjoint letters (الم، حم، طسم…) are spelled out, not words: the ear garbles them often.
   if (MUQATTAAT.has(words[w].norm) && x.touched) return pre + words[w].norm;
+  // One extra glide (ء ي و) inside a word is the ear's vowel spilling over («هدى» → «هءد», «هيد»).
+  if (x.heard.length === words[w].skel.length + 1) {
+    for (let k = 0; k < x.heard.length; k++) {
+      if ('ءيو'.includes(x.heard[k]) && x.heard.slice(0, k) + x.heard.slice(k + 1) === words[w].skel) return pre + words[w].norm;
+    }
+  }
+  // «فيه هدى»: two ه in a row, the ear hears the second as ء (seen in four recordings).
+  if (x.bad === 1 && x.del === 0 && w > 0 && words[w].skel[0] === 'ه' && words[w - 1].skel.endsWith('ه')
+      && x.heard.length === words[w].skel.length && x.heard[0] === 'ء' && x.heard.slice(1) === words[w].skel.slice(1)) return pre + words[w].norm;
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
   // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
