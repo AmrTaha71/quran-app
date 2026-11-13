@@ -39,5 +39,9 @@ for l in open(res):
     if r['mut'] is None: g['files']+=1; g['words']+=r['n']; g['ok']+=r['okN']; g['wrongTok']+=r['wrong']
     else:
         t = g['mut'].setdefault(r['mut'].split('#')[0], [0,0]); t[0]+=1; t[1]+= 0 if r['mutAccepted'] else 1  # [tested, caught]
-json.dump({'reciter': folder, 'variants': agg}, open(f'{work}/result.json','w'), ensure_ascii=False)
+det = []
+for l in open(res):
+    x = json.loads(l)
+    if x['mut'] is None and meta[x['f']]=='clean' and (x.get('miss') or x.get('wt')): det.append({'s': x['s'], 'miss': x['miss'], 'wt': x['wt']})
+json.dump({'reciter': folder, 'detail': det, 'variants': agg}, open(f'{work}/result.json','w'), ensure_ascii=False)
 print('done', folder)

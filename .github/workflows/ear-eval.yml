@@ -2,6 +2,7 @@ name: ear-eval
 on:
   workflow_dispatch:
     inputs:
+      clean_only: { description: 'skip augmentation', required: false, default: 'false' }
       reciters: { description: 'comma list of reciter folders (empty = all in reciters.json)', required: false, default: '' }
 permissions:
   contents: write
@@ -38,7 +39,10 @@ jobs:
       - run: sudo apt-get install -y -qq ffmpeg >/dev/null
       - run: npx esbuild tools/ear-eval/judge.ts --bundle --platform=node --format=esm --target=node20 --outfile=/tmp/judge.mjs --external:fs --log-level=error
       - run: python3 tools/ear-eval/run_reciter.py "${{ matrix.reciter }}" /tmp/work
-        env: { APP_ROOT: '${{ github.workspace }}', JUDGE: /tmp/judge.mjs }
+        env:
+          APP_ROOT: ${{ github.workspace }}
+          JUDGE: /tmp/judge.mjs
+          CLEAN_ONLY: ${{ inputs.clean_only == 'true' && '1' || '' }}
       - uses: actions/upload-artifact@v4
         with: { name: 'res-${{ matrix.reciter }}', path: /tmp/work/result.json }
   publish:

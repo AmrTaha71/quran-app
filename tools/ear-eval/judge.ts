@@ -44,6 +44,7 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
   }
   const row: any = { f: m.f, n: ref.length, okN: ok.filter(Boolean).length, wrong, mut: mut ? mut.type : null };
   if (mut) row.mutAccepted = ok[mut.i];
+  else { row.miss = ref.map((w, k) => (ok[k] ? null : w.norm)).filter(Boolean); row.wt = toks.filter(t => t.startsWith('~')); row.s = m.surah + ':' + m.a1; }
   appendFileSync(out, JSON.stringify(row) + '\n');
   }
 }
