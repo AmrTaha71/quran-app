@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
@@ -86,10 +86,17 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Hidden test page for the new ear (2026-11-13): #/ear-lab, own bundle.
+const EarLab = lazy(() => import('./pages/EarLabPage.tsx'));
+const isEarLab = window.location.hash.startsWith('#/ear-lab');
+window.addEventListener('hashchange', () => {
+  if (window.location.hash.startsWith('#/ear-lab') !== isEarLab) window.location.reload();
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      {isEarLab ? <Suspense fallback={null}><EarLab /></Suspense> : <App />}
     </ErrorBoundary>
   </StrictMode>
 );
