@@ -13,3 +13,7 @@ How to route:
 - When delegating, say what Haiku will do, what Sonnet will do, and what would need Opus.
 - Never use Opus where Haiku or Sonnet can do the task. Never use Sonnet where Haiku can.
 - Keep replies short. Do not repeat the request. No extra explanation unless asked.
+
+## Library docs (Context7)
+
+Before using a library API (React, Tailwind, Supabase, Vite, Motion, etc.), fetch its current docs with the Context7 MCP tools (`resolve-library-id`, then the docs tool). Do not guess an API from memory.
