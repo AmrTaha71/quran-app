@@ -119,7 +119,7 @@ export async function buildPhonWords(words: { norm: string; ayahIdx: number }[],
 }
 
 type Aligned = { cost: number; owner: Int32Array; firstW: number; lastW: number; per: Map<number, WordAl> };
-type WordAl = { bad: number; del: number; len: number; heard: string; touched: boolean; first: boolean; pre: string };
+type WordAl = { bad: number; del: number; len: number; heard: string; touched: boolean; firstDel?: boolean; first: boolean; pre: string };
 
 /** Semi-global alignment of heard skeleton H to the words near `pointer`.
  *  owner[i] = word index of heard letter i (-1 = before the first word). */
@@ -157,7 +157,7 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
   for (let j = 1; j <= m; j++) if (isBoundary[j] && d[n][j] < best) { best = d[n][j]; bestJ = j; }
   if (bestJ < 0) return null;
   const per: Aligned['per'] = new Map();
-  const get = (w: number) => { let x = per.get(w); if (!x) { x = { bad: 0, del: 0, len: words[w].skel.length, heard: '', touched: false, first: false, pre: '' }; per.set(w, x); } return x; };
+  const get = (w: number) => { let x = per.get(w); if (!x) { x = { bad: 0, del: 0, len: words[w].skel.length, heard: '', touched: false, first: false, firstDel: false, pre: '' }; per.set(w, x); } return x; };
   const owner = new Int32Array(n).fill(-1);
   let i = n, j = bestJ, lastCol = bestJ - 1;
   while (i > 0 || j > 0) {
@@ -175,7 +175,7 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
       else { x.heard = H[i - 1] + x.heard; x.bad++; x.touched = true; }
       owner[i - 1] = w; i--;
     }
-    else { get(colWord[j - 1]).del++; lastCol = j - 1; j--; }
+    else { const xd = get(colWord[j - 1]); xd.del++; if (isBoundary[j - 1]) xd.firstDel = true; lastCol = j - 1; j--; }
   }
   return { cost: best, owner, firstW: j < m ? colWord[j] : hi - 1, lastW: colWord[bestJ - 1], per };
 }
@@ -208,6 +208,11 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   // «فيه هدى»: two ه in a row, the ear hears the second as ء (seen in four recordings).
   if (x.bad === 1 && x.del === 0 && w > 0 && words[w].skel[0] === 'ه' && words[w - 1].skel.endsWith('ه')
       && x.heard.length === words[w].skel.length && x.heard[0] === 'ء' && x.heard.slice(1) === words[w].skel.slice(1)) return pre + words[w].norm;
+  // 2026-11-14 (Surah 68, read correctly): after a pause the ear clips the FIRST
+  // letter of a word («فستبصر»→«ستبصر», «بأيكم»→«أيكم», «همّاز»→«ماز», «منّاع»→«ناع»).
+  // Only that one letter missing and everything else exact is not a mistake.
+  // A wrong or swapped letter still counts (bad > 0).
+  if (x.bad === 0 && x.del === 1 && x.firstDel && x.len >= 4) return pre + words[w].norm;
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
   // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
