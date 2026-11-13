@@ -1,3 +1,4 @@
+import StudioMic from '../components/StudioMic';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Sama3 from '../components/Sama3';
 import { IMLA_ALT, IMLA_PAIR_ALT } from '../lib/imlaAlt';
@@ -5643,7 +5644,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         <button type="button" onClick={(e) => { e.preventDefault(); surahVoiceSearch(); }}
           aria-label="ابحث بالصوت"
           className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-xl ${surahVoiceOn ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white shadow'}`}>
-          <Mic className="w-6 h-6" />
+          <StudioMic className="w-6 h-6" />
         </button>
       </div>
       {surahSearch.trim() !== '' && (
@@ -5747,7 +5748,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       <header className="sticky top-0 z-40 app-header">
         <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
           <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-            <Mic className="w-7 h-7 text-white" />
+            <StudioMic className="w-7 h-7 text-white" />
           </div>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800"><Sama3 /> لي</h1>
@@ -5853,7 +5854,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <button onClick={() => setLobbyDoor('mic')}
                     className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
                     <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
-                      <Mic className="w-6 h-6 text-emerald-800" />
+                      <StudioMic className="w-6 h-6 text-emerald-800" />
                     </span>
                     <span className="block text-base font-semibold text-ink">فحص الميكروفون</span>
                     <span className="block text-xs text-ink-2 mt-1">تأكد إن الميكروفون شغال وسامعك قبل ما تبدأ</span>
@@ -6393,7 +6394,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </p>
                   )}
                   <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Mic className="w-10 h-10 text-emerald-700" />
+                    <StudioMic className="w-10 h-10 text-emerald-700" />
                   </div>
                   <p className="text-lg font-bold text-accent-700 leading-relaxed">
                     سمّع النطاق كله على بعضه من حفظك الآن
@@ -6401,7 +6402,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
                   <button onClick={startContinuousMic}
                     className="mt-5 px-8 py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 mx-auto polish-press polish-focus">
-                    <Mic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
+                    <StudioMic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
                   </button>
                 </>
               ) : (
@@ -6616,7 +6617,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </div>
                       )}
                       <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <Mic className="w-10 h-10 text-emerald-700" />
+                        <StudioMic className="w-10 h-10 text-emerald-700" />
                       </div>
                       <p className="text-lg font-bold text-accent-700 leading-relaxed">
                         سمّع الآية {ayahs[index].ayah_no} من حفظك الآن
@@ -6624,7 +6625,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ بصوتك</p>
                       <button onClick={() => startMic()}
                         className="mt-5 px-8 py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 mx-auto polish-press polish-focus">
-                        <Mic className="w-6 h-6" /> سمّع الآية بصوتك
+                        <StudioMic className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
                       <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}
                         className="mt-3 text-sm font-semibold text-accent-600 hover:text-accent-700 underline">

@@ -1,3 +1,4 @@
+import StudioMic from '../components/StudioMic';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Sama3 from '../components/Sama3';
 import { supabase } from '../lib/supabase';
@@ -623,13 +624,13 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           <DailyWird onNavigate={onNavigate} />
           <div className="glass-card rounded-2xl shadow-sm p-5 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
-              <Mic className="w-5 h-5 text-emerald-700" />
+              <StudioMic className="w-5 h-5 text-emerald-700" />
               <h2 className="font-semibold text-ink"><Sama3 /> لي</h2>
             </div>
             <p className="text-sm font-semibold text-emerald-700 mb-4">اقرأ من حفظك، والقارئ يصحّح لك</p>
             <button onClick={() => onNavigate('test')}
               className="w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
-              <Mic className="w-5 h-5" /> ابدأ التسميع
+              <StudioMic className="w-5 h-5" /> ابدأ التسميع
             </button>
             <div className="grid grid-cols-2 gap-2 mt-4">
               <button onClick={() => onNavigate('listen')} className="py-2.5 bg-white border border-hairline-emerald text-accent-800 font-bold rounded-xl polish-press">استمع للقرآن</button>
@@ -690,7 +691,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     onPointerDown={pressFeedback}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
                     className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                    <Mic className="w-5 h-5" />
+                    <StudioMic className="w-5 h-5" />
                   </button>
                 </div>
                 {searchHint && (

@@ -1,3 +1,4 @@
+import StudioMic from '../components/StudioMic';
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { transcribeBlob } from '../lib/quranEar';
 import { AyahSimilar, AyahAsbab } from '../components/AyahSimilarAsbab';
@@ -3839,7 +3840,7 @@ export default function QuranMushafPage({
           {(followOn || startInFollow) && !followPos && !showRatelIntro && (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
-                <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
+                <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
                 {followHelpShow ? (<>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-2">
                   اضغط بدء الاستماع، وقرّب الجهاز منك. أول ما يلقط الإمام ٥ كلمات، المصحف هيفتح لوحده على الصفحة ويظلّل الآية — من غير ما تدوس حاجة تانية. وبعد ما يفتح على الآية، المتابعة بتقف عندها — لو الإمام تقدّم لآية تانية، اقلب الصفحة يدويًا أو اضغط «مش دي؟ كمّل الاستماع» لالتقاط موضع جديد. هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.
@@ -3860,12 +3861,12 @@ export default function QuranMushafPage({
                     <button onClick={() => startFollowFromLobby('live')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-4 w-full py-3.5 grad-amber-door disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press polish-focus">
-                      <Mic className="w-5 h-5" /> ابدأ الاستماع للإمام
+                      <StudioMic className="w-5 h-5" /> ابدأ الاستماع للإمام
                     </button>
                     <button onClick={() => startFollowFromLobby('whisper')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press">
-                      <Mic className="w-4 h-4" /> طريقة استماع بديلة — لو الطريقة العادية مش شغالة
+                      <StudioMic className="w-4 h-4" /> طريقة استماع بديلة — لو الطريقة العادية مش شغالة
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {/* B1: the cancel button lives here, in the ready
@@ -3972,7 +3973,7 @@ export default function QuranMushafPage({
               onClick={(e) => { e.stopPropagation(); setFollowMicDenied(false); }}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white"
                 onClick={(e) => e.stopPropagation()}>
-                <p className="font-bold flex items-center gap-2 text-lg"><Mic className="w-6 h-6 text-amber-300" /> تم رفض إذن الميكروفون</p>
+                <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تم رفض إذن الميكروفون</p>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-2">
                   نافذة النظام ما ظهرتش أو اترفضت. لو كنت رفضت الإذن، سفاري مش هيعرض النافذة تاني من نفسه — اسمح بالميكروفون من إعدادات الموقع (علامة AA في شريط العنوان ← Website Settings ← Microphone ← Allow) وبعدين ارجع ودوس «ابدأ الاستماع» من جديد. ولو قفلت النافذة بالغلط، دوس «ابدأ» من جديد وهتظهر تاني.
                 </p>
@@ -4436,7 +4437,7 @@ export default function QuranMushafPage({
                 )}
                 {followOn && (
                   <div className="mb-2 flex items-center gap-2 bg-amber-700 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
-                    <Mic className="w-4 h-4 flex-shrink-0" />
+                    <StudioMic className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">
                       {followStatus === 'locked' && followPos
                         ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`

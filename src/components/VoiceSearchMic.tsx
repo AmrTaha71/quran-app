@@ -6,6 +6,7 @@
 // A field joins when its placeholder looks like a search (بحث / ابحث /
 // سورة / آية / search ...) or it has data-voice="on"; data-no-voice
 // opts out (fields that already have their own mic).
+import StudioMic from './StudioMic';
 import { useEffect, useRef, useState } from 'react';
 import { Mic } from 'lucide-react';
 
@@ -97,7 +98,7 @@ export default function VoiceSearchMic() {
       style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000 }}
       className={`w-12 h-12 rounded-xl flex items-center justify-center shadow ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white'}`}
     >
-      <Mic className="w-6 h-6" />
+      <StudioMic className="w-6 h-6" />
     </button>
   );
 }
