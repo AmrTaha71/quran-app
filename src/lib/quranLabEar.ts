@@ -131,7 +131,14 @@ export class QuranLabRecognition {
   private onWorker(m: any) {
     if (m.type === 'tokens') {
       if (m.text && !this.heardAny) { this.heardAny = true; this.onspeechstart?.(); }
-      if (this.ps && m.text) this.emit(this.ps.push(m.text));
+      if (this.ps && m.text) {
+        this.emit(this.ps.push(m.text));
+        // The last aligned word stays pending until more speech arrives, so
+        // the final word of an ayah («السعير») never settled and was marked
+        // missing. After a short quiet spell, settle it.
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        this.idleTimer = setTimeout(() => { this.idleTimer = null; if (this.ps && !this.stopped) this.emit(this.ps.finish()); }, 750);
+      }
       // Keep the page's no-result watchdog quiet while audio flows.
       const now = Date.now();
       if (now - this.lastKeepalive > 1500) {
@@ -164,7 +171,10 @@ export class QuranLabRecognition {
     this.finishEnd();
   }
 
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+
   private release() {
+    if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
     try { this.node?.disconnect(); } catch { /* ignore */ }
     try { this.src?.disconnect(); } catch { /* ignore */ }
     try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }

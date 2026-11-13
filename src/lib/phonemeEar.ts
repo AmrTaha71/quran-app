@@ -200,6 +200,11 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
       if ('ءيو'.includes(x.heard[k]) && x.heard.slice(0, k) + x.heard.slice(k + 1) === words[w].skel) return pre + words[w].norm;
     }
   }
+  // Word-final ى (alif maqsura: ترى، هدى، الأعلى) is the same sound as ا; the
+  // reference may spell it ي, so a final ا/ي swap is not a mistake.
+  { const sk0 = words[w].skel, h0 = x.heard;
+    if (h0.length === sk0.length && sk0.length >= 3 && h0.slice(0, -1) === sk0.slice(0, -1)
+        && 'اي'.includes(h0[h0.length - 1]) && 'اي'.includes(sk0[sk0.length - 1])) return pre + words[w].norm; }
   // «فيه هدى»: two ه in a row, the ear hears the second as ء (seen in four recordings).
   if (x.bad === 1 && x.del === 0 && w > 0 && words[w].skel[0] === 'ه' && words[w - 1].skel.endsWith('ه')
       && x.heard.length === words[w].skel.length && x.heard[0] === 'ء' && x.heard.slice(1) === words[w].skel.slice(1)) return pre + words[w].norm;
