@@ -45,6 +45,7 @@ export type AppRoute =
   | 'test'
   | 'listen'
   | 'adhkar'
+  | 'radio'
   | 'room';
 
 export interface ParsedHash {
@@ -73,6 +74,7 @@ const KNOWN_ROUTES: AppRoute[] = [
   'settings',
   'listen',
   'adhkar',
+  'radio',
   'room',
 ];
 

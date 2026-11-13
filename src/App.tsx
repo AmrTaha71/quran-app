@@ -28,6 +28,7 @@ import SettingsPage from './pages/SettingsPage';
 import SelfTestPage from './pages/SelfTestPage';
 import ListenPage from './pages/ListenPage';
 import AdhkarPage from './pages/AdhkarPage';
+import RadioPage from './pages/RadioPage';
 import SharedRoomPage from './pages/SharedRoomPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
@@ -42,7 +43,7 @@ import { BackButton, useBackTarget } from './components/BackButton';
 import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
+type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room' | 'radio';
 
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are
@@ -531,6 +532,8 @@ function AppContent() {
     // The wrapper above IS the page on these routes — nothing else
     // renders beside it.
     page = null;
+  } else if (route === 'radio') {
+    page = <RadioPage onNavigate={navigate} />;
   } else if (route === 'room') {
     page = <SharedRoomPage session={session} onNavigate={navigate} />;
   } else if (route === 'home' && session) {
