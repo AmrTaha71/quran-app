@@ -173,12 +173,9 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
   // Production gate (Claude review 2026-10-29): the route must
   // not play third-party streams before Maspero permission.
   // Default closed; testing only with the dev flag set.
-  // 2026-11-14: the owner opened the radio from the home tile («إذاعة القرآن
-  // الكريم»), so the route is open and starts playing at once. To close it
-  // again set this back to the dev-flag check below.
-  let radioDevEnabled = true;
+  let radioDevEnabled = false;
   try {
-    if (localStorage.getItem(DEV_FLAG_KEY) === '0') radioDevEnabled = false;
+    radioDevEnabled = localStorage.getItem(DEV_FLAG_KEY) === '1';
   } catch {}
 
   const clearRetryTimer = () => {

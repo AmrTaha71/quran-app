@@ -559,7 +559,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             the Quran radio, the nearest mosque, and the Qibla on the left edge. */}
         <div className="mb-4 grid grid-cols-4 gap-2 items-stretch">
           <NextPrayerTile icon={<Clock />} onNoLocation={() => onNavigate('settings')} />
-          <button type="button" onPointerDown={pressFeedback} onClick={() => { try { sessionStorage.setItem('quran-radio-autoplay', '1'); } catch { /* ignore */ } onNavigate('radio'); }} aria-label="إذاعة القرآن الكريم"
+          <button type="button" onPointerDown={pressFeedback} onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } }} aria-label="إذاعة القرآن الكريم"
             className="home-tile polish-focus !min-h-0">
             <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Radio /></span>
             <span className="home-tile-title !text-[0.8rem] !leading-tight">إذاعة القرآن الكريم</span>
