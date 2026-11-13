@@ -263,7 +263,10 @@ function judge(words: PhonWord[], w: number, x0: WordAl | undefined): string | n
   // 2026-11-14 (offline test): a consonant like ل ر ن م that the ear did not hear at all is
   // not the same as a quiet sound missed: if the word is otherwise exact, the swap
   // «ل→ر» hides exactly here. Strong consonants lost from inside/end of a word count.
-  if (x.bad === 0 && x.len >= 3 && x.delL && /[لرنم]/.test(x.delL) && x.del > 0) return `${pre}~${x.heard}`;
+  // The very last word of the range: the recording stops right after it, so a lost final
+  // letter («الانسان» → «لءنسا») is the tail cut off, not a mistake.
+  const tailCut = w === words.length - 1 && x.delL === words[w].skel.slice(-1);
+  if (x.bad === 0 && x.len >= 3 && x.delL && /[لرنم]/.test(x.delL) && x.del > 0 && !tailCut) return `${pre}~${x.heard}`;
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
   // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
