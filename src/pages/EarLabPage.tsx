@@ -2,6 +2,7 @@
 // Runs the Quran-Lab zipformer on the mic or on a recorded file and shows
 // the phonemes it heard, live, with timing. Not linked from the app.
 import { useEffect, useRef, useState } from 'react';
+import { earLabOn, setEarLab } from '../lib/quranLabEar';
 
 const TARGET = 16000;
 
@@ -30,6 +31,7 @@ export default function EarLabPage() {
   const [clean, setClean] = useState(false);
   const [info, setInfo] = useState('');
   const [copied, setCopied] = useState(false);
+  const [inTest, setInTest] = useState(earLabOn());
   const mic = useRef<{ ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; t0: number; samples: number } | null>(null);
   const runInfo = useRef({ audioSec: 0, startedAt: 0, firstTokenAt: 0 });
 
@@ -154,6 +156,14 @@ export default function EarLabPage() {
         <p className="font-semibold text-accent-800 mb-2">اللي اتسمع</p>
         <p className="text-2xl leading-[2.4] text-accent-900 min-h-[6rem] break-words" style={{ fontFamily: "'Amiri', 'Noto Naskh Arabic', serif" }}>{text || '—'}</p>
         {info && <p className="text-sm text-accent-700 mt-2">{info}</p>}
+      </div>
+
+      <div className="glass-card rounded-2xl p-4 mb-4">
+        <label className="flex items-center gap-3 text-base font-bold text-accent-900">
+          <input type="checkbox" className="w-6 h-6 accent-emerald-600" checked={inTest} onChange={(e) => { setEarLab(e.target.checked); setInTest(e.target.checked); }} />
+          استخدم الأذن الجديدة في «اختبر نفسك» (التسميع المتواصل)
+        </label>
+        <p className="text-sm text-accent-700 mt-1">تجريبي، على الجهاز ده بس. شيل العلامة ترجع للأذن القديمة.</p>
       </div>
 
       <div className="flex gap-2">

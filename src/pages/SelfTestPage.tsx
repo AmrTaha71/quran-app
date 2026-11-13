@@ -4,6 +4,7 @@ import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
+import { QuranLabRecognition, earLabOn, preloadEarLab } from '../lib/quranLabEar';
 import TajwidSkillPicker from '../components/TajwidSkillPicker';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import { hasChosenReciter, markChosenReciter, recitersForRange, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
@@ -979,7 +980,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [mixedPlan, setMixedPlan] = useState<RangeReciterPart[] | null>(null);
   const [reciterNote, setReciterNote] = useState('');
   // Warm the on-device ear as soon as the page opens when it is chosen.
-  useEffect(() => { if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
+  useEffect(() => { if (earLabOn()) preloadEarLab(); else if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
@@ -4276,7 +4277,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // correction waited behind them and heard nothing (diag 2026-11-11).
     try {
       const r = recRef.current;
-      if (r instanceof QuranModelRecognition) r.abort(); else r?.stop();
+      if (r instanceof QuranModelRecognition || r instanceof QuranLabRecognition) r.abort(); else r?.stop();
     } catch {}
     recRef.current = null;
     liveRef.current.contListening = false;
@@ -5157,7 +5158,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
     // Batch 4 fallback (2026-11-10): no browser speech API -> the on-device ear, automatically.
-    const useModelEar = getEar() === 'model' || !SR;
+    // 2026-11-13: the new phoneme ear (Quran-Lab), per-device flag.
+    const useLabEar = earLabOn();
+    const useModelEar = useLabEar || getEar() === 'model' || !SR;
     if (!SR && !useModelEar) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
       return;
@@ -5192,8 +5195,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setInterim('');
     userStopRef.current = false;
     lastInterimRef.current = '';
-    const rec: any = useModelEar ? new QuranModelRecognition() : new SR();
-    diagPush('ear', { label: useModelEar ? 'quran-model' : 'browser' });
+    let labStart = 0;
+    if (useLabEar) {
+      const em0 = contEffectiveMatched(false, false);
+      labStart = Math.max(0, em0.matched.findIndex((m) => !m));
+    }
+    const rec: any = useLabEar ? new QuranLabRecognition(liveRef.current.contExpected, labStart) : useModelEar ? new QuranModelRecognition() : new SR();
+    diagPush('ear', { label: useLabEar ? `quranlab@${labStart}` : useModelEar ? 'quran-model' : 'browser' });
     // [P7] Fixed test locale (see helpers).
     rec.lang = TEST_SPEECH_LOCALE;
     rec.continuous = true;
@@ -5258,7 +5266,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           sawFinal = true;
           // [P5] Narrow alternative-rescue (see helpers).
           let chosen = pickFinalTranscript(res, expectedNorms);
-          if (useModelEar && typeof e.audioMs === 'number' && e.audioMs < 900) {
+          if (useModelEar && !useLabEar && typeof e.audioMs === 'number' && e.audioMs < 900) {
             // Noise guard (2026-11-12 diag: «والمسلم» from 0.5s, «والأم» from
             // 0.8s of breath/noise). A very short segment counts only if it
             // is one of the next expected words; otherwise it is dropped.
@@ -5273,7 +5281,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               continue;
             }
           }
-          if (useModelEar) {
+          if (useModelEar && !useLabEar) {
             // Held tail (see heldTailRef): join it to this segment; if the
             // two halves make one expected word, glue them.
             const h = heldTailRef.current;
