@@ -35,8 +35,8 @@ export default function GrandpaIcon({ className = '' }: { className?: string }) 
         {/* far-side tuft, small */}
         <path d="M84 28 Q92 32 91 44 Q90 52 85 55 Q86 42 84 28 Z" fill="#E9EDF2" />
         {/* big round beard, two tones like the reference */}
-        <path d="M42 56 Q36 76 46 90 Q60 102 76 92 Q92 80 88 56 Q80 70 64 70 Q48 70 42 56 Z" fill="#E4E8E1" />
-        <path d="M42 56 Q36 76 46 90 Q56 99 66 98 Q60 84 64 70 Q48 70 42 56 Z" fill="#F4F6F2" />
+        <path d="M40 54 Q37 80 50 92 Q64 104 78 92 Q91 80 88 54 Q78 69 64 69 Q50 69 40 54 Z" fill="#F4F6F2" />
+        <g transform="translate(-3 0)">
         {/* cheeks */}
         <ellipse cx="52" cy="60" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
         <ellipse cx="78" cy="60" rx="4.5" ry="3" fill="#F2A693" opacity="0.55" />
@@ -55,8 +55,9 @@ export default function GrandpaIcon({ className = '' }: { className?: string }) 
           <path d="M48.8 43 L43 40" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
           <path d="M85.2 43 L88 40" fill="none" stroke="url(#gp-gold)" strokeWidth="2" strokeLinecap="round" />
         </g>
+        </g>
         {/* moustache */}
-        <path d="M66 68 Q58 63 50 68 Q46 74 50 80 Q57 78 62 74 Q66 72 70 72 Q74 72 78 75 Q84 79 88 76 Q90 70 84 67 Q75 62 66 68 Z" fill="#FFFFFF" />
+        <path d="M64 67 Q56 62 48 67 Q43 73 48 79 Q56 78 64 73 Q72 78 80 79 Q85 73 80 67 Q72 62 64 67 Z" fill="#FFFFFF" />
       </g>
       <circle cx="60" cy="60" r="57" fill="none" stroke="url(#gp-gold)" strokeWidth="2" />
     </svg>
