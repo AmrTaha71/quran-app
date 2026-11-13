@@ -8,6 +8,7 @@ import {
   ADHAN_VOICES, getAdhanVoice, setAdhanVoice, availableAdhanVoices, isAdhanVoiceDownloaded, downloadAdhanVoice,
   ADHAN_COUNTRIES,
   ADHAN_PRAYERS,
+  ADHAN_CHOICES,
   adhanLocationLabel,
   ensureAdhanDay,
   loadAdhanSettings,
@@ -360,6 +361,24 @@ export default function AdhanSettingsSection() {
         <p className="text-xs text-accent-600 mt-1">
           ملحوظة: آيفون/آيباد ممكن يمنع تشغيل الصوت قبل ما تلمس أي حاجة في التطبيق — زرار «جرّب الصوت» بيفتح الصوت، وأي ضغطة بعد فتح التطبيق تكفي للتنبيهات اللي بعدها.
         </p>
+      </div>
+
+      {/* Per-prayer alert */}
+      <div className="mt-4">
+        <p className="font-semibold text-accent-800 mb-1">تنبيه كل صلاة لوحدها</p>
+        <p className="text-xs text-accent-600 mb-2">اختار لكل صلاة نوع تنبيهها، أو «زي الإعداد العام» عشان تمشي على الصوت والنوع اللي فوق. الفجر: لو شغّلت منبه الفجر تحت، المنبه هو اللي يرن.</p>
+        <div className="grid gap-2">
+          {ADHAN_PRAYERS.map((p) => (
+            <div key={p.key} className="flex items-center gap-2">
+              <span className="w-16 shrink-0 font-medium text-accent-800">{p.label}</span>
+              <div className="flex-1 min-w-0">
+                <DrumSelect label={`تنبيه ${p.label}`} value={settings.perPrayer[p.key] ?? 'default'}
+                  onChange={(v) => update({ perPrayer: { ...settings.perPrayer, [p.key]: v } })}
+                  options={ADHAN_CHOICES.map((c) => ({ value: c.id, label: c.label }))} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <FajrAlarmSetting />

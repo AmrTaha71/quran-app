@@ -21,8 +21,21 @@ export type AdhanLocation =
   | { kind: 'gps'; lat: number; lng: number; label: string }
   | { kind: 'manual'; country: string; countryName: string; city: string };
 
+/** Per-prayer choice (2026-11-14): «default» follows the general sound/alert
+ *  settings; the rest override them for that prayer only. */
+export type AdhanPrayerChoice = 'default' | 'full' | 'takbir' | 'beep' | 'screen' | 'off';
+export const ADHAN_CHOICES: { id: AdhanPrayerChoice; label: string }[] = [
+  { id: 'default', label: 'زي الإعداد العام' },
+  { id: 'full', label: 'أذان كامل' },
+  { id: 'takbir', label: 'الله أكبر فقط' },
+  { id: 'beep', label: 'نغمة قصيرة' },
+  { id: 'screen', label: 'رسالة بس (من غير صوت)' },
+  { id: 'off', label: 'بدون تنبيه' },
+];
+
 export interface AdhanSettings {
   enabled: boolean;
+  perPrayer: Partial<Record<string, AdhanPrayerChoice>>;
   location: AdhanLocation | null;
   alertType: AdhanAlertType;
   sound: AdhanSound;
@@ -100,7 +113,7 @@ export const ADHAN_COUNTRIES: AdhanCountry[] = [
 ];
 
 export function defaultAdhanSettings(): AdhanSettings {
-  return { enabled: false, location: null, alertType: 'both', sound: 'full' };
+  return { enabled: false, perPrayer: {}, location: null, alertType: 'both', sound: 'full' };
 }
 
 function validLocation(raw: unknown): AdhanLocation | null {
@@ -127,6 +140,7 @@ export function loadAdhanSettings(): AdhanSettings {
     const p = JSON.parse(raw) as Partial<AdhanSettings>;
     return {
       enabled: p.enabled === true,
+      perPrayer: (p.perPrayer && typeof p.perPrayer === 'object') ? Object.fromEntries(Object.entries(p.perPrayer).filter(([, v]) => ADHAN_CHOICES.some((c) => c.id === v))) as AdhanSettings['perPrayer'] : {},
       location: validLocation(p.location),
       alertType: p.alertType === 'audio' ? 'audio' : 'both',
       sound: p.sound === 'beep' ? 'beep' : p.sound === 'takbir' ? 'takbir' : 'full',
@@ -134,6 +148,15 @@ export function loadAdhanSettings(): AdhanSettings {
   } catch {
     return defaultAdhanSettings();
   }
+}
+
+/** What to do for one prayer: a sound (or none) and whether to show the banner. */
+export function adhanPlanFor(s: AdhanSettings, prayer: string): { sound: AdhanSound | null; banner: boolean } {
+  const c = s.perPrayer[prayer] ?? 'default';
+  if (c === 'off') return { sound: null, banner: false };
+  if (c === 'screen') return { sound: null, banner: true };
+  if (c === 'full' || c === 'takbir' || c === 'beep') return { sound: c, banner: s.alertType === 'both' };
+  return { sound: s.sound, banner: s.alertType === 'both' };
 }
 
 export function saveAdhanSettings(s: AdhanSettings): void {

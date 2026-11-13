@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ADHAN_PRAYERS,
   adhanAlreadyFired,
+  adhanPlanFor,
   adhanDueNow,
   ensureAdhanDay,
   loadAdhanSettings,
@@ -53,10 +54,9 @@ export default function AdhanScheduler() {
           markAdhanFired(day.dateKey, p.key);
           audioRef.current?.pause();
           if (p.key === 'Fajr' && loadFajrAlarm() !== 'off') { setAlarm(true); break; }
-          audioRef.current = playAdhanSound(settings.sound);
-          if (settings.alertType === 'both') {
-            setBanner({ prayer: p.key, label: p.label });
-          }
+          { const plan = adhanPlanFor(settings, p.key);
+            audioRef.current = plan.sound ? playAdhanSound(plan.sound) : null;
+            if (plan.banner) setBanner({ prayer: p.key, label: p.label }); }
           break;
         }
       }
@@ -88,10 +88,9 @@ export default function AdhanScheduler() {
       const settings = loadAdhanSettings();
       audioRef.current?.pause();
       if (prayer === 'Fajr' && loadFajrAlarm() !== 'off') { setAlarm(true); return; }
-      audioRef.current = playAdhanSound(settings.sound);
-      if (settings.alertType === 'both') {
-        setBanner({ prayer, label: prayerLabel(prayer) });
-      }
+      const plan = adhanPlanFor(settings, prayer);
+      audioRef.current = plan.sound ? playAdhanSound(plan.sound) : null;
+      if (plan.banner) setBanner({ prayer, label: prayerLabel(prayer) });
     };
     try {
       const param = new URLSearchParams(window.location.search).get('adhan');
