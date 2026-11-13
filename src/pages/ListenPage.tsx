@@ -1866,12 +1866,22 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       sessionStorage.removeItem('quran-listen-surah');
     } catch {}
     if (!Number.isInteger(n) || n < 1 || n > 114) return;
+    // Optional one-time reciter from the voice assistant ("مع مين؟" -> الحصري).
+    let rid = reciterId;
+    try {
+      const vr = sessionStorage.getItem('quran-listen-reciter');
+      sessionStorage.removeItem('quran-listen-reciter');
+      if (vr && RECITERS.some((r) => r.id === vr)) {
+        rid = vr;
+        try { localStorage.setItem('quran-reciter', vr); } catch {}
+      }
+    } catch {}
     setHadrOn(false);
     setHadrSelected(false);
     changeRiwaya(null);
     setHubView('free');
     setSurah(n);
-    void startPlayback(n, reciterId, 'free', 1);
+    void startPlayback(n, rid, 'free', 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 

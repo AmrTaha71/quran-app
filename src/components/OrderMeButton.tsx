@@ -2,9 +2,8 @@
 // الكهف", "عايز أسمع الملك", "سمّعلي الشمس", "المتشابهات") and the
 // matching page opens. Not understood -> shows what was heard and
 // asks again; nothing opens by guess. (2026-11-08)
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Hint from './Hint';
-import { parseVoiceCommand, surahGlobalRange, surahName, type VoiceAction } from '../lib/voiceCommand';
 import { pressFeedback } from '../lib/pressFeedback';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
@@ -15,102 +14,42 @@ interface Props {
   onElderly: () => void;
 }
 
-export default function OrderMeButton({ onNavigate, onMutashabihat, onElderly }: Props) {
-  const [state, setState] = useState<'idle' | 'listening'>('idle');
-  const [note, setNote] = useState('');
-  const [askSurah, setAskSurah] = useState<number | null>(null);
+export default function OrderMeButton({ onMutashabihat, onElderly }: Props) {
+  const [on, setOn] = useState(false);
 
-  const run = (a: VoiceAction) => {
-    try {
-      if (a.kind === 'ask') {
-        setAskSurah(a.surah);
-        return;
-      }
-      if (a.kind === 'mushaf') {
-        if (a.surah) localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: a.surah, ayah: 1 }));
-        onNavigate('mushaf');
-      } else if (a.kind === 'listen') {
-        if (a.surah) sessionStorage.setItem('quran-listen-surah', String(a.surah));
-        onNavigate('listen');
-      } else if (a.kind === 'test') {
-        if (a.surah) {
-          const r = surahGlobalRange(a.surah);
-          sessionStorage.setItem('quran-test-range-preset', JSON.stringify({ startGlobal: r.start, endGlobal: r.end, label: `سورة ${surahName(a.surah)}` }));
-        }
-        onNavigate('test');
-      } else if (a.kind === 'mutashabihat') {
-        onMutashabihat();
-      } else if (a.kind === 'elderly') {
-        onElderly();
-      } else {
-        onNavigate(a.route);
-      }
-    } catch { /* storage blocked: still navigate where possible */ }
-  };
-
-  const start = () => {
-    const W = window as any;
-    const Ctor = W.SpeechRecognition || W.webkitSpeechRecognition;
-    if (!Ctor) { setNote('المتصفح ده مش بيدعم الأوامر بالصوت'); return; }
-    try {
-      const r = new Ctor();
-      r.lang = 'ar-SA';
-      r.interimResults = false;
-      r.maxAlternatives = 3;
-      let handled = false;
-      r.onresult = (e: any) => {
-        const res = e?.results?.[0];
-        const alts: string[] = [];
-        for (let i = 0; res && i < res.length; i++) alts.push(String(res[i]?.transcript || ''));
-        for (const t of alts) {
-          const a = parseVoiceCommand(t);
-          if (a) { handled = true; setNote(''); run(a); return; }
-        }
-        handled = true;
-        setNote(`سمعت: «${alts[0] || ''}» — ما فهمتش، قول تاني. مثال: عايز أقرأ سورة الكهف`);
-      };
-      r.onerror = () => { setState('idle'); };
-      r.onend = () => {
-        setState('idle');
-        if (!handled) setNote('ما سمعتش حاجة، دوس وقول طلبك');
-      };
-      setNote('');
-      setState('listening');
-      r.start();
-    } catch {
-      setState('idle');
-    }
-  };
+  // The conversation itself lives in <VoiceAssistant/> (App level) so the
+  // mic stays open while pages change. This button only toggles it and
+  // runs the Home-only actions (المتشابهات / صفحة جدو).
+  useEffect(() => {
+    const st = (e: Event) => setOn(!!(e as CustomEvent).detail);
+    const act = (e: Event) => {
+      const k = (e as CustomEvent).detail;
+      if (k === 'mutashabihat') onMutashabihat();
+      else if (k === 'elderly') onElderly();
+    };
+    window.addEventListener('voice-assistant-state', st);
+    window.addEventListener('voice-home-action', act);
+    return () => { window.removeEventListener('voice-assistant-state', st); window.removeEventListener('voice-home-action', act); };
+  }, [onMutashabihat, onElderly]);
 
   return (
     <div className="flex flex-col items-center gap-2 py-2">
       <button
         type="button"
         onPointerDown={pressFeedback}
-        onClick={start}
+        onClick={() => window.dispatchEvent(new CustomEvent('voice-assistant-toggle'))}
         aria-label="اؤمرني"
-        className={`group relative w-full max-w-md flex items-center gap-4 px-5 py-4 rounded-3xl shadow-xl polish-press transition-transform ${state === 'listening' ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#0f5c4d] via-[#12705d] to-[#0b3f37]'}`}
+        className={`group relative w-full max-w-md flex items-center gap-4 px-5 py-4 rounded-3xl shadow-xl polish-press transition-transform ${on ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#0f5c4d] via-[#12705d] to-[#0b3f37]'}`}
       >
-        <VintageMic listening={state === 'listening'} />
+        <VintageMic listening={on} />
         <span className="flex-1 text-right">
-          <span className="block text-3xl font-bold font-display-ar text-[#f6d27a] drop-shadow">{state === 'listening' ? 'بسمعك…' : 'اؤمرني'}</span>
-          <span className="block text-sm text-[#f3ead7]/90 mt-1">{state === 'listening' ? 'قول دلوقتي…' : 'قول لي عايز تعمل إيه، وأنا أفتحهولك'}</span>
+          <span className="block text-3xl font-bold font-display-ar text-[#f6d27a] drop-shadow">{on ? 'المايك مفتوح' : 'اؤمرني'}</span>
+          <span className="block text-sm text-[#f3ead7]/90 mt-1">{on ? 'كمّل كلامك، وقول «خلاص» لما تخلّص' : 'قول لي عايز تعمل إيه، وأنا أفتحهولك'}</span>
         </span>
       </button>
-      {askSurah && (
-        <div className="w-full max-w-md bg-white rounded-2xl border-2 border-amber-300 p-3 space-y-2" dir="rtl">
-          <p className="text-center font-bold text-accent-900">عايز تعمل إيه في سورة {surahName(askSurah)}؟</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button type="button" onClick={() => { const s0 = askSurah; setAskSurah(null); run({ kind: 'mushaf', surah: s0 }); }} className="min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold">أقرأها</button>
-            <button type="button" onClick={() => { const s0 = askSurah; setAskSurah(null); run({ kind: 'listen', surah: s0 }); }} className="min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold">أسمعها</button>
-            <button type="button" onClick={() => { const s0 = askSurah; setAskSurah(null); run({ kind: 'test', surah: s0 }); }} className="min-h-[48px] rounded-xl bg-amber-500 text-white font-bold">سمّعها لي</button>
-          </div>
-        </div>
-      )}
-      {state !== 'listening' && !note && !askSurah && (
+      {!on && (
         <Hint id="orderme-examples"><p className="text-center text-xs text-accent-600">قول: «اقرأ الكهف» • «اسمع الملك» • «سمّعلي الشمس» • «المتشابهات» — أو قول اسم السورة بس وأنا أسألك</p></Hint>
       )}
-      {note && <p className="text-center text-sm text-accent-700 bg-white/80 rounded-xl px-3 py-2">{note}</p>}
     </div>
   );
 }

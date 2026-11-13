@@ -12,7 +12,7 @@ export type VoiceAction =
   | { kind: 'elderly' }
   | { kind: 'ask'; surah: number };
 
-function norm(s: string): string {
+export function norm(s: string): string {
   return s
     .replace(/[ً-ْٰـ]/g, '') // tashkeel + tatweel
     .replace(/[أإآٱ]/g, 'ا')

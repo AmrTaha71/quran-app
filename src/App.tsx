@@ -35,6 +35,7 @@ import SplashScreen from './components/SplashScreen';
 import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardingDone } from './components/Onboarding';
 import DevicePicker from './components/DevicePicker';
 import VoiceSearchMic from './components/VoiceSearchMic';
+import VoiceAssistant from './components/VoiceAssistant';
 import { getLocalDeviceKind } from './lib/deviceProfile';
 import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
@@ -588,6 +589,8 @@ function AppContent() {
       <AdhanPushManager />
       {/* Mic beside any focused search field (voice or typing). */}
       <VoiceSearchMic />
+      {/* «اؤمرني»: continuous voice conversation, open across pages. */}
+      <VoiceAssistant onNavigate={navigate} />
       {/* First-run onboarding overlay (home route only; the app works
           normally behind it once finished or skipped). */}
       {showOnboarding && route === 'home' && (
