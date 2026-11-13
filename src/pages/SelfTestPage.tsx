@@ -1130,11 +1130,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try {
       const raw = sessionStorage.getItem('quran-test-range-preset');
       if (raw) {
-        const preset = JSON.parse(raw) as { startGlobal: number; endGlobal: number; label?: string };
+        const preset = JSON.parse(raw) as { startGlobal: number; endGlobal: number; label?: string; reciter?: string };
         if (typeof preset.startGlobal === 'number' && typeof preset.endGlobal === 'number' && preset.startGlobal >= 1 && preset.endGlobal >= preset.startGlobal) {
           sessionStorage.removeItem('quran-test-range-preset');
           sessionStorage.removeItem('quran-test-range-choice');
-          void startTestGlobal(preset.startGlobal, preset.endGlobal, null, undefined, null, { recentLabel: preset.label });
+          // Voice assistant: «سمّع على مين؟» already chose the reciter, so don't ask again.
+          const pickedReciter = preset.reciter && CORR_RECITERS.some((r) => r.folder === preset.reciter) ? preset.reciter : null;
+          if (pickedReciter) { setCorrReciter(pickedReciter); setCorrReciterState(pickedReciter); }
+          void startTestGlobal(preset.startGlobal, preset.endGlobal, null, undefined, null, { recentLabel: preset.label, ...(pickedReciter ? { reciterChosen: true } : {}) });
           return;
         }
         sessionStorage.removeItem('quran-test-range-preset');
