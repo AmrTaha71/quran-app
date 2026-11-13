@@ -241,7 +241,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
-            <button onClick={startRound} disabled={!canStart} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">تمام، سيف</button>
+            <button onClick={startRound} disabled={!canStart} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">تمام</button>
           </>
         )}
 
