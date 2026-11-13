@@ -20,15 +20,29 @@ export const refKeySkel = (k: string) => expectedWordList(k).map((w) => softSkel
 let worker: Worker | null = null;
 let ready: Promise<void> | null = null;
 let listener: ((m: any) => void) | null = null;
+const LOAD_TIMEOUT_MS = 40000;
+function resetWorker() {
+  try { worker?.terminate(); } catch { /* ignore */ }
+  worker = null; ready = null; listener = null;
+}
 function getWorker(): Promise<Worker> {
   if (!worker) {
     worker = new Worker(new URL('../workers/quranLab.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e) => listener?.(e.data);
-    ready = new Promise((res, rej) => {
+    // A failed or hung load used to stay cached forever: the red mic showed,
+    // nothing was heard, and every later tap hit the same dead promise.
+    const w0 = worker;
+    ready = new Promise<void>((res, rej) => {
       const prev = listener;
-      listener = (m) => { if (m.type === 'ready') { listener = prev; res(); } else if (m.type === 'error') { listener = prev; rej(new Error(m.message)); } };
-      worker!.postMessage({ type: 'load' });
+      const timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; rej(new Error('model-load-timeout')); }, LOAD_TIMEOUT_MS);
+      w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); rej(new Error('worker-error')); };
+      listener = (m) => {
+        if (m.type === 'ready') { clearTimeout(timer); listener = prev; res(); }
+        else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); rej(new Error(m.message)); }
+      };
+      w0.postMessage({ type: 'load' });
     });
+    ready.catch(() => {});
   }
   return ready!.then(() => worker!);
 }
@@ -69,6 +83,7 @@ export class QuranLabRecognition {
   onsoundend: (() => void) | null = null;
 
   private stream: MediaStream | null = null;
+  private streamP: Promise<MediaStream> | null = null;
   private ctx: AudioContext | null = null;
   private node: ScriptProcessorNode | null = null;
   private src: MediaStreamAudioSourceNode | null = null;
@@ -93,6 +108,12 @@ export class QuranLabRecognition {
       this.ctx = new AC();
       void this.ctx.resume().catch(() => {});
     } catch { this.ctx = null; }
+    // Ask for the microphone NOW (inside the tap): after a long model load the
+    // gesture is gone and iOS may never show the prompt / return a stream.
+    try {
+      this.streamP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
+      this.streamP.catch(() => {});
+    } catch { this.streamP = null; }
     void this.begin();
   }
 
@@ -106,7 +127,7 @@ export class QuranLabRecognition {
       this.ps.pointer = this.startWord;
       listener = (m) => this.onWorker(m);
       w.postMessage({ type: 'reset' });
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
+      this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }));
       if (this.stopped) { this.release(); this.finishEnd(); return; }
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       if (!this.ctx) this.ctx = new AC();
@@ -129,7 +150,9 @@ export class QuranLabRecognition {
       this.onaudiostart?.();
     } catch (err) {
       const name = (err as { name?: string })?.name || '';
-      this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture', message: String((err as Error)?.message || err) });
+      const msg = String((err as Error)?.message || err);
+      const loadFail = /model-load-timeout|worker-error|load|fetch|network/i.test(msg) && name !== 'NotAllowedError';
+      this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : loadFail ? 'network' : 'audio-capture', message: msg });
       this.release();
       this.finishEnd();
     }
@@ -195,6 +218,7 @@ export class QuranLabRecognition {
     try { this.node?.disconnect(); } catch { /* ignore */ }
     try { this.src?.disconnect(); } catch { /* ignore */ }
     try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    try { void this.streamP?.then((st) => st.getTracks().forEach((t) => t.stop())).catch(() => {}); } catch { /* ignore */ }
     try { void this.ctx?.close(); } catch { /* ignore */ }
     this.node = null; this.src = null; this.stream = null; this.ctx = null;
   }
