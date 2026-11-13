@@ -6,7 +6,7 @@ import GrandpaIcon from '../components/GrandpaIcon';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast, Compass, Landmark, Clock } from 'lucide-react';
+import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast, Compass, Landmark, Clock, Radio } from 'lucide-react';
 import NextPrayerTile from '../components/NextPrayerTile';
 import QiblaSheet from '../components/QiblaSheet';
 import DrumSelect from '../components/DrumSelect';
@@ -384,21 +384,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
         </div>
 
-        {/* 2026-11-13: for travellers — Qibla compass and the nearest mosque (Google Maps). */}
-        <div className="mb-4 grid grid-cols-3 gap-3 items-stretch">
-          <NextPrayerTile icon={<Clock />} onNoLocation={() => onNavigate('settings')} />
-          <button type="button" onPointerDown={pressFeedback} onClick={() => setQiblaOpen(true)} aria-label="اتجاه القبلة"
-            className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Compass /></span>
-            <span className="home-tile-title">اتجاه القبلة</span>
-          </button>
-          <button type="button" onPointerDown={pressFeedback} onClick={openNearestMosque} aria-label="أقرب مسجد"
-            className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-gold" aria-hidden="true"><Landmark /></span>
-            <span className="home-tile-title">أقرب مسجد</span>
-          </button>
-        </div>
-
         {/* The four main doors. A tile with choices opens its panel right
             under the grid; only one panel is open at a time. */}
         <div className="home-tiles mb-3">
@@ -581,6 +566,26 @@ export default function HomeStartPage({ session, onNavigate }: {
             onClick={() => onNavigate('adhkar')} />
           <HomeTile icon={<Settings />} glaze="plain" title="الإعدادات"
             onClick={() => onNavigate('settings')} />
+        </div>
+        {/* 2026-11-13 (agreed): third row — next prayer (name, «بعد», digital countdown),
+            the Quran radio, the nearest mosque, and the Qibla on the left edge. */}
+        <div className="mb-4 grid grid-cols-4 gap-2 items-stretch">
+          <NextPrayerTile icon={<Clock />} onNoLocation={() => onNavigate('settings')} />
+          <button type="button" onPointerDown={pressFeedback} onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } }} aria-label="إذاعة القرآن الكريم"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Radio /></span>
+            <span className="home-tile-title !text-[0.8rem] !leading-tight">إذاعة القرآن الكريم</span>
+          </button>
+          <button type="button" onPointerDown={pressFeedback} onClick={openNearestMosque} aria-label="أقرب مسجد"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-gold" aria-hidden="true"><Landmark /></span>
+            <span className="home-tile-title !text-[0.8rem] !leading-tight">أقرب مسجد</span>
+          </button>
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setQiblaOpen(true)} aria-label="اتجاه القبلة"
+            className="home-tile polish-focus !min-h-0">
+            <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Compass /></span>
+            <span className="home-tile-title !text-[0.8rem] !leading-tight">اتجاه القبلة</span>
+          </button>
         </div>
         {qiblaOpen && <QiblaSheet onClose={() => setQiblaOpen(false)} />}
         {bigOpen && <BigScreenSheet onClose={() => setBigOpen(false)} onRemote={() => { setBigOpen(false); onNavigate('room'); }} />}

@@ -33,10 +33,10 @@ function nextInfo(day: AdhanDay): { label: string; left: number } | null {
   return fajr === null ? null : { label: 'الفجر', left: fajr * 60 + 86400 - now };
 }
 
-const ar = (n: number) => n.toLocaleString('ar-EG');
 function leftText(sec: number): string {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60;
-  return `${h > 0 ? `${ar(h)} س ` : ''}${ar(m)} د ${ar(x)} ث`;
+  const z = (n: number) => String(n).padStart(2, '0');
+  return `${z(h)}:${z(m)}:${z(x)}`;
 }
 
 export default function NextPrayerTile({ icon, onNoLocation, onPress }: { icon: ReactNode; onNoLocation: () => void; onPress?: () => void }) {
@@ -57,8 +57,12 @@ export default function NextPrayerTile({ icon, onNoLocation, onPress }: { icon: 
   return (
     <button type="button" onClick={() => (hasLoc ? onPress?.() : onNoLocation())} aria-label="موعد الصلاة القادمة" className="home-tile polish-focus !min-h-0">
       <span className="tile-medal tile-medal-night" aria-hidden="true">{icon}</span>
-      <span className="home-tile-title">{info ? info.label : 'موعد الصلاة'}</span>
-      <span className="home-tile-hint tabular-nums">{info ? leftText(info.left) : hasLoc ? '…' : 'حدّد موقعك'}</span>
+      <span className="home-tile-title !text-[0.8rem] !leading-tight">{info ? info.label : 'موعد الصلاة'}</span>
+      {info && <span className="text-[0.68rem] text-ink-2 leading-none">بعد</span>}
+      <span className="font-bold tabular-nums leading-none text-emerald-800" dir="ltr"
+        style={{ fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace", fontSize: '0.8rem', letterSpacing: '0.02em' }}>
+        {info ? leftText(info.left) : hasLoc ? '…' : 'حدّد موقعك'}
+      </span>
     </button>
   );
 }
