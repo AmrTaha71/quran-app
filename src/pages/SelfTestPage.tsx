@@ -4831,7 +4831,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
       speakContPrompt(now.words, now.indices, now.norms, 'stall');
-    }, (corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) * 1000);
+    // 2026-11-13: the streaming ear emits words ~1 s behind the voice, so a
+    // 1 s stall timer fired while he was still reciting (false "missed"
+    // marks, then the correction audio muted the mic and the rest of the
+    // ayah was lost). Add the ear latency when the lab ear is on.
+    }, ((corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) + (earLabOn() ? 1.3 : 0)) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
