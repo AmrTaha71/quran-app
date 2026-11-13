@@ -1,0 +1,41 @@
+name: ear-eval
+on:
+  workflow_dispatch:
+    inputs:
+      reciters: { description: 'comma list of reciter folders (empty = all in reciters.json)', required: false, default: '' }
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs: { list: '${{ steps.p.outputs.list }}' }
+    steps:
+      - uses: actions/checkout@v4
+      - id: p
+        run: |
+          python3 - <<'PY' >> $GITHUB_OUTPUT
+          import json,os
+          inp=os.environ.get('IN','').strip()
+          allr=[x['folder'] for x in json.load(open('tools/ear-eval/reciters.json'))]
+          sel=[x for x in inp.split(',') if x] if inp else allr
+          print('list='+json.dumps(sel))
+          PY
+        env: { IN: '${{ inputs.reciters }}' }
+  run:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: { reciter: '${{ fromJson(needs.plan.outputs.list) }}' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: pip install kaldi-native-fbank onnxruntime soundfile numpy
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null
+      - run: npx esbuild tools/ear-eval/judge.ts --bundle --platform=node --format=esm --target=node20 --outfile=/tmp/judge.mjs --external:fs --log-level=error
+      - run: python3 tools/ear-eval/run_reciter.py "${{ matrix.reciter }}" /tmp/work
+        env: { APP_ROOT: '${{ github.workspace }}', JUDGE: /tmp/judge.mjs }
+      - uses: actions/upload-artifact@v4
+        with: { name: 'res-${{ matrix.reciter }}', path: /tmp/work/result.json }
