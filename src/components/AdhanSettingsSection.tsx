@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import DrumSelect from './DrumSelect';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
 import {
   ADHAN_AUDIO_CREDIT,
@@ -231,17 +232,8 @@ export default function AdhanSettingsSection() {
             <div className="grid gap-3">
               <label className="block">
                 <span className="block text-sm font-medium text-accent-700 mb-1">الدولة</span>
-                <select
-                  value={countryCode}
-                  onChange={(e) => setCountryCode(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-hairline-input bg-white text-accent-800"
-                >
-                  {ADHAN_COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                <DrumSelect label="الدولة" value={countryCode} onChange={setCountryCode}
+                  options={ADHAN_COUNTRIES.map((c) => ({ value: c.code, label: c.name }))} />
               </label>
               <label className="block">
                 <span className="block text-sm font-medium text-accent-700 mb-1">المدينة</span>

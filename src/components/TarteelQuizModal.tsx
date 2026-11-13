@@ -10,6 +10,8 @@ import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange, ayahUrl, planRangeReciters, downloadRange, isRangeDownloaded, rangeSizeMb, formatSize, type RangeReciterPart } from '../lib/corrDownload';
 import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import { useEscapeClose } from '../lib/useEscape';
+import DrumSelect from './DrumSelect';
+import { unitPickLabel } from '../lib/testRanges';
 
 type Scope = 'surah' | 'juz' | 'hizb' | 'quarter';
 const SCOPE_LABEL: Record<Scope, string> = { surah: 'سورة', juz: 'جزء', hizb: 'حزب', quarter: 'ربع' };
@@ -182,27 +184,25 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
               <div className="grid grid-cols-2 gap-2 mb-4">
                 <div>
                   <label className="block text-sm text-accent-700 mb-1">من جزء</label>
-                  <select value={num} onChange={(e) => { const v = Number(e.target.value); setNum(v); if (toNum < v) setToNum(v); }} className="w-full border border-emerald-200 rounded-lg p-2">
-                    {Array.from({ length: count }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{`جزء ${n}`}</option>)}
-                  </select>
+                  <DrumSelect label="من جزء" value={num} onChange={(v) => { setNum(v); if (toNum < v) setToNum(v); }}
+                    options={Array.from({ length: count }, (_, i) => i + 1).map((n) => ({ value: n, label: `الجزء ${n}` }))} />
                 </div>
                 <div>
                   <label className="block text-sm text-accent-700 mb-1">إلى جزء</label>
-                  <select value={toNum} onChange={(e) => setToNum(Number(e.target.value))} className="w-full border border-emerald-200 rounded-lg p-2">
-                    {Array.from({ length: count - num + 1 }, (_, i) => num + i).map((n) => <option key={n} value={n}>{`جزء ${n}`}</option>)}
-                  </select>
+                  <DrumSelect label="إلى جزء" value={toNum} onChange={setToNum}
+                    options={Array.from({ length: count - num + 1 }, (_, i) => num + i).map((n) => ({ value: n, label: `الجزء ${n}` }))} />
                 </div>
               </div>
             ) : (
               <>
                 <label className="block text-sm text-accent-700 mb-1">{SCOPE_LABEL[scope]}</label>
-                <select value={num} onChange={(e) => setNum(Number(e.target.value))} className="w-full border border-emerald-200 rounded-lg p-2 mb-4">
-                  {Array.from({ length: count }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {scope === 'surah' ? `${n} - ${surahNameOf(n)}` : `${SCOPE_LABEL[scope]} ${n}`}
-                    </option>
-                  ))}
-                </select>
+                <div className="mb-4">
+                  <DrumSelect label={SCOPE_LABEL[scope]} value={num} onChange={setNum}
+                    options={Array.from({ length: count }, (_, i) => i + 1).map((n) => ({
+                      value: n,
+                      label: scope === 'surah' ? `${n} - ${surahNameOf(n)}` : unitPickLabel(scope, n),
+                    }))} />
+                </div>
               </>
             )}
             {options.length === 0 && mixed === null && (
@@ -217,9 +217,9 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             {options.length > 1 && (
               <>
                 <label className="block text-sm text-accent-700 mb-1">القارئ</label>
-                <select value={activeId} onChange={(e) => setReciterId(e.target.value)} className="w-full border border-emerald-200 rounded-lg p-2 mb-5">
-                  {options.map((f) => <option key={f} value={f}>{reciterName(f)}</option>)}
-                </select>
+                <div className="mb-5">
+                  <DrumSelect label="القارئ" value={activeId} onChange={setReciterId} options={options.map((f) => ({ value: f, label: reciterName(f) }))} />
+                </div>
               </>
             )}
             {canStart && (

@@ -5,6 +5,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import { QuranLabRecognition, earLabOn, preloadEarLab } from '../lib/quranLabEar';
+import DrumSelect from '../components/DrumSelect';
 import TajwidSkillPicker from '../components/TajwidSkillPicker';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import { hasChosenReciter, markChosenReciter, recitersForRange, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
@@ -5620,16 +5621,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             : `${manualSurahMatches.length.toLocaleString('ar-EG')} سورة مطابقة`}
         </p>
       )}
-      <select aria-label="السورة" value={surah}
-        onChange={(e) => {
-          chooseSurah(Number(e.target.value));
-          setSurahSearch('');
-        }}
-        className="mt-2 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-        {manualSurahOptions.map((s) => (
-          <option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>
-        ))}
-      </select>
+      <div className="mt-2">
+        <DrumSelect label="السورة" value={surah}
+          onChange={(n) => { chooseSurah(n); setSurahSearch(''); }}
+          options={manualSurahOptions.map((s) => ({ value: s.no, label: `${s.no} — سورة ${s.name}` }))} />
+      </div>
     </label>
   );
 
@@ -5651,11 +5647,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       {/* «سمّع مع»: the reciter whose real voice corrects you (2026-11-08). */}
       <label className="flex items-center gap-2 text-sm font-semibold text-accent-800">
         <span className="shrink-0">سمّع مع</span>
-        <select aria-label="سمّع مع" value={corrReciter}
-          onChange={(e) => { setCorrReciter(e.target.value); setCorrReciterState(e.target.value); }}
-          className="flex-1 min-h-[44px] px-3 rounded-xl border border-hairline bg-white text-base">
-          {CORR_RECITERS.map((r) => <option key={r.folder} value={r.folder}>{r.name}</option>)}
-        </select>
+        <div className="flex-1 min-w-0">
+          <DrumSelect label="سمّع مع" value={corrReciter}
+            onChange={(v) => { setCorrReciter(v); setCorrReciterState(v); }}
+            options={CORR_RECITERS.map((r) => ({ value: r.folder, label: r.name }))} />
+        </div>
       </label>
       <p className="text-[11px] text-accent-500" dir="rtl">توقيت الكلمات: cpfair/quran-align (CC BY 4.0) • الصوت: EveryAyah</p>
       <div className="flex items-center justify-between gap-2">

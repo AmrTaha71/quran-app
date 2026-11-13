@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
 import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info } from 'lucide-react';
@@ -630,21 +631,15 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         ) : (
           <>
             <div className="flex gap-2">
-              <select
-                value={pick}
-                disabled={job?.phase === 'running' || job?.phase === 'estimating'}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 1 && n <= 114) setPick(n);
-                }}
-                className="flex-1 py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50"
-              >
-                {SURAHS.map((s) => (
-                  <option key={s.no} value={s.no}>
-                    {s.no} — {s.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex-1 min-w-0">
+                <DrumSelect
+                  label="السورة"
+                  value={pick}
+                  disabled={job?.phase === 'running' || job?.phase === 'estimating'}
+                  onChange={(n) => setPick(n)}
+                  options={SURAHS.map((x) => ({ value: x.no, label: `${x.no} — ${x.name}` }))}
+                />
+              </div>
               {pickDownloaded ? (
                 <span className="px-4 py-3 bg-emerald-100 text-emerald-800 font-semibold rounded-xl whitespace-nowrap">
                   محملة ✓

@@ -3,6 +3,7 @@
 // comes from src/data/mutashabihat-bank.json (built offline from the
 // Quran text; see the generator notes in that file's sibling docs).
 import { useMemo, useState } from 'react';
+import DrumSelect from './DrumSelect';
 import { X } from 'lucide-react';
 import BANK from '../data/mutashabihat-famous.json'; // 2026-11-07: only clues backed by two sources (Quranpedia similar groups)
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
@@ -164,10 +165,9 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
 
             {!solved && (
               <div className="flex gap-2">
-                <select value={surah} onChange={(e) => setSurah(Number(e.target.value))}
-                  className="flex-1 min-h-[52px] rounded-xl border-2 border-emerald-700 px-2 text-base bg-white">
-                  {SURAHS.map((s) => <option key={s.no} value={s.no}>{s.no}. {s.name}</option>)}
-                </select>
+                <div className="flex-1 min-w-0">
+                  <DrumSelect label="السورة" value={surah} onChange={setSurah} options={SURAHS.map((s) => ({ value: s.no, label: `${s.no}. ${s.name}` }))} />
+                </div>
                 <input inputMode="numeric" value={ayah} onChange={(e) => setAyah(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
                   placeholder="رقم الآية"

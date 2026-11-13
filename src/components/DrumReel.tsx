@@ -69,6 +69,15 @@ export function DrumReel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // When the parent changes the value (scope switch, reset to 1), roll the drum there.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || lastIdx.current === index) return;
+    lastIdx.current = index;
+    el.scrollTop = index * DRUM_ITEM_H;
+    setPos(index);
+  }, [index]);
+
   function onScroll() {
     const el = ref.current;
     if (!el) return;

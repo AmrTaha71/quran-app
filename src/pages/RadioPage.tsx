@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import TimerWheel from '../components/TimerWheel';
 import { Moon, Pause, Play, Radio } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
@@ -139,6 +140,7 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
   const activeRef = useRef(false);
   const hasLoadedRef = useRef(false);
   const listenersAttachedRef = useRef(false);
+  const [radioWheel, setRadioWheel] = useState(60);
   const [playing, setPlaying] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -505,17 +507,8 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
             ) : (
               <>
                 <p className="text-sm text-accent-600 mb-2">توقف تلقائي بعد:</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {SLEEP_TIMER_OPTIONS.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setSleepTimer(m)}
-                      className="py-2.5 px-2 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl"
-                    >
-                      {SLEEP_LABELS[m]}
-                    </button>
-                  ))}
-                </div>
+                <TimerWheel items={SLEEP_TIMER_OPTIONS.map((m): [number, string] => [m, SLEEP_LABELS[m]])} initialIndex={1} onChange={setRadioWheel} />
+                <button onClick={() => setSleepTimer(radioWheel)} className="mt-3 w-full py-3 grad-emerald-door text-white font-bold rounded-xl polish-press">ابدأ المؤقت</button>
               </>
             )}
           </div>

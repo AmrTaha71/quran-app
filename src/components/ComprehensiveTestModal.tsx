@@ -4,6 +4,7 @@
 // (the app cannot grade voice yet). Results are kept locally so the user
 // can see the score and its change over time.
 import DrumPicker from './DrumReel';
+import { unitPickLabel } from '../lib/testRanges';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { SURAHS, surahLabel } from '../lib/surahs';
@@ -184,7 +185,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 onChange={(n) => setNum(n)}
                 options={Array.from({ length: SCOPE_COUNT[scope] }, (_, i) => i + 1).map((n) => ({
                   value: n,
-                  label: scope === 'surah' ? `${n} - ${surahName(n)}` : `${SCOPE_LABEL[scope]} ${n}`,
+                  label: scope === 'surah' ? `${n} - ${surahName(n)}` : unitPickLabel(scope, n),
                 }))}
               />
             </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio, ExternalLink as HubExternal } from 'lucide-react';
 import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
+import DrumSelect from '../components/DrumSelect';
 import ClockWheel from '../components/ClockWheel';
 import {
   Check,
@@ -2526,25 +2527,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           <label className="block font-medium text-accent-800 mb-2" htmlFor="listen-surah">
             اختر السورة
           </label>
-          <select
+          <DrumSelect
             id="listen-surah"
+            label="اختر السورة"
             value={surah}
             disabled={locked}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isInteger(n) && n >= 1 && n <= 114) {
-                setSurah(n);
-                setCurrent(1);
-              }
-            }}
-            className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50 polish-press"
-          >
-            {SURAHS.map((s) => (
-              <option key={s.no} value={s.no}>
-                {s.no} — {s.name}
-              </option>
-            ))}
-          </select>
+            onChange={(n) => { setSurah(n); setCurrent(1); }}
+            options={SURAHS.map((x) => ({ value: x.no, label: `${x.no} — ${x.name}` }))}
+          />
 
           {/* Picker order (restructured): surah, then Group 1 —
               حفص FIRST, then Group 2 — الروايات, then the pace
@@ -2758,51 +2748,30 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-surah">
                 ابدأ من سورة
               </label>
-              <select
+              <DrumSelect
                 id="journey-surah"
+                label="ابدأ من سورة"
                 value={surah}
                 disabled={locked}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 1 && n <= 114) {
-                    setSurah(n);
-                    setCurrent(1);
-                  }
-                }}
-                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50 polish-press"
-              >
-                {SURAHS.map((s) => (
-                  <option key={s.no} value={s.no}>
-                    {s.no} — {s.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(n) => { setSurah(n); setCurrent(1); }}
+                options={SURAHS.map((x) => ({ value: x.no, label: `${x.no} — ${x.name}` }))}
+              />
             </div>
             <div>
               <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-reciter">
                 قارئ البداية
               </label>
-              <select
+              <DrumSelect
                 id="journey-reciter"
+                label="قارئ البداية"
                 value={journeyReciterForMode()}
                 disabled={locked}
-                onChange={(e) => changeJourneyReciter(e.target.value)}
-                className="w-full py-3 px-3 bg-white border border-hairline-emerald rounded-xl text-accent-800 disabled:opacity-50 polish-press"
-              >
-                {RECITERS.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-                {/* Juhani (hadr) is a single-khatma voice ONLY: the
-                    varied/tadabbur rotation is % 8 over the
-                    original 8, so this option never renders there. */}
-                {hubView === 'single' && (
-                  <option key={JUHANI_RECITER_ID} value={JUHANI_RECITER_ID}>
-                    {JUHANI_RECITER_NAME}
-                  </option>
-                )}
-              </select>
+                onChange={changeJourneyReciter}
+                options={[
+                  ...RECITERS.map((r) => ({ value: r.id as string, label: r.name })),
+                  ...(hubView === 'single' ? [{ value: JUHANI_RECITER_ID as string, label: JUHANI_RECITER_NAME }] : []),
+                ]}
+              />
               {hubView === 'single' && journeyReciterForMode() === JUHANI_RECITER_ID && (
                 <p className="text-xs text-accent-600 mt-2">
                   صوت الجهني حدر — ملف السورة كامل بسرعته الطبيعية؛ السرعة الإلكترونية لا تنطبق

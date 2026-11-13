@@ -91,3 +91,16 @@ export function rangeSummary(start: RangePoint, end: RangePoint): string {
   const n = end.global - start.global + 1;
   return `من سورة ${surahName(start.surah)} آية ${start.ayah} إلى سورة ${surahName(end.surah)} آية ${end.ayah} — ${n.toLocaleString('ar-EG')} آية`;
 }
+
+const ORD = ['الأول', 'الثاني', 'الثالث', 'الرابع'];
+
+/** Reel label (2026-11-13): hizb and rub are never counted to 60 / 240 on
+ *  their own; they are said inside their juz — «الحزب الأول — الجزء 16»,
+ *  «الربع الثالث — الحزب الأول — الجزء 16». */
+export function unitPickLabel(kind: UnitKind, n: number): string {
+  if (kind === 'surah') return `${n} - ${surahName(n)}`;
+  if (kind === 'juz') return `الجزء ${n}`;
+  if (kind === 'hizb') return `الحزب ${ORD[(n - 1) % 2]} — الجزء ${Math.ceil(n / 2)}`;
+  const hizb = Math.ceil(n / 4);
+  return `الربع ${ORD[(n - 1) % 4]} — الحزب ${ORD[(hizb - 1) % 2]} — الجزء ${Math.ceil(hizb / 2)}`;
+}

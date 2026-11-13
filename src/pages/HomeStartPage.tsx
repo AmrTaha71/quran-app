@@ -7,6 +7,7 @@ import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast, Compass, Landmark } from 'lucide-react';
 import QiblaSheet from '../components/QiblaSheet';
+import DrumSelect from '../components/DrumSelect';
 import { nearestMosqueUrl } from '../lib/qibla';
 import { useHint } from '../lib/hints';
 import BigScreenSheet from '../components/BigScreenSheet';
@@ -465,18 +466,10 @@ export default function HomeStartPage({ session, onNavigate }: {
                     aria-label="رقم السورة"
                     className="w-24 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-center text-lg font-bold polish-focus"
                   />
-                  <select
-                    value={pickerSurah}
-                    onChange={(e) => onSurahSelect(Number(e.target.value))}
-                    aria-label="اسم السورة"
-                    className="flex-1 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-base font-semibold polish-focus"
-                  >
-                    {SURAHS.map((s) => (
-                      <option key={s.no} value={s.no}>
-                        {toArabicIndic(s.no)} — {s.name} ({surahPlace(s.no)})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1 min-w-0">
+                    <DrumSelect label="اسم السورة" value={pickerSurah} onChange={onSurahSelect}
+                      options={SURAHS.map((s) => ({ value: s.no, label: `${toArabicIndic(s.no)} — ${s.name} (${surahPlace(s.no)})` }))} />
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <input

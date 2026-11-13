@@ -1,4 +1,5 @@
 import { roomLabel } from '../lib/roomLabel';
+import DrumSelect from '../components/DrumSelect';
 import Hint from '../components/Hint';
 import { useEffect, useRef, useState } from 'react';
 import type { Session, RealtimeChannel } from '@supabase/supabase-js';
@@ -751,11 +752,9 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
       <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 space-y-3">
         <p className="text-lg font-bold text-amber-900">ختمة بصوت القارئ على الشاشة</p>
         <p className="text-xs text-amber-800">التلفزيون يقرأ من الآية الحالية، والكلمة اللي بتتقري بتنوّر عشان العين تمشي معاها.</p>
-        <select value={pos.khatma?.reciter ?? CORR_RECITERS[0].folder}
-          onChange={(e) => sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { reciter: e.target.value, playing: pos.khatma?.playing ?? false } })}
-          className="w-full min-h-[44px] rounded-lg border px-2 bg-white">
-          {CORR_RECITERS.map((r) => <option key={r.folder} value={r.folder}>{r.name}</option>)}
-        </select>
+        <DrumSelect label="القارئ" value={pos.khatma?.reciter ?? CORR_RECITERS[0].folder}
+          onChange={(v) => sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { reciter: v, playing: pos.khatma?.playing ?? false } })}
+          options={CORR_RECITERS.map((r) => ({ value: r.folder, label: r.name }))} />
         <div className="grid grid-cols-3 gap-2">
           <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { reciter: pos.khatma?.reciter ?? CORR_RECITERS[0].folder, playing: !pos.khatma?.playing } })}
             className="min-h-[48px] rounded-xl bg-amber-500 text-white font-bold">{pos.khatma?.playing ? 'إيقاف مؤقت' : 'شغّل'}</button>
@@ -835,16 +834,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           </button>
         </div>
         <div className="flex gap-2">
-          <select
-            aria-label="اختر السورة"
-            value={pos.surah}
-            onChange={(e) => sendPos({ surah: Number(e.target.value), ayah: 1 })}
-            className="flex-1 border rounded-lg px-2 py-2 bg-white"
-          >
-            {SURAHS.map((s) => (
-              <option key={s.no} value={s.no}>{s.no}. {s.name}</option>
-            ))}
-          </select>
+          <div className="flex-1 min-w-0">
+            <DrumSelect label="اختر السورة" value={pos.surah} onChange={(n) => sendPos({ surah: n, ayah: 1 })}
+              options={SURAHS.map((s) => ({ value: s.no, label: `${s.no}. ${s.name}` }))} />
+          </div>
           <input
             aria-label="رقم الآية"
             type="number"
