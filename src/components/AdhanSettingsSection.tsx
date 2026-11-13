@@ -349,7 +349,6 @@ export default function AdhanSettingsSection() {
           </button>
           {settings.sound === 'takbir' && <AdhanVoicePicker />}
         </div>
-        </div>
         <button
           onClick={toggleTest}
           className="w-full mt-3 py-3 bg-white border-2 border-emerald-500 text-emerald-700 text-base font-bold rounded-xl transition-smooth polish-press"
