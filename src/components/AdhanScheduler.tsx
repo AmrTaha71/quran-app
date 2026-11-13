@@ -12,6 +12,7 @@ import {
 } from '../lib/adhan';
 import FajrAlarmOverlay from './FajrAlarmOverlay';
 import { loadRecordings } from '../lib/alarmRecordings';
+import { cancelTodayAlarmChain, isNativeApp, listenNativeAlarmTaps, rescheduleNativeAlarms } from '../lib/nativeAlarm';
 import { loadFajrAlarm, stopNightMode } from '../lib/fajrAlarm';
 import { isValidAdhanPrayerKey, prayerLabel } from '../lib/adhanPush';
 
@@ -29,7 +30,9 @@ export default function AdhanScheduler() {
   useEffect(() => {
     const on = () => setAlarm(true);
     window.addEventListener('fajr-alarm-test', on);
-    return () => window.removeEventListener('fajr-alarm-test', on);
+    const off = listenNativeAlarmTaps();
+    if (isNativeApp()) void rescheduleNativeAlarms();
+    return () => { window.removeEventListener('fajr-alarm-test', on); off(); };
   }, []);
 
   useEffect(() => {
@@ -115,7 +118,7 @@ export default function AdhanScheduler() {
     return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
   }, []);
 
-  if (alarm) return <FajrAlarmOverlay mode={loadFajrAlarm() === 'smart' ? 'smart' : 'simple'} onDone={() => { setAlarm(false); stopNightMode(); }} />;
+  if (alarm) return <FajrAlarmOverlay mode={loadFajrAlarm() === 'smart' ? 'smart' : 'simple'} onDone={() => { setAlarm(false); stopNightMode(); void cancelTodayAlarmChain(); }} />;
   if (!banner) return null;
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md" dir="rtl">
