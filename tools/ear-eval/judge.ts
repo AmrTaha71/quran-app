@@ -25,6 +25,9 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
       const i = Math.floor(rnd() * words.length); const nw = words[i].norm; if (nw.length < 3) continue;
       const p = Math.floor(rnd() * nw.length); const alts = CONF[nw[p]]; if (!alts) continue;
       const r = alts[Math.floor(rnd() * alts.length)];
+      // A swap that lands next to the same letter just collapses into a deletion in the
+      // skeleton (يوقنون→ييقنون = يقنون): that is not a one-letter swap, skip it.
+      if (nw[p - 1] === r || nw[p + 1] === r || nw[p - 1] === nw[p] || nw[p + 1] === nw[p]) continue;
       list.push({ i, norm: nw.slice(0, p) + r + nw.slice(p + 1), type: nw[p] + '>' + r + (p === nw.length - 1 ? '#end' : '') }); break;
     }
   }
