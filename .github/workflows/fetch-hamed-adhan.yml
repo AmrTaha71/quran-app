@@ -1,0 +1,21 @@
+name: fetch-hamed-adhan
+# One-off: copies Sheikh Hamed's Fajr adhan (CC BY-NC-ND 3.0, unmodified) into public/audio.
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p public/audio
+          curl -fL --retry 3 -o public/audio/hamed-fajr-mahmoudeya.mp3 https://www.repository.cam.ac.uk/bitstreams/89e27493-5010-4d23-a754-d60b4584b016/download
+          ls -la public/audio
+          file public/audio/hamed-fajr-mahmoudeya.mp3
+      - run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add public/audio
+          git commit -m "Add Sheikh Hamed Fajr adhan (CC BY-NC-ND 3.0, unmodified)" || echo none
+          git push
