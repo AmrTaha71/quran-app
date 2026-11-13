@@ -6,10 +6,10 @@
 // per step (Web Audio, no file). DrumPicker = drop-in for WheelPicker.
 import { useEffect, useRef, useState } from 'react';
 
-export const DRUM_ITEM_H = 34;
-const VIEW_H = 196;
+export const DRUM_ITEM_H = 32;
+const VIEW_H = 176;
 const PAD = (VIEW_H - DRUM_ITEM_H) / 2;
-const STEP_DEG = 21;
+const STEP_DEG = 24;
 const RADIUS = Math.round(DRUM_ITEM_H / 2 / Math.tan((STEP_DEG / 2) * (Math.PI / 180)));
 
 // Two looks (2026-11-12): 'range' = cream, dark-red bold choice, grey rest;
@@ -17,8 +17,8 @@ const RADIUS = Math.round(DRUM_ITEM_H / 2 / Math.tan((STEP_DEG / 2) * (Math.PI /
 export type DrumVariant = 'range' | 'clock';
 const LOOK = {
   // range: cream face, lit gold bar (light on top, dark below) with dark-emerald choice.
-  range: { bg: '#FBF7EE', band: 'linear-gradient(180deg,#F6E3A1 0%,#E2B94F 52%,#C48F22 100%)', sel: '#06301F', rest: '#7E9F8E', fade: '#FBF7EE' },
-  clock: { bg: 'transparent', band: 'transparent', sel: '#FBF3DC', rest: '#7FA593', fade: '' },
+  range: { bg: '#FBF7EE', band: 'rgba(212,170,70,0.20)', sel: '#06301F', rest: '#6F8F7E', fade: '#FBF7EE' },
+  clock: { bg: 'transparent', band: 'rgba(255,255,255,0.10)', sel: '#FBF3DC', rest: '#7FA593', fade: '' },
 } as const;
 
 let sharedCtx: AudioContext | null = null;
@@ -99,12 +99,12 @@ export function DrumReel({
       <div
         className="absolute inset-x-1 top-1/2 -translate-y-1/2 rounded-xl pointer-events-none"
         style={{
-          height: DRUM_ITEM_H + 6,
+          height: DRUM_ITEM_H + 2,
           background: look.band,
-          boxShadow: variant === 'range' ? '0 3px 10px rgba(122,84,10,.35), inset 0 1px 0 rgba(255,255,255,.65), inset 0 -2px 3px rgba(122,84,10,.35)' : undefined,
+          borderRadius: 14,
         }}
       />
-      <div className="absolute inset-0 pointer-events-none" style={{ perspective: 600 }} aria-hidden>
+      <div className="absolute inset-0 pointer-events-none" style={{ perspective: 520 }} aria-hidden>
         <div className="absolute inset-x-0 top-1/2" style={{ transformStyle: 'preserve-3d' }}>
           {labels.map((l, i) => {
             const d = i - pos;
@@ -119,10 +119,12 @@ export function DrumReel({
                   height: DRUM_ITEM_H,
                   transform: `rotateX(${-d * STEP_DEG}deg) translateZ(${RADIUS}px)`,
                   backfaceVisibility: 'hidden',
-                  fontSize: sel ? '1.55rem' : '1.1rem',
-                  fontWeight: sel ? 700 : 500,
+                  // Same size on every row: the cylinder alone shrinks and curves
+                  // the far rows (as in the iOS picker). Only colour/weight mark the choice.
+                  fontSize: '1.45rem',
+                  fontWeight: sel ? 700 : 600,
                   color: sel ? look.sel : look.rest,
-                  opacity: sel ? 1 : Math.max(0.3, 1 - 0.17 * Math.abs(d)),
+                  opacity: sel ? 1 : Math.max(0.1, 1 - 0.27 * Math.abs(d)),
                 }}
               >
                 {l}
@@ -133,8 +135,8 @@ export function DrumReel({
       </div>
       {look.fade && (
         <>
-          <div className="absolute inset-x-0 top-0 h-14 pointer-events-none" style={{ background: `linear-gradient(${look.fade}, ${look.fade}00)` }} />
-          <div className="absolute inset-x-0 bottom-0 h-14 pointer-events-none" style={{ background: `linear-gradient(${look.fade}00, ${look.fade})` }} />
+          <div className="absolute inset-x-0 top-0 h-10 pointer-events-none" style={{ background: `linear-gradient(${look.fade}, ${look.fade}00)` }} />
+          <div className="absolute inset-x-0 bottom-0 h-10 pointer-events-none" style={{ background: `linear-gradient(${look.fade}00, ${look.fade})` }} />
         </>
       )}
       {/* input layer */}
