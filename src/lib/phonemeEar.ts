@@ -229,16 +229,29 @@ export class PhonemeStream {
   private buf = '';
   pointer = 0;
   constructor(private words: PhonWord[]) {}
-  push(raw: string): string { this.buf = (this.buf + phonSkel(raw)).replace(/(.)\1+/g, '$1'); return this.step(false); }
-  finish(): string { const t = this.step(true); this.buf = ''; return t; }
+  private tbuf: number[] = []; // audio time (s) of every letter in buf
+  private lastT = 0;
+  push(raw: string): string { return this.pushTimed([{ s: raw, t: this.lastT }]); }
+  /** Same as push, but every decoded token carries its audio time. */
+  pushTimed(parts: { s: string; t: number }[]): string {
+    for (const p of parts) {
+      this.lastT = p.t;
+      for (const ch of phonSkel(p.s)) {
+        if (this.buf.length && this.buf[this.buf.length - 1] === ch) continue;
+        this.buf += ch; this.tbuf.push(p.t);
+      }
+    }
+    return this.step(false);
+  }
+  finish(): string { const t = this.step(true); this.buf = ''; this.tbuf = []; return t; }
   private step(final: boolean): string {
     const H = this.buf;
     if (H.length < 2) return '';
     const a = alignHeard(H, this.words, this.pointer);
     if (!a || a.cost > Math.max(3, 0.45 * H.length)) {
       // Nothing sensible: keep a short tail only, so noise cannot grow forever.
-      if (H.length > 40) this.buf = H.slice(-12);
-      if (final) this.buf = '';
+      if (H.length > 40) { this.buf = H.slice(-12); this.tbuf = this.tbuf.slice(-12); }
+      if (final) { this.buf = ''; this.tbuf = []; }
       return '';
     }
     const upto = final ? a.lastW : a.lastW - 1;
@@ -256,11 +269,31 @@ export class PhonemeStream {
     }
     if (upto < a.firstW) return '';
     const out: string[] = [];
-    for (let w = a.firstW; w <= upto; w++) { const t = judge(this.words, w, a.per.get(w)); if (t) out.push(t); }
+    // Audio span of every word the ear did hear (first / last letter time).
+    const span = new Map<number, { a: number; b: number }>();
+    for (let i = 0; i < H.length; i++) {
+      const w = a.owner[i]; const t = this.tbuf[i];
+      if (w < 0 || t === undefined) continue;
+      const e = span.get(w);
+      if (!e) span.set(w, { a: t, b: t }); else { if (t < e.a) e.a = t; if (t > e.b) e.b = t; }
+    }
+    for (let w = a.firstW; w <= upto; w++) {
+      let t = judge(this.words, w, a.per.get(w));
+      // 2026-11-13: ONE word the ear never heard between two heard words: if the
+      // silent gap between its neighbours is long enough to have held the word,
+      // the model missed a quiet word («طباقا» once in four reads); he did not
+      // skip it. A real skip leaves only a short gap.
+      if (!t && span.get(w - 1) && span.get(w + 1) && !span.has(w)) {
+        const gap = span.get(w + 1)!.a - span.get(w - 1)!.b;
+        if (gap >= 0.25 + 0.1 * this.words[w].skel.length) t = this.words[w].norm;
+      }
+      if (t) out.push(t);
+    }
     // Carry the heard letters of the words not committed yet.
     let cut = H.length;
     for (let i = 0; i < H.length; i++) if (a.owner[i] > upto) { cut = i; break; }
     this.buf = final ? '' : H.slice(cut);
+    this.tbuf = final ? [] : this.tbuf.slice(cut);
     this.pointer = upto + 1;
     return out.join(' ');
   }

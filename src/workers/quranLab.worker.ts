@@ -27,6 +27,7 @@ let fb = new OnlineFbank();
 let feats = new Float32Array(0); // pending feature frames (flattened)
 let prevId = -1;
 let busy = Promise.resolve();
+let chunkNo = 0; // chunks decoded since reset: gives every token an audio time
 
 ort.env.wasm.wasmPaths = '/ort/';
 ort.env.wasm.numThreads = (self as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated
@@ -77,6 +78,7 @@ function resetStates() {
   fb = new OnlineFbank();
   feats = new Float32Array(0);
   prevId = -1;
+  chunkNo = 0;
 }
 
 async function load() {
@@ -101,6 +103,7 @@ async function runChunks(final: boolean) {
   const { T, shift, blank } = spec;
   const frames = () => feats.length / FBANK_DIM;
   const ids: number[] = [];
+  const parts: { s: string; t: number }[] = [];
   let text = '';
   let chunks = 0;
   let ms = 0;
@@ -116,6 +119,7 @@ async function runChunks(final: boolean) {
     const out = await session.run(feeds);
     ms += performance.now() - t0;
     chunks++;
+    const thisChunk = chunkNo; chunkNo++;
     for (const s of spec.states) states[s.name] = out[`new_${s.name}`];
     const lp = out.log_probs;
     const [, nf, v] = lp.dims as number[];
@@ -124,14 +128,18 @@ async function runChunks(final: boolean) {
       let best = 0;
       let bv = -Infinity;
       for (let k = 0; k < v; k++) { const val = d[t * v + k]; if (val > bv) { bv = val; best = k; } }
-      if (best !== prevId && best !== blank) { ids.push(best); text += tokens[String(best)] ?? ''; }
+      if (best !== prevId && best !== blank) {
+        ids.push(best); const tk = tokens[String(best)] ?? ''; text += tk;
+        // audio time in seconds (10 ms input frames, `shift` of them per chunk)
+        parts.push({ s: tk, t: (thisChunk * shift + ((t + 0.5) / nf) * shift) * 0.01 });
+      }
       prevId = best;
     }
     const used = Math.min(shift, frames());
     feats = feats.slice(used * FBANK_DIM);
     if (final && frames() < T - shift) break;
   }
-  if (chunks) post({ type: 'tokens', text, ids, chunkMs: Math.round(ms / chunks), chunks });
+  if (chunks) post({ type: 'tokens', text, ids, parts, chunkMs: Math.round(ms / chunks), chunks });
 }
 
 self.onmessage = (e: MessageEvent) => {

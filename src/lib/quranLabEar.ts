@@ -148,7 +148,7 @@ export class QuranLabRecognition {
     if (m.type === 'tokens') {
       if (m.text && !this.heardAny) { this.heardAny = true; this.onspeechstart?.(); }
       if (this.ps && m.text) {
-        this.emit(this.ps.push(m.text));
+        this.emit(Array.isArray(m.parts) ? this.ps.pushTimed(m.parts) : this.ps.push(m.text));
         // The last aligned word stays pending until more speech arrives, so
         // the final word of an ayah («السعير») never settled and was marked
         // missing. After a short quiet spell, settle it.
