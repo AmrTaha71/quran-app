@@ -44,7 +44,7 @@ export default function FajrAlarmOverlay({ mode, onDone }: { mode: FajrAlarmMode
         <button onClick={() => { stopRef.current?.(); onDone(); }} className="mt-8 px-10 py-4 bg-white text-emerald-800 text-xl font-bold rounded-2xl">إيقاف المنبه</button>
       ) : (
         <>
-          <p className="text-emerald-100 mb-4">حلّ الأسئلة الثلاثة ({step + 1}/3) عشان المنبه يقف</p>
+          <p className="text-emerald-100 mb-4">إجابات صحيحة: {step}/3 — الغلط ما بيرجّعش للصفر ومفيش حد للمحاولات</p>
           <div className="w-full max-w-sm bg-white text-accent-800 rounded-2xl p-5 text-center">
             {ch.kind === 'math' && (<><p className="mb-2 font-bold">كم ناتج:</p><p className="text-3xl font-bold mb-3" dir="ltr">{ch.q}</p></>)}
             {ch.kind === 'code' && (<><p className="mb-2 font-bold">اكتب الرقم التالي:</p><p className="text-4xl font-bold tracking-widest mb-3" dir="ltr">{ch.code}</p></>)}
@@ -65,7 +65,7 @@ export default function FajrAlarmOverlay({ mode, onDone }: { mode: FajrAlarmMode
                 <button onClick={submit} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">تأكيد</button>
               </>
             )}
-            {wrong && <p className="text-red-600 font-bold mt-3">إجابة غلط — سؤال جديد</p>}
+            {wrong && <p className="text-red-600 font-bold mt-3">إجابة غلط — جرّب سؤال جديد (المحاولات مفتوحة)</p>}
           </div>
           <button onClick={() => setMuted(true)} disabled={muted} className="mt-5 px-6 py-2 bg-emerald-700 rounded-xl text-sm disabled:opacity-60">
             {muted ? `هيرن تاني بعد ${left} ث` : 'كتم دقيقة (هيرن تاني)'}
