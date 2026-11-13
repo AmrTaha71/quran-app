@@ -44,7 +44,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [mistakes, setMistakes] = useState(0);
   const [results, setResults] = useState<boolean[]>([]);
   const [surah, setSurah] = useState(1);
-  const [ayah, setAyah] = useState('');
+  const [ayah, setAyah] = useState('1');
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const current = queue[idx];
@@ -66,7 +66,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   function resetQuestion() {
     setFound(new Set());
     setMistakes(0);
-    setAyah('');
+    setAyah('1');
     setFeedback(null);
   }
 
@@ -93,7 +93,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
     const next = new Set(found);
     next.add(key);
     setFound(next);
-    setAyah('');
+    setAyah('1');
     if (next.size === current.answers.length) {
       playCelebrate();
       setFeedback({ ok: true, text: 'ممتاز! جبت الكل' });
@@ -168,10 +168,8 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
                 <div className="flex-1 min-w-0">
                   <DrumSelect label="السورة" value={surah} onChange={setSurah} options={SURAHS.map((s) => ({ value: s.no, label: `${s.no}. ${s.name}` }))} />
                 </div>
-                <input inputMode="numeric" value={ayah} onChange={(e) => setAyah(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-                  placeholder="رقم الآية"
-                  className="w-28 min-h-[52px] rounded-xl border-2 border-emerald-700 px-2 text-center text-lg bg-white" />
+                <div className="w-32 shrink-0"><DrumSelect label="رقم الآية" value={Number(ayah) || 1} onChange={(n) => setAyah(String(n))}
+                  options={Array.from({ length: SURAH_AYAH_COUNTS[surah - 1] || 1 }, (_, k) => ({ value: k + 1, label: `آية ${k + 1}` }))} /></div>
                 <button onClick={submit} className="min-h-[52px] px-4 grad-emerald-door text-white font-bold rounded-xl polish-press">تحقق</button>
               </div>
             )}

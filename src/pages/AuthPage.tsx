@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import DrumSelect from '../components/DrumSelect';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/LanguageContext';
 import { LANGUAGES, COUNTRY_CODES } from '../lib/translations';
@@ -666,12 +667,7 @@ export default function AuthPage({
               <div>
                 <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('country')} / {t('phone')}</label>
                 <div className="flex gap-2">
-                  <select value={countryCode} onChange={(e) => setCountryCode(e.target.value)}
-                    className="px-2 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500">
-                    {COUNTRY_CODES.map((c) => (
-                      <option key={c.code} value={c.code}>{c.flag} {c.code}</option>
-                    ))}
-                  </select>
+                  <div className="w-28 shrink-0"><DrumSelect label="كود الدولة" value={countryCode} onChange={setCountryCode} options={COUNTRY_CODES.map((c) => ({ value: c.code, label: `${c.flag} ${c.code}` }))} /></div>
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                     placeholder={t('phone')}
                     className="flex-1 px-3 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />

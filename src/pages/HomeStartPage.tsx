@@ -447,30 +447,16 @@ export default function HomeStartPage({ session, onNavigate }: {
                 </div>
                 <p className="font-bold text-ink text-base mb-2">أو اختر السورة والآية</p>
                 <div className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={pickerSurahText}
-                    onChange={(e) => onSurahNoChange(e.target.value)}
-                    placeholder="رقم السورة"
-                    aria-label="رقم السورة"
-                    className="w-24 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-center text-lg font-bold polish-focus"
-                  />
                   <div className="flex-1 min-w-0">
                     <DrumSelect label="اسم السورة" value={pickerSurah} onChange={onSurahSelect}
                       options={SURAHS.map((s) => ({ value: s.no, label: `${toArabicIndic(s.no)} — ${s.name} (${surahPlace(s.no)})` }))} />
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={pickerAyahText}
-                    onChange={(e) => onAyahNoChange(e.target.value)}
-                    placeholder="رقم الآية"
-                    aria-label="رقم الآية"
-                    className="w-24 py-3 px-3 rounded-xl border border-emerald-200 bg-white text-ink text-center text-lg font-bold polish-focus"
-                  />
+                  <div className="w-32 shrink-0">
+                    <DrumSelect label="رقم الآية" value={pickerAyah} onChange={(n) => onAyahNoChange(toArabicIndic(n))}
+                      options={Array.from({ length: pickerMaxAyah }, (_, k) => ({ value: k + 1, label: `آية ${toArabicIndic(k + 1)}` }))} />
+                  </div>
                   <button
                     onPointerDown={pressFeedback}
                     onClick={startFromPicker}

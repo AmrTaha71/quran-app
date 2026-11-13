@@ -6030,42 +6030,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">لهجة الصوت</span>
-                      <select aria-label="لهجة الصوت" value={recTags.dialect} onChange={(e) => setRecTags((t) => ({ ...t, dialect: e.target.value }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        <option value="">اختر…</option>
-                        <option value="مصري">مصري</option>
-                        <option value="شامي">شامي</option>
-                        <option value="خليجي">خليجي</option>
-                        <option value="مغربي">مغربي</option>
-                        <option value="فصحى">فصحى</option>
-                        <option value="أخرى">أخرى</option>
-                      </select>
+                      <DrumSelect label="لهجة الصوت" value={recTags.dialect as string} onChange={(v) => setRecTags((t) => ({ ...t, dialect: v }))} options={[{ value: "", label: "اختر…" },{ value: "مصري", label: "مصري" },{ value: "شامي", label: "شامي" },{ value: "خليجي", label: "خليجي" },{ value: "مغربي", label: "مغربي" },{ value: "فصحى", label: "فصحى" },{ value: "أخرى", label: "أخرى" }]} />
                     </label>
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">جنس الصوت</span>
-                      <select aria-label="جنس الصوت" value={recTags.gender} onChange={(e) => setRecTags((t) => ({ ...t, gender: e.target.value }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        <option value="">اختر…</option>
-                        <option value="male">رجالي</option>
-                        <option value="female">نسائي</option>
-                      </select>
+                      <DrumSelect label="جنس الصوت" value={recTags.gender as string} onChange={(v) => setRecTags((t) => ({ ...t, gender: v }))} options={[{ value: "", label: "اختر…" },{ value: "male", label: "رجالي" },{ value: "female", label: "نسائي" }]} />
                     </label>
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">سرعة التلاوة</span>
-                      <select aria-label="سرعة التلاوة" value={recTags.pace} onChange={(e) => setRecTags((t) => ({ ...t, pace: e.target.value as VoiceTags['pace'] }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        <option value="slow">بطيئة</option>
-                        <option value="normal">عادية</option>
-                        <option value="fast">سريعة</option>
-                      </select>
+                      <DrumSelect label="سرعة التلاوة" value={recTags.pace as string} onChange={(v) => setRecTags((t) => ({ ...t, pace: v as VoiceTags['pace'] }))} options={[{ value: "slow", label: "بطيئة" },{ value: "normal", label: "عادية" },{ value: "fast", label: "سريعة" }]} />
                     </label>
                     <label className="block">
                       <span className="text-sm font-medium text-accent-700">ضجيج المكان</span>
-                      <select aria-label="ضجيج المكان" value={recTags.noise} onChange={(e) => setRecTags((t) => ({ ...t, noise: e.target.value as VoiceTags['noise'] }))}
-                        className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                        <option value="low">هادئ</option>
-                        <option value="medium">متوسط</option>
-                      </select>
+                      <DrumSelect label="ضجيج المكان" value={recTags.noise as string} onChange={(v) => setRecTags((t) => ({ ...t, noise: v as VoiceTags['noise'] }))} options={[{ value: "low", label: "هادئ" },{ value: "medium", label: "متوسط" }]} />
                     </label>
                   </div>
                   <div>
@@ -6171,9 +6148,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <h2 className="font-semibold text-accent-800">بالجزء</h2>
                         <label className="block">
                           <span className="text-sm font-medium text-accent-700">رقم الجزء (١–٣٠)</span>
-                          <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={juzNum}
-                            onChange={(e) => setJuzNum(Math.max(1, Math.min(30, Number(normalizeDigits(e.target.value)) || 1)))}
-                            className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                          <DrumSelect label="رقم الجزء" value={juzNum} onChange={(v) => setJuzNum(v)} options={Array.from({ length: 30 }, (_, i) => ({ value: i + 1, label: `الجزء ${(i + 1).toLocaleString('ar-EG')}` }))} />
                         </label>
                         <p className="text-sm font-medium text-emerald-700">الجزء {juzNum.toLocaleString('ar-EG')} — {rangeSummary(juzRange.start, juzRange.end)}</p>
                         {recording && juzRange.start.surah !== juzRange.end.surah && (
@@ -6192,9 +6167,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <h2 className="font-semibold text-accent-800">بالصفحة</h2>
                         <label className="block">
                           <span className="text-sm font-medium text-accent-700">رقم الصفحة (١–٦٠٤)</span>
-                          <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={pageNum}
-                            onChange={(e) => setPageNum(Math.max(1, Math.min(TOTAL_MUSHAF_PAGES, Number(normalizeDigits(e.target.value)) || 1)))}
-                            className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                          <DrumSelect label="رقم الصفحة" value={pageNum} onChange={(v) => setPageNum(v)} options={Array.from({ length: TOTAL_MUSHAF_PAGES }, (_, i) => ({ value: i + 1, label: `صفحة ${(i + 1).toLocaleString('ar-EG')}` }))} />
                         </label>
                         {pageRangeState === 'loading' && (
                           <p className="text-sm text-accent-600">جارٍ تحميل حدود الصفحة…</p>
@@ -6223,15 +6196,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <div className="grid grid-cols-2 gap-3">
                           <label className="block">
                             <span className="text-sm font-medium text-accent-700">من آية</span>
-                            <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={from}
-                              onChange={(e) => setFrom(Number(normalizeDigits(e.target.value)) || 1)}
-                              className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                            <DrumSelect label="من آية" value={Math.min(Math.max(1, from), surahCount)} onChange={(v) => setFrom(v)} options={Array.from({ length: surahCount }, (_, i) => ({ value: i + 1, label: (i + 1).toLocaleString('ar-EG') }))} />
                           </label>
                           <label className="block">
                             <span className="text-sm font-medium text-accent-700">إلى آية</span>
-                            <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={to}
-                              onChange={(e) => setTo(Number(normalizeDigits(e.target.value)) || 1)}
-                              className="mt-1 w-full px-3 py-2.5 rounded-xl border border-hairline text-base focus:outline-none focus:ring-2 focus:ring-emerald-300" />
+                            <DrumSelect label="إلى آية" value={Math.min(Math.max(1, to), surahCount)} onChange={(v) => setTo(v)} options={Array.from({ length: surahCount }, (_, i) => ({ value: i + 1, label: (i + 1).toLocaleString('ar-EG') }))} />
                           </label>
                         </div>
                         <p className="text-sm text-accent-600">
