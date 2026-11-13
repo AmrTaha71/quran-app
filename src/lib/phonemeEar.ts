@@ -198,7 +198,7 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   if (sk.length >= 3 && h.length > sk.length) {
     if (h.startsWith(sk)) { const t = h.slice(sk.length); return (pre + words[w].norm + (t.length > 4 ? ` ~${t}` : '')); }
     const tail = h.endsWith(sk) ? sk : sk[0] === 'ء' && h.endsWith(sk.slice(1)) ? sk.slice(1) : '';
-    if (tail) { const t = h.slice(0, h.length - tail.length); return pre + (t.length >= 3 ? `~${t} ` : '') + words[w].norm; }
+    if (tail) { const t = h.slice(0, h.length - tail.length); return pre + (t.length >= 5 ? `~${t} ` : '') + words[w].norm; }
   }
   return `${pre}~${x.heard}`;
 }
