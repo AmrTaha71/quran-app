@@ -31,7 +31,7 @@ export const ALARM_TONES: { id: string; name: string; period: number; notes: Not
 export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number; credit?: string }[] = [
   {
     id: 'hamed-khayr', name: '🕌 الصلاة خير من النوم — الشيخ حامد',
-    url: 'https://www.repository.cam.ac.uk/bitstreams/89e27493-5010-4d23-a754-d60b4584b016/download',
+    url: '/audio/hamed-fajr-mahmoudeya.mp3',
     start: 145, end: 165, // 2:25 → 2:45 (measured by the owner); file itself is not edited (CC BY-NC-ND)
     credit: 'أذان الفجر — الشيخ حامد، مسجد المحمودية، القاهرة. تسجيل: Anna Kipervaser / On Look Films — World Oral Literature Project، جامعة كامبريدج (CC BY-NC-ND 3.0)',
   },
