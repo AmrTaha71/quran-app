@@ -25,9 +25,12 @@ export const ALARM_TONES: { id: string; name: string; period: number; notes: Not
   { id: 'trio', name: 'ثلاثية مرحة', period: 1.4, notes: [[0, 523, .15, 'square', .25], [.2, 659, .15, 'square', .25], [.4, 784, .3, 'square', .25], [.9, 784, .15, 'square', .2]] },
   { id: 'drums', name: 'طبول', period: .9, notes: [[0, 90, .18, 'sine', 1], [.15, 90, .18, 'sine', 1], [.45, 110, .25, 'sine', 1], [.6, 70, .25, 'sine', 1]] },
 ];
+// Voice clips taken from an adhan recording by playback window (file is not cut).
+// Fill with the muezzin file + seconds of «الصلاة خير من النوم» once measured.
+export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number }[] = [];
 export const FAJR_TONE_KEY = 'quran-fajr-tone';
 export function loadFajrTone(): string {
-  try { const v = localStorage.getItem(FAJR_TONE_KEY); return ALARM_TONES.some((t) => t.id === v) ? (v as string) : 'classic'; } catch { return 'classic'; }
+  try { const v = localStorage.getItem(FAJR_TONE_KEY); return (ALARM_TONES.some((t) => t.id === v) || ALARM_CLIPS.some((c) => c.id === v)) ? (v as string) : 'classic'; } catch { return 'classic'; }
 }
 export function saveFajrTone(id: string): void { try { localStorage.setItem(FAJR_TONE_KEY, id); } catch { /* ignore */ } }
 
@@ -95,13 +98,23 @@ export function stopNightMode(): void {
 export function startAlarmTone(toneId: string = loadFajrTone()): () => void {
   const night = shared;
   let el: HTMLAudioElement;
+  let onTime: (() => void) | null = null;
   try {
     el = night ?? new Audio();
-    el.src = toneUrl(toneId); el.loop = true; el.volume = 1;
+    const clip = ALARM_CLIPS.find((c) => c.id === toneId);
+    if (clip) {
+      el.src = clip.url; el.loop = false; el.volume = 1;
+      const seek = () => { try { el.currentTime = clip.start; } catch { /* retry */ } };
+      el.addEventListener('loadedmetadata', seek, { once: true });
+      onTime = () => { if (el.currentTime >= clip.end) seek(); };
+      el.addEventListener('timeupdate', onTime);
+      el.addEventListener('ended', seek);
+    } else { el.src = toneUrl(toneId); el.loop = true; el.volume = 1; }
     void el.play().catch(() => {});
   } catch { return () => {}; }
   return () => {
     try {
+      if (onTime) el.removeEventListener('timeupdate', onTime);
       if (night && shared === night) { el.src = silentUrl(); el.loop = true; void el.play().catch(() => {}); }
       else el.pause();
     } catch { /* ignore */ }

@@ -1,4 +1,4 @@
-import { isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
+import { ALARM_CLIPS, isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
@@ -474,7 +474,7 @@ function FajrAlarmSetting() {
           <div>
             <p className="font-semibold text-accent-800 mt-1 mb-1 text-sm">نغمة المنبه (اضغط للتجربة)</p>
             <div className="grid grid-cols-3 gap-1.5">
-              {ALARM_TONES.map((t) => (
+              {[...ALARM_CLIPS, ...ALARM_TONES].map((t) => (
                 <button key={t.id} onClick={() => { setTone(t.id); saveFajrTone(t.id); preview(t.id); }}
                   className={`py-2 rounded-lg text-xs font-bold polish-press ${tone === t.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-700'}`}>{t.name}</button>
               ))}
