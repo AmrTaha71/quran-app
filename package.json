@@ -12,6 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/local-notifications": "^8.3.1",
     "@huggingface/transformers": "^3.8.1",
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.446.0",
@@ -21,6 +24,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
     "@eslint/js": "^9.9.1",
     "@types/qrcode": "1.5.5",
     "@types/react": "^18.3.5",

@@ -12,6 +12,7 @@ import {
 } from '../lib/adhan';
 import FajrAlarmOverlay from './FajrAlarmOverlay';
 import { loadFajrAlarm } from '../lib/fajrAlarm';
+import { cancelTodayAlarmChain, isNativeAndroid, listenNativeAlarmTaps, rescheduleNativeAlarms } from '../lib/nativeAlarm';
 import { isValidAdhanPrayerKey, prayerLabel } from '../lib/adhanPush';
 
 // App-wide foreground adhan scheduler. Mounted once in App, outside
@@ -27,7 +28,9 @@ export default function AdhanScheduler() {
   useEffect(() => {
     const on = () => setAlarm(true);
     window.addEventListener('fajr-alarm-test', on);
-    return () => window.removeEventListener('fajr-alarm-test', on);
+    const off = listenNativeAlarmTaps();
+    if (isNativeAndroid()) void rescheduleNativeAlarms();
+    return () => { window.removeEventListener('fajr-alarm-test', on); off(); };
   }, []);
 
   useEffect(() => {
@@ -113,7 +116,7 @@ export default function AdhanScheduler() {
     return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
   }, []);
 
-  if (alarm) return <FajrAlarmOverlay mode={loadFajrAlarm() === 'smart' ? 'smart' : 'simple'} onDone={() => setAlarm(false)} />;
+  if (alarm) return <FajrAlarmOverlay mode={loadFajrAlarm() === 'smart' ? 'smart' : 'simple'} onDone={() => { setAlarm(false); void cancelTodayAlarmChain(); }} />;
   if (!banner) return null;
   return (
     <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md" dir="rtl">

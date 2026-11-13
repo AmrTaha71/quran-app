@@ -205,7 +205,7 @@ interface AlAdhanDay {
   date: { hijri: { day: string; month: { ar: string }; year: string } };
 }
 
-async function fetchDayFromApi(location: AdhanLocation, dateKey: string): Promise<AdhanDay> {
+export async function fetchDayFromApi(location: AdhanLocation, dateKey: string): Promise<AdhanDay> {
   let url: string;
   if (location.kind === 'gps') {
     url = `https://api.aladhan.com/v1/timings/${toApiDate(dateKey)}?latitude=${location.lat}&longitude=${location.lng}`;

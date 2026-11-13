@@ -1,3 +1,4 @@
+import { enableNativeAlarms, isNativeAndroid, rescheduleNativeAlarms } from '../lib/nativeAlarm';
 import { loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
@@ -349,7 +350,6 @@ export default function AdhanSettingsSection() {
           </button>
           {settings.sound === 'takbir' && <AdhanVoicePicker />}
         </div>
-        </div>
         <button
           onClick={toggleTest}
           className="w-full mt-3 py-3 bg-white border-2 border-emerald-500 text-emerald-700 text-base font-bold rounded-xl transition-smooth polish-press"
@@ -457,7 +457,7 @@ function FajrAlarmSetting() {
       <p className="font-semibold text-accent-800 mb-2">⏰ منبه الفجر</p>
       <div className="grid gap-2">
         {opts.map(([k, t, d]) => (
-          <button key={k} onClick={() => { setMode(k); saveFajrAlarm(k); }}
+          <button key={k} onClick={() => { setMode(k); saveFajrAlarm(k); void rescheduleNativeAlarms(); }}
             className={`text-right p-3 rounded-xl border-2 polish-press ${mode === k ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}>
             <span className="block font-medium text-accent-800">{t}</span>
             <span className="block text-sm text-accent-600">{d}</span>
@@ -466,6 +466,10 @@ function FajrAlarmSetting() {
         {mode !== 'off' && (
           <button onClick={() => window.dispatchEvent(new Event('fajr-alarm-test'))}
             className="w-full py-3 bg-white border-2 border-emerald-500 text-emerald-700 font-bold rounded-xl polish-press">▶ جرّب المنبه الآن</button>
+        )}
+        {isNativeAndroid() && (
+          <button onClick={() => { void enableNativeAlarms().then((r) => alert(r.ok ? 'تم تفعيل الأذان والمنبه حتى والتطبيق مقفول' : 'لازم تسمح بالإشعارات والمنبهات الدقيقة')); }}
+            className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl polish-press">تفعيل الأذان والمنبه والتطبيق مقفول</button>
         )}
         <p className="text-xs text-accent-600">المنبه يرن والتطبيق مفتوح فقط (قيد iOS)، ويحتاج لمسة واحدة على التطبيق بعد فتحه. سيب التطبيق مفتوح والشاشة شغالة بالليل.</p>
       </div>

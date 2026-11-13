@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">تربيطات آيات القرآن</string>
+    <string name="title_activity_main">تربيطات آيات القرآن</string>
+    <string name="package_name">app.tarbitat.quran</string>
+    <string name="custom_url_scheme">app.tarbitat.quran</string>
+</resources>
