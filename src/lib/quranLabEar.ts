@@ -21,6 +21,34 @@ let worker: Worker | null = null;
 let ready: Promise<void> | null = null;
 let listener: ((m: any) => void) | null = null;
 const LOAD_TIMEOUT_MS = 40000;
+
+// Surah 68 log (2026-11-14): after every correction the mic restarted from zero
+// and the first ~0.7 s of the next ayah was lost («ودّوا» never heard, «فستبصر»
+// clipped). Keep the stream + context alive for a while after a session ends so
+// the next start (same test) attaches to a ready, already-flowing mic.
+const KEEP_MS = 25000;
+let keep: { stream: MediaStream; ctx: AudioContext; timer: ReturnType<typeof setTimeout> } | null = null;
+function closeKeep() {
+  if (!keep) return;
+  clearTimeout(keep.timer);
+  try { keep.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+  try { void keep.ctx.close(); } catch { /* ignore */ }
+  keep = null;
+}
+function takeKeep(): { stream: MediaStream; ctx: AudioContext } | null {
+  if (!keep) return null;
+  const k = keep;
+  clearTimeout(k.timer);
+  keep = null;
+  const live = k.stream.getAudioTracks().some((t) => t.readyState === 'live' && !t.muted) && k.ctx.state !== 'closed';
+  if (!live) {
+    try { k.stream.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+    try { void k.ctx.close(); } catch { /* ignore */ }
+    return null;
+  }
+  return { stream: k.stream, ctx: k.ctx };
+}
+if (typeof window !== 'undefined') window.addEventListener('pagehide', closeKeep);
 function resetWorker() {
   try { worker?.terminate(); } catch { /* ignore */ }
   worker = null; ready = null; listener = null;
@@ -103,6 +131,14 @@ export class QuranLabRecognition {
     // the tap that started the test. Created after the awaits in begin() it
     // stays «suspended» on repeat recordings: the mic light is on, no audio
     // reaches the model, and the page waits for a first word forever.
+    const kept = takeKeep();
+    if (kept) {
+      this.ctx = kept.ctx;
+      void this.ctx.resume().catch(() => {});
+      this.streamP = Promise.resolve(kept.stream);
+      void this.begin();
+      return;
+    }
     try {
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       this.ctx = new AC();
@@ -270,9 +306,19 @@ export class QuranLabRecognition {
     if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
     try { this.node?.disconnect(); } catch { /* ignore */ }
     try { this.src?.disconnect(); } catch { /* ignore */ }
-    try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
-    try { void this.streamP?.then((st) => st.getTracks().forEach((t) => t.stop())).catch(() => {}); } catch { /* ignore */ }
-    try { void this.ctx?.close(); } catch { /* ignore */ }
+    if (this.node) this.node.onaudioprocess = null;
+    // A capture that delivered real sound is parked for the next start.
+    const healthy = this.stream && this.ctx && this.frames > 0 && this.maxRms > 1e-6
+      && this.stream.getAudioTracks().some((t) => t.readyState === 'live') && this.ctx.state !== 'closed';
+    if (healthy) {
+      closeKeep();
+      const stream = this.stream!, ctx = this.ctx!;
+      keep = { stream, ctx, timer: setTimeout(closeKeep, KEEP_MS) };
+    } else {
+      try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+      try { void this.streamP?.then((st) => st.getTracks().forEach((t) => t.stop())).catch(() => {}); } catch { /* ignore */ }
+      try { void this.ctx?.close(); } catch { /* ignore */ }
+    }
     this.node = null; this.src = null; this.stream = null; this.ctx = null;
   }
 

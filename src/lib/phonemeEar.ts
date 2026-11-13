@@ -212,7 +212,8 @@ function judge(words: PhonWord[], w: number, x: WordAl | undefined): string | nu
   // letter of a word («فستبصر»→«ستبصر», «بأيكم»→«أيكم», «همّاز»→«ماز», «منّاع»→«ناع»).
   // Only that one letter missing and everything else exact is not a mistake.
   // A wrong or swapped letter still counts (bad > 0).
-  if (x.bad === 0 && x.del === 1 && x.firstDel && x.len >= 4) return pre + words[w].norm;
+  // After a restart the ear can clip two letters of a long word («فستبصر» → «تبصر»).
+  if (x.bad === 0 && x.firstDel && x.len >= 4 && x.del <= (x.len >= 6 ? 2 : 1)) return pre + words[w].norm;
   if (x.bad === 0 && (x.del === 0 || (x.len >= 3 && firstOk && x.del <= Math.max(1, Math.floor(x.len / 2))))) return pre + words[w].norm;
   if (x.bad === 0 && x.heard.length * 2 <= x.len) return pre ? pre.trim() : null; // mostly cut: treat as not heard
   // A false start glued to a word (restart after a breath, «رزقناهم يقـ…»
@@ -292,6 +293,10 @@ export class PhonemeStream {
         const gap = span.get(w + 1)!.a - span.get(w - 1)!.b;
         if (gap >= 0.25 + 0.1 * this.words[w].skel.length) t = this.words[w].norm;
       }
+      // The opening disjoint letter («ن» of Surah 68) is one short sound at the very
+      // start of the stream; the ear often misses it. Not a mistake when the next
+      // word was heard.
+      if (!t && MUQATTAAT.has(this.words[w].norm) && span.has(w + 1)) t = this.words[w].norm;
       if (t) out.push(t);
     }
     // Carry the heard letters of the words not committed yet.
