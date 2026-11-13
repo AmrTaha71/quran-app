@@ -1,4 +1,4 @@
-import { loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
+import { ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
 import { Bell, MapPin, Volume2 } from 'lucide-react';
@@ -446,6 +446,13 @@ function AdhanVoicePicker() {
 
 function FajrAlarmSetting() {
   const [mode, setMode] = useState<FajrAlarmMode>(loadFajrAlarm());
+  const [tone, setTone] = useState(loadFajrTone());
+  const previewStop = useRef<(() => void) | null>(null);
+  const preview = (id: string) => {
+    previewStop.current?.();
+    previewStop.current = startAlarmTone(id);
+    window.setTimeout(() => { previewStop.current?.(); previewStop.current = null; }, 3500);
+  };
   const opts: [FajrAlarmMode, string, string][] = [
     ['off', 'بدون منبه', 'أذان الفجر العادي'],
     ['simple', 'منبه عادي', 'نغمة منبه بدل الأذان وزر إيقاف'],
@@ -462,6 +469,17 @@ function FajrAlarmSetting() {
             <span className="block text-sm text-accent-600">{d}</span>
           </button>
         ))}
+        {mode !== 'off' && (
+          <div>
+            <p className="font-semibold text-accent-800 mt-1 mb-1 text-sm">نغمة المنبه (اضغط للتجربة)</p>
+            <div className="grid grid-cols-3 gap-1.5">
+              {ALARM_TONES.map((t) => (
+                <button key={t.id} onClick={() => { setTone(t.id); saveFajrTone(t.id); preview(t.id); }}
+                  className={`py-2 rounded-lg text-xs font-bold polish-press ${tone === t.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-700'}`}>{t.name}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {mode !== 'off' && (
           <button onClick={() => window.dispatchEvent(new Event('fajr-alarm-test'))}
             className="w-full py-3 bg-white border-2 border-emerald-500 text-emerald-700 font-bold rounded-xl polish-press">▶ جرّب المنبه الآن</button>
