@@ -339,14 +339,15 @@ export default function AdhanSettingsSection() {
             <span className="block font-medium text-accent-800">تنبيه صوتي قصير</span>
             <span className="block text-sm text-accent-600">نغمة تنبيه مولّدة من الجهاز — من غير ملف صوتي</span>
           </button>
-          <div className="text-right p-3 rounded-xl border-2 border-hairline opacity-60">
-            <span className="block font-medium text-accent-800">
-              «الله أكبر الله أكبر» فقط <span className="text-xs bg-amber-100 text-amber-800 rounded-full px-2 py-0.5">قريبًا</span>
-            </span>
-            <span className="block text-sm text-accent-600">
-              نقطة القصّ لسه مش مؤكدة من التسجيل — مش هنقصّ على تخمين، وهيتضاف بعد التحقق من التوقيت.
-            </span>
-          </div>
+          <button
+            onClick={() => update({ sound: 'takbir' })}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'takbir' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+          >
+            <span className="block font-medium text-accent-800">«الله أكبر الله أكبر» فقط</span>
+            <span className="block text-sm text-accent-600">أول جملة من الأذان كتنبيه قصير (بصوت المؤذن المختار)</span>
+          </button>
+          {settings.sound === 'takbir' && <AdhanVoicePicker />}
+        </div>
         </div>
         <button
           onClick={toggleTest}
