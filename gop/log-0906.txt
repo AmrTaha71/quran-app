@@ -1,0 +1,17 @@
+{'metric': 'mean', 'tau': -0.2, 'false_pro_%': 9.69, 'false_amateur_%': 94.09, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -0.4, 'false_pro_%': 8.16, 'false_amateur_%': 93.91, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -0.7, 'false_pro_%': 6.46, 'false_amateur_%': 93.64, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -1.0, 'false_pro_%': 3.74, 'false_amateur_%': 93.64, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -1.5, 'false_pro_%': 1.87, 'false_amateur_%': 93.46, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -2.0, 'false_pro_%': 0.85, 'false_amateur_%': 93.28, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -3.0, 'false_pro_%': 0.34, 'false_amateur_%': 93.01, 'caught_%': 100.0}
+{'metric': 'mean', 'tau': -4.0, 'false_pro_%': 0.34, 'false_amateur_%': 92.56, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -0.2, 'false_pro_%': 11.05, 'false_amateur_%': 94.27, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -0.4, 'false_pro_%': 10.37, 'false_amateur_%': 94.09, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -0.7, 'false_pro_%': 10.03, 'false_amateur_%': 94.09, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -1.0, 'false_pro_%': 9.52, 'false_amateur_%': 94.0, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -1.5, 'false_pro_%': 9.35, 'false_amateur_%': 93.91, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -2.0, 'false_pro_%': 8.5, 'false_amateur_%': 93.91, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -3.0, 'false_pro_%': 7.14, 'false_amateur_%': 93.82, 'caught_%': 100.0}
+{'metric': 'min', 'tau': -4.0, 'false_pro_%': 5.95, 'false_amateur_%': 93.64, 'caught_%': 100.0}
+{'clips': 400, 'err_words': 27, 'clean_pro': 588, 'clean_amateur': 1116}
