@@ -24,6 +24,6 @@ jobs:
         run: |
           git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
           git fetch origin ear-results; git checkout -B ear-results origin/ear-results
-          mkdir -p hisn; cp /tmp/hisn-sum-*.json hisn/; cp /tmp/hisn.log hisn/run.log
+          mkdir -p hisn; cp /tmp/hisn-sum-*.json hisn/; for k in a c; do gzip -c /tmp/hisn-$k.jsonl > hisn/rows-${{ inputs.src }}-$k.jsonl.gz; done; cp /tmp/hisn.log hisn/run.log
           git add hisn; git commit -m "ear-hisn" || true
           git push origin ear-results

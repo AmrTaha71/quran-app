@@ -19,4 +19,7 @@ jobs:
           print('token present:', bool(t))
           try: print(list_repo_files('Muno459/fastconformer-quran', token=t))
           except Exception as e: print('FAIL', type(e).__name__, str(e)[:300])
+          from huggingface_hub import hf_hub_download
+          try: print('DL', hf_hub_download('Muno459/fastconformer-quran','model_config.yaml',token=t))
+          except Exception as e: print('DLFAIL', type(e).__name__, str(e)[:200])
           PY
