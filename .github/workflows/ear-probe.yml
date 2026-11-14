@@ -18,34 +18,25 @@ jobs:
           def to(sec):
               def h(*a): raise TimeoutError()
               signal.signal(signal.SIGALRM, h); signal.alarm(sec)
-          names = set()
-          for q in ['quran','tajweed','mispronunciation','iqra','recitation']:
-              try:
-                  to(40)
-                  for d in api.list_datasets(search=q, limit=60): names.add(d.id)
-              except BaseException as e: out['search'][q] = repr(e)[:100]
-              finally: signal.alarm(0)
-          try:
-              to(40)
-              for d in api.list_datasets(author='IqraEval', limit=60): names.add(d.id)
-          except BaseException as e: out['search']['author'] = repr(e)[:100]
-          finally: signal.alarm(0)
-          out['all_names'] = sorted(names)
-          for repo in ['IqraEval/Iqra_Extra_IS26','IqraEval/QuranMB.v2','IqraEval/open_testset','RetaSy/quranic_audio_dataset']:
+          repos = ['sobolev210/quran-recitation-errors','sobolev210/quran-recitation-errors-test','MON3EMPASHA/arabic_mispronunciation_dataset','IqraEval/IqraEval_Test_GT','IqraEval/test_references','IqraEval/leaderboard_data','Bisher/iqra_eval_all','Bisher/iqra_eval_all_ref','KhateebAI/iqraeval','aisyahhrazak/iqraeval-dataset','Quran-Lab/quran-tajweed-benchmark','obadx/mualem-recitations-annotated','haidaragh007/quran-tajweed-iqlab-pilot','zaibihassan/Quranic-Recitation-Data','omartariq612/everyayah-with-tajweed-tokens','MohamedRashad/Quran-Recitations']
+          for repo in repos:
               r = {}
               try:
-                  to(90)
-                  files = list_repo_files(repo, repo_type='dataset'); r['files'] = files[:40]; r['nfiles'] = len(files)
-                  pq_files = [f for f in files if f.endswith('.parquet')]
+                  to(120)
+                  files = list_repo_files(repo, repo_type='dataset'); r['files'] = files[:30]; r['nfiles'] = len(files)
                   if 'README.md' in files:
-                      r['readme'] = open(hf_hub_download(repo, 'README.md', repo_type='dataset')).read()[:3000]
+                      r['readme'] = open(hf_hub_download(repo, 'README.md', repo_type='dataset')).read()[:2500]
+                  pq_files = [f for f in files if f.endswith('.parquet')]
+                  data_files = [f for f in files if f.endswith(('.csv','.json','.jsonl','.tsv'))]
                   if pq_files:
                       pth = hf_hub_download(repo, pq_files[0], repo_type='dataset')
-                      pf = pq.ParquetFile(pth); r['schema'] = str(pf.schema_arrow)[:1500]; r['rows_first_file'] = pf.metadata.num_rows
-                      cols = [c for c in pf.schema_arrow.names if c != 'audio']
+                      pf = pq.ParquetFile(pth); r['schema'] = str(pf.schema_arrow)[:1200]; r['rows_first_file'] = pf.metadata.num_rows
+                      cols = [c for c in pf.schema_arrow.names if 'audio' not in c.lower()]
                       row = next(pf.iter_batches(batch_size=3, columns=cols)).to_pylist()
-                      r['sample'] = [{k: str(v)[:250] for k, v in x.items()} for x in row]
-              except BaseException as e: r['err'] = repr(e)[:300]
+                      r['sample'] = [{k: str(v)[:300] for k, v in x.items()} for x in row]
+                  elif data_files:
+                      pth = hf_hub_download(repo, data_files[0], repo_type='dataset'); r['head'] = open(pth, errors='replace').read()[:1500]
+              except BaseException as e: r['err'] = repr(e)[:250]
               finally: signal.alarm(0)
               out[repo] = r
           json.dump(out, open('/tmp/probe.json', 'w'), ensure_ascii=False, indent=1)
