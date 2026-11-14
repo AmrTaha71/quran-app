@@ -1,0 +1,41 @@
+name: ear-real
+on:
+  workflow_dispatch:
+    inputs:
+      src: { description: 'all | sobolev | qlab', required: false, default: 'all' }
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: pip install kaldi-native-fbank onnxruntime soundfile numpy huggingface_hub pyarrow
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null
+      - run: npx esbuild tools/ear-eval/judge_real.ts --bundle --platform=node --format=esm --target=node20 --outfile=/tmp/judge_real.mjs --external:fs --log-level=error
+      - run: SRC="${{ inputs.src }}" python3 tools/ear-eval/real_fetch.py /tmp/real
+        timeout-minutes: 40
+      - name: decode
+        run: |
+          python3 - <<'PY'
+          import json,subprocess
+          fs=[json.loads(l)['f'] for l in open('/tmp/real/manifest.jsonl')]
+          open('/tmp/real/files.txt','w').write('\n'.join(fs))
+          PY
+          xargs -a /tmp/real/files.txt -n 200 python3 tools/ear-eval/decode.py public/models/quranlab /tmp/real/dec.jsonl
+      - name: judge + summary
+        run: |
+          APP_ROOT=$PWD node /tmp/judge_real.mjs /tmp/real/dec.jsonl /tmp/real/manifest.jsonl /tmp/real/judged.jsonl
+          python3 tools/ear-eval/summarize_real.py /tmp/real/judged.jsonl /tmp/real/summary.json
+      - name: push summary to ear-results
+        run: |
+          git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
+          git fetch origin ear-results || true
+          git checkout -B ear-results origin/ear-results
+          mkdir -p real; cp /tmp/real/summary.json real/summary-$(date -u +%H%M).json; cp /tmp/real/judged.jsonl real/judged.jsonl; gzip -f real/judged.jsonl
+          git add real; git commit -m "ear-real $(date -u +%F-%H%M)" || true
+          git push origin ear-results
