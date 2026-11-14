@@ -1,0 +1,22 @@
+name: ear-fastconf
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - run: pip install huggingface_hub
+      - name: probe gated repo
+        env: { HF_TOKEN: '${{ secrets.HF_TOKEN }}' }
+        run: |
+          python3 - <<'PY'
+          import os
+          from huggingface_hub import list_repo_files
+          t=os.environ.get('HF_TOKEN') or None
+          print('token present:', bool(t))
+          try: print(list_repo_files('Muno459/fastconformer-quran', token=t))
+          except Exception as e: print('FAIL', type(e).__name__, str(e)[:300])
+          PY
