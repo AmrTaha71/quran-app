@@ -49,7 +49,7 @@ function hashRoute(): string {
   }
 }
 
-function anyAudioPlaying(): boolean {
+export function anyAudioPlaying(): boolean {
   try {
     const audios = document.querySelectorAll('audio');
     for (const a of Array.from(audios)) {

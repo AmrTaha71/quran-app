@@ -38,6 +38,9 @@ import DevicePicker from './components/DevicePicker';
 import VoiceSearchMic from './components/VoiceSearchMic';
 import VoiceAssistant from './components/VoiceAssistant';
 import { initLite } from './lib/liteMode';
+import { DailyReportWatcher } from './components/DailyReport';
+import ReferralSurvey, { REFERRAL_DONE_KEY } from './components/ReferralSurvey';
+import { tickStats } from './lib/dailyStats';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
@@ -143,6 +146,10 @@ function AppContent() {
   // Bumped after the device picker is answered, so it unmounts.
   const [, setDeviceTick] = useState(0);
   const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  const [referralDone, setReferralDone] = useState<boolean>(() => { try { return localStorage.getItem(REFERRAL_DONE_KEY) === '1'; } catch { return true; } });
+  const statsRouteRef = useRef(route);
+  statsRouteRef.current = route;
+  useEffect(() => { const iv = window.setInterval(() => tickStats(statsRouteRef.current), 10000); return () => window.clearInterval(iv); }, []);
   useEffect(() => {
     applyDeviceLayout();
     wireDeviceLayout();
@@ -607,8 +614,9 @@ function AppContent() {
       {/* First-run onboarding overlay (home route only; the app works
           normally behind it once finished or skipped). */}
       {showOnboarding && route === 'home' && (
-        <Onboarding onDone={closeOnboarding} />
+        (referralDone ? <Onboarding onDone={closeOnboarding} /> : <ReferralSurvey onDone={() => setReferralDone(true)} />)
       )}
+      <DailyReportWatcher />
       {/* Device picker (drums): first run per browser, or reopened from Settings. */}
       {(!loadDeviceChoice() || devicePickerOpen) && !showOnboarding && (
         <DevicePicker userId={session?.user.id} onDone={() => { setDevicePickerOpen(false); setDeviceTick((n) => n + 1); }}
