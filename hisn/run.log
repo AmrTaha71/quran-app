@@ -1,7 +1,7 @@
 Fetching 13 files:   0%|          | 0/13 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-Fetching 13 files:  54%|█████▍    | 7/13 [00:00<00:00, 67.52it/s]Fetching 13 files: 100%|██████████| 13/13 [00:00<00:00, 16.93it/s]
+Fetching 13 files:   8%|▊         | 1/13 [00:00<00:03,  3.45it/s]Fetching 13 files:  54%|█████▍    | 7/13 [00:00<00:00, 13.54it/s]Fetching 13 files:  69%|██████▉   | 9/13 [00:00<00:00,  8.80it/s]Fetching 13 files:  92%|█████████▏| 12/13 [00:01<00:00,  9.53it/s]Fetching 13 files: 100%|██████████| 13/13 [00:02<00:00,  4.90it/s]
 ['.gitattributes', 'config.json', 'onnx', 'README.md', 'assets', 'imam.py', 'warsh.py', 'model.safetensors', 'inference.py', 'modeling.py']
-[0;93m2026-11-14 12:08:03.982435405 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
+[0;93m2026-11-14 12:08:47.894728024 [W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id for PCI path at "/sys/devices/LNXSYSTM:00/LNXSYBUS:00/ACPI0004:00/MSFT1000:00/5620e0c7-8062-4dce-aeb7-520c7ef76171" because filename "5620e0c7-8062-4dce-aeb7-520c7ef76171" did not match expected pattern of [0-9a-f]+:[0-9a-f]+:[0-9a-f]+[.][0-9a-f]+[m
 """Tajweed v2: hear a recited phrase and write it in the Quran phonetic script, then (optionally) get per-word
 tajweed remarks from the bundled rule engine (imam.py).
 
@@ -48,4 +48,25 @@ if __name__ == '__main__':
         if f.getframerate() != 16000 or f.getsampwidth() != 2:
             sys.exit('give a 16 kHz
 (ref, heard, heard_sifat=None, langs=('ar', 'en', 'fr'), heard_probs=None, min_prob=0.7, min_prob_jali=None, heard_times=None, tempo=None) (words, heard, moshaf=None, back=4, margin=3, riwaya='hafs')
-len-mismatch 6
+SKIP-len f-9548-cb5ccbafe092/chunk9.wav 7 8
+SKIP-len e-9db6-a2a231a149dd/chunk0.wav 3 4
+SKIP-len c-a9ba-437df4ef9196/chunk2.wav 7 8
+ERR 7-b82a-9a42d4224f18/chunk4.wav IndexError('string index out of range')
+Traceback (most recent call last):
+  File "/home/runner/work/quran-app/quran-app/tools/ear-eval/hisn_eval.py", line 46, in <module>
+    res = imam.listen(ref, heard, heard_probs=probs, heard_times=times, min_prob=mp, min_prob_jali=mj, langs=('en',))
+  File "/home/runner/.cache/huggingface/hub/models--HisnLabs--tajweed-v2/snapshots/b3b0503d32b4d9a8a0447880b4564fd3e9d69c15/imam.py", line 370, in listen
+    n, _, _ = _run(heard, hs, max(he, hs + 1), 'ں')
+              ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.cache/huggingface/hub/models--HisnLabs--tajweed-v2/snapshots/b3b0503d32b4d9a8a0447880b4564fd3e9d69c15/imam.py", line 219, in _run
+    k = next((x for x in range(a, b) if heard[x] == c), None)
+  File "/home/runner/.cache/huggingface/hub/models--HisnLabs--tajweed-v2/snapshots/b3b0503d32b4d9a8a0447880b4564fd3e9d69c15/imam.py", line 219, in <genexpr>
+    k = next((x for x in range(a, b) if heard[x] == c), None)
+                                        ~~~~~^^^
+IndexError: string index out of range
+SKIP-len 2-908c-f146bee0d740/chunk5.wav 6 7
+SKIP-len 3-bdea-7bff40ffcf9f/chunk5.wav 8 9
+SKIP-len -bdea-7bff40ffcf9f/chunk13.wav 6 7
+SKIP-len 8-b23c-9c06f4fca6b9/chunk5.wav 6 7
+SKIP-len -8dbe-6df69612f11f/chunk30.wav 15 16
+len-mismatch 174
