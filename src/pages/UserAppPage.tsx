@@ -593,7 +593,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               حفظت {formatAr(memorizedFromStart)} آية من أول المصحف من {formatAr(TOTAL_VERSES)} — {formatAr(Math.round((memorizedFromStart / TOTAL_VERSES) * 100))}٪
             </p>
             <p className="text-sm text-ink-2 leading-relaxed mt-1">
-              تقدّمك من أول المصحف — وآياتك المحفوظة كلها تحت، ومع كل آية روابطها.
+              تقدّمك من أول المصحف — وآياتك المحفوظة كلها تحت، ومع كل آية تربيطاتها.
             </p>
             <button onClick={() => { setListFilter('memorized'); setPage(0); }}
               className="mt-3 text-sm font-semibold text-emerald-700 hover:text-emerald-800">

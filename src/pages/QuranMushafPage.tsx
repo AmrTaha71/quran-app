@@ -3574,7 +3574,7 @@ export default function QuranMushafPage({
                   </div>
                   <div>
                     <h3 className="font-bold text-accent-800 text-base">آيات سورة {currentSurahName}</h3>
-                    <p className="text-sm text-accent-600">{elderlyMode ? 'اضغط على أي آية لسماعها' : 'اضغط على أي آية لمعرفة الرابط'}</p>
+                    <p className="text-sm text-accent-600">{elderlyMode ? 'اضغط على أي آية لسماعها' : 'اضغط على أي آية لمعرفة التربيط'}</p>
                   </div>
                 </div>
                 {/* Ayah filter: jump straight to one ayah of this surah. */}
@@ -4106,7 +4106,7 @@ export default function QuranMushafPage({
           {/* وضع الحفظ toggle: hides the popup ayah text until revealed. */}
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); toggleHifzMode(); }}
-              title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار روابطها أولًا'}
+              title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار تربيطاتها أولًا'}
               className={`absolute top-[calc(68px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               وضع الحفظ {hifzMode ? '✓' : ''}
             </button>
@@ -4446,7 +4446,7 @@ export default function QuranMushafPage({
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
                   </div>
                 )}
-                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح روابطها • النقطة الذهبية تعني أن للآية تربيطات</p>
+                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح تربيطاتها • النقطة الذهبية تعني أن للآية تربيطات</p>
                 <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
                   <div className="flex gap-2">
                     {stripVerses.map((v) => (
