@@ -693,3 +693,6 @@ html { font-size: var(--dev-fs, 16px); }
 }
 html[data-device="tv"] main, html[data-device="desktop"] main { max-width: min(100%, 1100px); }
 html[data-device="tv"] main { max-width: 100%; }
+
+/* Safety net: never let one wide child push the whole page sideways. */
+html, body { max-width: 100%; overflow-x: clip; }

@@ -374,10 +374,10 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
 
         {/* 2026-11-13: «الشاشة» and «جدو» as big doors on both sides of «اؤمرني». */}
-        <div className="mb-4 grid grid-cols-[1fr_2.4fr_1fr] gap-3 items-stretch">
+        <div className="mb-4 grid grid-cols-[minmax(0,1fr)_minmax(0,2.4fr)_minmax(0,1fr)] gap-2 items-stretch [&>*]:min-w-0">
           <button type="button" onPointerDown={pressFeedback} onClick={() => setElderlyMode(true)} aria-label="صفحة جدو"
             className="home-tile polish-focus !min-h-0">
-            <GrandpaIcon className="w-[4.5rem] h-[4.5rem] drop-shadow-md" />
+            <GrandpaIcon className="w-[min(4.5rem,100%)] h-auto aspect-square drop-shadow-md" />
             <span className="home-tile-title">صفحة جدو</span>
           </button>
           <OrderMeButton onNavigate={onNavigate}
@@ -561,7 +561,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         </div>
         {/* 2026-11-13 (agreed): third row — next prayer (name, «بعد», digital countdown),
             the Quran radio, the nearest mosque, and the Qibla on the left edge. */}
-        <div className="mb-4 grid grid-cols-4 gap-2 items-stretch">
+        <div className="mb-4 grid grid-cols-4 gap-2 items-stretch [&>*]:min-w-0">
           <NextPrayerTile icon={<Clock />} onNoLocation={() => goAdhanSettings(onNavigate)} onPress={() => goAdhanSettings(onNavigate)} />
           <button type="button" onPointerDown={pressFeedback} onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } }} aria-label="إذاعة القرآن الكريم"
             className="home-tile polish-focus !min-h-0">
