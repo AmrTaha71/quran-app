@@ -659,7 +659,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             </p>
             {khBlocked && kh.playing && (
               <button onClick={() => { void khAudioRef.current?.play().then(() => setKhBlocked(false)).catch(() => {}); }}
-                className="mt-6 px-10 py-5 rounded-2xl bg-amber-400 text-emerald-950 text-4xl font-bold">▶ دوس OK بالريموت لتشغيل الصوت</button>
+                className="mt-6 px-10 py-5 rounded-2xl bg-amber-400 text-emerald-950 text-3xl font-bold">الصوت محجوب — دوس مرة واحدة على OK في ريموت التلفزيون ▶</button>
             )}
             {!kh.playing && <p className="text-3xl opacity-60">متوقف مؤقتاً</p>}
           </>
