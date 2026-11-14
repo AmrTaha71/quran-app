@@ -1,3 +1,4 @@
+import { useWakeLock } from '../lib/wakeLock';
 import { roomLabel } from '../lib/roomLabel';
 import DrumSelect from '../components/DrumSelect';
 import Hint from '../components/Hint';
@@ -127,6 +128,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     const url = `${window.location.origin}/#/room?join=${code}`;
     void QRCode.toDataURL(url, { width: 360, margin: 1 }).then(setTvQr).catch(() => setTvQr(''));
   }, [tvView, code]);
+  // The TV page keeps its own screen awake; the phone remote can be locked.
+  useWakeLock(tvView && !!code);
   const [joinInput, setJoinInput] = useState('');
   const [joinError, setJoinError] = useState('');
   const [members, setMembers] = useState(0);
@@ -755,6 +758,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
       </>)}
 
       {screenMode && (<>
+      <p className="text-sm text-sky-900 bg-sky-50 rounded-xl border border-sky-200 p-3">تقدر تقفل شاشة التليفون — التلفزيون بيكمل لوحده (الختمة والأذكار والمواقيت). عدّ السبحة بس محتاج التليفون.</p>
 <div className="bg-sky-50 rounded-xl border border-sky-200 p-4 space-y-3">
         <p className="text-lg font-bold text-sky-900">شاشة البيت: مواقيت الصلاة والأذكار</p>
         <p className="text-xs text-sky-800">الساعة، والوقت الباقي على الصلاة الجاية، وأذكار الصباح بعد الفجر والمساء بعد العصر بتتغير لوحدها.</p>
