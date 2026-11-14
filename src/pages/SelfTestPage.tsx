@@ -3546,6 +3546,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       ? new QuranLabRecognition(expectedWordList(ayah.ayah_text).map((w) => ({ norm: w.norm, ayahIdx: 0 })), labStartAyah)
       : useModelEarAyah ? new QuranModelRecognition() : new SR();
     diagPush('ear', { label: useLabEarAyah ? `quranlab-ayah@${labStartAyah}` : useModelEarAyah ? 'quran-model' : 'browser' });
+    if (useLabEarAyah) rec.diag = (label: string, ms: number) => diagPush('mic-timing', { label, ms });
     // [P7] Fixed test locale (see helpers): Quranic recitation,
     // not the UI language, decides the model.
     rec.lang = TEST_SPEECH_LOCALE;
@@ -5243,6 +5244,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
     const rec: any = useLabEar ? new QuranLabRecognition(liveRef.current.contExpected, labStart) : useModelEar ? new QuranModelRecognition() : new SR();
     diagPush('ear', { label: useLabEar ? `quranlab@${labStart}` : useModelEar ? 'quran-model' : 'browser' });
+    if (useLabEar) rec.diag = (label: string, ms: number) => diagPush('mic-timing', { label, ms });
     // [P7] Fixed test locale (see helpers).
     rec.lang = TEST_SPEECH_LOCALE;
     rec.continuous = true;

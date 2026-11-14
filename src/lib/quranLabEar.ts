@@ -26,7 +26,9 @@ const LOAD_TIMEOUT_MS = 40000;
 // and the first ~0.7 s of the next ayah was lost («ودّوا» never heard, «فستبصر»
 // clipped). Keep the stream + context alive for a while after a session ends so
 // the next start (same test) attaches to a ready, already-flowing mic.
-const KEEP_MS = 25000;
+// 2026-11-14 (b): a spoken correction can run 20 s+, and a dropped keep forced
+// a cold getUserMedia right when the user starts talking again.
+const KEEP_MS = 60000;
 let keep: { stream: MediaStream; ctx: AudioContext; timer: ReturnType<typeof setTimeout> } | null = null;
 function closeKeep() {
   if (!keep) return;
@@ -91,7 +93,14 @@ function downsample(input: Float32Array, fromRate: number): Float32Array {
   return out;
 }
 
-const wordCache = new WeakMap<object, Promise<PhonWord[]>>();
+// Keyed by the words' content, not the array identity: ayah mode builds a new
+// array on every (re)start, so every resume after a correction rebuilt it.
+const wordCache = new Map<string, Promise<PhonWord[]>>();
+function wordsKey(expected: { norm: string; ayahIdx: number }[]): string {
+  let k = String(expected.length);
+  for (const w of expected) k += '|' + w.ayahIdx + ':' + w.norm;
+  return k;
+}
 
 export class QuranLabRecognition {
   lang = 'ar';
@@ -121,6 +130,12 @@ export class QuranLabRecognition {
   private heardAny = false;
   private lastKeepalive = 0;
   private frames = 0;
+  /** Optional timing hook (ms since start()): the page logs it to its diag. */
+  diag: ((label: string, ms: number) => void) | null = null;
+  private t0 = 0;
+  private seenFrame = false;
+  private seenSound = false;
+  private mark(label: string) { try { this.diag?.(label, Math.round(performance.now() - this.t0)); } catch { /* ignore */ } }
 
   /** `expected`: the range's words (SelfTestPage contExpected). The
    *  stream starts aligning at `startWord` (the first word not yet said). */
@@ -131,7 +146,9 @@ export class QuranLabRecognition {
     // the tap that started the test. Created after the awaits in begin() it
     // stays «suspended» on repeat recordings: the mic light is on, no audio
     // reaches the model, and the page waits for a first word forever.
+    this.t0 = performance.now();
     const kept = takeKeep();
+    this.mark(kept ? 'start-kept' : 'start-cold');
     if (kept) {
       this.ctx = kept.ctx;
       void this.ctx.resume().catch(() => {});
@@ -155,8 +172,14 @@ export class QuranLabRecognition {
 
   private async begin() {
     try {
-      let words = wordCache.get(this.expected);
-      if (!words) { words = buildPhonWords(this.expected, refKeySkel); wordCache.set(this.expected, words); }
+      const wk = wordsKey(this.expected);
+      let words = wordCache.get(wk);
+      if (!words) {
+        words = buildPhonWords(this.expected, refKeySkel);
+        if (wordCache.size > 12) wordCache.clear();
+        wordCache.set(wk, words);
+        words.catch(() => { if (wordCache.get(wk) === words) wordCache.delete(wk); });
+      }
       const [w, pw] = await Promise.all([getWorker(), words]);
       if (this.stopped) { this.finishEnd(); return; }
       this.ps = new PhonemeStream(pw);
@@ -165,7 +188,9 @@ export class QuranLabRecognition {
       w.postMessage({ type: 'reset' });
       this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }));
       if (this.stopped) { this.release(); this.finishEnd(); return; }
+      this.mark('stream-ready');
       this.attach(w);
+      this.mark('attached');
       this.onstart?.();
       this.onaudiostart?.();
       this.watch(w);
@@ -200,6 +225,8 @@ export class QuranLabRecognition {
       for (let i = 0; i < ch.length; i += 8) sum += ch[i] * ch[i];
       const rms = Math.sqrt(sum / (ch.length / 8));
       if (rms > this.maxRms) this.maxRms = rms;
+      if (!this.seenFrame) { this.seenFrame = true; this.mark('first-frame'); }
+      if (!this.seenSound && rms > 1e-5) { this.seenSound = true; this.mark('first-signal'); }
       const s = downsample(ch, rate);
       w.postMessage({ type: 'audio', samples: s }, [s.buffer]);
     };
@@ -210,22 +237,28 @@ export class QuranLabRecognition {
   }
 
   /** The mic light can be on while no sound arrives (iOS audio-session
-   *  glitch, ~half of the starts). If after 2.2 s there are no frames or
-   *  pure digital silence, rebuild the capture silently (up to 2 times);
-   *  only then report an error. */
+   *  glitch, ~half of the starts; also right after a spoken correction).
+   *  2026-11-14 (b): checked fast. At 0.7 s: no audio callbacks at all, or a
+   *  dead track -> rebuild at once. At 1.8 s: still pure digital silence or a
+   *  muted track -> rebuild. Up to 2 rebuilds, then report. (Was one check at
+   *  2.2 s per round: a dead mic could cost ~6 s.) */
   private watch(w: Worker) {
-    setTimeout(() => {
+    const check = (final: boolean) => {
       if (this.stopped) return;
       const track = this.stream?.getAudioTracks()[0];
-      const dead = this.frames === 0 || this.maxRms < 1e-6 || !track || track.readyState !== 'live' || track.muted;
-      if (!dead) return;
+      const noFrames = this.frames === 0;
+      const trackDead = !track || track.readyState !== 'live';
+      const dead = noFrames || trackDead || (final && (this.maxRms < 1e-6 || !!track?.muted));
+      if (!dead) { if (!final) setTimeout(() => check(true), 1100); return; }
+      this.mark(`dead-${final ? 'late' : 'early'}${noFrames ? '-noframes' : trackDead ? '-track' : '-silent'}`);
       if (this.retries >= 2) {
         this.onerror?.({ error: 'audio-capture', message: 'no-audio-signal' });
         return;
       }
       this.retries++;
       void this.rebuild(w);
-    }, 2200);
+    };
+    setTimeout(() => check(false), 700);
   }
 
   private async rebuild(w: Worker) {
@@ -235,10 +268,12 @@ export class QuranLabRecognition {
       try { this.stream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
       try { await this.ctx?.close(); } catch { /* ignore */ }
       this.ctx = null; this.node = null; this.src = null;
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 120));
       if (this.stopped) return;
       this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: this.retries < 2, noiseSuppression: false, autoGainControl: true } });
       if (this.stopped) { this.release(); return; }
+      this.seenFrame = false; this.seenSound = false;
+      this.mark(`rebuilt-${this.retries}`);
       this.attach(w);
       this.watch(w);
     } catch (err) {
