@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """HisnLabs/tajweed-v2 on the same manifest. usage: hisn_eval.py MANIFEST OUT_PREFIX
 Writes OUT_PREFIX-<cfg>.jsonl rows compatible with summarize_real.py."""
-import sys, os, json, re, unicodedata, inspect
+import sys, os, json, re, unicodedata, inspect, traceback
 import numpy as np, soundfile as sf
 from huggingface_hub import snapshot_download
 d = snapshot_download('HisnLabs/tajweed-v2'); sys.path.insert(0, d)
@@ -10,6 +10,8 @@ import inference, imam
 print(inspect.getsource(inference)[:2500], flush=True)
 print(inspect.signature(imam.listen), inspect.signature(imam.recited), flush=True)
 from inference import hear
+from quran_transcript import Aya
+TB=[0]
 def norm(w):
     w = unicodedata.normalize('NFKD', w)
     w = ''.join(c for c in w if not unicodedata.category(c).startswith('M') and c not in 'ـٰۖۗۚۛۜ۟۠ۡۢۤۥۦ')
@@ -27,6 +29,12 @@ for r in rows[:lim]:
         if sr != 16000:
             n = int(len(w) * 16000 / sr); w = np.interp(np.linspace(0, len(w) - 1, n), np.arange(len(w)), w).astype(np.float32)
         words = [x for x in r['text'].split() if norm(x)]
+        if r.get('va'):
+            sv, av = map(int, str(r['va']).split(':'))
+            aw = Aya(sv, av).get().uthmani.split(' ')
+            if len(aw) == len(words): words = aw
+            elif r['src'] == 'qlab_correct': words = aw
+            else: print('SKIP-len', r['f'][-30:], len(aw), len(words), flush=True); continue
         heard, probs, times = hear(w, riwaya='hafs')
         ref = imam.recited(words, heard, riwaya='hafs')
         dn = [norm(x) for x in words]
@@ -40,5 +48,6 @@ for r in rows[:lim]:
             if len(ok) != len(words): ok = (ok + [False] * len(words))[:len(words)]; bad += 1
             outs[k].write(json.dumps({'f': r['f'], 'src': r['src'], 'n': len(words), 'ok': ok, 'wrong': 0, 'errIdx': errIdx}, ensure_ascii=False) + '\n')
     except Exception as e:
-        print('ERR', r['f'], repr(e)[:300], flush=True)
+        print('ERR', r['f'][-30:], repr(e)[:200], flush=True)
+        if TB[0] < 3: TB[0] += 1; traceback.print_exc()
 print('len-mismatch', bad)
