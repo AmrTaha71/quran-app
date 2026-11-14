@@ -73,6 +73,12 @@ for r in rows:
             vals.append(float(tgt))
         pos += len(s)
         scores.append({'mean': float(np.mean(vals)) if vals else -20.0, 'min': float(np.min(vals)) if vals else -20.0})
+    if r['src']=='sobolev' and len([1 for q in res if q['src']=='sobolev'])<8:
+        g=[];prev=-1
+        for t in lp.argmax(1):
+            if t!=prev and t!=BLANK: g.append(toks[str(int(t))])
+            prev=t
+        print('DBG',os.path.basename(r['f']),'T',lp.shape[0],'ntok',len(flat),'maxlp',round(float(lp.max(1).mean()),2),'| ref:',ph,'| heard:',''.join(g),'| word means',[round(x['mean'],1) for x in scores],flush=True)
     res.append({'src': r['src'], 'n': len(words), 'errors': r.get('errors') or {}, 'scores': scores, 'words': tw})
 json.dump(res, open(out, 'w', encoding='utf8'), ensure_ascii=False)
 print('clips scored', len(res), 'of', len(rows))
