@@ -3,6 +3,7 @@ import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, Lis
 import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
 import DrumSelect from '../components/DrumSelect';
+import { unitStartPoint, unitEndPoint, unitMax, unitPickLabel, rangeSummary, type UnitKind } from '../lib/testRanges';
 import ClockWheel from '../components/ClockWheel';
 import {
   Check,
@@ -2246,6 +2247,74 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const KHATMA_MINUTE_CHIPS: [number, string][] = [[15, 'ربع ساعة'], [30, 'نص ساعة'], [45, '٤٥ دقيقة']];
   const KHATMA_HOUR_CHIPS: [number, string][] = [[60, 'ساعة'], [120, 'ساعتين'], [180, '٣ ساعات']];
   const [wheelMinutes, setWheelMinutes] = useState<number>(30);
+  // «تنظيم الاستماع» (2026-11-14): optional plan chosen before any card —
+  // a time limit (timer reel) and/or a range (juz / hizb / rub / surah reels).
+  // Applied when playback starts; leaving both on «لا» changes nothing.
+  const [plan, setPlan] = useState<{ time: boolean; minutes: number; range: boolean; kind: UnitKind; from: number; to: number }>(
+    { time: false, minutes: 30, range: false, kind: 'juz', from: 1, to: 1 });
+  const planRange = plan.range
+    ? { start: unitStartPoint(plan.kind, plan.from), end: unitEndPoint(plan.kind, Math.max(plan.from, plan.to)) }
+    : null;
+  const planApplied = useRef(false);
+  useEffect(() => {
+    const active = playing || journeyMode !== null;
+    if (!active) { planApplied.current = false; return; }
+    if (planApplied.current) return;
+    planApplied.current = true;
+    if (planRange) { setUnitTarget(planRange.end.global + 1); setUnitLabel('نهاية النطاق'); }
+    if (plan.time) setSleepTimer(plan.minutes as SleepTimerMinutes);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, journeyMode]);
+  const planPosition = (mode: ThreeMode): ThreeModePosition | undefined => planRange
+    ? { mode, startSurah: planRange.start.surah, startReciterId: journeyReciterForMode(), kind: 'ayah', surah: planRange.start.surah, ayah: planRange.start.ayah, time: 0 }
+    : undefined;
+  const PLAN_MINUTES: [number, string][] = [[15, 'ربع ساعة'], [30, 'نص ساعة'], [45, '٤٥ دقيقة'], [60, 'ساعة'], [90, 'ساعة ونص'], [120, 'ساعتين'], [180, '٣ ساعات'], [240, '٤ ساعات'], [480, '٨ ساعات']];
+  const yesNo = (on: boolean, set: (v: boolean) => void) => (
+    <div className="grid grid-cols-2 gap-2">
+      {[false, true].map((v) => (
+        <button key={String(v)} type="button" onClick={() => set(v)} disabled={locked}
+          className={`min-h-[44px] rounded-xl font-bold text-sm polish-press ${on === v ? 'grad-emerald-door text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>
+          {v ? 'أيوه' : 'لا'}
+        </button>
+      ))}
+    </div>
+  );
+  const planUnitOptions = (k: UnitKind) => Array.from({ length: unitMax(k) }, (_, i) => ({ value: i + 1, label: unitPickLabel(k, i + 1) }));
+  const listenPlanCard = (
+    <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-4 mb-4">
+      <p className="font-bold text-accent-800 text-lg">تحب تنظّم استماعك؟</p>
+      <p className="text-sm text-accent-600 mt-1">اختياري. لو عايز تسمع على طول، سيبهم «لا» واضغط على أي كارت تحت.</p>
+      <div className="mt-3 space-y-3">
+        <div>
+          <p className="font-semibold text-accent-800 mb-1.5">عايز تسمع وقت معين؟</p>
+          {yesNo(plan.time, (v) => setPlan((p) => ({ ...p, time: v })))}
+          {plan.time && (
+            <div className="mt-2">
+              <DrumSelect label="مدة الاستماع" value={plan.minutes} onChange={(n) => setPlan((p) => ({ ...p, minutes: n }))}
+                options={PLAN_MINUTES.map(([v, l]) => ({ value: v, label: l }))} />
+            </div>
+          )}
+        </div>
+        <div>
+          <p className="font-semibold text-accent-800 mb-1.5">عايز تسمع نطاق معين؟</p>
+          {yesNo(plan.range, (v) => setPlan((p) => ({ ...p, range: v })))}
+          {plan.range && (
+            <div className="mt-2 space-y-2">
+              <DrumSelect label="نوع النطاق" value={plan.kind} onChange={(k) => setPlan((p) => ({ ...p, kind: k as UnitKind, from: 1, to: 1 }))}
+                options={[{ value: 'juz', label: 'جزء' }, { value: 'hizb', label: 'حزب' }, { value: 'quarter', label: 'ربع' }, { value: 'surah', label: 'سورة' }]} />
+              <div className="grid grid-cols-2 gap-2">
+                <div><p className="text-xs font-semibold text-accent-700 mb-1">من</p>
+                  <DrumSelect label="من" value={plan.from} onChange={(n) => setPlan((p) => ({ ...p, from: n, to: Math.max(p.to, n) }))} options={planUnitOptions(plan.kind)} /></div>
+                <div><p className="text-xs font-semibold text-accent-700 mb-1">إلى</p>
+                  <DrumSelect label="إلى" value={Math.max(plan.to, plan.from)} onChange={(n) => setPlan((p) => ({ ...p, to: Math.max(n, p.from) }))} options={planUnitOptions(plan.kind)} /></div>
+              </div>
+              {planRange && <p className="text-xs text-accent-600">{rangeSummary(planRange.start, planRange.end)}</p>}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
   const sleepTimerBlock = (
     <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
       <p className="font-semibold text-accent-800 flex items-center gap-2">
@@ -2421,6 +2490,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             Cards use grad-amber-door (gold sub-door treatment, same
             as the Home sub-doors — Amr 2026-11-06), so the hub reads
             as the level below the emerald main doors. */}
+        {hubView === 'hub' && listenPlanCard}
         {hubView === 'hub' && (
         <div className="mb-4">
           <p className="font-semibold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
@@ -2721,7 +2791,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                   ? void startHadrPlayback(surah, 0)
                   : riwayaId !== null
                     ? void startRiwayaPlayback(surah, riwayaId, 0)
-                    : void startPlayback(surah, reciterId, mode, 1)
+                    : planRange ? void startPlayback(planRange.start.surah, reciterId, mode, planRange.start.ayah) : void startPlayback(surah, reciterId, mode, 1)
               }
               className="mt-5 w-full py-3.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus"
             >
@@ -2883,7 +2953,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <button
                 key={`start-${m.id}`}
                 disabled={disabled}
-                onClick={() => void startJourney(m.id)}
+                onClick={() => void startJourney(m.id, planPosition(m.id))}
                 className="w-full mt-4 py-4 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50 polish-press polish-focus"
               >
                 ▶ ابدأ الاستماع
@@ -2897,7 +2967,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 <div key={m.id}>
                   <button
                     disabled={disabled}
-                    onClick={() => void startJourney(m.id)}
+                    onClick={() => void startJourney(m.id, planPosition(m.id))}
                     className={`w-full p-4 rounded-xl font-semibold text-right disabled:opacity-50 ${
                       journeyMode === m.id
                         ? 'grad-emerald-door text-white polish-press'
