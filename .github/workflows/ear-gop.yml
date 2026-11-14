@@ -1,0 +1,35 @@
+name: ear-gop
+on:
+  workflow_dispatch:
+    inputs:
+      src: { description: 'all | sobolev | qlab', required: false, default: 'all' }
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 170
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install kaldi-native-fbank onnxruntime soundfile numpy huggingface_hub pyarrow
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null
+      - run: SRC="${{ inputs.src }}" python3 tools/ear-eval/real_fetch.py /tmp/real
+        timeout-minutes: 40
+      - name: dump log-probs
+        run: |
+          python3 - <<'PY'
+          import json
+          open('/tmp/real/files.txt','w').write('\n'.join(json.loads(l)['f'] for l in open('/tmp/real/manifest.jsonl')))
+          PY
+          xargs -a /tmp/real/files.txt -n 100 python3 tools/ear-eval/dump_lp.py public/models/quranlab /tmp/lp
+      - name: score and sweep
+        run: |
+          python3 tools/ear-eval/gop.py public/models/quranlab /tmp/lp /tmp/real/manifest.jsonl /tmp/gop.json
+          python3 tools/ear-eval/gop_eval.py /tmp/gop.json /tmp/gop_summary.json | tee /tmp/gop_log.txt
+      - name: push
+        run: |
+          git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
+          git fetch origin ear-results; git checkout -B ear-results origin/ear-results
+          mkdir -p gop; cp /tmp/gop_summary.json gop/summary-$(date -u +%H%M).json; cp /tmp/gop_log.txt gop/log-$(date -u +%H%M).txt; cp /tmp/gop.json gop/gop.json; gzip -f gop/gop.json
+          git add gop; git commit -m "ear-gop $(date -u +%F-%H%M)" || true
+          git push origin ear-results
