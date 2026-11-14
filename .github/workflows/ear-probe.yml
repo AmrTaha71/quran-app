@@ -22,7 +22,7 @@ jobs:
           for repo in repos:
               r = {}
               try:
-                  to(120)
+                  to(50)
                   files = list_repo_files(repo, repo_type='dataset'); r['files'] = files[:30]; r['nfiles'] = len(files)
                   if 'README.md' in files:
                       r['readme'] = open(hf_hub_download(repo, 'README.md', repo_type='dataset')).read()[:2500]
@@ -39,9 +39,11 @@ jobs:
               except BaseException as e: r['err'] = repr(e)[:250]
               finally: signal.alarm(0)
               out[repo] = r
+              json.dump(out, open('/tmp/probe.json', 'w'), ensure_ascii=False, indent=1)
           json.dump(out, open('/tmp/probe.json', 'w'), ensure_ascii=False, indent=1)
           PY
       - name: push probe to ear-results
+        if: always()
         run: |
           git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
           git fetch origin ear-results; git checkout -B ear-results origin/ear-results
