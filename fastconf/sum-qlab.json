@@ -1,0 +1,15 @@
+{
+ "qlab_correct": {
+  "clips": 300,
+  "words": 2724,
+  "ok": 2628,
+  "wrong": 0,
+  "clean_clips": 300,
+  "clean_words": 2724,
+  "clean_notok": 96,
+  "clean_wrong": 0,
+  "clean_clips_flagged": 81
+ },
+ "by_type": {},
+ "missed_examples": []
+}
