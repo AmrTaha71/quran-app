@@ -1,3 +1,4 @@
+import DrumSelect from '../components/DrumSelect';
 import StudioMic from '../components/StudioMic';
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { transcribeBlob } from '../lib/quranEar';
@@ -3417,11 +3418,8 @@ export default function QuranMushafPage({
                 <ChevronRight className="w-5 h-5" />
               </button>
               <span className="flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-0.5 border border-gray-200">
-                <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={pageInput || currentPage}
-                  onChange={(e) => setPageInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { const n = parseInt(normalizeDigits(pageInput)); if (!isNaN(n)) goToPage(n); setPageInput(''); } }}
-                  className="w-14 text-center text-sm font-semibold text-accent-700 bg-transparent focus:outline-none"
-                  placeholder={formatAr(currentPage)} />
+                <div className="w-24"><DrumSelect label="رقم الصفحة" value={currentPage} onChange={(n) => goToPage(n)} className="!min-h-0 !py-0.5 !px-2 text-sm"
+                  options={Array.from({ length: TOTAL_PAGES }, (_, i) => ({ value: i + 1, label: formatAr(i + 1) }))} /></div>
                 <span className="text-xs text-accent-600">/ {formatAr(TOTAL_PAGES)}</span>
               </span>
               <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= TOTAL_PAGES} aria-label="الصفحة التالية"
@@ -3581,10 +3579,8 @@ export default function QuranMushafPage({
                   <label htmlFor="ayah-filter" className="text-sm font-semibold text-accent-600 whitespace-nowrap">
                     رقم الآية:
                   </label>
-                  <input id="ayah-filter" type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*"
-                    value={ayahFilter} placeholder="مثال: 255"
-                    onChange={(e) => setAyahFilter(e.target.value)}
-                    className="w-28 rounded-lg border border-gray-200 bg-white px-3 py-2 text-base font-semibold text-accent-700 focus:outline-none focus:border-emerald-400" />
+                  <div className="w-40"><DrumSelect id="ayah-filter" label="رقم الآية" value={ayahFilter} onChange={setAyahFilter}
+                    options={[{ value: '', label: 'كل الآيات' }, ...surahVerses.map((v) => ({ value: String(v.ayah_no), label: `آية ${v.ayah_no}` }))]} /></div>
                   {ayahFilter.trim() && (
                     <button onClick={() => setAyahFilter('')}
                       className="px-3 py-2 text-sm font-semibold text-accent-600 hover:bg-white rounded-lg">
@@ -4536,9 +4532,8 @@ export default function QuranMushafPage({
                                 <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يوصل للإدارة بالبريد للمراجعة قبل النشر.</p>
                                 <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
                                 <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
-                                <select value={suggestType} onChange={(e) => setSuggestType(e.target.value)} className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white">
-                                  {LINK_TYPES.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
-                                </select>
+                                <div className="mb-2"><DrumSelect label="نوع التربيط" value={suggestType} onChange={(v) => setSuggestType(String(v))}
+                                  options={LINK_TYPES.map((t) => ({ value: t.value, label: t.label }))} /></div>
                                 {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
                                 <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl text-sm polish-press">
                                   {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح بالبريد'}

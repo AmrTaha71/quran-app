@@ -838,18 +838,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             <DrumSelect label="اختر السورة" value={pos.surah} onChange={(n) => sendPos({ surah: n, ayah: 1 })}
               options={SURAHS.map((s) => ({ value: s.no, label: `${s.no}. ${s.name}` }))} />
           </div>
-          <input
-            aria-label="رقم الآية"
-            type="number"
-            min={1}
-            max={ayahCount}
-            value={pos.ayah}
-            onChange={(e) => {
-              const v = Math.min(Math.max(Number(e.target.value) || 1, 1), ayahCount);
-              sendPos({ surah: pos.surah, ayah: v });
-            }}
-            className="w-24 border rounded-lg px-2 py-2 bg-white text-center"
-          />
+          <div className="w-28 shrink-0">
+            <DrumSelect label="رقم الآية" value={pos.ayah} onChange={(n) => sendPos({ surah: pos.surah, ayah: n })}
+              options={Array.from({ length: Math.max(1, ayahCount) }, (_, i) => ({ value: i + 1, label: `آية ${i + 1}` }))} />
+          </div>
         </div>
         <button onClick={openInMushaf} className="w-full py-3 rounded-lg bg-emerald-600 text-white font-semibold flex items-center justify-center gap-2">
           <BookOpen className="w-4 h-4" /> افتحها في المصحف

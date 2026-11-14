@@ -696,3 +696,17 @@ html[data-device="tv"] main { max-width: 100%; }
 
 /* Safety net: never let one wide child push the whole page sideways. */
 html, body { max-width: 100%; overflow-x: clip; }
+
+/* Device-size hooks (deviceModel.ts sets data-dsize / data-device on <html>). */
+html[data-dsize="xs"] .home-tile, html[data-dsize="s"] .home-tile { min-height: 7rem; padding: 0.75rem 0.35rem 0.6rem; gap: 0.35rem; }
+html[data-dsize="xs"] .home-tiles, html[data-dsize="s"] .home-tiles { gap: 0.5rem; }
+/* Held sideways: wide and short → four tiles per row, tighter tiles. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .home-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .home-tiles-small { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .home-tile { min-height: 6.25rem; padding: 0.55rem 0.4rem 0.5rem; }
+}
+/* TV / big screens: roomy tiles and gaps, readable from a distance. */
+html[data-device="tv"] .home-tiles { gap: 1.25rem; }
+html[data-device="tv"] .home-tile { min-height: 11rem; }
+html[data-device="tablet"] .home-tile { min-height: 9rem; }

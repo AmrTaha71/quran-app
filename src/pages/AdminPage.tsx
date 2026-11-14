@@ -1,3 +1,4 @@
+import DrumSelect from '../components/DrumSelect';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
@@ -764,11 +765,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" /> {searchHint}
               </div>
             )}
-            <select value={surahFilter} onChange={(e) => { setSurahFilter(e.target.value); setPage(0); }}
-              className="px-3 py-2.5 bg-gray-50 border border-hairline rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth">
-              <option value="">كل السور</option>
-              {SURAHS.map((s) => <option key={s.no} value={s.no}>{s.no}. {s.name}</option>)}
-            </select>
+            <div className="min-w-[10rem]"><DrumSelect label="السورة" value={surahFilter} onChange={(v) => { setSurahFilter(String(v)); setPage(0); }}
+              options={[{ value: '', label: 'كل السور' }, ...SURAHS.map((x) => ({ value: String(x.no), label: `${x.no}. ${x.name}` }))]} /></div>
             <div className="flex items-center gap-1 bg-gray-50 rounded-xl p-1 border border-hairline">
               {(['all', 'green', 'red'] as VerseFilter[]).map((f) => (
                 <button key={f} onClick={() => { setStatusFilter(f); setPage(0); }}

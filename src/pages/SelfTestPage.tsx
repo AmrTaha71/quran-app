@@ -6057,16 +6057,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="text-xs font-semibold text-accent-700">السورة</span>
-                        <select aria-label="السورة" value={plDraft.surah} onChange={(e) => setPlDraft((d) => ({ ...d, surah: Number(e.target.value) }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
-                          {SURAHS.map((s) => (<option key={s.no} value={s.no}>{s.no} — سورة {s.name}</option>))}
-                        </select>
+                        <DrumSelect label="السورة" value={plDraft.surah} onChange={(n) => setPlDraft((d) => ({ ...d, surah: n, ayah: 1 }))}
+                          options={SURAHS.map((x) => ({ value: x.no, label: `${x.no} — سورة ${x.name}` }))} />
                       </label>
                       <label className="block">
                         <span className="text-xs font-semibold text-accent-700">الآية</span>
-                        <input type="text" inputMode="numeric" pattern="[0-9٠-٩۰-۹]*" value={plDraft.ayah}
-                          onChange={(e) => setPlDraft((d) => ({ ...d, ayah: Math.max(1, Math.min(SURAH_AYAH_COUNTS[d.surah - 1] || 1, Number(normalizeDigits(e.target.value)) || 1)) }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base" />
+                        <DrumSelect label="الآية" value={plDraft.ayah} onChange={(n) => setPlDraft((d) => ({ ...d, ayah: n }))}
+                          options={Array.from({ length: SURAH_AYAH_COUNTS[plDraft.surah - 1] || 1 }, (_, i) => ({ value: i + 1, label: `آية ${i + 1}` }))} />
                       </label>
                       <label className="block">
                         <span className="text-xs font-semibold text-accent-700">ستقول (خطأً)</span>
@@ -6080,10 +6077,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </label>
                       <label className="block col-span-2">
                         <span className="text-xs font-semibold text-accent-700">نوع الخطأ</span>
-                        <select aria-label="نوع الخطأ" value={plDraft.type} onChange={(e) => setPlDraft((d) => ({ ...d, type: e.target.value as FixedTaxonomy }))}
-                          className="mt-1 w-full px-3 py-2 rounded-xl border border-hairline text-base bg-white">
-                          {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
-                        </select>
+                        <DrumSelect label="نوع الخطأ" value={plDraft.type} onChange={(v) => setPlDraft((d) => ({ ...d, type: v as FixedTaxonomy }))}
+                          options={TAXONOMY_VALUES.map((t) => ({ value: t, label: TAXONOMY_LABELS[t] }))} />
                       </label>
                     </div>
                     <button onClick={() => {
@@ -6898,14 +6893,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <div key={a.id} className="border border-hairline rounded-xl p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-sm font-semibold text-accent-800">سورة {SURAHS.find((s) => s.no === a.surah_no)?.name || ''} — آية {a.ayah_no}</span>
-                              <select aria-label="حالة الآية" value={st} onChange={(e) => setStatus(key, a.surah_no, a.ayah_no, e.target.value)}
-                                className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
-                                <option value="correct">صحيح</option>
-                                <option value="planted">خطأ مزروع (مخطط)</option>
-                                <option value="unintended">أخطأت دون قصد</option>
-                                <option value="self-corrected">تعثر ثم صححت نفسي</option>
-                                <option value="mixed">مختلط (مدخلات متعددة)</option>
-                              </select>
+                              <div className="w-52"><DrumSelect label="حالة الآية" value={st} onChange={(v) => setStatus(key, a.surah_no, a.ayah_no, String(v))}
+                                options={[{ value: 'correct', label: 'صحيح' }, { value: 'planted', label: 'خطأ مزروع (مخطط)' }, { value: 'unintended', label: 'أخطأت دون قصد' }, { value: 'self-corrected', label: 'تعثر ثم صححت نفسي' }, { value: 'mixed', label: 'مختلط (مدخلات متعددة)' }]} /></div>
                             </div>
                             {st === 'planted' && (planned.length === 0 ? (
                               <p className="text-sm text-amber-link">لا توجد خطة لهذه الآية — إن زرعت خطأً غير مخطط، اختر «أخطأت دون قصد».</p>
@@ -6937,9 +6926,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                 <div className="grid grid-cols-2 gap-2">
                                   <input placeholder="قلت (خطأً)" value={(unDraft[key]?.spoken) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), spoken: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
                                   <input placeholder="بدل كلمة" value={(unDraft[key]?.expected) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), expected: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
-                                  <select aria-label="نوع الخطأ" value={(unDraft[key]?.type) || 'substitution'} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: e.target.value as FixedTaxonomy } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm bg-white">
-                                    {TAXONOMY_VALUES.map((t) => (<option key={t} value={t}>{TAXONOMY_LABELS[t]}</option>))}
-                                  </select>
+                                  <div className="min-w-[9rem]"><DrumSelect label="نوع الخطأ" value={(unDraft[key]?.type) || 'substitution'} onChange={(v) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), type: v as FixedTaxonomy } }))}
+                                    options={TAXONOMY_VALUES.map((t) => ({ value: t, label: TAXONOMY_LABELS[t] }))} /></div>
                                   <input placeholder="تفاصيل اختيارية" value={(unDraft[key]?.free) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), free: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
                                 </div>
                                 <button onClick={() => addUnintended(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة خطأ غير مقصود</button>
