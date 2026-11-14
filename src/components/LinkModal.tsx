@@ -486,7 +486,7 @@ export default function LinkModal({
             <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center">
               <Bookmark className="w-4 h-4 text-emerald-600" />
             </div>
-            <h3 className="font-semibold text-accent-800">إنشاء رابط للآية</h3>
+            <h3 className="font-semibold text-accent-800">إنشاء تربيط للآية</h3>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg transition-smooth">
             <X className="w-5 h-5" />
@@ -503,7 +503,7 @@ export default function LinkModal({
           {/* Multi-type selection */}
           <div>
             <label className="block text-sm font-semibold text-accent-700 mb-1.5">
-              نوع الرابط <span className="text-accent-400 font-normal">(يمكن اختيار أكثر من صفة)</span>
+              نوع التربيط <span className="text-accent-400 font-normal">(يمكن اختيار أكثر من صفة)</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               {LINK_TYPES.map((t) => (
@@ -772,7 +772,7 @@ export default function LinkModal({
                   <FileText className="w-4 h-4" /> لا خلاص التزم بالنص الأصلي
                 </button>
               </div>
-              <p className="text-xs text-accent-600 text-center">سيتم إرسال الرابط للمراجعة من قبل الإدارة قبل نشره</p>
+              <p className="text-xs text-accent-600 text-center">سيتم إرسال التربيط للمراجعة من قبل الإدارة قبل نشره</p>
             </div>
           )}
 
@@ -790,7 +790,7 @@ export default function LinkModal({
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
                 <Check className="w-8 h-8 text-emerald-600" />
               </div>
-              <p className="text-sm font-semibold text-accent-800">تم يا رنا — اتبعت الرابط للمراجعة بنجاح</p>
+              <p className="text-sm font-semibold text-accent-800">تم يا رنا — اتبعت التربيط للمراجعة بنجاح</p>
               <p className="text-xs text-accent-600">سيظهر للمستخدمين بعد موافقة الإدارة</p>
             </div>
           )}

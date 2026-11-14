@@ -464,7 +464,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             </div>
             <div>
               <h1 className="text-lg font-bold text-ink">{t('appName')}</h1>
-              <p className="text-sm text-ink-2">{preferredName ? `لوحة ${preferredName} — روابط الآيات` : 'لوحتي — روابط الآيات'}</p>
+              <p className="text-sm text-ink-2">{preferredName ? `لوحة ${preferredName} — تربيطات الآيات` : 'لوحتي — تربيطات الآيات'}</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -681,7 +681,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <div className="px-4 pb-4 space-y-3 animate-slide-up border-t border-gray-50 pt-4">
               {/* Search */}
               <div>
-                <label className="block text-sm font-semibold text-ink-2 mb-1.5">بحث في الآيات والروابط</label>
+                <label className="block text-sm font-semibold text-ink-2 mb-1.5">بحث في الآيات والتربيطات</label>
                 <div className="relative">
                   <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-emerald-700" />
                   <input type="text" value={search}
@@ -713,7 +713,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               {/* Link type filter */}
               <div>
                 <label className="block text-sm font-semibold text-ink-2 mb-1.5 flex items-center gap-1.5">
-                  <Layers className="w-5 h-5 text-emerald-700" /> نوع الرابط
+                  <Layers className="w-5 h-5 text-emerald-700" /> نوع التربيط
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => { setLinkTypeFilter([]); setPage(0); }}

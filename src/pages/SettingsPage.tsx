@@ -1203,7 +1203,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             ))}
           </div>
-          <p className="text-sm font-semibold text-accent-700 mb-2">الجنس — يحدد صوت روابط الآيات</p>
+          <p className="text-sm font-semibold text-accent-700 mb-2">الجنس — يحدد صوت تربيطات الآيات</p>
           <p className="text-xs text-accent-600 mb-3">للرجال: الصوت الرجالي المولّد دائماً. للنساء: الصوت النسائي.</p>
           <div className="flex gap-2">
             <button onClick={() => pickGender('female')}

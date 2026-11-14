@@ -637,7 +637,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <p className="text-sm text-ink-2 mb-4">٣ خطوات، وكل آية تثبت في ذهنك:</p>
             <ol className="text-right space-y-3 text-base text-ink-2">
               <li><span className="font-medium text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
-              <li><span className="font-medium text-emerald-700">٢.</span> شوف رابطها — التربيط يثبّتها في ذهنك</li>
+              <li><span className="font-medium text-emerald-700">٢.</span> شوف تربيطها — التربيط يثبّتها في ذهنك</li>
               <li><span className="font-medium text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
             </ol>
             <button onPointerDown={pressFeedback} onClick={dismissIntro}

@@ -55,19 +55,19 @@ export default function ProgressWidget() {
 
       <div className="relative flex items-center gap-5">
         {/* Circular progress */}
-        <CircularProgressIndicator value={indexedPercent} size={110} label="له رابط" />
+        <CircularProgressIndicator value={indexedPercent} size={110} label="له تربيط" />
 
         {/* Stats grid */}
         <div className="flex-1 grid grid-cols-2 gap-2.5">
           <StatChip
             icon={<Bookmark className="w-3.5 h-3.5" />}
-            label="روابط"
+            label="تربيطات"
             value={stats.totalLinks}
             color="bg-white/15"
           />
           <StatChip
             icon={<BookOpen className="w-3.5 h-3.5" />}
-            label="له رابط"
+            label="له تربيط"
             value={stats.indexedVerses}
             color="bg-white/15"
           />

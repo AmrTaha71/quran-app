@@ -214,7 +214,7 @@ export function LinkLongPressMenu({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Bookmark className="w-5 h-5 text-emerald-600" />
-            <p className="text-sm font-semibold text-accent-800">إضافة الرابط إلى قائمة</p>
+            <p className="text-sm font-semibold text-accent-800">إضافة التربيط إلى قائمة</p>
           </div>
           <button onClick={onClose} aria-label="إغلاق" className="icon-action text-ink-3 hover:bg-gray-100 rounded-lg p-1">
             <X className="w-4 h-4" />

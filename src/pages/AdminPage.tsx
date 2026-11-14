@@ -335,13 +335,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   };
 
   const deleteLink = async (linkId: number) => {
-    if (!window.confirm('حذف هذا الرابط نهائيًا؟ لا يمكن التراجع.')) return;
+    if (!window.confirm('حذف هذا التربيط نهائيًا؟ لا يمكن التراجع.')) return;
     if (savingIds[linkId]) return;
     setSaving(linkId, true);
     setAdminError('');
     const { error } = await supabase.from('ayah_links').delete().eq('id', linkId);
     if (error) {
-      setAdminError('تعذّر حذف الرابط — لم يتغير شيء، حاول تاني.');
+      setAdminError('تعذّر حذف التربيط — لم يتغير شيء، حاول تاني.');
     } else {
       if (showLinksFor) fetchVerseLinks(showLinksFor);
       fetchVerses();
@@ -355,7 +355,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     setAdminError('');
     const { error } = await supabase.from('ayah_links').update({ status: 'approved' }).eq('id', linkId);
     if (error) {
-      setAdminError('تعذّر نشر الرابط — لم يتغير شيء، حاول تاني.');
+      setAdminError('تعذّر نشر التربيط — لم يتغير شيء، حاول تاني.');
     } else {
       removePendingLocal(linkId);
       fetchStats();
@@ -364,13 +364,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   };
 
   const rejectLink = async (linkId: number) => {
-    if (!window.confirm('رفض هذا الرابط؟ سيختفي من قائمة المراجعة ولن يظهر للمستخدمين.')) return;
+    if (!window.confirm('رفض هذا التربيط؟ سيختفي من قائمة المراجعة ولن يظهر للمستخدمين.')) return;
     if (savingIds[linkId]) return;
     setSaving(linkId, true);
     setAdminError('');
     const { error } = await supabase.from('ayah_links').update({ status: 'rejected' }).eq('id', linkId);
     if (error) {
-      setAdminError('تعذّر رفض الرابط — لم يتغير شيء، حاول تاني.');
+      setAdminError('تعذّر رفض التربيط — لم يتغير شيء، حاول تاني.');
     } else {
       removePendingLocal(linkId);
     }
@@ -489,7 +489,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   };
 
   const exportExcel = () => {
-    const headers = ['السورة', 'رقم السورة', 'رقم الآية', 'نص الآية', 'له رابط', 'عدد الروابط'];
+    const headers = ['السورة', 'رقم السورة', 'رقم الآية', 'نص الآية', 'له تربيط', 'عدد التربيطات'];
     const rows = verses.map((v) => [v.surah_name, v.surah_no, v.ayah_no, v.ayah_text, v.has_links ? 'نعم' : 'لا', v.links_count]);
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
@@ -631,7 +631,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         {/* Dashboard sub-doors: small buttons, each opens its own panel */}
         <div className="flex flex-wrap gap-2 mb-4">
           {([
-            ['progress', 'تقدم الروابط'],
+            ['progress', 'تقدم التربيطات'],
             ['users', 'المستخدمين'],
             ['openai', 'رصيد OpenAI'],
           ] as const).map(([key, label]) => (
@@ -652,14 +652,14 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-teal-300/10 rounded-full blur-xl" />
             <CircularProgressIndicator value={linkedPercentage} size={100} />
             <div className="flex-1 relative">
-              <p className="text-sm text-emerald-100 font-semibold mb-1">تقدم إنشاء الروابط</p>
+              <p className="text-sm text-emerald-100 font-semibold mb-1">تقدم إنشاء التربيطات</p>
               <p className="text-3xl font-bold text-white">{stats.withLinks.toLocaleString('ar-EG')}</p>
               <p className="text-xs text-emerald-200">من {TOTAL_VERSES.toLocaleString('ar-EG')} آية</p>
               <p className="text-xs text-amber-200 mt-1">{remaining.toLocaleString('ar-EG')} متبقية</p>
             </div>
           </div>
-          <StatCard label="آيات لها رابط" value={stats.withLinks} color="emerald" icon={<Bookmark className="w-5 h-5" />} />
-          <StatCard label="آيات بدون روابط" value={stats.withoutLinks} color="red" icon={<X className="w-5 h-5" />} />
+          <StatCard label="آيات لها تربيط" value={stats.withLinks} color="emerald" icon={<Bookmark className="w-5 h-5" />} />
+          <StatCard label="آيات بدون تربيطات" value={stats.withoutLinks} color="red" icon={<X className="w-5 h-5" />} />
         </div>
 
         {/* User accounts — so the admins can rejoice in the good they
@@ -775,7 +775,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       ? f === 'green' ? 'bg-emerald-500 text-white shadow-sm' : f === 'red' ? 'bg-red-500 text-white shadow-sm' : 'bg-accent-700 text-white shadow-sm'
                       : 'text-accent-500 hover:bg-gray-100'
                   }`}>
-                  {f === 'all' ? 'الكل' : f === 'green' ? 'له رابط' : 'بدون رابط'}
+                  {f === 'all' ? 'الكل' : f === 'green' ? 'له تربيط' : 'بدون تربيط'}
                 </button>
               ))}
             </div>
@@ -790,19 +790,19 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded border-r-4 border-emerald-400 bg-emerald-50"></div>
-              <span className="text-xs text-accent-600">آية لها رابط</span>
+              <span className="text-xs text-accent-600">آية لها تربيط</span>
             </div>
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 rounded border-r-4 border-red-400 bg-red-50"></div>
-              <span className="text-xs text-accent-600">آية بدون روابط</span>
+              <span className="text-xs text-accent-600">آية بدون تربيطات</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Bookmark className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-xs text-accent-600">سجلي المقطع يا رنا — تسجيل رابط</span>
+              <span className="text-xs text-accent-600">سجلي المقطع يا رنا — تسجيل تربيط</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Settings className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-xs text-accent-600">عرض الروابط</span>
+              <span className="text-xs text-accent-600">عرض التربيطات</span>
             </div>
           </div>
         </div>
@@ -839,10 +839,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg">{verse.surah_no}:{verse.ayah_no}</span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
                           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-ink-3 bg-gray-50'}`}>
-                            <Bookmark className="w-3 h-3" /> {verse.links_count || 0} رابط
+                            <Bookmark className="w-3 h-3" /> {verse.links_count || 0} تربيط
                           </span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
-                            {verse.has_links ? 'لها رابط' : 'بدون رابط'}
+                            {verse.has_links ? 'لها تربيط' : 'بدون تربيط'}
                           </span>
                         </div>
                         <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{verse.ayah_text}</p>
@@ -865,7 +865,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                                   )}
                                   {link.status === 'pending' && <span className="text-xs text-amber-link font-semibold">بانتظار المراجعة</span>}
                                 </div>
-                                <button onClick={() => deleteLink(link.id)} disabled={!!savingIds[link.id]} aria-label="حذف الرابط" className="icon-action text-red-500 hover:bg-red-100 rounded p-1 flex-shrink-0 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
+                                <button onClick={() => deleteLink(link.id)} disabled={!!savingIds[link.id]} aria-label="حذف التربيط" className="icon-action text-red-500 hover:bg-red-100 rounded p-1 flex-shrink-0 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             ))}
                           </div>
@@ -881,11 +881,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <span className="text-xs font-semibold text-center">سجلي المقطع<br />يا رنا</span>
                         </button>
                         <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
-                          title="عرض الروابط"
+                          title="عرض التربيطات"
                           className={`flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-smooth ${
                             showLinksFor === verse.id ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-50 text-accent-600 hover:bg-gray-100 border border-hairline'
                           }`}>
-                          <Settings className="w-3.5 h-3.5" /> الروابط
+                          <Settings className="w-3.5 h-3.5" /> التربيطات
                         </button>
                       </div>
                     </div>
@@ -917,11 +917,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       {/* Pending Links Review Modal */}
       {showPending && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowPending(false)}>
-          <div role="dialog" aria-modal="true" aria-label="روابط بانتظار المراجعة" className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
+          <div role="dialog" aria-modal="true" aria-label="تربيطات بانتظار المراجعة" className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl my-8 animate-slide-up" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-3xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />
-                <h3 className="font-semibold text-accent-800">روابط بانتظار المراجعة ({pendingLinks.length})</h3>
+                <h3 className="font-semibold text-accent-800">تربيطات بانتظار المراجعة ({pendingLinks.length})</h3>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => fetchPendingLinks()} disabled={pendingLoading}
@@ -953,7 +953,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 ) : (
                 <div className="text-center py-12 text-accent-400">
                   <Check className="w-10 h-10 mx-auto mb-2 text-emerald-400" />
-                  <p>لا توجد روابط بانتظار المراجعة</p>
+                  <p>لا توجد تربيطات بانتظار المراجعة</p>
                 </div>
                 )
               ) : (
