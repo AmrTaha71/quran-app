@@ -1,14 +1,14 @@
 {
- "sobolev": {
-  "clips": 1,
-  "words": 4,
-  "ok": 0,
+ "qlab_correct": {
+  "clips": 300,
+  "words": 2724,
+  "ok": 2349,
   "wrong": 0,
-  "clean_clips": 1,
-  "clean_words": 4,
-  "clean_notok": 4,
+  "clean_clips": 300,
+  "clean_words": 2724,
+  "clean_notok": 375,
   "clean_wrong": 0,
-  "clean_clips_flagged": 1
+  "clean_clips_flagged": 187
  },
  "by_type": {},
  "missed_examples": []
