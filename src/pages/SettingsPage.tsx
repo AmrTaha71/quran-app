@@ -58,6 +58,29 @@ function readStored<T>(key: string, fallback: T, parse: (raw: string) => T | nul
   }
 }
 
+// Today's date, Hijri (Umm al-Qura) + Gregorian. Offline: no network call.
+function TodayDatesCard() {
+  const now = new Date();
+  let hijri = '';
+  let greg = '';
+  try {
+    hijri = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-arab', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
+  } catch {
+    try { hijri = new Intl.DateTimeFormat('ar-SA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now); } catch { hijri = ''; }
+  }
+  try { greg = new Intl.DateTimeFormat('ar-EG-u-ca-gregory', { day: 'numeric', month: 'long', year: 'numeric' }).format(now); } catch { greg = ''; }
+  if (!hijri && !greg) return null;
+  return (
+    <section className="glass-card rounded-2xl p-4 md:p-5 flex items-center gap-3">
+      <CalendarDays className="w-6 h-6 text-amber-600 shrink-0" />
+      <div className="min-w-0">
+        {hijri && <p className="text-base md:text-lg font-bold text-accent-800">{hijri}</p>}
+        {greg && <p className="text-sm text-accent-600">{greg} م • التقويم الهجري (أم القرى)</p>}
+      </div>
+    </section>
+  );
+}
+
 export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const { lang, setLang } = useLang();
   // Settings hub (2026-11-04): null = hub grid of doors; otherwise
@@ -756,6 +779,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
+        {openDoor === null && <TodayDatesCard />}
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
             {doors.filter((d) => (d.id !== 'admin' || adminGateError || isAdmin) && (d.id !== 'diag' || isAdmin)).map((d, i) => (

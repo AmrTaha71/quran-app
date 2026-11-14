@@ -9,6 +9,7 @@
 import StudioMic from './StudioMic';
 import { useEffect, useRef, useState } from 'react';
 import { Mic } from 'lucide-react';
+import { speechErrorMessage } from '../lib/speechErrors';
 
 const SEARCH_HINT = /بحث|ابحث|دوّر|دور|سور|آية|سمعتها|العلامة|search/i;
 
@@ -30,6 +31,8 @@ export default function VoiceSearchMic() {
   const [target, setTarget] = useState<HTMLInputElement | null>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const [listening, setListening] = useState(false);
+  const [err, setErr] = useState('');
+  const errTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supported = typeof window !== 'undefined' &&
     !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -80,7 +83,11 @@ export default function VoiceSearchMic() {
         if (t) setNativeValue(el, t);
       };
       r.onend = () => { setListening(false); setTarget(null); setPos(null); };
-      r.onerror = () => { setListening(false); };
+      r.onerror = (ev: any) => {
+        setListening(false);
+        const m = speechErrorMessage(ev?.error);
+        if (m) { setErr(m.text); if (errTimer.current) clearTimeout(errTimer.current); errTimer.current = setTimeout(() => setErr(''), 7000); }
+      };
       setListening(true);
       r.start();
     } catch {
@@ -88,8 +95,16 @@ export default function VoiceSearchMic() {
     }
   };
 
-  if (!supported || (!target && !listening) || !pos) return null;
+  const bubble = err ? (
+    <div dir="rtl" role="alert" onClick={() => setErr('')} style={{ position: 'fixed', left: 12, right: 12, bottom: 16, zIndex: 2100 }}
+      className="mx-auto max-w-md rounded-2xl bg-rose-800 text-white shadow-2xl p-3 text-sm font-semibold leading-snug">
+      🎙️ {err}
+    </div>
+  ) : null;
+  if (!supported || (!target && !listening) || !pos) return bubble;
   return (
+    <>
+    {bubble}
     <button
       type="button"
       aria-label="ابحث بالصوت"
@@ -100,5 +115,6 @@ export default function VoiceSearchMic() {
     >
       <StudioMic className="w-6 h-6" />
     </button>
+    </>
   );
 }

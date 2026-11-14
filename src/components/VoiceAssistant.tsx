@@ -8,6 +8,7 @@ import { parseVoiceCommand, findSurah, surahGlobalRange, surahName, norm, type V
 import { RECITERS } from '../lib/reciters';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange } from '../lib/corrDownload';
+import { speechErrorMessage } from '../lib/speechErrors';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 type Step = { k: 'root' } | { k: 'surah'; surah: number } | { k: 'reciter'; surah: number } | { k: 'recite'; surah: number };
@@ -65,6 +66,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
   const [heard, setHeard] = useState('');
   const [note, setNote] = useState('');
   const activeRef = useRef(false);
+  const netErrRef = useRef(0);
   const stepRef = useRef<Step>({ k: 'root' });
   const recRef = useRef<any>(null);
   const restartTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -194,6 +196,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
     const Ctor = W.SpeechRecognition || W.webkitSpeechRecognition;
     if (!Ctor) { setNote('المتصفح ده مش بيدعم الأوامر بالصوت'); return; }
     activeRef.current = true;
+    netErrRef.current = 0;
     setActive(true);
     announce(true);
     setHeard('');
@@ -209,6 +212,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
         r.interimResults = false;
         r.maxAlternatives = 3;
         r.onresult = (e: any) => {
+          netErrRef.current = 0;
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const res = e.results[i];
             if (!res.isFinal) continue;
@@ -218,7 +222,13 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
           }
         };
         r.onerror = (ev: any) => {
-          if (ev?.error === 'not-allowed' || ev?.error === 'service-not-allowed') stop('المايك مش مسموح، فعّله من إعدادات المتصفح');
+          const m = speechErrorMessage(ev?.error);
+          if (!m) return;
+          if (m.fatal) { stop(m.text); return; }
+          // Transient (network): say so, and give up after 3 in a row.
+          netErrRef.current += 1;
+          if (netErrRef.current >= 3) { stop(m.text); return; }
+          setNote(m.text);
         };
         r.onend = () => {
           if (!activeRef.current) return;
