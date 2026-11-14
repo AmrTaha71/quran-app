@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Like decode.py, but keeps the model's per-frame log-probabilities.
 usage: dump_lp.py MODEL_DIR OUT_DIR wav [wav...]  -> OUT_DIR/<basename>.npy (float16, frames x 251)"""
-import sys, os, numpy as np, soundfile as sf, onnxruntime as ort, kaldi_native_fbank as knf
+import hashlib, sys, os, numpy as np, soundfile as sf, onnxruntime as ort, kaldi_native_fbank as knf
 md=sys.argv[1]; out=sys.argv[2]; files=sys.argv[3:]; os.makedirs(out,exist_ok=True)
 sess=ort.InferenceSession(f'{md}/zipformer_p_arabic_v3.int8.onnx',providers=['CPUExecutionProvider'])
 ins=sess.get_inputs(); names=[i.name for i in ins]
@@ -24,4 +24,4 @@ for path in files:
         o=sess.run(None,{names[0]:x[None],**st})
         for n,v in zip(names[1:],o[1:]): st[n]=v
         rows.append(o[0][0].astype(np.float16)); pos+=SHIFT
-    np.save(os.path.join(out,os.path.basename(path)+'.npy'),np.concatenate(rows))
+    np.save(os.path.join(out,hashlib.md5(path.encode()).hexdigest()+'.npy'),np.concatenate(rows))

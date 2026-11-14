@@ -4,7 +4,7 @@ usage: gop.py MODEL_DIR LP_DIR MANIFEST OUT.json
 For every clip: tokenise the reference phoneme script of its ayah, CTC-Viterbi align it
 to the saved log-probs, score every word, then sweep thresholds against the labelled
 errors (sobolev) and the correct recitations (qlab) to compare with the greedy judge."""
-import sys, os, re, json, numpy as np
+import hashlib, sys, os, re, json, numpy as np
 md, lpd, man, out = sys.argv[1:5]
 toks = json.load(open(f'{md}/tokens.json', encoding='utf8'))
 inv = {v: int(k) for k, v in toks.items() if v != '<blank>'}
@@ -46,7 +46,7 @@ def viterbi(lp, seq):
 rows = [json.loads(l) for l in open(man, encoding='utf8')]
 res = []
 for r in rows:
-    p = os.path.join(lpd, os.path.basename(r['f']) + '.npy')
+    p = os.path.join(lpd, hashlib.md5(r['f'].encode()).hexdigest() + '.npy')
     if not os.path.exists(p): continue
     key = norm(r['text']); ph = byk.get(key)
     if ph is None: continue
