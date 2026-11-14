@@ -6,6 +6,7 @@
 // Palette is emerald + gold only (unified palette; no new hue), calm
 // transitions from the alive styles (push 204), no loud effects.
 import Sama3 from './Sama3';
+import OnboardingDemo, { type DemoKind } from './OnboardingDemo';
 import { useState } from 'react';
 import { BookMarked, Mic, Headphones, ChevronLeft, X } from 'lucide-react';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
@@ -48,16 +49,25 @@ const LEVELS: { id: VerifyLevel; label: string; hint: string }[] = [
 
 const SCREENS = [
   {
+    kind: 'links' as DemoKind,
     icon: BookMarked,
     title: 'احفظ بالتربيطات',
     line: 'كل آية ليها تربيطات تربطها باللي قبلها وبعدها — احفظ بالمعنى، مش بالتكرار بس.',
   },
   {
+    kind: 'tasmee' as DemoKind,
     icon: Mic,
     title: <><Sama3 /> لي</>,
     line: 'سمّع بصوتك والتطبيق يصحح لك لحظيًا — من غير ما تحتاج حد يسمع لك.',
   },
   {
+    kind: 'imam' as DemoKind,
+    icon: Headphones,
+    title: 'الْحَقِ الإِمَامَ',
+    line: 'افتح المصحف وهو يقرأ، والتطبيق ينوّر الكلمة اللي بيقولها الإمام وإنت تتابع بعينك.',
+  },
+  {
+    kind: 'listen' as DemoKind,
     icon: Headphones,
     title: 'استمع',
     line: 'ختمة كاملة بأصوات القرّاء، وتفسير مسموع، وأذكار — اسمع في أي وقت.',
@@ -143,9 +153,7 @@ export default function Onboarding({ onDone }: { onDone: () => void }) {
 
         {!isSetup ? (
           <div key={step} className="px-6 pb-6 pt-2 text-center polish-fade-up">
-            <div className="mx-auto w-20 h-20 rounded-3xl grad-emerald-door flex items-center justify-center shadow-lg mb-5">
-              <ScreenIcon className="w-10 h-10 text-white" />
-            </div>
+            <OnboardingDemo kind={screen.kind} />
             <h2 className="text-2xl font-bold font-display-ar text-ink">{screen.title}</h2>
             <p className="text-base text-ink-2 leading-relaxed mt-3 min-h-[4.5rem]">{screen.line}</p>
             <button

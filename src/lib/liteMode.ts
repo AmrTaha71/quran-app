@@ -1,7 +1,7 @@
 // «وضع التوفير» (2026-11-14): one switch that makes the app gentle on the
 // battery. On: no vibration, no tap/opening sounds, no animations or blur/
 // shadow effects, a soft dim over the screen (saves power on OLED; a web page
-// cannot set the phone's own brightness), and no keep-awake lock. Switches on
+// cannot set the phone's own brightness). The keep-awake lock stays, because reading, listening and tasmee' must not be cut. Switches on
 // by itself once when the battery drops to 20% or less (not charging), unless
 // the user switched it off by hand. Battery API: Android/Chrome only.
 const KEY = 'quran-lite';
