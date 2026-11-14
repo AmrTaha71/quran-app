@@ -39,12 +39,12 @@ export default function OrderMeButton({ onMutashabihat, onElderly }: Props) {
         onPointerDown={pressFeedback}
         onClick={() => window.dispatchEvent(new CustomEvent('voice-assistant-toggle'))}
         aria-label="اؤمرني"
-        className={`group relative w-full max-w-md flex items-center gap-4 px-5 py-4 rounded-3xl shadow-xl polish-press transition-transform ${on ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#0f5c4d] via-[#12705d] to-[#0b3f37]'}`}
+        className={`group relative w-full max-w-md flex flex-col items-center gap-1 px-2 py-3 rounded-3xl min-w-0 overflow-hidden shadow-xl polish-press transition-transform ${on ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#0f5c4d] via-[#12705d] to-[#0b3f37]'}`}
       >
         <VintageMic listening={on} />
-        <span className="flex-1 text-right">
-          <span className="block text-3xl font-bold font-display-ar text-[#f6d27a] drop-shadow">{on ? 'المايك مفتوح' : 'اؤمرني'}</span>
-          <span className="block text-sm text-[#f3ead7]/90 mt-1">{on ? 'كمّل كلامك، وقول «خلاص» لما تخلّص' : 'قول لي عايز تعمل إيه، وأنا أفتحهولك'}</span>
+        <span className="w-full min-w-0 text-center">
+          <span className="block text-[clamp(1.3rem,6vw,1.75rem)] leading-tight font-bold font-display-ar text-[#f6d27a] drop-shadow">{on ? 'المايك مفتوح' : 'اؤمرني'}</span>
+          <span className="block text-[clamp(0.7rem,3.1vw,0.875rem)] leading-snug text-[#f3ead7]/90 mt-1 break-words">{on ? 'قول «خلاص» لما تخلّص' : 'قول عايز إيه'}</span>
         </span>
       </button>
       {!on && (
@@ -58,7 +58,7 @@ export default function OrderMeButton({ onMutashabihat, onElderly }: Props) {
 // tilted stage mic: rounded capsule, slotted grille, holder ring).
 function VintageMic({ listening }: { listening: boolean }) {
   return (
-    <svg viewBox="0 0 100 120" className={`w-28 h-32 shrink-0 drop-shadow-xl ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
+    <svg viewBox="0 0 100 120" className={`w-[38%] max-w-24 h-auto shrink-0 drop-shadow-xl ${listening ? 'animate-pulse' : ''}`} aria-hidden="true">
       <defs>
         <linearGradient id="vmChrome" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#5b5f6a" />

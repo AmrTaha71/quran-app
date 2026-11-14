@@ -1,9 +1,10 @@
 // شارك (2026-11-13): one share sheet for the whole app — the social apps
 // people use most in the Arab world, plus copy-link and the device's own
 // share menu when it has one. Instagram has no web share link, so it is
-// reached through «مشاركة من الجهاز» or by pasting the copied link.
+// opened after the link is copied (tap, then paste in a chat).
 import { useState } from 'react';
-import { X, Copy, Check, Share2 } from 'lucide-react';
+import { X, Copy, Check, Share2, Mail, MessageSquareText } from 'lucide-react';
+import { BRAND_ICONS } from '../lib/brandIcons';
 import { useEscapeClose } from '../lib/useEscape';
 
 export default function ShareSheet({ title, text, url, onClose }: { title: string; text: string; url: string; onClose: () => void }) {
@@ -12,14 +13,15 @@ export default function ShareSheet({ title, text, url, onClose }: { title: strin
   const t = encodeURIComponent(text);
   const u = encodeURIComponent(url);
   const both = encodeURIComponent(`${text}\n${url}`);
-  const targets: { name: string; href: string; bg: string }[] = [
-    { name: 'واتساب', href: `https://wa.me/?text=${both}`, bg: '#25D366' },
-    { name: 'تيليجرام', href: `https://t.me/share/url?url=${u}&text=${t}`, bg: '#229ED9' },
-    { name: 'فيسبوك', href: `https://www.facebook.com/sharer/sharer.php?u=${u}`, bg: '#1877F2' },
-    { name: 'ماسنجر', href: `fb-messenger://share/?link=${u}`, bg: '#0084FF' },
-    { name: 'إكس', href: `https://twitter.com/intent/tweet?text=${t}&url=${u}`, bg: '#111111' },
-    { name: 'رسالة SMS', href: `sms:?&body=${both}`, bg: '#3B5B4E' },
-    { name: 'إيميل', href: `mailto:?subject=${encodeURIComponent(title)}&body=${both}`, bg: '#7C4410' },
+  const targets: { name: string; href: string; bg: string; icon: string | null; ig?: boolean }[] = [
+    { name: 'واتساب', href: `https://wa.me/?text=${both}`, bg: '#25D366', icon: 'whatsapp' },
+    { name: 'تيليجرام', href: `https://t.me/share/url?url=${u}&text=${t}`, bg: '#229ED9', icon: 'telegram' },
+    { name: 'فيسبوك', href: `https://www.facebook.com/sharer/sharer.php?u=${u}`, bg: '#1877F2', icon: 'facebook' },
+    { name: 'ماسنجر', href: `fb-messenger://share/?link=${u}`, bg: '#0084FF', icon: 'messenger' },
+    { name: 'إكس', href: `https://twitter.com/intent/tweet?text=${t}&url=${u}`, bg: '#111111', icon: 'x' },
+    { name: 'رسالة SMS', href: `sms:?&body=${both}`, bg: '#34C759', icon: null },
+    { name: 'إيميل', href: `mailto:?subject=${encodeURIComponent(title)}&body=${both}`, bg: '#1A73E8', icon: null },
+    { name: 'إنستجرام', href: 'https://www.instagram.com/', bg: 'linear-gradient(45deg,#FEDA75,#FA7E1E,#D62976,#962FBF,#4F5BD5)', icon: 'instagram', ig: true },
   ];
   const canNative = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const copy = async () => {
@@ -34,8 +36,13 @@ export default function ShareSheet({ title, text, url, onClose }: { title: strin
         </div>
         <div className="grid grid-cols-4 gap-3">
           {targets.map((s) => (
-            <a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 polish-press">
-              <span className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold shadow-md" style={{ background: s.bg }}>{s.name[0]}</span>
+            <a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1.5 polish-press"
+              onClick={s.ig ? () => { void navigator.clipboard?.writeText(`${text}\n${url}`).catch(() => {}); } : undefined}>
+              <span className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-md" style={{ background: s.bg }}>
+                {s.icon ? (
+                  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#fff" aria-hidden="true"><path d={BRAND_ICONS[s.icon].path} /></svg>
+                ) : s.name === 'إيميل' ? <Mail className="w-7 h-7" /> : <MessageSquareText className="w-7 h-7" />}
+              </span>
               <span className="text-xs font-bold text-accent-800 text-center">{s.name}</span>
             </a>
           ))}
@@ -47,7 +54,7 @@ export default function ShareSheet({ title, text, url, onClose }: { title: strin
         {canNative && (
           <button onClick={() => { void navigator.share({ title, text, url }).catch(() => {}); }}
             className="mt-4 w-full py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press">
-            <Share2 className="w-5 h-5" /> مشاركة من الجهاز (إنستجرام وغيره)
+            <Share2 className="w-5 h-5" /> تطبيقات أخرى
           </button>
         )}
       </div>
