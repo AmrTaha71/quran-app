@@ -1,5 +1,6 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { getSharedAudio } from './sharedAudio';
+import { isLite } from './liteMode';
 
 // Visual design batch (2026-11-04) + water pass (2026-11-04) +
 // alive ripple (2026-11-06): one press-feedback entry point for nav
@@ -24,6 +25,7 @@ import { getSharedAudio } from './sharedAudio';
 export const TAP_SOUND_KEY = 'quran-tap-sound';
 
 export function isTapSoundEnabled(): boolean {
+  if (isLite()) return false;
   try {
     return localStorage.getItem(TAP_SOUND_KEY) !== '0';
   } catch {

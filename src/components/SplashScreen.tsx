@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { playOpening } from '../lib/openingFeel';
 
 // Branded launch screen for "تربيطات آيات القرآن" — the artwork
 // ITSELF, not a redraw: the centerpiece is the hosted icon-512.png,
@@ -14,6 +15,7 @@ import { useEffect, useState } from 'react';
 export default function SplashScreen({ onFinish, duration = 2000, message }: { onFinish: () => void; duration?: number; message?: string }) {
   const [fadeOut, setFadeOut] = useState(false);
 
+  useEffect(() => { playOpening(); }, []);
   useEffect(() => {
     const show = setTimeout(() => setFadeOut(true), duration);
     const done = setTimeout(onFinish, duration + 500);

@@ -4045,12 +4045,12 @@ export default function QuranMushafPage({
               covers it. */}
           {!showRatelIntro && cleanMode && (
             <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
-              <WorshipTimer dark />
+              <WorshipTimer dark flash />
             </div>
           )}
           {!showRatelIntro && !cleanMode && (
             <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)] md:max-w-[calc(100vw-31rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
-              <WorshipTimer dark />
+              <WorshipTimer dark flash />
               <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">صفحة {labelPage}</span>
               {/* Juz/Hizb collapse below 420px: on a 320-360px phone the
                   timer + page + surah already fill one line, and a

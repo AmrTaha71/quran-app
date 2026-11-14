@@ -129,7 +129,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     void QRCode.toDataURL(url, { width: 360, margin: 1 }).then(setTvQr).catch(() => setTvQr(''));
   }, [tvView, code]);
   // The TV page keeps its own screen awake; the phone remote can be locked.
-  useWakeLock(tvView && !!code);
+  useWakeLock(tvView && !!code, true);
   const [joinInput, setJoinInput] = useState('');
   const [joinError, setJoinError] = useState('');
   const [members, setMembers] = useState(0);

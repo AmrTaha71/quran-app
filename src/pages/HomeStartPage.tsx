@@ -32,6 +32,7 @@ import { normalizeDigits, toArabicIndic } from '../lib/numerals';
 import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
+import LiteModeButton from '../components/LiteModeButton';
 
 type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room' | 'radio';
 
@@ -618,6 +619,8 @@ export default function HomeStartPage({ session, onNavigate }: {
             </button>
           </div>
         )}
+
+        <div className="mb-4"><LiteModeButton /></div>
 
         {/* Share app: last, out of the way of the daily doors. */}
         <div className="mb-4 qr-home">

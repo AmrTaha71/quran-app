@@ -37,6 +37,7 @@ import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardin
 import DevicePicker from './components/DevicePicker';
 import VoiceSearchMic from './components/VoiceSearchMic';
 import VoiceAssistant from './components/VoiceAssistant';
+import { initLite } from './lib/liteMode';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
@@ -145,6 +146,7 @@ function AppContent() {
   useEffect(() => {
     applyDeviceLayout();
     wireDeviceLayout();
+    initLite();
     const open = () => setDevicePickerOpen(true);
     window.addEventListener('quran-open-device-picker', open);
     return () => window.removeEventListener('quran-open-device-picker', open);

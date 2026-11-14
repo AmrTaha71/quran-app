@@ -2,10 +2,12 @@
 // drops the lock when the page is hidden, so it is re-acquired on return.
 // Silently does nothing where the Screen Wake Lock API is missing.
 import { useEffect } from 'react';
+import { isLite } from './liteMode';
 
-export function useWakeLock(active: boolean): void {
+export function useWakeLock(active: boolean, force = false): void {
   useEffect(() => {
     if (!active) return;
+    if (!force && isLite()) return;
     const nav = navigator as Navigator & { wakeLock?: { request: (t: 'screen') => Promise<WakeLockSentinel> } };
     if (!nav.wakeLock) return;
     let sentinel: WakeLockSentinel | null = null;
