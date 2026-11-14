@@ -17,14 +17,14 @@ import { useEffect, useState } from 'react';
 import { getBackTarget, subscribeBackTarget, type BackTarget } from '../lib/backTarget';
 import { pressFeedback } from '../lib/pressFeedback';
 
-export function BackButton({ label, onBack }: { label: string; onBack: () => void }) {
+export function BackButton({ label, onBack, compact }: { label: string; onBack: () => void; compact?: boolean }) {
   return (
     <button
       type="button"
       onPointerDown={pressFeedback}
       onClick={onBack}
       aria-label={label}
-      className="grad-emerald-door polish-press inline-flex items-center gap-2 min-h-[56px] px-4 py-3 rounded-xl text-white text-base md:text-lg font-bold shadow-sm"
+      className={`grad-emerald-door polish-press inline-flex items-center gap-2 rounded-xl text-white font-bold shadow-sm ${compact ? 'min-h-[36px] px-3 py-1 text-sm' : 'min-h-[56px] px-4 py-3 text-base md:text-lg'}`}
     >
       <span aria-hidden="true">←</span>
       <span>{label}</span>

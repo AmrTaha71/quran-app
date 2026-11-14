@@ -126,9 +126,9 @@ function WorshipTimer({ dark }: { dark?: boolean }) {
     return () => window.clearInterval(id);
   }, []);
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold whitespace-nowrap ${dark ? 'bg-black/60 text-white ring-1 ring-white/40' : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'}`} title="وقتك في التعبّد بحفظ كتاب الله">
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap ${dark ? 'bg-black/60 text-white ring-1 ring-white/40' : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'}`} title="وقتك في التعبّد بحفظ كتاب الله">
       <Clock className="w-4 h-4" />
-      بقالك {formatWorship(total)} بتتعبد بحفظ كتاب الله
+      بقالك {formatWorship(total)}<span className="hidden sm:inline"> بتتعبد بحفظ كتاب الله</span>
     </span>
   );
 }
@@ -3339,7 +3339,7 @@ export default function QuranMushafPage({
     <div className="min-h-screen mushaf-page-bg pb-24">
       {/* Header — BOLD pass: chrome-enter on mount (chrome only, never the image) */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm mushaf-chrome-enter">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-0.5 flex items-center justify-between gap-x-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg flex items-center justify-center shadow flex-shrink-0">
               <BookOpen className="w-4 h-4 text-white" />
@@ -3348,7 +3348,7 @@ export default function QuranMushafPage({
               <h1 className="text-base font-bold text-accent-800 whitespace-nowrap">المصحف الشريف</h1>
             </div>
           </div>
-          <span className="min-w-0 flex-1 flex items-center justify-center gap-1 text-xs text-amber-700/90 font-semibold"><Heart className="w-4 h-4 flex-shrink-0" /><span className="truncate">استحضر النية · {dailyDua()}</span></span>
+          <span className="min-w-0 flex-1 hidden sm:flex items-center justify-center gap-1 text-xs text-amber-700/90 font-semibold"><Heart className="w-4 h-4 flex-shrink-0" /><span className="truncate">استحضر النية · {dailyDua()}</span></span>
           <div className="flex items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowLangMenu(!showLangMenu)}
@@ -3393,27 +3393,27 @@ export default function QuranMushafPage({
             min-height) is dropped here so the bar can be dense. The
             niyyah line moved into the header row above; the header
             subtitle (descriptive text, not a control) was dropped. */}
-        <div className="bg-white rounded-xl border border-gray-200 p-1.5 mb-1 shadow-sm">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <div className="bg-white rounded-xl border border-gray-200 p-1 mb-1 shadow-sm">
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 [&_button]:text-[11px] [&_.drum-compact]:text-xs">
             <button onClick={() => { setShowIndex(true); setIndexTab('juz'); }}
-              className="flex items-center gap-1.5 px-2 py-0.5 bg-white hover:bg-amber-50 text-amber-800 rounded-lg text-xs font-semibold transition-smooth border border-amber-300 shadow-sm">
-              <LayoutGrid className="w-4 h-4" /> {currentJuz.name}
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-white hover:bg-amber-50 text-amber-800 rounded-lg text-[11px] font-semibold transition-smooth border border-amber-300 shadow-sm">
+              <LayoutGrid className="w-3.5 h-3.5" /> {currentJuz.name}
             </button>
             <button onClick={() => { setShowIndex(true); setIndexTab('hizb'); }}
-              className="flex items-center gap-1.5 px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded-lg text-xs font-semibold transition-smooth border border-emerald-300 shadow-sm">
-              <Hash className="w-4 h-4" /> الحزب {currentHizb.number}
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-white hover:bg-emerald-50 text-emerald-800 rounded-lg text-[11px] font-semibold transition-smooth border border-emerald-300 shadow-sm">
+              <Hash className="w-3.5 h-3.5" /> الحزب {currentHizb.number}
             </button>
             <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
-              className="flex items-center gap-1.5 px-2 py-0.5 bg-white hover:bg-blue-50 text-blue-800 rounded-lg text-xs font-semibold transition-smooth border border-blue-300 shadow-sm">
-              <BookMarked className="w-4 h-4" /> سورة {currentSurahName}
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-white hover:bg-blue-50 text-blue-800 rounded-lg text-[11px] font-semibold transition-smooth border border-blue-300 shadow-sm">
+              <BookMarked className="w-3.5 h-3.5" /> سورة {currentSurahName}
             </button>
             <button onClick={() => setShowEditionPicker(true)}
-              className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-semibold transition-smooth border border-amber-200">
-              <Layers className="w-4 h-4" /> {edition.name}
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-[11px] font-semibold transition-smooth border border-amber-200">
+              <Layers className="w-3.5 h-3.5" /> {edition.name}
             </button>
             <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
-              className="flex items-center gap-1.5 px-2.5 py-0.5 bg-stone-50 hover:bg-stone-100 text-accent-700 rounded-lg text-xs font-semibold transition-smooth border border-gray-200">
-              <List className="w-4 h-4" /> الفهرس
+              className="flex items-center gap-1 px-1.5 py-0.5 bg-stone-50 hover:bg-stone-100 text-accent-700 rounded-lg text-[11px] font-semibold transition-smooth border border-gray-200">
+              <List className="w-3.5 h-3.5" /> الفهرس
             </button>
             <span className="flex items-center gap-1">
               <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="الصفحة السابقة"

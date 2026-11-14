@@ -565,17 +565,17 @@ function AppContent() {
           registered internal target wins when present; otherwise
           every tab route goes back to الرئيسية. */}
       {BACK_BUTTON_ROUTES.includes(route) && (
-        <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-4 md:pt-5">
+        <div className={`max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 ${route === 'mushaf' || route === 'follow' ? 'pt-1.5 pb-1' : 'pt-4 md:pt-5'}`}>
           {/* 2026-11-12 (agreed UI rule): a sub-page shows TWO back
               buttons on top — its parent (the internal target) and
               الرئيسية. Without an internal target there is one button. */}
           {backTarget ? (
             <div className="flex flex-wrap gap-2">
-              <BackButton label={backTarget.label} onBack={backTarget.onBack} />
-              <BackButton label="الرئيسية" onBack={() => navigate('home')} />
+              <BackButton compact={route === 'mushaf' || route === 'follow'} label={backTarget.label} onBack={backTarget.onBack} />
+              <BackButton compact={route === 'mushaf' || route === 'follow'} label="الرئيسية" onBack={() => navigate('home')} />
             </div>
           ) : (
-            <BackButton label="الرئيسية" onBack={() => navigate('home')} />
+            <BackButton compact={route === 'mushaf' || route === 'follow'} label="الرئيسية" onBack={() => navigate('home')} />
           )}
         </div>
       )}
