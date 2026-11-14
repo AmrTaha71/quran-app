@@ -11,21 +11,31 @@ jobs:
       - name: probe datasets
         run: |
           python3 - <<'PY'
-          import json, traceback
+          import json
           from huggingface_hub import HfApi, list_repo_files
-          out = {}
-          for repo in ['IqraEval/Iqra_QuranMB_v2','IqraEval/Iqra_train','IqraEval/Iqra_TTS','RetaSy/quranic_audio_dataset','tarteel-ai/everyayah','Salmamohammed/quran-recitation-errors']:
+          api = HfApi(); out = {'search': {}}
+          names = set()
+          for q in ['quran','quranic','tajweed','recitation','mispronunciation','iqra','everyayah','tarteel','qdat','qur']:
+              try:
+                  for d in api.list_datasets(search=q, limit=100):
+                      names.add(d.id)
+              except Exception as e: out['search'][q] = str(e)[:100]
+          try:
+              for d in api.list_datasets(author='IqraEval', limit=100): names.add(d.id)
+          except Exception as e: out['search']['author'] = str(e)[:100]
+          out['all_names'] = sorted(names)
+          from datasets import load_dataset, Audio
+          for repo in ['IqraEval/Iqra_Extra_IS26','IqraEval/QuranMB.v2','IqraEval/open_testset','IqraEval/Iqra_QuranMB_v1','RetaSy/quranic_audio_dataset']:
               r = {}
               try:
-                  files = list_repo_files(repo, repo_type='dataset'); r['files'] = files[:60]; r['nfiles'] = len(files)
-              except Exception as e: r['files_err'] = str(e)[:200]
+                  files = list_repo_files(repo, repo_type='dataset'); r['files'] = files[:40]; r['nfiles'] = len(files)
+              except Exception as e: r['files_err'] = str(e)[:150]
               try:
-                  from datasets import load_dataset
-                  ds = load_dataset(repo, streaming=True)
-                  r['splits'] = list(ds.keys())
+                  ds = load_dataset(repo, streaming=True); r['splits'] = list(ds.keys())
                   for sp in list(ds.keys())[:3]:
-                      row = next(iter(ds[sp]))
-                      r.setdefault('sample', {})[sp] = {k: (str(v)[:200] if k != 'audio' else 'audio:' + str({kk: (vv if kk != 'array' else 'array') for kk, vv in v.items()} )) for k, v in row.items()}
+                      d2 = ds[sp].cast_column('audio', Audio(decode=False)) if 'audio' in (ds[sp].features or {}) else ds[sp]
+                      row = next(iter(d2))
+                      r.setdefault('sample', {})[sp] = {k: (str(v)[:300] if k != 'audio' else 'audio') for k, v in row.items()}
               except Exception as e: r['load_err'] = str(e)[:300]
               out[repo] = r
           json.dump(out, open('/tmp/probe.json', 'w'), ensure_ascii=False, indent=1)
