@@ -52,7 +52,7 @@ type Choice = 'read' | 'play' | 'recite';
 /** Wave-1 words. Order matters: «اسمعلي/سمّعلي» (recite to me) before «اسمع» (play). */
 function matchChoice(raw: string): Choice | null {
   const t = norm(raw);
-  if (/(اسمعها|سمعها|اسمعنيها|سمع ?لي|اسمع ?لي|تسميع|امتحن|راجع)/.test(t)) return 'recite';
+  if (/(على ?قار|اسمعها|سمعها|اسمعنيها|سمع ?لي|اسمع ?لي|تسميع|امتحن|راجع)/.test(t)) return 'recite';
   if (hasAny(t, ['شغل', 'تشغيل', 'استمع', 'اسمع', 'سماع'])) return 'play';
   if (hasAny(t, ['اقرا', 'مصحف', 'قراءه', 'قرايه', 'افتح'])) return 'read';
   if (/(^| )(ا?سمع|سمعها|سمعني)( |$)/.test(t)) return 'recite';
@@ -186,7 +186,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
       go(a);
       return;
     }
-    setNote(st.k === 'reciter' ? 'ما فهمتش القارئ، قول اسمه تاني' : st.k === 'surah' ? 'قول: اقرأ، شغّل، أو أسمّعها' : 'ما فهمتش، قول تاني');
+    setNote(st.k === 'reciter' ? 'ما فهمتش القارئ، قول اسمه تاني' : st.k === 'surah' ? 'قول: اقرأ، شغّل، أو اسمعها على قارئ' : 'ما فهمتش، قول تاني');
   };
 
   const begin = useCallback(() => {
@@ -260,7 +260,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
           <div key="w1" className="va-wave grid grid-cols-3 gap-2">
             <button type="button" onClick={() => go({ kind: 'mushaf', surah: step.surah })} className="min-h-[76px] rounded-2xl bg-emerald-600 font-bold flex flex-col items-center justify-center"><span className="text-2xl">📖</span><span className="text-lg">اقرأ</span><span className="text-[11px] opacity-80">المصحف</span></button>
             <button type="button" onClick={() => setStepBoth({ k: 'reciter', surah: step.surah })} className="min-h-[76px] rounded-2xl bg-sky-600 font-bold flex flex-col items-center justify-center"><span className="text-2xl">🎧</span><span className="text-lg">شغّل</span><span className="text-[11px] opacity-80">بصوت قارئ</span></button>
-            <button type="button" onClick={() => toRecite(step.surah)} className="min-h-[76px] rounded-2xl bg-amber-500 font-bold flex flex-col items-center justify-center"><span className="text-2xl">🎙️</span><span className="text-lg">أسمّعها</span><span className="text-[11px] opacity-80">أنت تقرأ</span></button>
+            <button type="button" onClick={() => toRecite(step.surah)} className="min-h-[76px] rounded-2xl bg-amber-500 font-bold flex flex-col items-center justify-center"><span className="text-2xl">🎙️</span><span className="text-lg">اسمعها</span><span className="text-[11px] opacity-80">على قارئ</span></button>
           </div>
         )}
         {active && step.k === 'recite' && (
