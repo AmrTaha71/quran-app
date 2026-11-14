@@ -7,6 +7,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import QuranAsrLab from '../components/QuranAsrLab';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import { QuranLabRecognition, earLabOn, preloadEarLab } from '../lib/quranLabEar';
+import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
 import TajwidSkillPicker from '../components/TajwidSkillPicker';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
@@ -3542,6 +3543,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     userStopRef.current = false;
     lastInterimRef.current = '';
     const labStartAyah = 0;
+    // Advanced level: also catch an extra/repeated word right after a settled one (off elsewhere).
+    setExtraWordMin(useLabEarAyah && liveRef.current.level === 'advanced' ? 2 : Infinity);
     const rec: any = useLabEarAyah
       ? new QuranLabRecognition(expectedWordList(ayah.ayah_text).map((w) => ({ norm: w.norm, ayahIdx: 0 })), labStartAyah)
       : useModelEarAyah ? new QuranModelRecognition() : new SR();
@@ -5242,6 +5245,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const em0 = contEffectiveMatched(false, false);
       labStart = Math.max(0, em0.matched.findIndex((m) => !m));
     }
+    setExtraWordMin(useLabEar && liveRef.current.level === 'advanced' ? 2 : Infinity);
     const rec: any = useLabEar ? new QuranLabRecognition(liveRef.current.contExpected, labStart) : useModelEar ? new QuranModelRecognition() : new SR();
     diagPush('ear', { label: useLabEar ? `quranlab@${labStart}` : useModelEar ? 'quran-model' : 'browser' });
     if (useLabEar) rec.diag = (label: string, ms: number) => diagPush('mic-timing', { label, ms });
