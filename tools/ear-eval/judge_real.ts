@@ -2,11 +2,12 @@
 import { readFileSync, appendFileSync } from 'fs';
 const ROOT = process.env.APP_ROOT || '.';
 (globalThis as any).fetch = async () => ({ json: async () => JSON.parse(readFileSync(`${ROOT}/public/models/quranlab/quran_text2phoneme.json`, 'utf8')) });
-const { buildPhonWords, PhonemeStream } = await import('../../src/lib/phonemeEar');
+const { buildPhonWords, PhonemeStream, setExtraWordMin } = await import('../../src/lib/phonemeEar');
 const { expectedWordList } = await import('../../src/lib/expectedWords');
 const { refKeySkel } = await import('../../src/lib/quranLabEar');
 const verses: [number, number, string][] = JSON.parse(readFileSync(`${ROOT}/tools/ear-eval/verses.json`, 'utf8'));
 const vt = new Map(verses.map(v => [`${v[0]}:${v[1]}`, v[2]]));
+if (process.env.EXTRA_MIN) setExtraWordMin(+process.env.EXTRA_MIN);
 const dec = new Map<string, any>();
 for (const l of readFileSync(process.argv[2], 'utf8').split('\n')) if (l.trim()) { const j = JSON.parse(l); dec.set(j.f, j.chunks); }
 const out = process.argv[4];
@@ -19,9 +20,11 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
   const words = (useApp ? app : dwords).map(w => ({ ...w, ayahIdx: 0 }));
   if (words.length < 1) continue;
   const pw = await buildPhonWords(words, refKeySkel);
+  if (process.env.TRACE && m.f.includes(process.env.TRACE)) (globalThis as any).__trace = []; else (globalThis as any).__trace = undefined;
   const ps = new PhonemeStream(pw); const emitted: string[] = [];
   for (const c of chunks) { if (c.length) { const r = ps.pushTimed(c); if (r) emitted.push(r); } }
   const f = ps.finish(); if (f) emitted.push(f);
+  if ((globalThis as any).__trace) for (const t of (globalThis as any).__trace) console.log(m.f.slice(-8), t.w, JSON.stringify(t.t), t.skel, JSON.stringify(t.per));
   const toks = emitted.join(' ').split(/\s+/).filter(Boolean);
   let j = 0; const ok: boolean[] = words.map(() => false); let wrong = 0;
   for (const t of toks) {

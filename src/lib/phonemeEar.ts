@@ -193,6 +193,12 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
   return { cost: best, owner, firstW: j < m ? colWord[j] : hi - 1, lastW: colWord[bestJ - 1], per };
 }
 
+/** Fewest extra letters (before the first aligned word) reported as an extra/repeated word.
+ *  Off by default: offline on 951 clips, min 2 caught the added «كل» and the repeated «جاء»
+ *  but added +0.2% false marks on professionals and +0.9% on amateurs (restarts, breaths).
+ *  Meant for an opt-in «advanced» level: setExtraWordMin(2). */
+let extraMin = Infinity;
+export function setExtraWordMin(n: number) { extraMin = n; }
 const MUQATTAAT = new Set(['الم', 'المص', 'الر', 'المر', 'كهيعص', 'طه', 'طسم', 'طس', 'يس', 'ص', 'حم', 'عسق', 'ق', 'ن']);
 
 /** 2026-11-14 (offline test, 39 reciters × 28k words): the ear's spelling of a
@@ -324,6 +330,7 @@ export class PhonemeStream {
     // can align to an EARLIER short word («بمن») and drag the pointer back, so the
     // real word is never judged. Backward alignments need real evidence first.
     if (!final && a.lastW < this.pointer - 1 && H.length < 14) return '';
+    { const tr = (globalThis as { __trace?: unknown[] }).__trace; if (tr) tr.push({ w: -1, t: 'ALIGN', skel: H, per: { owner: Array.from(a.owner).join(','), fw: a.firstW, lw: a.lastW, final } }); }
     const upto = final ? a.lastW : a.lastW - 1;
     // A short sound can match a word far away by chance («هدى لـ» ≈ «هدى من»
     // in the next ayah). Never jump ahead on a few letters: wait for more.
@@ -339,6 +346,11 @@ export class PhonemeStream {
     }
     if (upto < a.firstW) return '';
     const out: string[] = [];
+    // 2026-11-14: letters heard BEFORE the first aligned word, right after a commit,
+    // are an extra word or a repeated word («جاء جاء», «شر كل ما»): they own no word
+    // of the text, and used to be dropped silently when the buffer was trimmed.
+    { let lead = 0; while (lead < H.length && a.owner[lead] === -1) lead++;
+      if (lead >= extraMin && this.pointer > 0) out.push('~' + H.slice(0, lead)); }
     // Audio span of every word the ear did hear (first / last letter time).
     const span = new Map<number, { a: number; b: number }>();
     for (let i = 0; i < H.length; i++) {
