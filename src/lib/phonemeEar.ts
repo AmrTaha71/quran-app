@@ -203,6 +203,13 @@ function forgive(sk: string, norm: string, x: WordAl): { x: WordAl; ok: boolean 
   let heard = x.heard, bad = x.bad, del = x.del;
   // A word-initial alif is said as a hamza after a pause («الذي» → «ءلذي»).
   if (sk[0] === 'ا' && heard[0] === 'ء' && heard.slice(1) === sk.slice(1)) return { x, ok: true };
+  // 2026-11-14 round 1: alef/hamza are the ear's softest sounds. Same word once
+  // every ء is read as ا and the inner alefs are ignored, length >= 3 so short
+  // words are never matched by luck. A swapped or extra consonant still fails.
+  { const f = (t: string) => t.replace(/ء/g, 'ا'), core = (t: string) => f(t).replace(/(?<=.)ا/g, '');
+    if (sk.length >= 3 && core(heard).length >= 2 && core(heard) === core(sk)) return { x, ok: true };
+    // «الله» after a pause or in wasl: «لاه»، «ولاه».
+    if (norm === 'الله' && /^[وف]?ل+ا?ه$/.test(f(heard).replace(/ا/g, 'ا'))) return { x, ok: true }; }
   // Madd + hamza at the word's end («الشتاء») is spelled without the hamza in the text.
   if (heard.length > 2 && heard.endsWith('ء') && 'اوي'.includes(heard[heard.length - 2]) && !sk.endsWith('ء')) {
     heard = heard.slice(0, -1); bad = Math.max(0, bad - 1);
