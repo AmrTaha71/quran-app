@@ -70,7 +70,7 @@ export default function BottomNav({
     // saved items — a dashboard grid reads instantly, a bookmark does not.
     { id: 'app' as const, label: appLabel, icon: <LayoutDashboard className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
-    { id: 'follow' as const, label: 'الحق الإمام', icon: <AudioLines className="w-7 h-7" /> },
+    { id: 'follow' as const, label: 'الْحَقِ الإِمَامَ', icon: <AudioLines className="w-7 h-7" /> },
     { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
   // Sliding pill: one tab wide (5 equal tabs). In RTL the first tab

@@ -1,5 +1,5 @@
 import StudioMic from '../components/StudioMic';
-import { MosqueIcon, ListenerMicIcon } from '../components/HomeIcons';
+import { MosqueIcon, MushafIcon, EarListenIcon } from '../components/HomeIcons';
 import { roomLabel } from '../lib/roomLabel';
 import Sama3 from '../components/Sama3';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -393,13 +393,13 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* The four main doors. A tile with choices opens its panel right
             under the grid; only one panel is open at a time. */}
         <div className="home-tiles mb-3">
-          <HomeTile icon={<BookMarked />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
+          <HomeTile icon={<MushafIcon />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
             expanded={hifzOpen} onClick={() => { togglePanel('hifz'); setShowPicker(false); }} />
-          <HomeTile icon={<ListenerMicIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
+          <HomeTile icon={<EarListenIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             expanded={testOpen} onClick={() => togglePanel('test')} />
           <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             expanded={quizOpen} onClick={() => togglePanel('quiz')} />
-          <HomeTile icon={<AudioLines />} glaze="emerald" title="الحق الإمام" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
+          <HomeTile icon={<AudioLines />} glaze="emerald" title="الْحَقِ الإِمَامَ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
         </div>
 
@@ -552,9 +552,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="home-tiles mb-4">
           <HomeTile icon={<Users />} glaze="emerald" title={roomLabel()} hint={showHints ? 'راجعوا مع بعض' : undefined}
             onClick={() => onNavigate('room')} />
-          <HomeTile icon={<Headphones />} glaze="night" title="استمع للقرآن" hint={showHints ? 'والشاشة مقفولة' : undefined}
+          <HomeTile icon={<Headphones />} glaze="night" title="استمع للقرآن" hint="واقفل الشاشة ووفّر البطارية"
             onClick={() => onNavigate('listen')} />
-          <HomeTile icon={<SunMoon />} glaze="night" title="استمع للأذكار" hint={showHints ? 'صباح ومساء' : undefined}
+          <HomeTile icon={<SunMoon />} glaze="night" title="استمع للأذكار" hint="واقفل الشاشة ووفّر البطارية"
             onClick={() => onNavigate('adhkar')} />
           <HomeTile icon={<Settings />} glaze="plain" title="الإعدادات"
             onClick={() => onNavigate('settings')} />

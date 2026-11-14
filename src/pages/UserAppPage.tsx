@@ -1,3 +1,4 @@
+import DrumSelect from '../components/DrumSelect';
 import StudioMic from '../components/StudioMic';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Sama3 from '../components/Sama3';
@@ -705,23 +706,8 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
               {/* Surah selection */}
               <div>
                 <label className="block text-sm font-semibold text-ink-2 mb-1.5">اختر السورة</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-[200px] overflow-y-auto p-1">
-                  <button onClick={() => { setSurahFilter(''); setPage(0); }}
-                    className={`p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                      surahFilter === '' ? 'grad-emerald-door text-white border-emerald-700 polish-press' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald polish-press'
-                    }`}>
-                    كل السور
-                  </button>
-                  {SURAHS.map((s) => (
-                    <button key={s.no} onClick={() => { setSurahFilter(String(s.no)); setPage(0); }}
-                      className={`flex items-center gap-1.5 p-2.5 rounded-lg text-sm font-semibold transition-smooth border ${
-                        surahFilter === String(s.no) ? 'grad-emerald-door text-white border-emerald-700 polish-press' : 'bg-white text-ink-2 border-hairline hover:border-hairline-emerald polish-press'
-                      }`}>
-                      <span className="text-xs opacity-60">{s.no}.</span>
-                      <span>{s.name}</span>
-                    </button>
-                  ))}
-                </div>
+                <DrumSelect label="اختر السورة" value={surahFilter} onChange={(v) => { setSurahFilter(String(v)); setPage(0); }}
+                  options={[{ value: '', label: 'كل السور' }, ...SURAHS.map((x) => ({ value: String(x.no), label: `${x.no}. ${x.name}` }))]} />
               </div>
 
               {/* Link type filter */}
