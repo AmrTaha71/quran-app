@@ -151,7 +151,7 @@ export default function ShareButton({
     {
       icon: copied ? <Check className="w-8 h-8" /> : <Copy className="w-8 h-8" />,
       label: copied ? 'تم النسخ' : 'نسخ الرابط',
-      color: copied ? 'grad-emerald-door' : 'grad-emerald-door',
+      color: 'bg-white border border-slate-300 !text-slate-700',
       url: '#copy',
       action: handleCopy,
     },

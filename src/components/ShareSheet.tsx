@@ -47,7 +47,7 @@ export default function ShareSheet({ title, text, url, onClose }: { title: strin
             </a>
           ))}
           <button onClick={copy} className="flex flex-col items-center gap-1.5 polish-press">
-            <span className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-md grad-amber-door">{copied ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}</span>
+            <span className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-md border border-slate-300 bg-white ${copied ? 'text-emerald-600' : 'text-slate-700'}`}>{copied ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}</span>
             <span className="text-xs font-bold text-accent-800">{copied ? 'اتنسخ' : 'انسخ اللينك'}</span>
           </button>
         </div>
