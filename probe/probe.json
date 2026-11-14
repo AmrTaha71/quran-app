@@ -119,7 +119,7 @@
    "labels_test.csv"
   ],
   "nfiles": 2,
-  "err": "GatedRepoError('401 Client Error. (Request ID: Root=1-6af7af2c-65358e251876505b41898367;852462eb-e359-475e-a6f1-a3e83920831c)\\n\\nCannot access gated repo for url https://huggingface.co/datasets/IqraEval/IqraEval_Test_GT/resolve/main/labels_test.csv.\\"
+  "err": "GatedRepoError('401 Client Error. (Request ID: Root=1-6af7c1f2-133726ba3ce6ba3e67e6e76c;b608d150-56a8-46e3-937a-d3aefe9c89a4)\\n\\nCannot access gated repo for url https://huggingface.co/datasets/IqraEval/IqraEval_Test_GT/resolve/main/labels_test.csv.\\"
  },
  "IqraEval/test_references": {
   "files": [
@@ -394,7 +394,7 @@
   ],
   "nfiles": 14,
   "readme": "---\ndataset_info:\n  features:\n  - name: audio_filepath\n    dtype: string\n  - name: transcription\n    dtype: string\n  - name: phoneme_ref\n    dtype: string\n  - name: phoneme_mis\n    dtype: string\n  - name: source\n    dtype: string\n  splits:\n  - name: train\n    num_bytes: 36228595\n    num_examples: 49103\n  - name: Iqra_Extra_IS26_train\n    num_bytes: 494081\n    num_examples: 1330\n  - name: IqraEval_Iqra_TTSn\n    num_bytes: 18685273\n    num_examples: 55369\n  - name: iqra_train\n    num_bytes: 21881860\n    num_examples: 71391\n  - name: QuranRecitations\n    num_bytes: 83018669\n    num_examples: 124227\n  - name: clean\n    num_bytes: 108992633\n    num_examples: 246539\n  download_size: 124059756\n  dataset_size: 269301111\nconfigs:\n- config_name: default\n  data_files:\n  - split: train\n    path: data/train-*\n  - split: iqra_train\n    path: data/iqra_train-*\n  - split: Iqra_Extra_IS26_train\n    path: data/Iqra_Extra_IS26_train-*\n  - split: IqraEval_Iqra_TTSn\n    path: data/IqraEval_Iqra_TTSn-*\n  - split: clean\n    path: data/clean-*\n  - split: QuranRecitations\n    path: data/QuranRecitations-*\n---\n",
-  "err": "GatedRepoError('401 Client Error. (Request ID: Root=1-6af7af33-6ce1117022691310560e0a15;36f8e1f0-babd-4b66-a281-626d0af767d8)\\n\\nCannot access gated repo for url https://huggingface.co/datasets/aisyahhrazak/iqraeval-dataset/resolve/main/data/IqraEval"
+  "err": "GatedRepoError('401 Client Error. (Request ID: Root=1-6af7c1fa-04ba9bc14112862f2e6b515a;3c1107e2-3558-41b9-8b1d-7b0e5892b554)\\n\\nCannot access gated repo for url https://huggingface.co/datasets/aisyahhrazak/iqraeval-dataset/resolve/main/data/IqraEval"
  },
  "Quran-Lab/quran-tajweed-benchmark": {
   "files": [
@@ -657,6 +657,150 @@
     "phoneme_realized": "",
     "duration_s": "38.689998626708984",
     "source_url": "https://everyayah.com/data/Hudhaify_128kbps/002019.mp3"
+   }
+  ]
+ },
+ "zaibihassan/Quranic-Recitation-Data": {
+  "files": [
+   ".gitattributes",
+   "Abdallah Abdal (Murattal)/Full Surah/001/001.json",
+   "Abdallah Abdal (Murattal)/Full Surah/001/001.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/001/001.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/002/002.json",
+   "Abdallah Abdal (Murattal)/Full Surah/002/002.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/002/002.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/003/003.json",
+   "Abdallah Abdal (Murattal)/Full Surah/003/003.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/003/003.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/004/004.json",
+   "Abdallah Abdal (Murattal)/Full Surah/004/004.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/004/004.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/005/005.json",
+   "Abdallah Abdal (Murattal)/Full Surah/005/005.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/005/005.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/006/006.json",
+   "Abdallah Abdal (Murattal)/Full Surah/006/006.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/006/006.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/007/007.json",
+   "Abdallah Abdal (Murattal)/Full Surah/007/007.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/007/007.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/008/008.json",
+   "Abdallah Abdal (Murattal)/Full Surah/008/008.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/008/008.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/009/009.json",
+   "Abdallah Abdal (Murattal)/Full Surah/009/009.opus",
+   "Abdallah Abdal (Murattal)/Full Surah/009/009.pb",
+   "Abdallah Abdal (Murattal)/Full Surah/010/010.json",
+   "Abdallah Abdal (Murattal)/Full Surah/010/010.opus"
+  ],
+  "nfiles": 860470,
+  "readme": "---\nlanguage:\n- ar\nlicense: apache-2.0\nsize_categories:\n- 100K<n<1M\ntask_categories:\n- automatic-speech-recognition\n- text-to-speech\n- audio-classification\npretty_name: Quranic Recitation Dataset (Word-by-Word & Zero-Bleed Verses)\ntags:\n- quran\n- audio\n- speech\n- religion\n- arabic\n- word-by-word\n- recitation\n- opus\n- protobuf\n---\n\n<p align=\"center\">\n  <img src=\"./banner.png\" alt=\"Quranic Recitation Dataset Banner\" width=\"100%\">\n</p>\n\n<p align=\"center\">\n  <img src=\"https://img.shields.io/badge/Audio%20Format-Opus%20(48kHz%20VBR)-emerald?style=for-the-badge&logo=opus\" alt=\"Opus Format\">\n  <img src=\"https://img.shields.io/badge/Total%20Reciters-128-blue?style=for-the-badge\" alt=\"Total Reciters\">\n  <img src=\"https://img.shields.io/badge/Timing%20Format-Protocol%20Buffers%20%2B%20JSON-violet?style=for-the-badge\" alt=\"Protobuf\">\n  <img src=\"https://img.shields.io/badge/Architecture-Verses%20%2B%20Full%20Surah-teal?style=for-the-badge\" alt=\"Architecture\">\n  <img src=\"https://img.shields.io/badge/CDN-Cloudflare%20Edge-orange?style=for-the-badge&logo=cloudflare\" alt=\"Cloudflare CDN\">\n  <img src=\"https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge\" alt=\"License\">\n</p>\n\n---\n\n## 🌟 Overview\n\n**Quranic Recitation Dataset (Word-by-Word Sync & Zero-Bleed Verses)** is a high-quality, production-ready dataset containing studio audio recitations of the Holy Quran synchronized at the **word-by-word** level.\n\nThis dataset features **128 world-renowned reciters**, organized into a dual-layout architecture:\n1. **`Verses/`** — Sample-exact, zero-bleed verse audio files (`<s3><a3>.opus`) generated using acoustic silence boundary detection with 10ms cosine fade-in and 15ms cosine fade-out, accompanied by verse-relative word timing in both JSON (`<s3>.json`) and Protocol Buffer (`<s3>.pb`) formats.\n2. **`Full Surah/`** — Continuous full-surah audio files (`<s3>.opus`) with surah-relative word timestamps (`<s3>.json` and `<s3>.pb`).\n\nServed globally via a **Cloudflare Edge CDN** (`cdn.mualim.app`) with native HTTP 206 partial content range requests and CORS support for instant mobile and web streaming.\n\n---\n\n## 🚀 Key Features\n\n* **128 Reciters × 114 Surahs** — Over 800,000 sample-exact audio files with accompanying timing data.\n* **Zero-Bleed Verse Slices** — Every verse cut is acoustically guaranteed to start strictly after the previous verse has concluded ($t_{\\text{cut}} \\ge t_{\\text{last\\_end}}$) and before the next verse begins ($t_{\\text{cut}} \\le t_{\\te",
+  "head": "{\n  \"metadata\": {\n    \"pipeline\": \"asr_v15.0\",\n    \"surah_id\": 1,\n    \"duration_ms\": 51938,\n    \"audio_duration_ms\": 51938,\n    \"reciter\": \"Abdallah Abdal\",\n    \"style\": \"Murattal\",\n    \"totalAyahs\": 7,\n    \"totalWords\": 29,\n    \"valid\": true\n  },\n  \"verses\": [\n    {\n      \"verseId\": 1,\n      \"key\": \"1:1\",\n      \"verseConfidence\": 1.0,\n      \"words\": [\n        {\n          \"wordIndex\": 1,\n          \"text\": \"بِسْمِ\",\n          \"startTime\": 5320,\n          \"endTime\": 5640,\n          \"confidence\": 1.0\n        },\n        {\n          \"wordIndex\": 2,\n          \"text\": \"ٱللَّهِ\",\n          \"startTime\": 6000,\n          \"endTime\": 6360,\n          \"confidence\": 1.0\n        },\n        {\n          \"wordIndex\": 3,\n          \"text\": \"ٱلرَّحْمَـٰنِ\",\n          \"startTime\": 6720,\n          \"endTime\": 7520,\n          \"confidence\": 1.0\n        },\n        {\n          \"wordIndex\": 4,\n          \"text\": \"ٱلرَّحِيمِ\",\n          \"startTime\": 7840,\n          \"endTime\": 8480,\n          \"confidence\": 1.0\n        }\n      ],\n      \"segments\": [\n        {\n          \"wordIndex\": 1,\n          \"text\": \"بِسْمِ\",\n          \"startTime\": 5320,\n          \"endTime\": 5640,\n          \"confidence\": 1.0\n        },\n        {\n          \"wordIndex\": 2,\n          \"text\": \"ٱللَّهِ\",\n          \"startTime\": 6000,\n          \"endTime\": 6360,\n          \"confidence\": 1.0\n        },\n        {\n          \"wordIndex\": 3,\n          \"text\": \"ٱلرَّحْمَـٰنِ\",\n          \"startTime\": 6720,\n          \"endTime\": 7520,\n          \"confidence\":"
+ },
+ "omartariq612/everyayah-with-tajweed-tokens": {
+  "files": [
+   ".gitattributes",
+   "README.md",
+   "data/train-00000-of-00093.parquet",
+   "data/train-00001-of-00093.parquet",
+   "data/train-00002-of-00093.parquet",
+   "data/train-00003-of-00093.parquet",
+   "data/train-00004-of-00093.parquet",
+   "data/train-00005-of-00093.parquet",
+   "data/train-00006-of-00093.parquet",
+   "data/train-00007-of-00093.parquet",
+   "data/train-00008-of-00093.parquet",
+   "data/train-00009-of-00093.parquet",
+   "data/train-00010-of-00093.parquet",
+   "data/train-00011-of-00093.parquet",
+   "data/train-00012-of-00093.parquet",
+   "data/train-00013-of-00093.parquet",
+   "data/train-00014-of-00093.parquet",
+   "data/train-00015-of-00093.parquet",
+   "data/train-00016-of-00093.parquet",
+   "data/train-00017-of-00093.parquet",
+   "data/train-00018-of-00093.parquet",
+   "data/train-00019-of-00093.parquet",
+   "data/train-00020-of-00093.parquet",
+   "data/train-00021-of-00093.parquet",
+   "data/train-00022-of-00093.parquet",
+   "data/train-00023-of-00093.parquet",
+   "data/train-00024-of-00093.parquet",
+   "data/train-00025-of-00093.parquet",
+   "data/train-00026-of-00093.parquet",
+   "data/train-00027-of-00093.parquet"
+  ],
+  "nfiles": 115,
+  "readme": "---\ndataset_info:\n  features:\n  - name: audio\n    dtype:\n      audio:\n        sampling_rate: 16000\n  - name: sheikh\n    dtype: string\n  - name: duration\n    dtype: float64\n  - name: text\n    dtype: string\n  splits:\n  - name: train\n    num_bytes: 46292804960.064\n    num_examples: 180844\n  - name: validation\n    num_bytes: 9536779257.819347\n    num_examples: 43626\n  download_size: 55763993917\n  dataset_size: 55829584217.88335\nconfigs:\n- config_name: default\n  data_files:\n  - split: train\n    path: data/train-*\n  - split: validation\n    path: data/validation-*\n---\n",
+  "schema": "audio: struct<bytes: binary, path: string>\n  child 0, bytes: binary\n  child 1, path: string\nsheikh: string\nduration: double\ntext: string\n-- schema metadata --\nhuggingface: '{\"info\": {\"features\": {\"audio\": {\"sampling_rate\": 16000, \"_' + 166",
+  "rows_first_file": 1945,
+  "sample": [
+   {
+    "sheikh": "Abu Bakr Ash-Shaatree 128kbps",
+    "duration": "7.1916875",
+    "text": "أَمۡ تَسۡـَٔلُهُمۡ أَ&جۡ&رࣰا فَهُم %مِّ%^ن^ %م%َّغۡرَم^ࣲ^ %م%ُّثۡقَلُ$و$نَ"
+   },
+   {
+    "sheikh": "Ahmed Ibn Ali Al Ajamy 128kbps",
+    "duration": "8.843514739229025",
+    "text": "فَٱرۡتَقِ&بۡ& یَوۡمَ تَأۡتِی ٱ^ل^سَّمَ#اۤ#ءُ بِدُخَان^ࣲ^ %م%ُّبِ$ی$نࣲ"
+   },
+   {
+    "sheikh": "Akram Al Alaqimy 128kbps",
+    "duration": "6.77375",
+    "text": "وَقَالَ إِ%نِّ%ی ذَاهِبٌ إِلَىٰ رَبِّی سَیَهۡدِ$ی$نِ"
+   }
+  ]
+ },
+ "MohamedRashad/Quran-Recitations": {
+  "files": [
+   ".gitattributes",
+   "README.md",
+   "data/train-00000-of-00100.parquet",
+   "data/train-00001-of-00100.parquet",
+   "data/train-00002-of-00100.parquet",
+   "data/train-00003-of-00100.parquet",
+   "data/train-00004-of-00100.parquet",
+   "data/train-00005-of-00100.parquet",
+   "data/train-00006-of-00100.parquet",
+   "data/train-00007-of-00100.parquet",
+   "data/train-00008-of-00100.parquet",
+   "data/train-00009-of-00100.parquet",
+   "data/train-00010-of-00100.parquet",
+   "data/train-00011-of-00100.parquet",
+   "data/train-00012-of-00100.parquet",
+   "data/train-00013-of-00100.parquet",
+   "data/train-00014-of-00100.parquet",
+   "data/train-00015-of-00100.parquet",
+   "data/train-00016-of-00100.parquet",
+   "data/train-00017-of-00100.parquet",
+   "data/train-00018-of-00100.parquet",
+   "data/train-00019-of-00100.parquet",
+   "data/train-00020-of-00100.parquet",
+   "data/train-00021-of-00100.parquet",
+   "data/train-00022-of-00100.parquet",
+   "data/train-00023-of-00100.parquet",
+   "data/train-00024-of-00100.parquet",
+   "data/train-00025-of-00100.parquet",
+   "data/train-00026-of-00100.parquet",
+   "data/train-00027-of-00100.parquet"
+  ],
+  "nfiles": 102,
+  "readme": "---\ndataset_info:\n  features:\n  - name: source\n    dtype: string\n  - name: text\n    dtype: string\n  - name: audio\n    dtype: audio\n  splits:\n  - name: train\n    num_bytes: 49579449331.918\n    num_examples: 124689\n  download_size: 33136131149\n  dataset_size: 49579449331.918\nconfigs:\n- config_name: default\n  data_files:\n  - split: train\n    path: data/train-*\ntask_categories:\n- automatic-speech-recognition\n- text-to-speech\nlanguage:\n- ar\nsize_categories:\n- 100K<n<1M\n---\n\n# Quran-Recitations Dataset\n\n<center>\n  <!-- <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/muJk9lzE-xb4JK5d-7beR.png\"/> -->\n  <!-- <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/24Xi6fbwzQUW_Q6mYkf9Q.png\"/> -->\n  <!-- <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/16gvU7A895ES3Y-o4yaoB.png\"/> -->\n  <!-- <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/Q9racRRxdbRIjpop1lpIx.png\"/> -->\n  <!-- <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/henY6A_C9hq_jgiQIANR5.jpeg\"/> -->\n  <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/BnZUrdWzwaehhwM4f_LmY.png\"/>\n  <!-- <img src=\"https://cdn-uploads.huggingface.co/production/uploads/6116d0584ef9fdfbf45dc4d9/kBCQNyHkKle30td7-JawC.png\" width=\"50%\"/> -->\n</center>\n\n\n## Overview\nThe **Quran-Recitations** dataset is a rich and reverent collection of Quranic verses, meticulously paired with their respective recitations by esteemed Qaris. This dataset serves as a valuable resource for researchers, developers, and students interested in Quranic studies, speech recognition, audio analysis, and Islamic applications.\n\n## Dataset Structure\n- **source**: The name of the Qari (reciter) who performed the recitation.\n- **text**: The Quranic verse (ayah) with full diacritical marks (tashkeel) to preserve proper pronunciation.\n- **audio**: The corresponding recitation audio file for the ayah.\n\n## Reciters Included\nThis dataset features recitations from some of the most renowned Qaris, including:\n- أحمد بن علي العجمي\n- مشاري العفاسي\n- علي بن عبدالرحمن الحذيفي\n- محمود خليل الحصري (مرتّل ومجوّد)\n- ماهر المعيقلي\n- محمد صديق المنشاوي (مرتّل ومجوّد)\n- محمد أيوب\n- محمد جبريل\n- أبو بكر الشاطري\n- عبد الباسط عبد الصمد (مرتّل)\n- عبد الله بصفر\n- عبدالرحمن السديس\n- هاني الرفاعي\n- إبراهيم الأخضر\n- شهریار پرهیزگار\n- أيمن سويد\n- سعود الشريم\n\n## ",
+  "schema": "source: string\ntext: string\naudio: struct<bytes: binary, path: string>\n  child 0, bytes: binary\n  child 1, path: string\n-- schema metadata --\nhuggingface: '{\"info\": {\"features\": {\"source\": {\"dtype\": \"string\", \"_type' + 90",
+  "rows_first_file": 1247,
+  "sample": [
+   {
+    "source": "أحمد بن علي العجمي",
+    "text": "﻿بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
+   },
+   {
+    "source": "أحمد بن علي العجمي",
+    "text": "ٱلْحَمْدُ لِلَّهِ رَبِّ ٱلْعَٰلَمِينَ"
+   },
+   {
+    "source": "أحمد بن علي العجمي",
+    "text": "ٱلرَّحْمَٰنِ ٱلرَّحِيمِ"
    }
   ]
  }
