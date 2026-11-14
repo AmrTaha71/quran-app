@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
-      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch onnxruntime soundfile numpy huggingface_hub pyarrow quran-transcript librosa
+      - run: pip install --extra-index-url https://download.pytorch.org/whl/cpu torch onnxruntime soundfile numpy huggingface_hub pyarrow quran-transcript librosa faster-whisper
       - run: sudo apt-get install -y -qq ffmpeg >/dev/null
       - run: SRC="${{ inputs.src }}" QL_LIMIT=300 python3 tools/ear-eval/real_fetch.py /tmp/real
         timeout-minutes: 40
