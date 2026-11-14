@@ -36,6 +36,6 @@ jobs:
           git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
           git fetch origin ear-results || true
           git checkout -B ear-results origin/ear-results
-          mkdir -p real; cp /tmp/real/summary.json real/summary-$(date -u +%H%M).json; cp /tmp/real/judged.jsonl real/judged.jsonl; gzip -f real/judged.jsonl
+          mkdir -p real; cp /tmp/real/summary.json real/summary-$(date -u +%H%M).json; cp /tmp/real/judged.jsonl real/judged.jsonl; gzip -f real/judged.jsonl; cp /tmp/real/dec.jsonl real/dec.jsonl; gzip -f real/dec.jsonl; cp /tmp/real/manifest.jsonl real/manifest.jsonl; gzip -f real/manifest.jsonl
           git add real; git commit -m "ear-real $(date -u +%F-%H%M)" || true
           git push origin ear-results

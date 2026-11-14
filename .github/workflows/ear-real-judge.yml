@@ -1,0 +1,32 @@
+name: ear-real-judge
+on:
+  workflow_dispatch:
+    inputs:
+      tag: { description: 'label for the summary file', required: false, default: 'r' }
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npx esbuild tools/ear-eval/judge_real.ts --bundle --platform=node --format=esm --target=node20 --outfile=/tmp/judge_real.mjs --external:fs --log-level=error
+      - name: fetch saved decodes
+        run: |
+          mkdir -p /tmp/real
+          for f in dec manifest; do gh api "repos/${{ github.repository }}/contents/real/$f.jsonl.gz?ref=ear-results" -H "Accept: application/vnd.github.raw" > /tmp/real/$f.jsonl.gz; gunzip -f /tmp/real/$f.jsonl.gz; done
+        env: { GH_TOKEN: '${{ github.token }}' }
+      - run: |
+          APP_ROOT=$PWD node /tmp/judge_real.mjs /tmp/real/dec.jsonl /tmp/real/manifest.jsonl /tmp/real/judged.jsonl
+          python3 tools/ear-eval/summarize_real.py /tmp/real/judged.jsonl /tmp/real/summary.json
+      - name: push
+        run: |
+          git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
+          git fetch origin ear-results; git checkout -B ear-results origin/ear-results
+          cp /tmp/real/summary.json real/summary-${{ inputs.tag }}.json; cp /tmp/real/judged.jsonl real/judged-${{ inputs.tag }}.jsonl; gzip -f real/judged-${{ inputs.tag }}.jsonl
+          git add real; git commit -m "ear-real-judge ${{ inputs.tag }}" || true
+          git push origin ear-results

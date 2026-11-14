@@ -28,5 +28,5 @@ for (const l of readFileSync(process.argv[3], 'utf8').split('\n')) {
     const nn = expectedWordList(w)[0]?.norm; if (!nn) continue;
     const i = words.findIndex(x => x.norm === nn); if (i >= 0) errIdx.push({ i, types, w: nn });
   }
-  appendFileSync(out, JSON.stringify({ f: m.f, src: m.src, n: words.length, ok, wrong, errIdx, toks: toks.length }) + '\n');
+  appendFileSync(out, JSON.stringify({ f: m.f, src: m.src, n: words.length, ok, wrong, errIdx, toks: toks.length, ref: words.map(w => w.norm), em: toks }) + '\n');
 }
