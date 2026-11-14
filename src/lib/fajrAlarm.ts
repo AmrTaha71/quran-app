@@ -32,7 +32,7 @@ export const ALARM_CLIPS: { id: string; name: string; url: string; start: number
   {
     id: 'hamed-khayr', name: '🕌 الصلاة خير من النوم — الشيخ حامد',
     url: '/audio/hamed-fajr-mahmoudeya.mp3',
-    start: 145, end: 165, // 2:25 → 2:45 (measured by the owner); file itself is not edited (CC BY-NC-ND)
+    start: 145.5, end: 154.4, // one full «الصلاة خير من النوم» (located by phoneme decode + silence gaps); file itself is not edited (CC BY-NC-ND)
     credit: 'أذان الفجر — الشيخ حامد، مسجد المحمودية، القاهرة. تسجيل: Anna Kipervaser / On Look Films — World Oral Literature Project، جامعة كامبريدج (CC BY-NC-ND 3.0)',
   },
 ];
@@ -114,7 +114,8 @@ export function startAlarmTone(toneId: string = loadFajrTone()): () => void {
       el.src = clip.url; el.loop = false; el.volume = 1;
       const seek = () => { try { el.currentTime = clip.start; } catch { /* retry */ } };
       el.addEventListener('loadedmetadata', seek, { once: true });
-      onTime = () => { if (el.currentTime >= clip.end) seek(); };
+      el.addEventListener('canplay', () => { if (el.currentTime < clip.start - 0.5 || el.currentTime > clip.end) seek(); }, { once: true });
+      onTime = () => { if (el.currentTime >= clip.end || el.currentTime < clip.start - 0.5) seek(); };
       el.addEventListener('timeupdate', onTime);
       el.addEventListener('ended', seek);
     } else if (isRecTone(toneId) && recUrl(toneId.slice(4))) { el.src = recUrl(toneId.slice(4)) as string; el.loop = true; el.volume = 1; }
