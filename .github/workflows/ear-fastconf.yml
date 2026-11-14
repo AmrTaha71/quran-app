@@ -1,25 +1,42 @@
 name: ear-fastconf
 on:
   workflow_dispatch:
+    inputs:
+      mode: { description: 'probe | eval', required: false, default: 'probe' }
+      src: { description: 'qlab | sobolev', required: false, default: 'qlab' }
 permissions:
-  contents: read
+  contents: write
 jobs:
-  probe:
+  run:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 150
     steps:
-      - run: pip install huggingface_hub
-      - name: probe gated repo
+      - uses: actions/checkout@v4
+      - run: pip install onnxruntime soundfile numpy huggingface_hub pyarrow sentencepiece librosa pyyaml torch torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
+      - run: sudo apt-get install -y -qq ffmpeg >/dev/null
+      - name: probe
+        if: inputs.mode == 'probe'
         env: { HF_TOKEN: '${{ secrets.HF_TOKEN }}' }
         run: |
           python3 - <<'PY'
-          import os
-          from huggingface_hub import list_repo_files
-          t=os.environ.get('HF_TOKEN') or None
-          print('token present:', bool(t))
-          try: print(list_repo_files('Muno459/fastconformer-quran', token=t))
-          except Exception as e: print('FAIL', type(e).__name__, str(e)[:300])
-          from huggingface_hub import hf_hub_download
-          try: print('DL', hf_hub_download('Muno459/fastconformer-quran','model_config.yaml',token=t))
-          except Exception as e: print('DLFAIL', type(e).__name__, str(e)[:200])
+          import os, onnxruntime as ort, sentencepiece as spm
+          from huggingface_hub import hf_hub_download as dl
+          t=os.environ['HF_TOKEN']; R='Muno459/fastconformer-quran'
+          cfg=dl(R,'model_config.yaml',token=t); print(open(cfg).read()[:3500])
+          for f in ['tajweed/aligner.py']:
+              p=dl(R,f,token=t); s=open(p).read(); print('=====',f,len(s)); print(s[:5000])
+          m=dl(R,'onnx/model.fp16.onnx',token=t); s=ort.InferenceSession(m,providers=['CPUExecutionProvider'])
+          print([(i.name,i.shape,i.type) for i in s.get_inputs()],[(o.name,o.shape) for o in s.get_outputs()])
+          sp=spm.SentencePieceProcessor(model_file=dl(R,'tokenizer.model',token=t)); print(sp.get_piece_size(), [sp.id_to_piece(i) for i in range(5)])
           PY
+      - name: eval
+        if: inputs.mode == 'eval'
+        env: { HF_TOKEN: '${{ secrets.HF_TOKEN }}' }
+        run: |
+          SRC="${{ inputs.src }}" QL_LIMIT=300 python3 tools/ear-eval/real_fetch.py /tmp/real
+          python3 tools/ear-eval/fastconf_eval.py /tmp/real/manifest.jsonl /tmp/fc 2>&1 | tail -40
+          python3 tools/ear-eval/summarize_real.py /tmp/fc.jsonl /tmp/fc-sum.json | head -c 2500
+          git config user.name ear-eval; git config user.email ear-eval@users.noreply.github.com
+          git fetch origin ear-results; git checkout -B ear-results origin/ear-results
+          mkdir -p fastconf; cp /tmp/fc-sum.json fastconf/sum-${{ inputs.src }}.json; gzip -c /tmp/fc.jsonl > fastconf/rows-${{ inputs.src }}.jsonl.gz
+          git add fastconf; git commit -m "ear-fastconf ${{ inputs.src }}" || true; git push origin ear-results
