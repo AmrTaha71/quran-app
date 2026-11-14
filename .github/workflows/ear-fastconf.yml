@@ -25,7 +25,7 @@ jobs:
           cfg=dl(R,'model_config.yaml',token=t); print(open(cfg).read()[:3500])
           for f in ['tajweed/aligner.py']:
               p=dl(R,f,token=t); s=open(p).read(); print('=====',f,len(s)); print(s[:5000])
-          m=dl(R,'onnx/model.fp16.onnx',token=t); s=ort.InferenceSession(m,providers=['CPUExecutionProvider'])
+          m=dl(R,'onnx/model.onnx',token=t); s=ort.InferenceSession(m,providers=['CPUExecutionProvider'])
           print([(i.name,i.shape,i.type) for i in s.get_inputs()],[(o.name,o.shape) for o in s.get_outputs()])
           sp=spm.SentencePieceProcessor(model_file=dl(R,'tokenizer.model',token=t)); print(sp.get_piece_size(), [sp.id_to_piece(i) for i in range(5)])
           PY
