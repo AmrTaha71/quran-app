@@ -110,7 +110,17 @@ function formatWorship(totalSeconds: number): string {
   return mm === 0 ? `${h} ساعة` : `${h} ساعة و ${mm} دقيقة`;
 }
 
-function WorshipTimer({ dark }: { dark?: boolean }) {
+function WorshipTimer({ dark, flash }: { dark?: boolean; flash?: boolean }) {
+  // flash: the pill fades in for a few seconds, then out, again and again.
+  const [vis, setVis] = useState(!flash);
+  useEffect(() => {
+    if (!flash) return;
+    let t2: number | undefined;
+    const cycle = () => { setVis(true); t2 = window.setTimeout(() => setVis(false), 6000); };
+    const t1 = window.setTimeout(cycle, 1500);
+    const iv = window.setInterval(cycle, 45000);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); window.clearInterval(iv); };
+  }, [flash]);
   const [total, setTotal] = useState<number>(() => {
     try { return Number(localStorage.getItem(WORSHIP_STORAGE_KEY)) || 0; } catch { return 0; }
   });
@@ -126,9 +136,9 @@ function WorshipTimer({ dark }: { dark?: boolean }) {
     return () => window.clearInterval(id);
   }, []);
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap ${dark ? 'bg-black/60 text-white ring-1 ring-white/40' : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'}`} title="وقتك في التعبّد بحفظ كتاب الله">
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-opacity duration-700 ${vis ? 'opacity-100' : 'opacity-0'} ${dark ? 'bg-black/60 text-white ring-1 ring-white/40' : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'}`} title="وقتك في التعبّد بحفظ كتاب الله">
       <Clock className="w-4 h-4" />
-      بقالك {formatWorship(total)}<span className="hidden sm:inline"> بتتعبد بحفظ كتاب الله</span>
+      بقالك {formatWorship(total)} بتتعبد بقراءة القرآن الكريم
     </span>
   );
 }
@@ -3471,7 +3481,6 @@ export default function QuranMushafPage({
                   className="p-1 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
               </span>
             )}
-            {!showFullscreen && <span className="inline-flex [&>span]:py-1 [&>span]:px-2 [&>span]:text-xs"><WorshipTimer /></span>}
           </div>
         </div>
 
@@ -3545,6 +3554,9 @@ export default function QuranMushafPage({
                   style={zoom > 1
                     ? { width: `${zoom * 100}%`, maxWidth: 'none', height: 'auto' }
                     : { transform: `scale(${zoom})` }} loading="eager" />
+              )}
+              {!showFullscreen && (
+                <div className="absolute top-1.5 inset-x-0 z-20 flex justify-center pointer-events-none"><WorshipTimer flash /></div>
               )}
               {goldFrame && (
                 <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] rounded-2xl" />
