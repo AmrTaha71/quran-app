@@ -1,0 +1,120 @@
+{
+ "clips": 400,
+ "err_words": 27,
+ "clean_pro": 588,
+ "clean_amateur": 1116,
+ "rows": [
+  {
+   "metric": "mean",
+   "tau": -0.2,
+   "false_pro_%": 9.69,
+   "false_amateur_%": 19.53,
+   "caught_%": 18.52
+  },
+  {
+   "metric": "mean",
+   "tau": -0.4,
+   "false_pro_%": 8.16,
+   "false_amateur_%": 18.19,
+   "caught_%": 18.52
+  },
+  {
+   "metric": "mean",
+   "tau": -0.7,
+   "false_pro_%": 6.46,
+   "false_amateur_%": 17.2,
+   "caught_%": 14.81
+  },
+  {
+   "metric": "mean",
+   "tau": -1.0,
+   "false_pro_%": 3.74,
+   "false_amateur_%": 15.05,
+   "caught_%": 11.11
+  },
+  {
+   "metric": "mean",
+   "tau": -1.5,
+   "false_pro_%": 1.87,
+   "false_amateur_%": 12.99,
+   "caught_%": 11.11
+  },
+  {
+   "metric": "mean",
+   "tau": -2.0,
+   "false_pro_%": 0.85,
+   "false_amateur_%": 10.84,
+   "caught_%": 11.11
+  },
+  {
+   "metric": "mean",
+   "tau": -3.0,
+   "false_pro_%": 0.34,
+   "false_amateur_%": 9.14,
+   "caught_%": 7.41
+  },
+  {
+   "metric": "mean",
+   "tau": -4.0,
+   "false_pro_%": 0.34,
+   "false_amateur_%": 8.24,
+   "caught_%": 3.7
+  },
+  {
+   "metric": "min",
+   "tau": -0.2,
+   "false_pro_%": 11.05,
+   "false_amateur_%": 20.97,
+   "caught_%": 22.22
+  },
+  {
+   "metric": "min",
+   "tau": -0.4,
+   "false_pro_%": 10.37,
+   "false_amateur_%": 20.25,
+   "caught_%": 22.22
+  },
+  {
+   "metric": "min",
+   "tau": -0.7,
+   "false_pro_%": 10.03,
+   "false_amateur_%": 19.62,
+   "caught_%": 18.52
+  },
+  {
+   "metric": "min",
+   "tau": -1.0,
+   "false_pro_%": 9.52,
+   "false_amateur_%": 19.09,
+   "caught_%": 18.52
+  },
+  {
+   "metric": "min",
+   "tau": -1.5,
+   "false_pro_%": 9.35,
+   "false_amateur_%": 18.64,
+   "caught_%": 14.81
+  },
+  {
+   "metric": "min",
+   "tau": -2.0,
+   "false_pro_%": 8.5,
+   "false_amateur_%": 18.01,
+   "caught_%": 14.81
+  },
+  {
+   "metric": "min",
+   "tau": -3.0,
+   "false_pro_%": 7.14,
+   "false_amateur_%": 17.11,
+   "caught_%": 14.81
+  },
+  {
+   "metric": "min",
+   "tau": -4.0,
+   "false_pro_%": 5.95,
+   "false_amateur_%": 16.22,
+   "caught_%": 14.81
+  }
+ ]
+}
