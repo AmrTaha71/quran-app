@@ -684,3 +684,12 @@ html[data-mushaf-night="1"] .mushaf-page-bg {
 /* Voice assistant: each wave of choices slides up and fades in. */
 @keyframes va-wave-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 .va-wave { animation: va-wave-in .28s ease-out both; }
+
+/* Device layout (2026-11-14): root size from the chosen device (deviceModel.ts).
+   Landscape phones are short, so shrink a little; TVs get large type. */
+html { font-size: var(--dev-fs, 16px); }
+@media (orientation: landscape) and (max-height: 520px) {
+  html[data-device="phone"] { font-size: calc(var(--dev-fs, 16px) * 0.88); }
+}
+html[data-device="tv"] main, html[data-device="desktop"] main { max-width: min(100%, 1100px); }
+html[data-device="tv"] main { max-width: 100%; }

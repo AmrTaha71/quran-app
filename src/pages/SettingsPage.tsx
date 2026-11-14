@@ -29,6 +29,7 @@ import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
+import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import DeleteAccountButton from '../components/DeleteAccountButton';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
@@ -60,7 +61,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Settings hub (2026-11-04): null = hub grid of doors; otherwise
   // the id of the open door. All section state lives in this
   // component, so switching hub<->detail never loses a control.
-  const [openDoor, setOpenDoor] = useState<string | null>(null);
+  const [openDoor, setOpenDoor] = useState<string | null>(() => {
+    try { const d = sessionStorage.getItem('quran-settings-door'); sessionStorage.removeItem('quran-settings-door'); return d; } catch { return null; }
+  });
   const [hintsBack, setHintsBack] = useState(false);
   // Shared back button (2026-11-06): while a Settings door is open,
   // the shell BackButton goes back to the hub instead of الرئيسية.
@@ -589,6 +592,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'device', icon: Smartphone, title: 'جهازك', sub: 'نوعه وحجمه وطريقة مسكه', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'download', icon: Download, title: 'تحميل المصحف', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'reciters', icon: Headphones, title: 'عايز مين يسمّعلك؟', sub: 'قارئ التصحيح والتسميع', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
@@ -873,6 +877,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${elderlyMode ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
             </span>
           </button>
+        </section>
+            </>)}
+            {openDoor === 'device' && (<>
+        <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5 space-y-3">
+          <p className="text-sm text-ink-2">{(() => { const c = loadDeviceChoice(); return c ? `${c.brand} — ${c.model} — ${c.variant}` : 'لسه ما اخترتش جهازك'; })()}</p>
+          <button type="button" onClick={() => window.dispatchEvent(new Event('quran-open-device-picker'))} className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold">غيّر جهازك</button>
         </section>
             </>)}
             {openDoor === 'adhan' && (<>

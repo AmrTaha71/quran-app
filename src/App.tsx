@@ -37,7 +37,7 @@ import Onboarding, { ONBOARDING_DONE_KEY, ONBOARDING_REOPEN_EVENT, markOnboardin
 import DevicePicker from './components/DevicePicker';
 import VoiceSearchMic from './components/VoiceSearchMic';
 import VoiceAssistant from './components/VoiceAssistant';
-import { getLocalDeviceKind } from './lib/deviceProfile';
+import { loadDeviceChoice, applyDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
 import { setBackTarget } from './lib/backTarget';
@@ -141,6 +141,13 @@ function AppContent() {
   const [session, setSession] = useState<Session | null>(null);
   // Bumped after the device picker is answered, so it unmounts.
   const [, setDeviceTick] = useState(0);
+  const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  useEffect(() => {
+    applyDeviceLayout();
+    const open = () => setDevicePickerOpen(true);
+    window.addEventListener('quran-open-device-picker', open);
+    return () => window.removeEventListener('quran-open-device-picker', open);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [showSplash, setShowSplash] = useState(true);
   const [authJustSucceeded, setAuthJustSucceeded] = useState(false);
@@ -599,9 +606,10 @@ function AppContent() {
       {showOnboarding && route === 'home' && (
         <Onboarding onDone={closeOnboarding} />
       )}
-      {/* Device picker: once per browser after sign-in. */}
-      {session && !getLocalDeviceKind() && !showOnboarding && (
-        <DevicePicker userId={session.user.id} onDone={() => setDeviceTick((n) => n + 1)} />
+      {/* Device picker (drums): first run per browser, or reopened from Settings. */}
+      {(!loadDeviceChoice() || devicePickerOpen) && !showOnboarding && (
+        <DevicePicker userId={session?.user.id} onDone={() => { setDevicePickerOpen(false); setDeviceTick((n) => n + 1); }}
+          onClose={loadDeviceChoice() ? () => setDevicePickerOpen(false) : undefined} />
       )}
     </>
   );

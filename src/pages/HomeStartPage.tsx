@@ -64,6 +64,10 @@ function pageSurah(page: number): string {
 // Jump the Mushaf to a specific ayah: QuranMushafPage consumes the stored
 // target on mount (goes to the ayah's actual page, opens fullscreen at
 // once, highlights the ayah). Same mechanism as the تربيط اليوم card.
+function goAdhanSettings(onNavigate: (r: Route) => void): void {
+  try { sessionStorage.setItem('quran-settings-door', 'adhan'); } catch { /* ignore */ }
+  onNavigate('settings');
+}
 function jumpToAyah(surah: number, ayah: number, onNavigate: (r: Route) => void): void {
   try {
     localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah, ayah }));
@@ -558,7 +562,7 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* 2026-11-13 (agreed): third row — next prayer (name, «بعد», digital countdown),
             the Quran radio, the nearest mosque, and the Qibla on the left edge. */}
         <div className="mb-4 grid grid-cols-4 gap-2 items-stretch">
-          <NextPrayerTile icon={<Clock />} onNoLocation={() => onNavigate('settings')} />
+          <NextPrayerTile icon={<Clock />} onNoLocation={() => goAdhanSettings(onNavigate)} onPress={() => goAdhanSettings(onNavigate)} />
           <button type="button" onPointerDown={pressFeedback} onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } }} aria-label="إذاعة القرآن الكريم"
             className="home-tile polish-focus !min-h-0">
             <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Radio /></span>

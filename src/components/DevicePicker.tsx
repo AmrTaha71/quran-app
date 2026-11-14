@@ -1,77 +1,58 @@
-// "أنهي جهاز ده؟" — asked once per browser after sign-in (2026-11-08).
-// Phones are split by platform (iPhone / Android) and screen size; the
-// platform and size go into the account's settings JSON, so device_kind
-// stays one of the four values the SQL allows.
+// «أنهي جهاز ده؟» — cascading drums (2026-11-14): type → brand → model → size
+// → how it is held. Each reel's options come from the previous reel's choice.
 import { useState } from 'react';
-import { DeviceKind, setLocalDeviceKind, saveDeviceSettings } from '../lib/deviceProfile';
+import { DrumReel } from './DrumReel';
+import { CATS, CAT_LABELS, LEVEL_TITLES, TREES, applyDeviceLayout, guessCat, loadDeviceChoice, saveDeviceChoice, type Cat, type Orient } from '../lib/deviceModel';
+import { setLocalDeviceKind, saveDeviceSettings, type DeviceKind } from '../lib/deviceProfile';
 
-type Platform = 'ios' | 'android';
-type ScreenSize = 'small' | 'large';
+const KIND: Record<Cat, DeviceKind> = { phone: 'phone', tablet: 'ipad', desktop: 'desktop', tv: 'tv' };
+const ORIENT: { v: Orient; label: string }[] = [{ v: 'portrait', label: 'بالطول' }, { v: 'landscape', label: 'بالعرض' }];
 
-interface Props {
-  userId: string;
-  onDone: (kind: DeviceKind) => void;
-}
+interface Props { userId?: string; onDone: () => void; onClose?: () => void }
 
-export default function DevicePicker({ userId, onDone }: Props) {
-  const [kind, setKind] = useState<DeviceKind | null>(null);
-  const [platform, setPlatform] = useState<Platform | null>(null);
-  const [size, setSize] = useState<ScreenSize | null>(null);
-  const [saving, setSaving] = useState(false);
+export default function DevicePicker({ userId, onDone, onClose }: Props) {
+  const prev = loadDeviceChoice();
+  const [cat, setCat] = useState<Cat>(prev?.cat ?? guessCat());
+  const [bi, setBi] = useState(0);
+  const [mi, setMi] = useState(0);
+  const [vi, setVi] = useState(0);
+  const [oi, setOi] = useState(prev?.orient === 'landscape' ? 1 : 0);
 
-  const isPhone = kind === 'phone';
-  const canSave = kind !== null && (!isPhone || (platform !== null && size !== null));
+  const brands = Object.keys(TREES[cat]);
+  const brand = brands[Math.min(bi, brands.length - 1)];
+  const models = Object.keys(TREES[cat][brand]);
+  const model = models[Math.min(mi, models.length - 1)];
+  const variants = Object.keys(TREES[cat][brand][model]);
+  const variant = variants[Math.min(vi, variants.length - 1)];
+  const [t1, t2, t3] = LEVEL_TITLES[cat];
 
   const save = async () => {
-    if (!kind || !canSave) return;
-    setSaving(true);
-    setLocalDeviceKind(kind);
-    const details = isPhone ? { platform, screen: size } : {};
-    // Saving to the account is best-effort: the device choice still applies locally.
-    await saveDeviceSettings(userId, kind, details).catch(() => false);
-    setSaving(false);
-    onDone(kind);
+    saveDeviceChoice({ cat, brand, model, variant, orient: ORIENT[oi].v });
+    setLocalDeviceKind(KIND[cat]);
+    applyDeviceLayout();
+    if (userId) await saveDeviceSettings(userId, KIND[cat], { brand, model, variant, orient: ORIENT[oi].v }).catch(() => false);
+    onDone();
   };
-
-  const card = (active: boolean) =>
-    `w-full text-right rounded-xl border p-4 ${active ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 bg-white'}`;
+  const col = (title: string, node: React.ReactNode) => (
+    <div className="min-w-0"><p className="text-xs font-bold text-emerald-800 text-center mb-1">{title}</p>{node}</div>
+  );
 
   return (
-    <div dir="rtl" className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold text-emerald-800">أنهي جهاز ده؟</h2>
-        <p className="text-sm text-slate-600">الاختيار ده بيتحفظ عشان الإعدادات تتظبط على الجهاز ده.</p>
-
-        <div className="space-y-2">
-          <button type="button" className={card(kind === 'phone')} onClick={() => setKind('phone')}>موبايل</button>
-          <button type="button" className={card(kind === 'ipad')} onClick={() => setKind('ipad')}>آيباد</button>
-          <button type="button" className={card(kind === 'tv')} onClick={() => setKind('tv')}>تلفزيون</button>
-          <button type="button" className={card(kind === 'desktop')} onClick={() => setKind('desktop')}>كمبيوتر</button>
+    <div dir="rtl" className="fixed inset-0 z-[60] bg-black/40 flex items-end sm:items-center justify-center p-3">
+      <div className="w-full max-w-lg bg-white rounded-2xl p-4 space-y-3 max-h-[94vh] overflow-y-auto">
+        <h2 className="text-lg font-bold text-emerald-800">أنهي جهاز ده؟</h2>
+        <p className="text-xs text-slate-600">لف البكرات: كل واحدة بتحدد اللي بعدها، والتطبيق يتظبط على مقاس شاشتك.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {col('نوع الجهاز', <DrumReel label="نوع الجهاز" labels={CATS.map((c) => CAT_LABELS[c])} index={CATS.indexOf(cat)} onIndex={(i) => { setCat(CATS[i]); setBi(0); setMi(0); setVi(0); }} />)}
+          {col(t1, <DrumReel key={`b-${cat}`} label={t1} labels={brands} index={bi} onIndex={(i) => { setBi(i); setMi(0); setVi(0); }} />)}
+          {col(t2, <DrumReel key={`m-${cat}-${brand}`} label={t2} labels={models} index={mi} onIndex={(i) => { setMi(i); setVi(0); }} />)}
+          {col(t3, <DrumReel key={`v-${cat}-${brand}-${model}`} label={t3} labels={variants} index={vi} onIndex={setVi} />)}
         </div>
-
-        {isPhone && (
-          <div className="space-y-3 border-t pt-4">
-            <p className="font-semibold text-slate-800">نوع الموبايل</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className={card(platform === 'ios')} onClick={() => setPlatform('ios')}>آيفون</button>
-              <button type="button" className={card(platform === 'android')} onClick={() => setPlatform('android')}>أندرويد (مش آيفون)</button>
-            </div>
-            <p className="font-semibold text-slate-800">حجم الشاشة</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" className={card(size === 'small')} onClick={() => setSize('small')}>صغيرة</button>
-              <button type="button" className={card(size === 'large')} onClick={() => setSize('large')}>كبيرة (Plus، Max، Pro Max)</button>
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={save}
-          disabled={!canSave || saving}
-          className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold disabled:opacity-40"
-        >
-          {saving ? 'بيتحفظ...' : 'تمام'}
-        </button>
+        {col('ماسك الجهاز إزاي؟', <div className="max-w-[12rem] mx-auto"><DrumReel label="اتجاه الجهاز" labels={ORIENT.map((o) => o.label)} index={oi} onIndex={setOi} /></div>)}
+        <div className="flex gap-2">
+          <button type="button" onClick={save} className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold">تمام</button>
+          {onClose && <button type="button" onClick={onClose} className="px-4 py-3 rounded-xl border border-slate-300 text-slate-700">إلغاء</button>}
+        </div>
       </div>
     </div>
   );
