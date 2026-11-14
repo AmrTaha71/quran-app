@@ -74,7 +74,7 @@ function DhikrFrame({ frame, children }: { frame: number; children: React.ReactN
     </div>
   );
 }
-const ROOM_TASBIH = ['سبحان الله', 'الحمد لله', 'الله أكبر', 'لا إله إلا الله', 'أستغفر الله'];
+const ROOM_TASBIH = ['سبحان الله', 'الحمد لله', 'الله أكبر', 'لا إله إلا الله', 'أستغفر الله', 'اللهم صل على سيدنا محمد'];
 type Msg = { id: string; by: string; text: string; at: number };
 type VoiceApi = { start: () => Promise<void>; stop: () => void; setMuted: (m: boolean) => void };
 
@@ -116,6 +116,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   })();
   const [code, setCode] = useState<string | null>(() => (tvView ? newCode() : joinFromLink));
   const [tvQr, setTvQr] = useState('');
+  // screenMode: this phone is the remote for the big screen (not a friend room).
+  const [screenMode, setScreenMode] = useState<boolean>(() => !!joinFromLink);
   // TV sabha: idle -> slideshow of the five adhkar; soft tick on each count.
   const [tvIdle, setTvIdle] = useState(false);
   const [slide, setSlide] = useState(0);
@@ -443,7 +445,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     );
   };
 
-  const joinRoom = () => {
+  const joinRoom = (asScreen = false) => {
     const c = joinInput.trim().toUpperCase();
     if (!isValidCode(c)) {
       setJoinError('الكود لازم يكون 6 حروف أو أرقام زي ما بيظهر عند صاحب الغرفة');
@@ -452,12 +454,14 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     setJoinError('');
     setPos({ surah: 1, ayah: 1, by: '', at: 0 });
     setMsgs([]);
+    setScreenMode(asScreen);
     setCode(c);
   };
 
   const createRoom = () => {
     setPos({ surah: 1, ayah: 1, by: '', at: 0 });
     setMsgs([]);
+    setScreenMode(false);
     setCode(newCode());
   };
 
@@ -558,11 +562,26 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           {joinError && <p className="text-sm text-red-600">{joinError}</p>}
           <button
             onPointerDown={pressFeedback}
-            onClick={joinRoom}
+            onClick={() => joinRoom(false)}
             className="w-full py-3 bg-slate-800 text-white font-bold rounded-xl"
           >
             ادخل
           </button>
+        </div>
+        <div className="bg-sky-50 rounded-xl border border-sky-200 p-4 space-y-3">
+          <p className="font-semibold text-sky-900">الشاشة الكبيرة (التلفزيون)</p>
+          <p className="text-sm text-sky-800">افتح على التلفزيون: <span dir="ltr" className="font-bold">{typeof window !== 'undefined' ? `${window.location.host}/tv` : ''}</span> — هيظهر كود، اكتبه هنا</p>
+          <input
+            aria-label="كود الشاشة"
+            value={joinInput}
+            onChange={(e) => setJoinInput(e.target.value)}
+            maxLength={CODE_LENGTH}
+            placeholder="كود الشاشة"
+            dir="ltr"
+            className="w-full border rounded-lg px-3 py-3 text-center text-xl tracking-widest uppercase bg-white"
+          />
+          {joinError && <p className="text-sm text-red-600">{joinError}</p>}
+          <button onPointerDown={pressFeedback} onClick={() => joinRoom(true)} className="w-full py-3 bg-sky-700 text-white font-bold rounded-xl">تحكّم في الشاشة</button>
         </div>
         {audioEl}
       </div>
@@ -692,9 +711,9 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
     <div dir="rtl" className="max-w-xl mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-emerald-800 flex items-center gap-2">
-          <Users className="w-5 h-5" /> {roomLabel()}
+          <Users className="w-5 h-5" /> {screenMode ? "التحكم في الشاشة الكبيرة" : roomLabel()}
         </h1>
-        <span className="text-sm text-slate-600">الموجودين: {members || 1}</span>
+        {!screenMode && <span className="text-sm text-slate-600">الموجودين: {members || 1}</span>}
       </div>
 
       <div className="bg-white rounded-xl border p-4 flex items-center justify-between">
@@ -707,14 +726,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border p-4 space-y-2 text-sm text-slate-600">
-        <p className="font-semibold text-slate-800">شاشة التلفزيون</p>
-        <p>على متصفح التلفزيون افتح الرابط ده (مرة واحدة، وبعدين احفظه):</p>
-        <p dir="ltr" className="break-all text-slate-800">{typeof window !== 'undefined' ? `${window.location.host}/tv` : ''}</p>
-        <p>التلفزيون هيظهر كود، وانت ادخله هنا عشان تتحكم فيه.</p>
-      </div>
-
-      <div className="bg-white rounded-xl border p-4 space-y-3">
+      {!screenMode && (<>
+<div className="bg-white rounded-xl border p-4 space-y-3">
         <p className="font-semibold text-slate-800">الصوت</p>
         {!voiceOn ? (
           <button
@@ -739,7 +752,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         {voiceError && <p className="text-sm text-red-600">{voiceError}</p>}
       </div>
 
-      <div className="bg-sky-50 rounded-xl border border-sky-200 p-4 space-y-3">
+      </>)}
+
+      {screenMode && (<>
+<div className="bg-sky-50 rounded-xl border border-sky-200 p-4 space-y-3">
         <p className="text-lg font-bold text-sky-900">شاشة البيت: مواقيت الصلاة والأذكار</p>
         <p className="text-xs text-sky-800">الساعة، والوقت الباقي على الصلاة الجاية، وأذكار الصباح بعد الفجر والمساء بعد العصر بتتغير لوحدها.</p>
         {homeMsg && <p className="text-xs text-red-600">{homeMsg}</p>}
@@ -821,6 +837,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         )}
       </div>
 
+      </>)}
+
       <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-4 space-y-3">
         <p className="text-lg font-bold text-emerald-900">
           سورة {surahName} — آية {pos.ayah}
@@ -848,7 +866,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border p-4 space-y-3">
+      {!screenMode && (<>
+<div className="bg-white rounded-xl border p-4 space-y-3">
         <p className="font-semibold text-slate-800">الرسائل</p>
         <div className="max-h-64 overflow-y-auto space-y-2">
           {msgs.length === 0 && <p className="text-sm text-slate-500">لسه مفيش رسائل</p>}
@@ -872,6 +891,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           </button>
         </div>
       </div>
+
+      </>)}
 
       <button onClick={leaveRoom} className="w-full py-3 rounded-xl border text-slate-700 flex items-center justify-center gap-2">
         <LogOut className="w-4 h-4" /> اخرج من الغرفة
