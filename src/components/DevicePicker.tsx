@@ -6,7 +6,7 @@ import { CATS, CAT_LABELS, LEVEL_TITLES, TREES, applyDeviceLayout, guessCat, loa
 import { setLocalDeviceKind, saveDeviceSettings, type DeviceKind } from '../lib/deviceProfile';
 
 const KIND: Record<Cat, DeviceKind> = { phone: 'phone', tablet: 'ipad', desktop: 'desktop', tv: 'tv' };
-const ORIENT: { v: Orient; label: string }[] = [{ v: 'portrait', label: 'بالطول' }, { v: 'landscape', label: 'بالعرض' }];
+const ORIENT: { v: Orient; label: string }[] = [{ v: 'portrait', label: 'بالطول' }, { v: 'landscape', label: 'بالعرض' }, { v: 'auto', label: 'الاتنين (يتظبط لوحده)' }];
 
 interface Props { userId?: string; onDone: () => void; onClose?: () => void }
 
@@ -16,7 +16,7 @@ export default function DevicePicker({ userId, onDone, onClose }: Props) {
   const [bi, setBi] = useState(0);
   const [mi, setMi] = useState(0);
   const [vi, setVi] = useState(0);
-  const [oi, setOi] = useState(prev?.orient === 'landscape' ? 1 : 0);
+  const [oi, setOi] = useState(prev?.orient === 'landscape' ? 1 : prev?.orient === 'portrait' ? 0 : 2);
 
   const brands = Object.keys(TREES[cat]);
   const brand = brands[Math.min(bi, brands.length - 1)];

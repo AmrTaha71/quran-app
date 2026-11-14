@@ -706,6 +706,13 @@ html[data-dsize="xs"] .home-tiles, html[data-dsize="s"] .home-tiles { gap: 0.5re
   .home-tiles-small { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .home-tile { min-height: 6.25rem; padding: 0.55rem 0.4rem 0.5rem; }
 }
+/* Tablet held sideways: four tiles per row, lower tiles so the whole home fits. */
+html[data-device="tablet"][data-orient="landscape"] .home-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+html[data-device="tablet"][data-orient="landscape"] .home-tile { min-height: 7.25rem; }
+/* Tablet held upright keeps the roomy tiles. */
+html[data-device="tablet"][data-orient="portrait"] .home-tile { min-height: 9rem; }
+/* Notches and rounded corners when sideways: keep content inside the safe area. */
+html[data-orient="landscape"] body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 /* TV / big screens: roomy tiles and gaps, readable from a distance. */
 html[data-device="tv"] .home-tiles { gap: 1.25rem; }
 html[data-device="tv"] .home-tile { min-height: 11rem; }

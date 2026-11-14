@@ -4,7 +4,7 @@
 // Real rotation is still handled by CSS media queries; the held-orientation
 // choice is the starting hint only.
 export type Cat = 'phone' | 'tablet' | 'desktop' | 'tv';
-export type Orient = 'portrait' | 'landscape';
+export type Orient = 'portrait' | 'landscape' | 'auto';
 type Size = [number, number];
 type Variants = Record<string, Size>;
 type Tree = Record<string, Record<string, Variants>>; // brand → model → variant → size
@@ -131,6 +131,29 @@ export function applyDeviceLayout(): void {
   else if (cat === 'tv') { bucket = 'xl'; fs = 24; }
   else { bucket = 'm'; fs = short >= 2000 ? 18 : 16; }
   el.dataset.device = cat; el.dataset.dsize = bucket;
-  if (c) el.dataset.heldOrient = c.orient;
+  // Geometry always follows the real window, so nothing is ever cut off in
+  // either orientation. The chosen orientation only decides the first guess
+  // before the window reports a size ('auto' = follow the window).
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const live: Orient = vw && vh ? (vw > vh ? 'landscape' : 'portrait') : (c && c.orient !== 'auto' ? c.orient : 'portrait');
+  el.dataset.orient = live;
+  el.dataset.heldOrient = c?.orient ?? 'auto';
+  if (live === 'landscape') {
+    // Sideways the height is the scarce side: shrink type with the height.
+    const h = vh || short;
+    if (cat === 'phone' && h < 520) fs *= 0.88;
+    else if (cat === 'tablet' && h < 820) fs *= 0.92;
+  }
   el.style.setProperty('--dev-fs', `${fs}px`);
+}
+
+let layoutWired = false;
+/** Re-apply when the device is rotated or the window is resized. */
+export function wireDeviceLayout(): void {
+  if (layoutWired || typeof window === 'undefined') return;
+  layoutWired = true;
+  let t: number | undefined;
+  const again = () => { window.clearTimeout(t); t = window.setTimeout(applyDeviceLayout, 120); };
+  window.addEventListener('resize', again);
+  window.addEventListener('orientationchange', again);
 }
