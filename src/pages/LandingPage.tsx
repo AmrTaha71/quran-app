@@ -82,9 +82,12 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               : 'Memorize the Quran through links: connect ayahs by meaning so they stick.'}
           </p>
 
-          <div className="free-banner flex items-center justify-center gap-3 w-full max-w-2xl mx-auto px-6 py-5 mb-10 rounded-2xl bg-emerald-600 text-white font-extrabold text-2xl md:text-4xl leading-snug shadow-2xl">
-            <HeartHandshake className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
-            مجاني بالكامل، بلا إعلانات ولا اشتراكات
+          <div className="free-banner flex flex-col items-center justify-center gap-1 w-full max-w-2xl mx-auto px-6 py-5 mb-10 rounded-2xl bg-emerald-600 text-white font-extrabold text-2xl md:text-4xl leading-snug shadow-2xl">
+            <span className="flex items-center gap-3">
+              <HeartHandshake className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
+              مجاني بالكامل
+            </span>
+            <span className="text-lg md:text-2xl font-bold">لا إعلانات ولا اشتراكات</span>
           </div>
 
           <div className="flex flex-wrap justify-center gap-4 mb-10">
