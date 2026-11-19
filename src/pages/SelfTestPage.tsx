@@ -6,6 +6,7 @@ import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
 import EarDownloadCard from '../components/EarDownloadCard';
 import TestHistoryPanel from '../components/TestHistoryPanel';
+import { requestDayRecap } from '../lib/dailyStats';
 import { registerAligner } from '../lib/alignBridge';
 import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
@@ -7138,7 +7139,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>
-              <button onClick={() => onNavigate('app')}
+              <button onClick={() => { requestDayRecap(); onNavigate('app'); }}
                 className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                 العودة إلى لوحتي
               </button>
