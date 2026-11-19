@@ -8,12 +8,11 @@ import RoundRecite, { RoundReveal } from './RoundRecite';
 import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
 import { useIsAdminView } from '../lib/adminPreview';
-import { arNum, currentHistoryLevel, pickRoundAyah, surahsOfRange, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
 import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange, planRangeReciters, downloadRange, isRangeDownloaded, rangeSizeMb, formatSize, type RangeReciterPart } from '../lib/corrDownload';
-import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import { useEscapeClose } from '../lib/useEscape';
 import DrumSelect from './DrumSelect';
 import { unitPickLabel } from '../lib/testRanges';
@@ -53,19 +52,6 @@ function fromGlobal(g: number): { s: number; a: number } {
   return { s: 114, a: SURAH_AYAH_COUNTS[113] };
 }
 
-let textMap: Promise<Map<string, string> | null> | null = null;
-function loadText(): Promise<Map<string, string> | null> {
-  if (!textMap) {
-    textMap = getQuranTextCache().getAll(6000).then((rows: CachedTextRow[] | null) => {
-      if (!rows) return null;
-      const m = new Map<string, string>();
-      for (const r of rows) m.set(`${r.surah_no}:${r.ayah_no}`, r.ayah_text);
-      return m;
-    }).catch(() => null);
-  }
-  return textMap;
-}
-
 type Done = { ayah: PickedAyah; result: RoundResult; surahOk: boolean | null; completion: number; surah: number; total: number };
 type Phase = 'setup' | 'loading' | 'recite' | 'surah' | 'score' | 'summary';
 
@@ -84,7 +70,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   const used = useRef<Set<number>>(new Set());
   const saved = useRef(false);
 
-  useEffect(() => { loadText().then(setText); }, []);
+  useEffect(() => { loadQuranText().then(setText); }, []);
 
   const count = SCOPE_COUNT[scope];
   // Only readers with word timings for the WHOLE picked range are offered
@@ -294,6 +280,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <div className="bg-gray-50 rounded-lg p-3 border border-emerald-100 my-3 text-sm text-accent-800 space-y-1">
               <p>إكمال الآية: {arNum(lastRound.completion)} من {arNum(lastRound.surahOk === null ? 10 : 8)} ({arNum(cur.result.credited)} من {arNum(cur.result.total)} كلمة)</p>
               {lastRound.surahOk !== null && <p>السورة: {lastRound.surahOk ? '✓ صح' : '✗ غلط'} — {arNum(lastRound.surah)} من ٢</p>}
+              {cur.result.extras > 0 && <p className="text-amber-700">طلبت «كلمتين كمان» {arNum(cur.result.extras)} مرة — خصم {arNum(cur.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
               <p className="font-bold">درجة الجولة: {arNum(lastRound.total)} من ١٠</p>
             </div>
             <div className="grid grid-cols-2 gap-2">

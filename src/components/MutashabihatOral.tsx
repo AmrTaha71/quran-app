@@ -13,6 +13,8 @@ import { setExtraWordMin } from '../lib/phonemeEar';
 import { surahLabel } from '../lib/surahs';
 import { countAyat } from './MutashabihatGame';
 import SurahTiles from './SurahTiles';
+import { wordsAfterClue } from '../lib/mutHint';
+import { HINT_COST, HINT_WORDS, MAX_HINTS } from '../lib/roundTest';
 
 const PASS = 0.75;
 
@@ -36,6 +38,9 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
   const [queue, setQueue] = useState<string[]>([]);
   const [qi, setQi] = useState(0);
   const [surahOk, setSurahOk] = useState<Record<string, boolean>>({});
+  // «اديني كلمتين كمان»: words after the clue in the next ayah not said yet (text only, no names).
+  const [hintWords, setHintWords] = useState<Record<string, number>>({});
+  const [hints, setHints] = useState(0);
   const recRef = useRef<Rec | null>(null);
   const finals = useRef('');
   const interim = useRef('');
@@ -54,6 +59,16 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
   function toSurahPhase(list: string[]) {
     if (list.length === 0) { setPhase('review'); return; }
     setQueue(list); setQi(0); setPhase('surah');
+  }
+
+  function moreWords() {
+    const k = left[0];
+    if (!k || hints >= MAX_HINTS) return;
+    const n = (hintWords[k] ?? 0) + HINT_WORDS;
+    if (!wordsAfterClue(clue, text?.get(k) ?? '', n)) { setMsg('مفيش كلمات زيادة نديك إياها في الآية دي.'); return; }
+    setHintWords({ ...hintWords, [k]: n });
+    setHints(hints + 1);
+    setMsg('');
   }
 
   function begin() {
@@ -107,7 +122,7 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
     try { r.stop(); } catch { go(); }
   }
 
-  const finishAll = () => onDone({ found: found.length, surahRight: Object.values(surahOk).filter(Boolean).length, hints: 0 });
+  const finishAll = () => onDone({ found: found.length, surahRight: Object.values(surahOk).filter(Boolean).length, hints });
   const finishSelf = (list: string[]) => { setFound(list); toSurahPhase(list); };
 
   // No recognizer on the device: the user says them aloud, then ticks what he got.
@@ -167,6 +182,8 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
           {found.map((k, i) => <span key={k} className="px-3 py-1 rounded-full bg-emerald-600 text-white text-sm font-bold">✓ الآية {(i + 1).toLocaleString('ar-EG')}</span>)}
         </div>
       )}
+      {answers.map((k, i) => (hintWords[k] && !found.includes(k)
+        ? <p key={k} className="font-arabic text-lg text-amber-800">الآية {(i + 1).toLocaleString('ar-EG')}: … {wordsAfterClue(clue, text?.get(k) ?? '', hintWords[k])}</p> : null))}
       {listening ? (
         <button onClick={stop} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">خلصت الآية</button>
       ) : grading ? (
@@ -174,6 +191,11 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
       ) : (
         <div className="grid grid-cols-2 gap-2">
           <button onClick={begin} className="py-3 grad-emerald-door text-white font-bold rounded-xl">سمّع آية</button>
+          {text && left.length > 0 && hints < MAX_HINTS && (
+            <button onClick={moreWords} className="col-span-2 order-last py-2 rounded-xl border border-amber-300 text-amber-800 font-bold">
+              اديني كلمتين كمان <span className="text-xs font-normal">(بيخصم {(HINT_COST * 100).toLocaleString('ar-EG')}٪ من درجة الآيات)</span>
+            </button>
+          )}
           <button onClick={() => toSurahPhase(found)} className="py-3 bg-gray-100 text-accent-700 font-bold rounded-xl">{found.length > 0 ? 'كفاية كده' : 'مش فاكر'}</button>
         </div>
       )}

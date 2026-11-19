@@ -11,7 +11,7 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { firstMistake, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { firstMistake, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
 const QUIET_MS = 1800;
@@ -22,7 +22,10 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   corrections: number;
   onFinish: (r: RoundResult) => void;
 }) {
-  const rest = useMemo(() => ayah.words.slice(ayah.promptLen), [ayah]);
+  // «اديني كلمتين كمان»: each request plays HINT_WORDS more words before the user starts.
+  const [extra, setExtra] = useState(0);
+  const eff = ayah.promptLen + HINT_WORDS * extra;
+  const rest = useMemo(() => ayah.words.slice(eff), [ayah, eff]);
   const restNorms = useMemo(() => rest.map((w) => w.norm), [rest]);
   const [phase, setPhaseState] = useState<Phase>('idle');
   const phaseRef = useRef<Phase>('idle');
@@ -35,6 +38,8 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const got = useRef<boolean[]>(new Array(rest.length).fill(false));
   const mistaken = useRef<Set<number>>(new Set());
   const corrLeft = useRef(corrections);
+  const effRef = useRef(eff);
+  effRef.current = eff;
   const recRef = useRef<Rec | null>(null);
   const kindRef = useRef<'lab' | 'browser' | 'manual'>('manual');
   const finals = useRef('');
@@ -65,13 +70,26 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   async function playPrompt() {
     setMsg('');
     setPhase('prompting');
-    await span(Math.max(0, t[0] - 0.25), t[2 * (ayah.promptLen - 1) + 1] + 0.15);
+    await span(Math.max(0, t[0] - 0.25), t[2 * (effRef.current - 1) + 1] + 0.15);
+    if (!finished.current) setPhase('ready');
+  }
+
+  const canMore = extra < MAX_HINTS && ayah.words.length - (eff + HINT_WORDS) >= 2;
+  async function moreWords() {
+    if (!canMore) return;
+    const from = eff, to = eff + HINT_WORDS;
+    got.current = new Array(ayah.words.length - to).fill(false);
+    base.current = 0;
+    setExtra(extra + 1);
+    setMsg('');
+    setPhase('prompting');
+    await span(Math.max(0, t[2 * from] - 0.1), t[2 * (to - 1) + 1] + 0.1);
     if (!finished.current) setPhase('ready');
   }
 
   async function playCorrection() {
     setPhase('correcting');
-    const abs = ayah.promptLen + base.current;
+    const abs = effRef.current + base.current;
     const nextW = Math.min(abs + 1, ayah.words.length - 1);
     await span(Math.max(0, t[2 * abs] - 0.1), t[2 * nextW + 1] + 0.1);
     if (!finished.current) setPhase('afterCorr');
@@ -99,7 +117,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     const credited = got.current.filter(Boolean).length;
     const wrong: number[] = [];
     got.current.forEach((g, i) => { if (!g) wrong.push(i); });
-    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, promptLen: ayah.promptLen, ear: kindRef.current });
+    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, promptLen: effRef.current, extras: extra, ear: kindRef.current });
   }
 
   function evaluate(final: boolean) {
@@ -178,7 +196,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   function finishManual() {
     const credited = rest.length - manualWrong.size;
     finished.current = true;
-    onFinish({ total: rest.length, credited, wrong: [...manualWrong].sort((a, b) => a - b), locked: false, corrected: 0, promptLen: ayah.promptLen, ear: 'manual' });
+    onFinish({ total: rest.length, credited, wrong: [...manualWrong].sort((a, b) => a - b), locked: false, corrected: 0, promptLen: effRef.current, extras: extra, ear: 'manual' });
   }
 
   const btn = 'w-full py-3 text-white font-bold rounded-xl disabled:opacity-50';
@@ -186,7 +204,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     <div className="space-y-3">
       {phase === 'idle' && (
         <>
-          <p className="text-sm text-accent-700">هتسمع أول {ayah.promptLen.toLocaleString('ar-EG')} كلمات من آية بصوت القارئ، وبعدين كمّل الآية بصوتك.</p>
+          <p className="text-sm text-accent-700">هتسمع أول {eff.toLocaleString('ar-EG')} كلمات من آية بصوت القارئ، وبعدين كمّل الآية بصوتك.</p>
           <button onClick={() => void playPrompt()} className={`${btn} grad-amber-door`}>اسمع الكلمات</button>
         </>
       )}
@@ -197,6 +215,11 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
           {phase === 'ready' && <p className="text-sm text-accent-700">كمّل الآية من بعد الكلمات اللي سمعتها.</p>}
           <button onClick={startMic} className={`${btn} grad-emerald-door`}>كمّل بصوتك</button>
           {phase === 'ready' && <button onClick={() => void playPrompt()} className="w-full py-2 rounded-xl border border-emerald-300 text-emerald-800 font-bold">أعد سماع الكلمات</button>}
+          {phase === 'ready' && canMore && (
+            <button onClick={() => void moreWords()} className="w-full py-2 rounded-xl border border-amber-300 text-amber-800 font-bold">
+              اديني كلمتين كمان <span className="text-xs font-normal">(بيخصم {(HINT_COST * 100).toLocaleString('ar-EG')}٪ من درجة الآية)</span>
+            </button>
+          )}
         </>
       )}
       {phase === 'listening' && (

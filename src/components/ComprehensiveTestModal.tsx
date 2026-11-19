@@ -12,7 +12,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { surahLabel } from '../lib/surahs';
 import BANK from '../data/mutashabihat-famous.json';
-import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange, planRangeReciters } from '../lib/corrDownload';
 import { useIsAdminView } from '../lib/adminPreview';
@@ -24,7 +23,7 @@ import {
 } from '../lib/comprehensiveTest';
 import DrumSelect from './DrumSelect';
 import {
-  COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
+  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
@@ -43,19 +42,6 @@ const SCOPES: { id: ScopeId; label: string }[] = [
   { id: 'first5', label: 'أول ٥ أجزاء' },
   { id: 'juz30', label: 'جزء ٣٠' },
 ];
-
-let textMap: Promise<Map<string, string> | null> | null = null;
-function loadText(): Promise<Map<string, string> | null> {
-  if (!textMap) {
-    textMap = getQuranTextCache().getAll(6000).then((rows: CachedTextRow[] | null) => {
-      if (!rows) return null;
-      const m = new Map<string, string>();
-      for (const r of rows) m.set(`${r.surah_no}:${r.ayah_no}`, r.ayah_text);
-      return m;
-    }).catch(() => null);
-  }
-  return textMap;
-}
 
 function buildMut(count: number): MutQ[] {
   const pool = [...(BANK as MutQ[])];
@@ -105,7 +91,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [saved, setSaved] = useState<SavedResult | null>(null);
   const ctx = useRef<{ span: { start: number; end: number; label: string }; folderAt: (g: number) => string; used: Set<number>; pool: number[] } | null>(null);
 
-  useEffect(() => { loadText().then(setText); }, []);
+  useEffect(() => { loadQuranText().then(setText); }, []);
   useEscapeClose(true, onClose);
 
   const parts = activeParts(isAdmin);
@@ -347,6 +333,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 <RoundReveal ayah={showRes.ayah} result={showRes.result} />
                 <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}{showRes.surahOk === null ? '' : showRes.surahOk ? ' · السورة ✓' : ' · السورة ✗'}</p>
                 <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل بغلطة تانية)' : ''}</p>
+                {showRes.result.extras > 0 && <p className="text-xs text-amber-700 mb-2">طلبت «كلمتين كمان» {arNum(showRes.result.extras)} مرة — خصم {arNum(showRes.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
                 {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
                 <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">
                   {positions.length >= count ? 'كمّل للمتشابهات' : 'الموضع التالي'}

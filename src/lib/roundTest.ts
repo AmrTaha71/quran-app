@@ -6,6 +6,7 @@ import { reciterWordTimings } from './juhaniCorr';
 import { expectedWordList } from './expectedWords';
 import { SURAHS } from './surahs';
 import { fromGlobal } from './comprehensiveTest';
+import { getQuranTextCache, type CachedTextRow } from './quranTextCache';
 
 /** Most words an ayah starts with as the prompt (shorter ayat use fewer, see promptLenFor). */
 export const PROMPT_WORDS = 5;
@@ -17,6 +18,7 @@ export type RoundResult = {
   locked: boolean;    // a 2nd mistake closed the position
   corrected: number;  // how many corrections the reciter gave
   promptLen: number;  // words heard before the user started (the prompt + any hints)
+  extras: number;     // «اديني كلمتين كمان» requests (each costs HINT_COST of the ayah part)
   ear: 'lab' | 'browser' | 'manual';
 };
 
@@ -47,7 +49,8 @@ export const AYAH_PART = 8;
 export const SURAH_PART = 2;
 export function tarteelRoundScore(r: RoundResult, surahOk: boolean | null): { completion: number; surah: number; total: number } {
   const share = r.total ? r.credited / r.total : 0;
-  const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share);
+  const keep = Math.max(0, 1 - HINT_COST * (r.extras ?? 0));
+  const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share * keep);
   const surah = surahOk ? SURAH_PART : 0;
   return { completion, surah, total: r1(completion + surah) };
 }
@@ -85,7 +88,7 @@ export const positionScore = (frac: number, n: number) => r1(positionMax(n) * fr
 export function positionsFinal(fracs: number[]): number {
   return fracs.length ? r1(COMP_TOTAL * (fracs.reduce((a, b) => a + b, 0) / fracs.length)) : 0;
 }
-export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited === r.total && !r.locked && r.corrected === 0;
+export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited === r.total && !r.locked && r.corrected === 0 && r.extras === 0;
 
 /** 4 surah tiles (the right one + 3 others), shuffled. The others come from `pool`
  *  (the surahs of the range) when it has enough, else from the whole Quran. */
@@ -204,4 +207,18 @@ export async function pickRoundAyah(
     return { surah: p.s, ayah: p.a, folder, words: w, timings, promptLen, relaxed: tier === 'relaxed' };
   }
   return null;
+}
+
+let textMap: Promise<Map<string, string> | null> | null = null;
+/** Quran text (key "s:a") from the local cache; null when it is not available. Loaded once. */
+export function loadQuranText(): Promise<Map<string, string> | null> {
+  if (!textMap) {
+    textMap = getQuranTextCache().getAll(6000).then((rows: CachedTextRow[] | null) => {
+      if (!rows) return null;
+      const m = new Map<string, string>();
+      for (const r of rows) m.set(`${r.surah_no}:${r.ayah_no}`, r.ayah_text);
+      return m;
+    }).catch(() => null);
+  }
+  return textMap;
 }

@@ -2,12 +2,14 @@
 // from the Quran and must name every ayah that contains it. Bank
 // comes from src/data/mutashabihat-bank.json (built offline from the
 // Quran text; see the generator notes in that file's sibling docs).
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import DrumSelect from './DrumSelect';
 import { X } from 'lucide-react';
 import BANK from '../data/mutashabihat-famous.json'; // 2026-11-07: only clues backed by two sources (Quranpedia similar groups)
 import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { playClap, playCelebrate, playBuzz } from '../lib/gameSounds';
+import { loadQuranText, HINT_COST, HINT_WORDS, MAX_HINTS, arNum } from '../lib/roundTest';
+import { wordsAfterClue } from '../lib/mutHint';
 
 type Level = 'easy' | 'medium' | 'hard';
 interface BankItem { id: string; clue: string; answers: string[]; level: Level }
@@ -43,6 +45,12 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [found, setFound] = useState<Set<string>>(new Set());
   const [mistakes, setMistakes] = useState(0);
   const [results, setResults] = useState<boolean[]>([]);
+  // W4-L «اديني كلمتين كمان»: words after the clue (per ayah), each request costs HINT_COST of the question.
+  const [text, setText] = useState<Map<string, string> | null>(null);
+  const [hintN, setHintN] = useState<Record<string, number>>({});
+  const [qHints, setQHints] = useState(0);
+  const [points, setPoints] = useState<number[]>([]);
+  useEffect(() => { void loadQuranText().then(setText); }, []);
   const [surah, setSurah] = useState(1);
   const [ayah, setAyah] = useState('1');
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
@@ -60,6 +68,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
     setQueue(shuffle(pool).slice(0, ROUND_SIZE));
     setIdx(0);
     setResults([]);
+    setPoints([]);
     resetQuestion();
   }
 
@@ -67,6 +76,19 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
     setFound(new Set());
     setMistakes(0);
     setAyah('1');
+    setFeedback(null);
+    setHintN({});
+    setQHints(0);
+  }
+
+  function moreWords() {
+    if (!current || qHints >= MAX_HINTS) return;
+    const k = current.answers.find((x) => !found.has(x));
+    if (!k) return;
+    const n = (hintN[k] ?? 0) + HINT_WORDS;
+    if (!wordsAfterClue(current.clue, text?.get(k) ?? '', n)) { setFeedback({ ok: false, text: 'مفيش كلمات زيادة نديك إياها' }); return; }
+    setHintN({ ...hintN, [k]: n });
+    setQHints(qHints + 1);
     setFeedback(null);
   }
 
@@ -106,6 +128,8 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   function nextQuestion() {
     const done = mistakes === 0 && found.size === (current?.answers.length ?? 0);
     const nextResults = [...results, done];
+    const nextPoints = [...points, done ? Math.max(0, 1 - HINT_COST * qHints) : 0];
+    setPoints(nextPoints);
     if (idx + 1 >= queue.length) {
       setResults(nextResults);
       setQueue([]);
@@ -144,6 +168,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
           <div className="text-center space-y-4 py-4">
             <p className="text-2xl font-bold text-ink">خلصت الجولة</p>
             <p className="text-lg text-ink-2">جبت {results.filter(Boolean).length} من {results.length} من غير أخطاء</p>
+            <p className="text-base text-ink-2">الدرجة: {arNum(Math.round(points.reduce((a, b) => a + b, 0) * 10) / 10)} من {arNum(results.length)} (كل «كلمتين كمان» بتخصم {arNum(HINT_COST * 100)}٪ من السؤال)</p>
             <button onClick={() => startRound(level)} className="w-full min-h-[52px] grad-emerald-door text-white font-bold rounded-xl polish-press">جولة تانية</button>
             <button onClick={() => setLevel(null)} className="w-full min-h-[48px] bg-white border-2 border-emerald-700 text-emerald-800 font-bold rounded-xl">غيّر المستوى</button>
           </div>
@@ -163,6 +188,13 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
               ) : null)}
             </div>
 
+            {current.answers.map((k, i) => (hintN[k] && !found.has(k)
+              ? <p key={k} className="text-center font-display-ar text-lg text-amber-800">الآية {arNum(i + 1)}: … {wordsAfterClue(current.clue, text?.get(k) ?? '', hintN[k])}</p> : null))}
+            {!solved && text && qHints < MAX_HINTS && (
+              <button onClick={moreWords} className="w-full min-h-[44px] rounded-xl border border-amber-300 text-amber-800 font-bold">
+                اديني كلمتين كمان <span className="text-xs font-normal">(بيخصم {arNum(HINT_COST * 100)}٪ من السؤال)</span>
+              </button>
+            )}
             {!solved && (
               <div className="flex gap-2">
                 <div className="flex-1 min-w-0">
