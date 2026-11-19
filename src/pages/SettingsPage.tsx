@@ -30,6 +30,7 @@ import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
 import Collapsible from '../components/Collapsible';
+import PageHeader from '../components/PageHeader';
 import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import DeleteAccountButton from '../components/DeleteAccountButton';
@@ -92,6 +93,21 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { const d = sessionStorage.getItem('quran-settings-door'); sessionStorage.removeItem('quran-settings-door'); return d; } catch { return null; }
   });
   const [hintsBack, setHintsBack] = useState(false);
+  // W3-S4: the tour starts only once the device is set up (the device decides
+  // layout and sizes). No device chosen yet -> open the device picker first and
+  // say so; the tour starts from the next tap. Same reopen event as before.
+  const [tourNote, setTourNote] = useState('');
+  const startTour = () => {
+    if (!loadDeviceChoice()) {
+      setTourNote('اختار جهازك الأول، وبعدها اضغط على الجولة.');
+      window.dispatchEvent(new Event('quran-open-device-picker'));
+      return;
+    }
+    setTourNote('');
+    clearOnboardingDone();
+    window.dispatchEvent(new Event(ONBOARDING_REOPEN_EVENT));
+    onNavigate('home');
+  };
   // Shared back button (2026-11-06): while a Settings door is open,
   // the shell BackButton goes back to the hub instead of الرئيسية.
   // Cleanup on close/unmount clears it, so no stale target survives.
@@ -669,6 +685,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // detail view, unchanged. The admin door renders only when its
   // section would (admin error or admin user), exactly as before.
   const doors = [
+    { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -680,7 +697,6 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -817,22 +833,36 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
-      <header className="sticky top-0 z-40 app-header">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-5 flex flex-wrap items-center gap-3">
-          <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-            <Settings className="w-7 h-7 md:w-8 md:h-8 text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">الإعدادات</h1>
-            <p className="text-sm md:text-base text-accent-600">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
-          </div>
-          {savedTick && (
-            <span className="mr-auto flex items-center gap-1 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-hairline-emerald rounded-full px-3 py-1">
-              <Check className="w-4 h-4" /> تم الحفظ
-            </span>
-          )}
+      {/* W3-S4: thin shared header; the tour icon sits first, at the very top. */}
+      <PageHeader
+        sticky
+        title="الإعدادات"
+        icon={Settings}
+        actions={(
+          <>
+            {savedTick && (
+              <span className="flex items-center gap-1 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-hairline-emerald rounded-full px-3 py-1">
+                <Check className="w-4 h-4" /> تم الحفظ
+              </span>
+            )}
+            <button
+              type="button"
+              onPointerDown={pressFeedback}
+              onClick={startTour}
+              aria-label="الجولة التعريفية"
+              title="الجولة التعريفية"
+              className="grad-emerald-door polish-press w-11 h-11 rounded-xl flex items-center justify-center text-white"
+            >
+              <Compass className="w-6 h-6" />
+            </button>
+          </>
+        )}
+      />
+      {tourNote && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-3">
+          <p className="text-sm font-semibold text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2" role="status">{tourNote}</p>
         </div>
-      </header>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
         {openDoor === null && <TodayDatesCard />}
@@ -1400,11 +1430,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسـمّع لي، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
           </p></Hint>
           <button
-            onClick={() => {
-              clearOnboardingDone();
-              window.dispatchEvent(new Event(ONBOARDING_REOPEN_EVENT));
-              onNavigate('home');
-            }}
+            onClick={startTour}
             onPointerDown={pressFeedback}
             className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
             إعادة الجولة التعريفية
