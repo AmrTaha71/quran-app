@@ -1018,6 +1018,27 @@ export default function QuranMushafPage({
     findSimilar(selectedVerse);
   }, [popupTab, selectedVerse, findSimilar]);
 
+  // W5-C: how many places the ayah's most repeated QUL phrase occurs in
+  // (max `ayahs` across its phrases), shown on the المتشابهات tile as
+  // «(في N مواضع)», or «مفيش متشابهات مشهورة في الآية دي» when the ayah
+  // has no QUL phrase. null = data not loaded yet (no label shown).
+  const [similarCount, setSimilarCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!selectedVerse) { setSimilarCount(null); return; }
+    let cancelled = false;
+    setSimilarCount(null);
+    loadQulData().then((d) => {
+      if (cancelled || !d) return;
+      const ids = d.phraseVerses[`${selectedVerse.surah_no}:${selectedVerse.ayah_no}`] || [];
+      let max = 0;
+      for (const id of ids) { const ph = d.phrases[String(id)]; if (ph && ph.ayahs > max) max = ph.ayahs; }
+      setSimilarCount(max);
+    });
+    return () => { cancelled = true; };
+  }, [selectedVerse, loadQulData]);
+  const similarLabel = similarCount === null ? null
+    : similarCount > 1 ? `(في ${similarCount} مواضع)` : 'مفيش متشابهات مشهورة في الآية دي';
+
   // Warm the QUL phrase JSONs shortly after the Mushaf mounts (idle,
   // best-effort): the first mutashabihat tab open then skips its only
   // remaining fetch. The full verse table is NOT preloaded — it is
@@ -4526,8 +4547,11 @@ export default function QuranMushafPage({
                         </button>
                         {([['mutashabihat','المتشابهات'],['irab','الإعراب'],['asbab','أسباب النزول'],['meanings','معاني الكلمات']] as const).map(([k,l]) => (
                           <button key={k} onClick={() => setPopupTab(k as any)}
-                            className={`py-2.5 rounded-xl text-xs font-bold transition-smooth polish-press ${popupTab === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
+                            className={`py-2.5 rounded-xl text-xs font-bold transition-smooth polish-press flex flex-col items-center justify-center gap-0.5 ${popupTab === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                             {l}
+                            {k === 'mutashabihat' && similarLabel && (
+                              <span className={`text-[10px] font-semibold leading-tight ${popupTab === k ? 'text-white/90' : 'text-accent-500'}`}>{similarLabel}</span>
+                            )}
                           </button>
                         ))}
                       </div>
@@ -4565,7 +4589,7 @@ export default function QuranMushafPage({
                           {qulPhrases.map((e) => (
                             <div key={e.id} className="bg-gray-50 rounded-lg p-3 border border-emerald-100">
                               <p className="font-arabic text-lg font-bold text-accent-800 leading-loose"><mark className="bg-amber-200 rounded px-0.5">{e.text}</mark></p>
-                              <p className="text-sm text-accent-600 mb-2">تتكرر في {e.ayahs} آية في {e.surahs} سورة</p>
+                              <p className="text-sm text-accent-600 mb-2">(في {e.ayahs} مواضع) في {e.surahs} سورة</p>
                               <div className="space-y-2">
                                 {e.others.slice(0, 12).map((o) => (
                                   <button key={o.key} onClick={() => handleSimilarClick(o.row)}
@@ -4592,7 +4616,7 @@ export default function QuranMushafPage({
                         </div>
                       ) : (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
-                          <p className="text-base text-accent-400">لا توجد آيات تشترك مع هذه الآية في عبارة من ٣ كلمات فأكثر</p>
+                          <p className="text-base text-accent-400">مفيش متشابهات مشهورة في الآية دي</p>
                         </div>
                       ))}
                       {popupTab === 'links' && (loadingLinks ? (
