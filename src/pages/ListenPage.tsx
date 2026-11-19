@@ -2939,6 +2939,26 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
             </div>
           )}
+          {/* B-14: electronic speed chips for the khatma journeys too
+              (same persisted 'quran-playback-rate' + changeRate as
+              سماع حر). Picked before start; locked while playing. */}
+          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
+          <div className="grid grid-cols-3 gap-2">
+            {PLAYBACK_RATES.map((rate) => (
+              <button
+                key={`journey-rate-${rate}`}
+                disabled={locked}
+                onClick={() => changeRate(rate)}
+                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
+                  playbackRate === rate
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
+                }`}
+              >
+                {PLAYBACK_RATE_LABELS[rate]}
+              </button>
+            ))}
+          </div>
           {/* Explicit start control: the mode card below also starts
               playback on tap, but it reads as an info card (same
               name as the hub card just tapped), so first-time
