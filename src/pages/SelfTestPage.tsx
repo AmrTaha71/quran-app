@@ -5,6 +5,8 @@ import { IMLA_ALT, IMLA_PAIR_ALT } from '../lib/imlaAlt';
 import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
 import EarDownloadCard from '../components/EarDownloadCard';
+import TestHistoryPanel from '../components/TestHistoryPanel';
+import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
@@ -42,6 +44,7 @@ import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
   Mic, Square, Award, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
+  TrendingUp,
 } from 'lucide-react';
 import type { Route } from '../lib/routes';
 import { useIsAdminView } from '../lib/adminPreview';
@@ -1047,12 +1050,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => { if (!earLabOn() && getEar() === 'model') void loadEar().catch(() => {}); }, []);
   // Which ear the current/last mic session really uses (stall timing).
   const labEarInUseRef = useRef(false);
+  // W4-D: the ear of the last mic session, for the score log.
+  const earKindRef = useRef<TestHistoryEntry['ear']>('manual');
+  const [scoreLog, setScoreLog] = useState<TestHistoryEntry[]>(loadTestHistoryV1);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
   // the open door. All setup state lives here; doors only hide/show
   // the existing cards, they never change a setting.
-  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results' | 'weak';
+  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results' | 'weak' | 'scores';
   const [lobbyDoor, setLobbyDoor] = useState<LobbyDoor | null>(null);
   const [surah, setSurah] = useState(2);
   const [from, setFrom] = useState(1);
@@ -2812,6 +2818,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         .then(setTajweedReview)
         .catch(() => setTajweedReview({ status: 'error', message: 'request failed' }));
     }
+    // W4-D: score log v1 (last 100, with the level locked at the start).
+    const lbl = rec.endSurahName && rec.endSurah !== rec.surah
+      ? `من ${rec.surahName} ${formatAr(rec.from)} إلى ${rec.endSurahName} ${formatAr(rec.endAyah ?? 0)}`
+      : `سورة ${rec.surahName} ${formatAr(rec.from)}–${formatAr(rec.to)}`;
+    setScoreLog(addTestHistoryV1({
+      ts: new Date().toISOString(),
+      level: liveRef.current.level,
+      score: attempted > 0 ? Math.round((correct / attempted) * 100) : 0,
+      correct,
+      attempted,
+      completed: skippedCount === 0 && attempted === ayahs.length && ayahs.length > 0,
+      mode: liveRef.current.mode,
+      ear: manualMode ? 'manual' : earKindRef.current,
+      label: explicitAyahIdsRef.current ? 'آياتي الضعيفة' : lbl,
+    }));
     const nextHistory = [rec, ...history].slice(0, 20);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory)); } catch {}
     setHistory(nextHistory);
@@ -3606,6 +3627,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const useLabEarAyah = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
     labEarInUseRef.current = useLabEarAyah;
     const useModelEarAyah = useLabEarAyah || getEar() === 'model' || !SR;
+    earKindRef.current = useLabEarAyah ? 'lab' : useModelEarAyah ? 'model' : 'browser';
     if (!SR && !useModelEarAyah) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
       return;
@@ -5303,6 +5325,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const useLabEar = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
     labEarInUseRef.current = useLabEar;
     const useModelEar = useLabEar || getEar() === 'model' || !SR;
+    earKindRef.current = useLabEar ? 'lab' : useModelEar ? 'model' : 'browser';
     if (!SR && !useModelEar) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
       return;
@@ -5979,6 +6002,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="block text-base font-semibold text-ink">سمّعني آياتي الضعيفة</span>
                     <span className="block text-xs text-ink-2 mt-1">الآيات اللي علّمتها «صعبة» أو «ارجع لها بعدين»</span>
                   </button>
+                  <button onClick={() => setLobbyDoor('scores')}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <TrendingUp className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">سجل الدرجات</span>
+                    <span className="block text-xs text-ink-2 mt-1">{scoreLog.length > 0 ? `آخر ${formatAr(scoreLog.length)} اختبار ومنحنى تطورك` : 'درجاتك ومنحنى تطورك هيظهروا هنا'}</span>
+                  </button>
                   {history.length > 0 && (
                     <button onClick={() => setLobbyDoor('results')}
                       className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
@@ -6354,6 +6385,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </>
             )}
 
+            {lobbyDoor === 'scores' && (
+              <TestHistoryPanel entries={scoreLog} showMaster={isAdminView} initialLevel={runLevel} />
+            )}
             {lobbyDoor === 'results' && (
               <>
             {history.length > 0 && (
