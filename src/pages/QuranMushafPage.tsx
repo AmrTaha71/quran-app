@@ -22,6 +22,7 @@ import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { ImamFollower, type FollowIndex, type FollowState } from '../lib/imamFollow';
 import { loadFollowIndex } from '../lib/imamFollowIndex';
+import { madinahPageOfAyah } from '../lib/madinahPageStarts';
 import { QuranLabPhonemeTap, releaseEarMic, earLabOn, getEarLabState, subscribeEarLab, earModelCached, preloadEarLab, markEarLabFailed } from '../lib/quranLabEar';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT, MADINAH_MARK_MARGIN } from '../lib/madinahPaperBoxes';
@@ -30,7 +31,7 @@ import { parseHash } from '../lib/shareLinks';
 import { HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import { useElderlyMode } from '../lib/elderlyMode';
 import { currentListenWord } from '../lib/listenWordTrack';
-import { getNowPlaying, subscribeNowPlaying, type NowPlayingAyah } from '../lib/nowPlaying';
+import { getNowPlaying, subscribeNowPlaying, setNowPlaying, type NowPlayingAyah } from '../lib/nowPlaying';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
 import MushafHighlightLayer from '../components/mushaf/MushafHighlightLayer';
@@ -309,6 +310,8 @@ export default function QuranMushafPage({
   }, []);
   // 2026-11-19: word-by-word highlight for the recitation playing in Listen.
   const [listenWord, setListenWord] = useState(-1);
+  // Debug hook only (__imamDebug.listen): a fixed word instead of the audio clock.
+  const listenWordOverrideRef = useRef<number | null>(null);
   const pageWordBoxesRef = useRef<WordBox[] | null>(null);
   useEffect(() => {
     if (!nowPlayingAyah || nowPlayingAyah.kind !== 'ayah') { setListenWord(-1); return; }
@@ -319,8 +322,10 @@ export default function QuranMushafPage({
       const sorted = boxes
         .map((b) => ({ n: Number(b.key.split(':')[2]) || 0, w: Math.max(0.5, b.width) }))
         .sort((a, b) => a.n - b.n);
-      const idx = currentListenWord(np.surah, np.ayah, sorted.map((x) => x.w));
-      const w = idx < 0 ? -1 : sorted[idx].n - 1;
+      const ov = listenWordOverrideRef.current;
+      const idx = ov !== null ? ov : currentListenWord(np.surah, np.ayah, sorted.map((x) => x.w));
+      // (an ayah that runs over two pages has fewer boxes here than words)
+      const w = idx < 0 ? -1 : ov !== null ? ov : sorted[Math.min(idx, sorted.length - 1)].n - 1;
       setListenWord((prev) => (prev === w ? prev : w));
     }, 100);
     return () => window.clearInterval(id);
@@ -1322,6 +1327,12 @@ export default function QuranMushafPage({
     if (!nowPlayingAyah || nowPlayingAyah.kind !== 'ayah' || !showFullscreen || followOn) return;
     const np = nowPlayingAyah;
     let dead = false;
+    // Madinah: the scans' own page starts (offline, this print's breaks).
+    if (edition.id === 'madinah') {
+      const pg = madinahPageOfAyah(np.surah, np.ayah);
+      if (pg !== currentPage) goToPage(pg);
+      return;
+    }
     loadSurahPageList(np.surah).then((list) => {
       if (dead) return;
       const e = list.find((a) => a.number === np.ayah);
@@ -1487,6 +1498,15 @@ export default function QuranMushafPage({
   // Global word index (FollowIndex.words) the highlight shows now: never
   // moves back inside a surah (Dr. Amr's rule).
   const followShownGRef = useRef(-1);
+  // 2026-11-19 (Dr. Amr: the band must grow with the imam and move to the
+  // next ayah on EVERY device): when the device ear is not available, the
+  // browser / Whisper engines no longer lock once on a static whole-ayah
+  // mark — after the lock their heard words keep feeding an ImamFollower
+  // (pushWords), exactly like the ear's phonemes. interimN = words of the
+  // current live utterance already pushed.
+  const followTextRef = useRef<{ f: ImamFollower; interimN: number } | null>(null);
+  const [followTextOn, setFollowTextOn] = useState(false);
+  const applyFollowStateRef = useRef<(st: FollowState) => void>(() => {});
   const followEarCachedRef = useRef(false);
   // MERGED followStatus: listening | locked ONLY. 'found' (pending
   // confirmation) and 'lost' (re-lock after tracking) are both deleted:
@@ -1891,6 +1911,8 @@ export default function QuranMushafPage({
     followerRef.current = null;
     followLabPendingRef.current = [];
     followShownGRef.current = -1;
+    followTextRef.current = null;
+    setFollowTextOn(false);
     try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
   }, [handleFollowVisibility, stopFollowEngines]);
 
@@ -1936,6 +1958,8 @@ export default function QuranMushafPage({
     followerRef.current = null;
     followLabPendingRef.current = [];
     followShownGRef.current = -1;
+    followTextRef.current = null;
+    setFollowTextOn(false);
     setFollowTrack('listening');
     setFollowCands([]);
     setFollowEarNote(null);
@@ -2004,12 +2028,9 @@ export default function QuranMushafPage({
   const jumpToTracked = useCallback(async (pos: TrackedPosition, opts?: { highlight?: boolean }) => {
     const gen = followJumpGenRef.current;
     try {
-      const list = await loadSurahPageList(pos.surah);
-      // Superseded while the network was in flight (stop / a newer
-      // lock): do NOT yank the page to a stale ayah.
+      // 2026-11-19: the scans' own page starts (offline, this print's breaks).
+      const page = madinahPageOfAyah(pos.surah, pos.ayah);
       if (gen !== followJumpGenRef.current) return;
-      const entry = list.find((a) => a.number === pos.ayah);
-      const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
       // D4: the lock turn's connection belongs to the target image
       // (neighbour preloads are skipped for this one turn — see
       // followLockPreloadSkipRef), and the Ratel intro must never
@@ -2083,7 +2104,7 @@ export default function QuranMushafPage({
           img.src = madinah.imageUrl(page);
         }
         const file = String(page).padStart(3, '0');
-        void fetch(`https://raw.githubusercontent.com/bodoorzahera/Quran-coordinate/master/src/qurancoor/data/page-${file}.json`).catch(() => {});
+        void fetch(`${import.meta.env.BASE_URL || '/'}mushaf-boxes/${file}.json`).catch(() => {});
       } catch { /* best-effort warm: a failure just means the lock path loads normally */ }
     }).catch(() => { /* page-list warm failure: the lock path retries on its own */ });
   }, [loadSurahPageList]);
@@ -2117,8 +2138,31 @@ export default function QuranMushafPage({
   // followActiveRef deliberately STAYS true: the wake lock must keep
   // re-acquiring on visibility return, and the route-exit effect must
   // still see an active session to stop on leave.
-  const handleFollowAutoLock = useCallback((lock: TrackedPosition) => {
-    if (followAutoLockedRef.current) return;
+  const handleFollowAutoLock = useCallback((lock: TrackedPosition, opts?: { manual?: boolean }) => {
+    if (followAutoLockedRef.current || followTextRef.current) return;
+    // Continuous text follow (see followTextRef): the engines keep running,
+    // the highlight starts at the locked word and grows / moves on with
+    // every heard word. Falls back to the old lock-once path only when the
+    // follow index is not loaded.
+    const idx = followIndexRef.current;
+    const g0 = idx ? idx.words.findIndex((w) => w.surah === lock.surah && w.ayah === lock.ayah && w.word === (lock.word ?? 0)) : -1;
+    // (Typed words — «ابحث» — have no audio to follow: old static lock.)
+    if (idx && g0 >= 0 && !opts?.manual) {
+      const f = new ImamFollower(idx);
+      f.pushWords(followBufferRef.current, 0);
+      followTextRef.current = { f, interimN: 0 };
+      setFollowTextOn(true);
+      followShownGRef.current = g0;
+      const tp: TrackedPosition = { surah: lock.surah, ayah: lock.ayah, word: idx.words[g0].word };
+      followPosRef.current = tp;
+      setFollowPos(tp);
+      followStatusRef.current = 'locked';
+      setFollowStatus('locked');
+      setFollowTrack('following');
+      followJumpGenRef.current += 1;
+      void jumpToTracked(tp);
+      return;
+    }
     followAutoLockedRef.current = true;
     followStartGenRef.current += 1;
     followJumpGenRef.current += 1;
@@ -2147,6 +2191,14 @@ export default function QuranMushafPage({
     if (!followListeningRef.current || followAutoLockedRef.current || !followActiveRef.current) return;
     const words = heardWords(text);
     if (words.length === 0) return;
+    const tf = followTextRef.current;
+    if (tf) {
+      setFollowHeard(text);
+      const fresh = words.slice(tf.interimN);
+      tf.interimN = 0;
+      if (fresh.length) applyFollowStateRef.current(tf.f.pushWords(fresh, Date.now() / 1000));
+      return;
+    }
     // DISPLAY FIX (2026-10-29): finals are the ONLY writing iOS ever
     // produces — it sends no interim text — so show every final here,
     // in the existing "سمعت:" line. Before this, the live iOS path
@@ -2203,10 +2255,20 @@ export default function QuranMushafPage({
   const lastInterimRef = useRef('');
   const onFollowInterim = useCallback((text: string) => {
     if (!followListeningRef.current || followAutoLockedRef.current || !followActiveRef.current) return;
-    if (followPosRef.current) return;
+    if (followPosRef.current && !followTextRef.current) return;
     const trimmed = text.trim();
     if (!trimmed || trimmed === lastInterimRef.current) return;
     lastInterimRef.current = trimmed;
+    const tf = followTextRef.current;
+    if (tf) {
+      const iw = heardWords(trimmed);
+      if (iw.length > tf.interimN) {
+        const fresh = iw.slice(tf.interimN);
+        tf.interimN = iw.length;
+        applyFollowStateRef.current(tf.f.pushWords(fresh, Date.now() / 1000));
+      }
+      return;
+    }
     const ordered = followOrderedRef.current;
     if (!ordered) return;
     const words = heardWords(trimmed);
@@ -2308,6 +2370,8 @@ export default function QuranMushafPage({
     }
   }, []);
 
+  applyFollowStateRef.current = applyFollowState;
+
   const onLabParts = useCallback((parts: { s: string; t: number }[], gen: number) => {
     if (gen !== followStartGenRef.current || !followListeningRef.current || !followActiveRef.current) return;
     if (followMicWaitingRef.current) setFollowMicWaitingState(false);
@@ -2321,6 +2385,47 @@ export default function QuranMushafPage({
     }
     applyFollowState(f.pushPhonemes(parts));
   }, [applyFollowState, setFollowMicWaitingState]);
+
+  // Debug hook (dev builds, or localStorage 'quran-debug'=1): drives the
+  // follow highlight through the SAME code paths as a real session, so the
+  // band can be checked without a microphone. lab(s,a,w) = an ear update
+  // (applyFollowState with the index word); text(...) = a browser-engine
+  // lock + heard words (handleFollowAutoLock / onFollowFinal).
+  useEffect(() => {
+    let on = import.meta.env.DEV;
+    try { on = on || localStorage.getItem('quran-debug') === '1'; } catch { /* ignore */ }
+    if (!on) return;
+    const w = window as any;
+    const idx = async () => { const i = followIndexRef.current ?? await loadFollowIndex(); followIndexRef.current = i; return i; };
+    w.__imamDebug = {
+      start: async (engine: 'lab' | 'live' = 'lab') => {
+        await idx();
+        if (engine === 'live' && !followOrderedRef.current) followOrderedRef.current = buildOrderedVerses(await loadVerseIndex());
+        enterFollowMode();
+        followListeningRef.current = true;
+        followActiveRef.current = true;
+        setFollowEngine(engine);
+        setFollowReady(false);
+      },
+      lab: async (surah: number, ayah: number, word: number) => {
+        const i = await idx();
+        const g = i.words.findIndex((x) => x.surah === surah && x.ayah === ayah && x.word === word);
+        if (g < 0) return false;
+        applyFollowState({ status: 'following', pos: { surah, ayah, word, g }, rate: 0, locks: 1, losts: 0, heardT: 0, candidates: [] });
+        return true;
+      },
+      textLock: (surah: number, ayah: number, word: number) => handleFollowAutoLock({ surah, ayah, word }),
+      textHeard: (t: string) => followFinalRef.current(t),
+      state: () => ({ pos: followPosRef.current, g: followShownGRef.current, text: !!followTextRef.current }),
+      listen: (surah: number, ayah: number, word: number | null) => {
+        listenWordOverrideRef.current = word;
+        setNowPlaying(word === null ? null : { surah, ayah, kind: 'ayah' });
+      },
+      fullscreen: () => setShowFullscreen(true),
+    };
+    return () => { delete w.__imamDebug; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyFollowState, handleFollowAutoLock, enterFollowMode]);
 
   // Terminal stop of a lab session with a message: back to the lobby
   // (start button + error), the page underneath stays where it was.
@@ -3192,7 +3297,7 @@ export default function QuranMushafPage({
       setFollowError('لم أجد آية مطابقة — جرّب كلمات أخرى سمعتها بوضوح');
       return;
     }
-    handleFollowAutoLock(lock);
+    handleFollowAutoLock(lock, { manual: true });
   }, [followManual, handleFollowAutoLock]);
 
   // S4 wrong-lock escape ("wrong page? keep listening"): the merged
@@ -3389,6 +3494,12 @@ export default function QuranMushafPage({
     if (cached) { setPageWordBoxes(cached); return; }
     let cancelled = false;
     const file = String(currentPage).padStart(3, '0');
+    // 2026-11-19 (exact highlight): FIRST the boxes measured on our own page
+    // scans (tools/mushaf-boxes/build.py -> public/mushaf-boxes/NNN.json,
+    // [s,a,w,x0,y0,x1,y1] in px of the 1240x1754 image). The qurancoor
+    // dataset below follows another print (different line breaks, lines
+    // 20-80 px off), so it is only the fallback for a page without a file.
+    const ownUrl = `${import.meta.env.BASE_URL || '/'}mushaf-boxes/${file}.json`;
     // raw.githubusercontent FIRST: jsdelivr cannot serve this repo at
     // all — it refuses packages over 50 MB ("Package size exceeded the
     // configured limit of 50 MB"), so jsdelivr stays only as a fallback
@@ -3402,14 +3513,31 @@ export default function QuranMushafPage({
       try { const r = await fetch(urls[i]); if (r.ok) return await r.json(); } catch {}
       return loadCoords(i + 1);
     };
-    loadCoords(0)
-      .then((j) => {
+    const loadOwn = async (): Promise<WordBox[] | null> => {
+      try {
+        const r = await fetch(ownUrl);
+        if (!r.ok) return null;
+        const j = await r.json();
+        if (!j || !Array.isArray(j.w)) return null;
+        return (j.w as number[][]).map(([s, a, w, x0, y0, x1, y1]) => ({
+          key: `${s}:${a}:${w}`, surah: s, ayah: a,
+          left: (x0 / 1240) * 100, top: (y0 / 1754) * 100,
+          width: ((x1 - x0) / 1240) * 100, height: ((y1 - y0) / 1754) * 100,
+        }));
+      } catch { return null; }
+    };
+    loadOwn()
+      .then((own): Promise<{ own?: WordBox[]; j?: any }> => (own ? Promise.resolve({ own }) : loadCoords(0).then((j) => ({ j }))))
+      .then((res: { own?: WordBox[]; j?: any }) => {
         if (cancelled) return;
+        if (res.own) {
+          wordBoxCache.current[currentPage] = res.own;
+          setPageWordBoxes(res.own);
+          return;
+        }
+        const j = res.j;
         if (!j || !j.coords) { setPageWordBoxes(null); return; }
         const boxes: WordBox[] = [];
-        // Parity-aware calibration (see the note above the loader):
-        // odd pages text [6,83], even [17,94]; raw h.x >= 880 is the
-        // dataset's spurious border box, dropped for both parities.
         const calA = currentPage % 2 === 1 ? 6 : 17;
         for (const [key, v] of Object.entries<any>(j.coords)) {
           const h = v?.h;
@@ -3417,21 +3545,19 @@ export default function QuranMushafPage({
           if (h.x >= 880) continue;
           const parts = key.split(':').map(Number);
           if (parts.length < 2 || !parts[0] || !parts[1]) continue;
-          // 2026-11-19 re-calibration (measured on the 1240x1754 page PNGs, pages
-          // 42/43/293): the dataset grid is 840 wide x 1381 tall (x from 40, y from
-          // 22), and the text block really spans 64.9% of the image width
-          // (even pages start at 22.6%, odd at 12.5%) and image rows 190..1580 px.
-          // The old 77%-wide / hand-tuned map stretched every line ~18% past the
-          // text, giving empty edge boxes and uneven highlights. Pages 1-2 (circle
-          // layout) keep the old map until they are measured separately.
+          // Fallback map, fitted on all 602 text pages (8807 lines): x px =
+          // 0.9542*x + 117.98 (odd) / 245.62 (even); lines on the fixed
+          // 15-line grid, centre 269.1 + 89.43*slot px, box +-32 px.
           if (currentPage >= 3) {
-            const L = currentPage % 2 === 0 ? 22.6 : 12.5;
+            const bx = currentPage % 2 === 1 ? 117.98 : 245.62;
+            const slot = Math.round((h.y + h.h / 2 - 57.3) / 93.66);
+            const cy = 269.1 + 89.43 * slot;
             boxes.push({
               key, surah: parts[0], ayah: parts[1],
-              left: L + ((h.x - 40) / 840) * 64.9,
-              top: ((190 + (h.y - 22) * (1390 / 1381)) / 1754) * 100,
-              width: (h.w / 840) * 64.9,
-              height: ((h.h * (1390 / 1381)) / 1754) * 100,
+              left: ((0.9542 * h.x + bx) / 1240) * 100,
+              top: ((cy - 32) / 1754) * 100,
+              width: ((0.9542 * h.w) / 1240) * 100,
+              height: (64 / 1754) * 100,
             });
             continue;
           }
@@ -3461,8 +3587,10 @@ export default function QuranMushafPage({
   // word-count mismatch between the index and the boxes must not
   // ping-pong two pages).
   const followTurnSurahRef = useRef<number | null>(null);
+  // Continuous follow: the ear (lab) or a text engine after its lock.
+  const followTracking = followEngine === 'lab' || followTextOn;
   useEffect(() => {
-    if (followEngine !== 'lab' || !followOn || !followPos) return;
+    if (!followTracking || !followOn || !followPos) return;
     const pos = followPos;
     const boxes = wordBoxCache.current[currentPage];
     if (boxes) {
@@ -3474,21 +3602,19 @@ export default function QuranMushafPage({
         return;
       }
     }
-    let cancelled = false;
-    void loadSurahPageList(pos.surah).then((list) => {
-      if (cancelled) return;
-      const entry = list.find((a) => a.number === pos.ayah);
-      const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
-      if (page === currentPage) return;
-      if (page < currentPage && followTurnSurahRef.current === pos.surah) return;
-      followTurnSurahRef.current = pos.surah;
-      followLockPreloadSkipRef.current = true;
-      goToPage(page);
-    }).catch(() => {});
-    return () => { cancelled = true; };
+    // 2026-11-19: the page comes from the scans' own page starts (offline,
+    // and right for this print even where its page breaks differ from the
+    // API page list, e.g. juz 30). An ayah that runs onto the next page is
+    // turned by the word rule above once its first word there is reached.
+    const page = madinahPageOfAyah(pos.surah, pos.ayah);
+    if (page === currentPage) return;
+    if (page < currentPage && followTurnSurahRef.current === pos.surah) return;
+    followTurnSurahRef.current = pos.surah;
+    followLockPreloadSkipRef.current = true;
+    goToPage(page);
     // goToPage is a plain function of this component (stable behaviour).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [followEngine, followOn, followPos, currentPage, pageWordBoxes, loadSurahPageList]);
+  }, [followTracking, followOn, followPos, currentPage, pageWordBoxes]);
 
   // Madinah paper-box normalization — the page-turn dance fix. The
   // sufone scans frame the paper differently per page (two widths,
@@ -4391,7 +4517,17 @@ export default function QuranMushafPage({
               <div className={`absolute z-30 mushaf-chrome-enter transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                 style={{ left: 'max(0.5rem, env(safe-area-inset-left))', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.4rem)' }}
                 onClick={(e) => e.stopPropagation()}>
-                <BackButton label="عودة" onBack={() => { if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
+                <BackButton label="عودة" onBack={() => {
+                // 2026-11-19: opened from the Listen page's «قفل الشاشة» choice → go back there.
+                try {
+                  if (localStorage.getItem('quran-mushaf-from-listen') === '1') {
+                    localStorage.removeItem('quran-mushaf-from-listen');
+                    exitFullscreenView();
+                    onNavigate('listen');
+                    return;
+                  }
+                } catch { /* ignore */ }
+                if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
               </div>
             </>
           )}
@@ -4400,7 +4536,7 @@ export default function QuranMushafPage({
               follow bar with its stop button fades with the rest after
               5 s; any tap brings it back). Corner pill, no touch, off the
               page text. */}
-          {followOn && followEngine === 'lab' && followPos && !fsOverlaysVisible && (
+          {followOn && followTracking && followPos && !fsOverlaysVisible && (
             <div className="absolute z-30 pointer-events-none text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/35 text-white/90 ring-1 ring-white/20"
               style={{ right: 'max(0.5rem, env(safe-area-inset-right))', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.4rem)' }}>
               {followTrack === 'following' ? 'تابعت' : followTrack === 'searching' ? 'بدوّر على الموضع…' : 'بسمع…'}
@@ -4637,7 +4773,7 @@ export default function QuranMushafPage({
                     // W5-N3: while the lab ear searches for its place again,
                     // the last highlight stays, faded (never jumps, never vanishes).
                     return (
-                      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${followEngine === 'lab' && followTrack === 'searching' ? 'opacity-40' : 'opacity-100'}`}>
+                      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${followTracking && followTrack === 'searching' ? 'opacity-40' : 'opacity-100'}`}>
                         <MushafHighlightLayer currentWord={followPos.word ?? -1}
                           boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
                       </div>
@@ -4804,14 +4940,14 @@ export default function QuranMushafPage({
                   <div className="mb-2 flex items-center gap-2 bg-amber-700 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
                     <StudioMic className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">
-                      {followEngine === 'lab'
+                      {followTracking
                         ? (followTrack === 'following' ? 'تابعت' : followTrack === 'searching' ? 'بدوّر على الموضع…' : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'بسمع…')
                         : followStatus === 'locked' && followPos
                         ? 'تتبع الإمام شغال'
                         : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
                     <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
-                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0 flex items-center gap-1"><Square className="w-4 h-4" />{followEngine === 'lab' && <span className="text-xs pl-1">إيقاف</span>}</button>
+                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0 flex items-center gap-1"><Square className="w-4 h-4" />{followTracking && <span className="text-xs pl-1">إيقاف</span>}</button>
                   </div>
                 )}
                 {/* W5-E: guidance sentence removed (thin footer); the
