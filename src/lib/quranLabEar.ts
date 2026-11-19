@@ -176,6 +176,8 @@ export class QuranLabRecognition {
   onnomatch: (() => void) | null = null;
   onsoundstart: (() => void) | null = null;
   onsoundend: (() => void) | null = null;
+  /** W5-N2: every decoded chunk's timed phoneme parts ({s, t: audio s}). */
+  onparts: ((parts: { s: string; t: number }[]) => void) | null = null;
 
   private stream: MediaStream | null = null;
   private streamP: Promise<MediaStream> | null = null;
@@ -230,18 +232,26 @@ export class QuranLabRecognition {
 
   private async begin() {
     try {
-      const wk = wordsKey(this.expected);
-      let words = wordCache.get(wk);
-      if (!words) {
-        words = buildPhonWords(this.expected, refKeySkel);
-        if (wordCache.size > 12) wordCache.clear();
-        wordCache.set(wk, words);
-        words.catch(() => { if (wordCache.get(wk) === words) wordCache.delete(wk); });
+      // W5-N2: no expected words = phoneme tap (follow-the-imam): no
+      // PhonemeStream, the raw timed parts go to onparts instead.
+      let words: Promise<PhonWord[]> | null = null;
+      if (this.expected.length) {
+        const wk = wordsKey(this.expected);
+        words = wordCache.get(wk) ?? null;
+        if (!words) {
+          const built = buildPhonWords(this.expected, refKeySkel);
+          words = built;
+          if (wordCache.size > 12) wordCache.clear();
+          wordCache.set(wk, built);
+          built.catch(() => { if (wordCache.get(wk) === built) wordCache.delete(wk); });
+        }
       }
       const [w, pw] = await Promise.all([getWorker(), words]);
       if (this.stopped) { this.finishEnd(); return; }
-      this.ps = new PhonemeStream(pw);
-      this.ps.pointer = this.startWord;
+      if (pw) {
+        this.ps = new PhonemeStream(pw);
+        this.ps.pointer = this.startWord;
+      }
       listener = (m) => this.onWorker(m);
       w.postMessage({ type: 'reset' });
       this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }));
@@ -352,6 +362,9 @@ export class QuranLabRecognition {
   private onWorker(m: any) {
     if (m.type === 'tokens') {
       if (m.text && !this.heardAny) { this.heardAny = true; this.onspeechstart?.(); }
+      if (this.onparts && !this.stopped && Array.isArray(m.parts) && m.parts.length) {
+        try { this.onparts(m.parts); } catch { /* the page's handler must not kill the ear */ }
+      }
       if (this.ps && m.text) {
         this.emit(Array.isArray(m.parts) ? this.ps.pushTimed(m.parts) : this.ps.push(m.text));
         // The last aligned word stays pending until more speech arrives, so
@@ -421,3 +434,15 @@ export class QuranLabRecognition {
     setTimeout(() => { this.onaudioend?.(); this.onend?.(); }, 0);
   }
 }
+
+/** W5-N2 (2026-11-19): the ear with no expected text, for follow-the-imam.
+ *  Same worker, same mic path (stream asked inside the tap, iOS keep/
+ *  rebuild logic, error names) as the tasmee' ear; it only hands each
+ *  chunk's timed phoneme parts to `onparts` (→ ImamFollower.pushPhonemes). */
+export class QuranLabPhonemeTap extends QuranLabRecognition {
+  constructor() { super([]); }
+}
+
+/** W5-N2: drop the parked mic (kept 60 s for the next tasmee' start) so a
+ *  stopped follow session does not leave the mic light on. */
+export function releaseEarMic(): void { closeKeep(); }
