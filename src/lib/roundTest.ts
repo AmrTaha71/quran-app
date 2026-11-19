@@ -36,12 +36,32 @@ export function firstMistake(matched: boolean[]): number {
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
-/** Tarteel round: 7 for completing the ayah (by the share of words right) + 3 for the surah. */
-export function tarteelRoundScore(r: RoundResult, surahOk: boolean): { completion: number; surah: number; total: number } {
-  const completion = r1(7 * (r.total ? r.credited / r.total : 0));
-  const surah = surahOk ? 3 : 0;
+/** W4-J: a round / position is out of 10: 8 for completing the ayah itself (by the share
+ *  of words right) + 2 for naming the surah. When the range is a single surah the
+ *  surah question is skipped (surahOk = null) and the ayah carries all 10. */
+export const AYAH_PART = 8;
+export const SURAH_PART = 2;
+export function tarteelRoundScore(r: RoundResult, surahOk: boolean | null): { completion: number; surah: number; total: number } {
+  const share = r.total ? r.credited / r.total : 0;
+  const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share);
+  const surah = surahOk ? SURAH_PART : 0;
   return { completion, surah, total: r1(completion + surah) };
 }
+/** 0..1 share of a round / position (round total / 10). */
+export const roundFrac = (r: RoundResult, surahOk: boolean | null) => tarteelRoundScore(r, surahOk).total / 10;
+
+/** Oral mutashabihat question: 8 for the ayat said, 2 for the surah names (per ayah
+ *  found), 0..1. Each «كلمتين كمان» hint takes HINT_COST of the ayat part. */
+export function oralFraction(found: number, total: number, surahRight: number, hints = 0): number {
+  if (total <= 0) return 0;
+  const keep = Math.max(0, 1 - HINT_COST * hints);
+  return (AYAH_PART / 10) * (found / total) * keep + (SURAH_PART / 10) * (surahRight / total);
+}
+
+/** W4-L: «اديني كلمتين كمان» costs 10% of the ayah part (8 of 10) per request. */
+export const HINT_COST = 0.1;
+export const HINT_WORDS = 2;
+export const MAX_HINTS = 3;
 
 /** Final /40 = average of the rounds (each /10) x 4. */
 export function tarteelFinal(roundTotals: number[]): number {
@@ -63,11 +83,18 @@ export function positionsFinal(fracs: number[]): number {
 }
 export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited === r.total && !r.locked && r.corrected === 0;
 
-/** 4 surah tiles (the right one + 3 other random surahs), shuffled. */
-export function surahTiles(correct: number): number[] {
+/** 4 surah tiles (the right one + 3 others), shuffled. The others come from `pool`
+ *  (the surahs of the range) when it has enough, else from the whole Quran. */
+export function surahTiles(correct: number, pool?: number[]): number[] {
   const set = new Set<number>([correct]);
-  while (set.size < 4) set.add(1 + Math.floor(Math.random() * 114));
+  const from = pool && pool.length >= 4 ? pool : null;
+  while (set.size < 4) set.add(from ? from[Math.floor(Math.random() * from.length)] : 1 + Math.floor(Math.random() * 114));
   return [...set].map((s) => ({ s, k: Math.random() })).sort((a, b) => a.k - b.k).map((x) => x.s);
+}
+/** Surahs touched by a global ayah range [start, end] (inclusive), and whether it is ONE surah. */
+export function surahsOfRange(range: { start: number; end: number }): number[] {
+  const a = fromGlobal(range.start).s, b = fromGlobal(range.end).s;
+  return Array.from({ length: b - a + 1 }, (_, i) => a + i);
 }
 export const surahNameOnly = (n: number) => SURAHS.find((s) => s.no === n)?.name ?? '';
 

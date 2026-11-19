@@ -1,13 +1,14 @@
 // اختبار الترتيل (W4-E, 2026-11-19): «سمّعني»-style rounds. Pick a range, then
 // a reciter (the list shows only readers with word timings for the range).
 // Each round: 5 words from the reciter, the user completes the ayah by voice
-// (RoundRecite), then «في أي سورة؟» (tiles for now). Round = 7 (completion)
-// + 3 (surah); final /40 = average of the rounds x 4, kept in the score log.
-import { useEffect, useRef, useState } from 'react';
+// (RoundRecite), then «في أي سورة؟» (tiles). Round = 8 (completion)
+// + 2 (surah name; skipped inside a single surah); final /40 = average of the rounds x 4, kept in the score log.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import RoundRecite, { RoundReveal } from './RoundRecite';
+import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
 import { useIsAdminView } from '../lib/adminPreview';
-import { arNum, currentHistoryLevel, pickRoundAyah, surahNameOnly, surahTiles, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { arNum, currentHistoryLevel, pickRoundAyah, surahsOfRange, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
 import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
@@ -65,7 +66,7 @@ function loadText(): Promise<Map<string, string> | null> {
   return textMap;
 }
 
-type Done = { ayah: PickedAyah; result: RoundResult; surahOk: boolean; completion: number; surah: number; total: number };
+type Done = { ayah: PickedAyah; result: RoundResult; surahOk: boolean | null; completion: number; surah: number; total: number };
 type Phase = 'setup' | 'loading' | 'recite' | 'surah' | 'score' | 'summary';
 
 export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
@@ -78,7 +79,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState<Map<string, string> | null>(null);
   const [phase, setPhase] = useState<Phase>('setup');
   const [err, setErr] = useState('');
-  const [cur, setCur] = useState<{ ayah: PickedAyah; result?: RoundResult; tiles?: number[]; surahOk?: boolean } | null>(null);
+  const [cur, setCur] = useState<{ ayah: PickedAyah; result?: RoundResult; surahOk?: boolean | null } | null>(null);
   const [rounds, setRounds] = useState<Done[]>([]);
   const used = useRef<Set<number>>(new Set());
   const saved = useRef(false);
@@ -135,18 +136,27 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     setPhase('recite');
   }
 
+  // A range inside ONE surah makes «في أي سورة؟» pointless: skipped, the ayah carries the 10.
+  const pool = useMemo(() => surahsOfRange({ start: range.start, end: range.end - 1 }), [range.start, range.end]);
+  const oneSurah = pool.length === 1;
+
+  function settle(base: { ayah: PickedAyah; result: RoundResult }, ok: boolean | null) {
+    const sc = tarteelRoundScore(base.result, ok);
+    setRounds((r) => [...r, { ayah: base.ayah, result: base.result, surahOk: ok, ...sc }]);
+    setCur({ ...base, surahOk: ok });
+    setPhase('score');
+  }
+
   function onRecited(result: RoundResult) {
-    setCur((c) => (c ? { ...c, result, tiles: surahTiles(c.ayah.surah) } : c));
+    if (!cur) return;
+    if (oneSurah) { settle({ ayah: cur.ayah, result }, null); return; }
+    setCur({ ayah: cur.ayah, result });
     setPhase('surah');
   }
 
   function answerSurah(s: number) {
     if (!cur?.result) return;
-    const ok = s === cur.ayah.surah;
-    const sc = tarteelRoundScore(cur.result, ok);
-    setRounds((r) => [...r, { ayah: cur.ayah, result: cur.result!, surahOk: ok, ...sc }]);
-    setCur({ ...cur, surahOk: ok });
-    setPhase('score');
+    settle({ ayah: cur.ayah, result: cur.result }, s === cur.ayah.surah);
   }
 
   const final40 = tarteelFinal(rounds.map((r) => r.total));
@@ -273,15 +283,8 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
           </>
         )}
 
-        {phase === 'surah' && cur?.tiles && (
-          <>
-            <p className="font-bold text-accent-800 mb-3">في أي سورة؟</p>
-            <div className="grid grid-cols-2 gap-2">
-              {cur.tiles.map((s) => (
-                <button key={s} onClick={() => answerSurah(s)} className="py-3 rounded-xl bg-white border border-hairline-emerald text-accent-800 font-bold">{surahNameOnly(s)}</button>
-              ))}
-            </div>
-          </>
+        {phase === 'surah' && cur?.result && (
+          <SurahTiles key={rounds.length} correct={cur.ayah.surah} pool={pool} onAnswer={answerSurah} />
         )}
 
         {phase === 'score' && cur?.result && lastRound && (
@@ -289,8 +292,8 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <RoundReveal ayah={cur.ayah} result={cur.result} />
             <p className="text-sm text-accent-700 mt-1">{surahNameOf(cur.ayah.surah)} — آية {arNum(cur.ayah.ayah)}</p>
             <div className="bg-gray-50 rounded-lg p-3 border border-emerald-100 my-3 text-sm text-accent-800 space-y-1">
-              <p>إكمال الآية: {arNum(lastRound.completion)} من ٧ ({arNum(cur.result.credited)} من {arNum(cur.result.total)} كلمة)</p>
-              <p>السورة: {lastRound.surahOk ? '✓ صح' : '✗ غلط'} — {arNum(lastRound.surah)} من ٣</p>
+              <p>إكمال الآية: {arNum(lastRound.completion)} من {arNum(lastRound.surahOk === null ? 10 : 8)} ({arNum(cur.result.credited)} من {arNum(cur.result.total)} كلمة)</p>
+              {lastRound.surahOk !== null && <p>السورة: {lastRound.surahOk ? '✓ صح' : '✗ غلط'} — {arNum(lastRound.surah)} من ٢</p>}
               <p className="font-bold">درجة الجولة: {arNum(lastRound.total)} من ١٠</p>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -308,7 +311,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <p className="text-accent-600 mb-3">من ٤٠ — متوسط {arNum(rounds.length)} جولة × ٤</p>
             <div className="space-y-1 text-right mb-4">
               {rounds.map((r, i) => (
-                <p key={i} className="text-sm text-accent-700">الجولة {arNum(i + 1)}: {surahNameOf(r.ayah.surah)} آية {arNum(r.ayah.ayah)} — {arNum(r.total)} من ١٠ {r.surahOk ? '✓' : '✗'}</p>
+                <p key={i} className="text-sm text-accent-700">الجولة {arNum(i + 1)}: {surahNameOf(r.ayah.surah)} آية {arNum(r.ayah.ayah)} — {arNum(r.total)} من ١٠ {r.surahOk === null ? '' : r.surahOk ? '✓' : '✗'}</p>
               ))}
             </div>
             <button onClick={() => { saved.current = false; setRounds([]); used.current = new Set(); setCur(null); setPhase('setup'); }} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">اختبار جديد</button>

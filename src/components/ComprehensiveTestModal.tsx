@@ -24,16 +24,17 @@ import {
 } from '../lib/comprehensiveTest';
 import DrumSelect from './DrumSelect';
 import {
-  COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, pickRoundAyah, positionMax, positionPerfect, positionScore, positionsFinal,
+  COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, pickRoundAyah, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
 import RoundRecite, { RoundReveal } from './RoundRecite';
-import MutashabihatOral from './MutashabihatOral';
+import MutashabihatOral, { type OralResult } from './MutashabihatOral';
+import SurahTiles from './SurahTiles';
 
 type Step = 'scope' | 'positions' | 'mutashabihat' | 'tajweed' | 'tilawa' | 'done';
 type ScopeId = 'surah' | 'juz' | 'first5' | 'juz30';
-type Done = { ayah: PickedAyah; result: RoundResult; frac: number; score: number };
+type Done = { ayah: PickedAyah; result: RoundResult; surahOk: boolean | null; frac: number; score: number };
 type MutQ = { clue: string; answers: string[] };
 
 const SCOPES: { id: ScopeId; label: string }[] = [
@@ -90,6 +91,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [positions, setPositions] = useState<Done[]>([]);
   const [cur, setCur] = useState<PickedAyah | null>(null);
   const [showRes, setShowRes] = useState<Done | null>(null);
+  const [askSurah, setAskSurah] = useState<RoundResult | null>(null);
   const [mut, setMut] = useState<MutQ[]>([]);
   const [mutIdx, setMutIdx] = useState(0);
   const [mutFrac, setMutFrac] = useState<number[]>([]);
@@ -100,7 +102,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [history, setHistory] = useState<SavedResult[]>(() => readResults());
   const [saved, setSaved] = useState<SavedResult | null>(null);
-  const ctx = useRef<{ span: { start: number; end: number; label: string }; folderAt: (g: number) => string; used: Set<number> } | null>(null);
+  const ctx = useRef<{ span: { start: number; end: number; label: string }; folderAt: (g: number) => string; used: Set<number>; pool: number[] } | null>(null);
 
   useEffect(() => { loadText().then(setText); }, []);
   useEscapeClose(true, onClose);
@@ -125,7 +127,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
       folderAt = (g) => plan.find((p) => g >= p.start && g <= p.end)?.folder ?? plan[0].folder;
       chosen = plan[0].folder;
     }
-    ctx.current = { span, folderAt, used: new Set() };
+    ctx.current = { span, folderAt, used: new Set(), pool: surahsOfRange(span) };
     setReciter(chosen);
     setErr('');
     setPositions([]);
@@ -146,6 +148,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     if (!c || !text) return;
     setBusy(true);
     setShowRes(null);
+    setAskSurah(null);
     const picked = await pickRoundAyah({ start: c.span.start, end: c.span.end }, c.folderAt, text, c.used);
     setBusy(false);
     if (!picked) {
@@ -165,11 +168,20 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     setStep('positions');
   }
 
+  // W4-J: after the recitation the position asks «في أي سورة؟» (2 of its 10); inside a
+  // single surah that question is pointless and is skipped (the ayah carries the 10).
   function onPositionDone(result: RoundResult) {
     if (!cur) return;
-    const frac = result.total ? result.credited / result.total : 0;
-    const d: Done = { ayah: cur, result, frac, score: positionScore(frac, count) };
+    if (ctx.current && ctx.current.pool.length === 1) settlePosition(result, null);
+    else setAskSurah(result);
+  }
+
+  function settlePosition(result: RoundResult, surahOk: boolean | null) {
+    if (!cur) return;
+    const frac = roundFrac(result, surahOk);
+    const d: Done = { ayah: cur, result, surahOk, frac, score: positionScore(frac, count) };
     setPositions((p) => [...p, d]);
+    setAskSurah(null);
     setShowRes(d);
   }
 
@@ -180,9 +192,9 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     } else void nextPosition();
   }
 
-  function onMutDone(found: number) {
+  function onMutDone(res: OralResult) {
     const q = mut[mutIdx];
-    const frac = q.answers.length ? found / q.answers.length : 0;
+    const frac = oralFraction(res.found, q.answers.length, res.surahRight, res.hints);
     const next = [...mutFrac, frac];
     setMutFrac(next);
     if (mutIdx + 1 < mut.length) setMutIdx(mutIdx + 1);
@@ -313,12 +325,15 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
             <p className="font-bold text-accent-800 mb-1">التسميع — الموضع {arNum(Math.min(count, positions.length + (showRes ? 0 : 1)))} من {arNum(count)}</p>
             <p className="text-xs text-accent-600 mb-3">القارئ: {reciterName(reciter)} · غلطة واحدة بيصحّحها، والتانية بتقفل الموضع</p>
             {busy && <p className="text-center text-accent-700 font-bold py-6">بنجهّز الموضع…</p>}
-            {!busy && cur && !showRes && <RoundRecite key={positions.length} ayah={cur} corrections={1} onFinish={onPositionDone} />}
+            {!busy && cur && !showRes && !askSurah && <RoundRecite key={positions.length} ayah={cur} corrections={1} onFinish={onPositionDone} />}
+            {!busy && cur && askSurah && ctx.current && (
+              <SurahTiles key={positions.length} correct={cur.surah} pool={ctx.current.pool} onAnswer={(sn) => settlePosition(askSurah, sn === cur.surah)} />
+            )}
             {showRes && (
               <>
                 <p className={`text-2xl font-bold mb-2 ${positionPerfect(showRes.result) ? 'text-emerald-700' : 'text-rose-700'}`}>{positionPerfect(showRes.result) ? '✓ صح' : '✗ غلط'}</p>
                 <RoundReveal ayah={showRes.ayah} result={showRes.result} />
-                <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}</p>
+                <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}{showRes.surahOk === null ? '' : showRes.surahOk ? ' · السورة ✓' : ' · السورة ✗'}</p>
                 <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل بغلطة تانية)' : ''}</p>
                 {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
                 <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">
