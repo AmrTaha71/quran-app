@@ -1,7 +1,7 @@
 // «سجل الدرجات» (W4-D): last 100 tests + a progress curve pinned to one
 // grading level (tabs). Plain SVG, no chart library.
 import { useMemo, useState } from 'react';
-import { HISTORY_LEVEL_LABEL, type HistoryLevel, type TestHistoryEntry } from '../lib/testHistory';
+import { HISTORY_LEVEL_LABEL, TEST_KIND_LABEL, kindOf, type HistoryLevel, type TestHistoryEntry, type TestKind } from '../lib/testHistory';
 
 const ar = (n: number) => n.toLocaleString('ar-EG');
 
@@ -45,7 +45,10 @@ export default function TestHistoryPanel({ entries, showMaster, initialLevel }: 
   const levels: HistoryLevel[] = showMaster ? ['beginner', 'advanced', 'master'] : ['beginner', 'advanced'];
   const [level, setLevel] = useState<HistoryLevel>(levels.includes(initialLevel) ? initialLevel : 'beginner');
   const visible = useMemo(() => entries.filter((e) => showMaster || e.level !== 'master'), [entries, showMaster]);
-  const ofLevel = useMemo(() => visible.filter((e) => e.level === level), [visible, level]);
+  // W4-E: tarteel / comprehensive scores are out of 40: each kind has its own curve.
+  const kinds = useMemo(() => (['tasmee', 'tarteel', 'comprehensive'] as TestKind[]).filter((k) => visible.some((e) => kindOf(e) === k)), [visible]);
+  const [kind, setKind] = useState<TestKind>('tasmee');
+  const ofLevel = useMemo(() => visible.filter((e) => e.level === level && kindOf(e) === kind), [visible, level, kind]);
   const curve = useMemo(() => [...ofLevel].reverse(), [ofLevel]);
 
   return (
@@ -59,6 +62,14 @@ export default function TestHistoryPanel({ entries, showMaster, initialLevel }: 
           </button>
         ))}
       </div>
+      {kinds.length > 1 && (
+        <div className="flex gap-1.5">
+          {kinds.map((k) => (
+            <button key={k} type="button" onClick={() => setKind(k)}
+              className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${kind === k ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-700'}`}>{TEST_KIND_LABEL[k]}</button>
+          ))}
+        </div>
+      )}
       {ofLevel.length === 0 ? (
         <p className="text-sm text-accent-600">مفيش اختبارات على مستوى «{HISTORY_LEVEL_LABEL[level]}» لسه.</p>
       ) : (

@@ -6,6 +6,7 @@ import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
 import EarDownloadCard from '../components/EarDownloadCard';
 import TestHistoryPanel from '../components/TestHistoryPanel';
+import { registerAligner } from '../lib/alignBridge';
 import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
@@ -1030,6 +1031,8 @@ async function limitedVoiceFetch(run: () => Promise<Response>): Promise<Response
     voiceWaiters.shift()?.();
   }
 }
+
+registerAligner(alignWords, spokenTokens);
 
 export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [phase, setPhase] = useState<'setup' | 'testing' | 'done'>('setup');

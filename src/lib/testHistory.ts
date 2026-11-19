@@ -24,7 +24,14 @@ export type TestHistoryEntry = {
   ear: 'lab' | 'browser' | 'model' | 'manual';
   /** Human range label, e.g. «سورة الملك ١–٥». */
   label: string;
+  /** W4-E: which test. Missing = the tasmee' test (all older entries). The
+   *  tarteel / comprehensive scores are out of 40 and kept on their own curve. */
+  kind?: TestKind;
 };
+
+export type TestKind = 'tasmee' | 'tarteel' | 'comprehensive';
+export const TEST_KIND_LABEL: Record<TestKind, string> = { tasmee: 'تسميع', tarteel: 'ترتيل', comprehensive: 'شامل' };
+export const kindOf = (e: TestHistoryEntry): TestKind => e.kind ?? 'tasmee';
 
 export const TEST_HISTORY_V1_KEY = 'quran-test-history-v1';
 export const TEST_HISTORY_MAX = 100;
