@@ -19,6 +19,10 @@ import { dailyDua } from '../lib/personalTouch';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
+import { ImamFollower, type FollowIndex, type FollowState } from '../lib/imamFollow';
+import { loadFollowIndex } from '../lib/imamFollowIndex';
+import { QuranLabPhonemeTap, releaseEarMic, earLabOn, getEarLabState, subscribeEarLab, earModelCached, preloadEarLab, markEarLabFailed } from '../lib/quranLabEar';
+import { speechErrorMessage } from '../lib/speechErrors';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT, MADINAH_MARK_MARGIN } from '../lib/madinahPaperBoxes';
 import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { parseHash } from '../lib/shareLinks';
@@ -1433,7 +1437,23 @@ export default function QuranMushafPage({
   // spends OpenAI balance, and is labelled as such in the panel.
   const [followOn, setFollowOn] = useState(false);
   const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
-  const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | null>(null);
+  const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | 'lab' | null>(null);
+  // W5-N3 (2026-11-19): continuous follow on the Quran-Lab ear ('lab'
+  // engine, lib/imamFollow). followTrack is the small status chip:
+  // listening = «بسمع…» (no place yet), following = «تابعت», searching =
+  // «بدوّر على الموضع» (lost after a lock; the highlight stays, faded).
+  const [followTrack, setFollowTrack] = useState<'listening' | 'following' | 'searching'>('listening');
+  const [followCands, setFollowCands] = useState<{ surah: number; ayah: number }[]>([]);
+  // Why the old lock-once path is used instead of the device ear (shown in the lobby).
+  const [followEarNote, setFollowEarNote] = useState<string | null>(null);
+  const [followEarStatus, setFollowEarStatus] = useState(() => getEarLabState().status);
+  const followerRef = useRef<ImamFollower | null>(null);
+  const followIndexRef = useRef<FollowIndex | null>(null);
+  const followLabPendingRef = useRef<{ s: string; t: number }[][]>([]);
+  // Global word index (FollowIndex.words) the highlight shows now: never
+  // moves back inside a surah (Dr. Amr's rule).
+  const followShownGRef = useRef(-1);
+  const followEarCachedRef = useRef(false);
   // MERGED followStatus: listening | locked ONLY. 'found' (pending
   // confirmation) and 'lost' (re-lock after tracking) are both deleted:
   // there is no confirmation card and no tracking after a lock, so a
@@ -1827,6 +1847,12 @@ export default function QuranMushafPage({
     }
     try { followWakeLockRef.current?.release(); } catch {}
     followWakeLockRef.current = null;
+    // W5-N3: the lab ear parks its mic for 60 s after a stop (tasmee'
+    // restarts); a stopped follow session must not keep the mic light on.
+    releaseEarMic();
+    followerRef.current = null;
+    followLabPendingRef.current = [];
+    followShownGRef.current = -1;
     try { sessionStorage.removeItem(FOLLOW_STORAGE_KEY); } catch {}
   }, [handleFollowVisibility, stopFollowEngines]);
 
@@ -1866,6 +1892,12 @@ export default function QuranMushafPage({
     setFollowChunkFails(0);
     followBufferRef.current = [];
     followWarmInterimLenRef.current = 0;
+    followerRef.current = null;
+    followLabPendingRef.current = [];
+    followShownGRef.current = -1;
+    setFollowTrack('listening');
+    setFollowCands([]);
+    setFollowEarNote(null);
     setCleanMode(false);
     // Word-level highlighting needs the Madinah word boxes, so follow
     // mode always uses the Madinah edition (harmless if already selected).
@@ -1913,6 +1945,8 @@ export default function QuranMushafPage({
     setFollowStatus('listening');
     followStatusRef.current = 'listening';
     setFollowEngine(null);
+    setFollowTrack('listening');
+    setFollowCands([]);
   }, [teardownFollowResources, setFollowMicWaitingState]);
 
   // MERGED auto-fullscreen + highlight: this is the ONLY page-open used
@@ -2154,6 +2188,186 @@ export default function QuranMushafPage({
   const followInterimRef = useRef(onFollowInterim);
   useEffect(() => { followInterimRef.current = onFollowInterim; });
 
+  // ---- W5-N3: continuous follow-the-imam on the Quran-Lab ear ----------
+  // «تتبع الإمام» → «ابدأ»: when the device ear is on and loaded (or
+  // cached), the start tap opens THIS path instead of the lock-once one.
+  // Same mic path as the tasmee' ear (QuranLabPhonemeTap: stream asked
+  // inside the tap, iOS rebuild logic); each decoded chunk's phonemes go
+  // to ImamFollower (lib/imamFollow, measured in plan/imam-tracking-
+  // report.md, default options untouched). The session does NOT stop at
+  // the first lock: followPos keeps moving word by word, the page turns
+  // with the imam (effect below), a lost ear re-locks by itself. The
+  // highlight never moves back inside a surah; a new surah (after al-
+  // Fatiha the imam may read any) is a new place, not a step back.
+  // Everything else (manual ابحث, the browser/Whisper engines, the lock
+  // callback) is the old path, unchanged, and is used when the ear is
+  // not available — with the reason shown in the lobby.
+  const followEarChoice = (): 'lab' | string => {
+    if (!earLabOn()) return 'أذن المصحف مقفولة على الجهاز ده (من صفحة الأذن) — هيفتح على الآية بس، والهايلايت مش هيمشي مع الإمام';
+    const st = getEarLabState().status;
+    if (st === 'ready' || st === 'loading') return 'lab';
+    if (st === 'error') return 'أذن المصحف ما اتحمّلتش على الجهاز ده — هيفتح على الآية بس، والهايلايت مش هيمشي مع الإمام';
+    if (followEarCachedRef.current) return 'lab';
+    return 'أذن المصحف لسه ما اتنزّلتش على الجهاز ده — نزّلها مرة واحدة من الإعدادات (كارت الأذن) عشان الهايلايت يمشي مع الإمام كلمة بكلمة. دلوقتي هيفتح على الآية بس.';
+  };
+
+  // While follow is open: learn whether the ear model is cached (the tap
+  // cannot await that), warm the cached model and the follow index.
+  useEffect(() => {
+    if (!followOn && !startInFollow) return;
+    let alive = true;
+    void earModelCached().then((c) => { if (alive) followEarCachedRef.current = c; });
+    preloadEarLab();
+    void loadFollowIndex().then((idx) => { followIndexRef.current = idx; }).catch(() => {});
+    setFollowEarStatus(getEarLabState().status);
+    const unsub = subscribeEarLab(() => setFollowEarStatus(getEarLabState().status));
+    return () => { alive = false; unsub(); };
+  }, [followOn, startInFollow]);
+
+  const resetLabFollow = useCallback(() => {
+    followerRef.current = null;
+    followLabPendingRef.current = [];
+    followShownGRef.current = -1;
+    followTurnSurahRef.current = null;
+    setFollowTrack('listening');
+    setFollowCands([]);
+  }, []);
+
+  const applyFollowState = useCallback((st: FollowState) => {
+    const idx = followIndexRef.current;
+    if (!idx) return;
+    const cands = st.candidates;
+    setFollowCands((prev) => (prev.length === cands.length && prev.every((c, i) => c.surah === cands[i].surah && c.ayah === cands[i].ayah) ? prev : cands));
+    if (st.status === 'searching' || !st.pos) {
+      // Before the first lock: «بسمع…». After it: the ear lost the place
+      // (lostLetters in imamFollow); the highlight stays where it was,
+      // faded, until the follower re-locks.
+      setFollowTrack(followShownGRef.current < 0 ? 'listening' : 'searching');
+      return;
+    }
+    setFollowTrack('following');
+    const shown = followShownGRef.current;
+    let g = st.pos.g;
+    // Never back inside the same surah: a short back-step of the
+    // follower, or a re-lock behind the shown word (the imam repeating),
+    // keeps the highlight where it is until the voice passes it again.
+    if (shown >= 0 && g < shown && idx.words[g].surah === idx.words[shown].surah) g = shown;
+    if (g === shown) return;
+    followShownGRef.current = g;
+    const w = idx.words[g];
+    const tp: TrackedPosition = { surah: w.surah, ayah: w.ayah, word: w.word };
+    followPosRef.current = tp;
+    setFollowPos(tp);
+    if (followStatusRef.current !== 'locked') {
+      followStatusRef.current = 'locked';
+      setFollowStatus('locked');
+      setShowRatelIntro(false);
+      setSelectedVerse(null);
+      setShowFullscreen(true);
+    }
+  }, []);
+
+  const onLabParts = useCallback((parts: { s: string; t: number }[], gen: number) => {
+    if (gen !== followStartGenRef.current || !followListeningRef.current || !followActiveRef.current) return;
+    if (followMicWaitingRef.current) setFollowMicWaitingState(false);
+    const f = followerRef.current;
+    if (!f) {
+      // The index is still loading: keep the heard chunks (bounded) and
+      // replay them in order once it is ready.
+      followLabPendingRef.current.push(parts);
+      if (followLabPendingRef.current.length > 120) followLabPendingRef.current.shift();
+      return;
+    }
+    applyFollowState(f.pushPhonemes(parts));
+  }, [applyFollowState, setFollowMicWaitingState]);
+
+  // Terminal stop of a lab session with a message: back to the lobby
+  // (start button + error), the page underneath stays where it was.
+  const stopLabWithMessage = useCallback((message: string) => {
+    followStartGenRef.current += 1;
+    stopFollowEngines();
+    releaseEarMic();
+    resetLabFollow();
+    followPosRef.current = null;
+    setFollowPos(null);
+    followStatusRef.current = 'listening';
+    setFollowStatus('listening');
+    setFollowReady(true);
+    setFollowError(message);
+  }, [stopFollowEngines, resetLabFollow]);
+
+  // Called synchronously from the start tap (startFollowListening, no
+  // await before rec.start(): the mic request must stay in the gesture).
+  const startLabFollow = useCallback((startGen: number) => {
+    setFollowEngine('lab');
+    setFollowEarNote(null);
+    resetLabFollow();
+    const rec = new QuranLabPhonemeTap();
+    const mine = () => startGen === followStartGenRef.current && recognitionRef.current === rec;
+    rec.onstart = () => {
+      if (!mine()) return;
+      markMicGranted();
+      followAudioStartedRef.current = true;
+      if (followMicWaitingRef.current) setFollowMicWaitingState(false);
+    };
+    rec.onerror = (e: { error?: string; message?: string }) => {
+      if (!mine()) return;
+      if (e?.error === 'not-allowed') {
+        clearMicGranted();
+        setFollowMicDenied(true);
+      }
+      let msg: string;
+      if (e?.error === 'network') {
+        // quranLabEar maps a model-load failure to 'network'.
+        markEarLabFailed();
+        msg = 'أذن المصحف ما اتحمّلتش دلوقتي — اضغط «ابدأ» تاني (هيشتغل بالطريقة القديمة: يفتح على الآية بس)، أو جرّب «طريقة استماع بديلة»';
+      } else {
+        msg = speechErrorMessage(e?.error)?.text ?? 'توقف الاستماع — اضغط «ابدأ» من جديد';
+      }
+      stopLabWithMessage(msg);
+    };
+    rec.onend = () => {
+      if (!mine() || !followListeningRef.current) return;
+      stopLabWithMessage('الاستماع وقف لوحده — اضغط «ابدأ» من جديد');
+    };
+    rec.onparts = (parts) => onLabParts(parts, startGen);
+    recognitionRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      recognitionRef.current = null;
+      followStartingRef.current = false;
+      setFollowMicWaitingState(false);
+      setFollowReady(true);
+      setFollowError('توقف الاستماع — اضغط «ابدأ» من جديد');
+      return;
+    }
+    followListeningRef.current = true;
+    followStartingRef.current = false;
+    setFollowReady(false);
+    setFollowStatus('listening');
+    followStatusRef.current = 'listening';
+    ensureWakeLockTracking();
+    const ready = followIndexRef.current;
+    const attach = (idx: FollowIndex) => {
+      followIndexRef.current = idx;
+      const f = new ImamFollower(idx);
+      followerRef.current = f;
+      const pend = followLabPendingRef.current;
+      followLabPendingRef.current = [];
+      let st: FollowState | null = null;
+      for (const p of pend) st = f.pushPhonemes(p);
+      if (st) applyFollowState(st);
+    };
+    if (ready) { attach(ready); return; }
+    setFollowIndexLoading(true);
+    loadFollowIndex()
+      .then((idx) => { if (startGen === followStartGenRef.current) attach(idx); })
+      .catch(() => { if (startGen === followStartGenRef.current) stopLabWithMessage('تعذر تحميل فهرس التتبع — تأكد من الاتصال بالإنترنت واضغط «ابدأ» من جديد'); })
+      .finally(() => setFollowIndexLoading(false));
+  }, [resetLabFollow, onLabParts, stopLabWithMessage, applyFollowState, ensureWakeLockTracking, setFollowMicWaitingState]);
+
+
   const recordChunk = (ms: number): Promise<Blob> => new Promise((resolve, reject) => {
     const stream = followStreamRef.current;
     if (!stream) { reject(new Error('no stream')); return; }
@@ -2354,6 +2568,17 @@ export default function QuranMushafPage({
       }
       return 'تم رفض إذن الميكروفون — اسمح به من إعدادات المتصفح ثم اضغط «ابدأ الاستماع» من جديد';
     };
+    // W5-N3: the device ear (continuous follow) when it is on and
+    // loaded/cached; otherwise the old lock-once engines below, with the
+    // reason shown in the lobby. Synchronous: the mic request stays in
+    // the tap gesture.
+    if (!forceWhisper) {
+      const ear = followEarChoice();
+      if (ear === 'lab') { startLabFollow(startGen); return; }
+      setFollowEarNote(ear);
+    } else {
+      setFollowEarNote(null);
+    }
     const SR = forceWhisper ? null : ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
     if (SR) {
       setFollowEngine('live');
@@ -2885,7 +3110,7 @@ export default function QuranMushafPage({
       return;
     }
     void runWhisperLoop();
-  }, [runWhisperLoop, ensureWakeLockTracking, session, setFollowMicWaitingState]);
+  }, [runWhisperLoop, ensureWakeLockTracking, session, setFollowMicWaitingState, startLabFollow]);
 
   // Manual ابحث (merged decision 5): typed input is NOT governed by
   // the 5-word trigger gate (it is not an engine transcript), and it
@@ -3162,6 +3387,43 @@ export default function QuranMushafPage({
       .catch(() => { if (!cancelled) setPageWordBoxes(null); });
     return () => { cancelled = true; };
   }, [currentPage, edition.id]);
+
+  // W5-N3 (declared after the word-box loader: its deps read pageWordBoxes).
+  // Auto page turn with the imam (lab engine only). Decided on the
+  // current page's own word boxes, so an ayah that runs onto the next
+  // page turns exactly when its first word there is reached. Never
+  // turns back inside the same surah (shown position is monotonic; a
+  // word-count mismatch between the index and the boxes must not
+  // ping-pong two pages).
+  const followTurnSurahRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (followEngine !== 'lab' || !followOn || !followPos) return;
+    const pos = followPos;
+    const boxes = wordBoxCache.current[currentPage];
+    if (boxes) {
+      if (boxes.some((b) => b.key === `${pos.surah}:${pos.ayah}:${pos.word + 1}`)) { followTurnSurahRef.current = pos.surah; return; }
+      const same = boxes.filter((b) => b.surah === pos.surah && b.ayah === pos.ayah);
+      if (same.length) {
+        const maxW = Math.max(...same.map((b) => Number(b.key.split(':')[2]) || 0));
+        if (pos.word + 1 > maxW && currentPage < TOTAL_PAGES) { followTurnSurahRef.current = pos.surah; goToPage(currentPage + 1); }
+        return;
+      }
+    }
+    let cancelled = false;
+    void loadSurahPageList(pos.surah).then((list) => {
+      if (cancelled) return;
+      const entry = list.find((a) => a.number === pos.ayah);
+      const page = entry ? entry.page_number : getSurahStartPage(pos.surah);
+      if (page === currentPage) return;
+      if (page < currentPage && followTurnSurahRef.current === pos.surah) return;
+      followTurnSurahRef.current = pos.surah;
+      followLockPreloadSkipRef.current = true;
+      goToPage(page);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+    // goToPage is a plain function of this component (stable behaviour).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followEngine, followOn, followPos, currentPage, pageWordBoxes, loadSurahPageList]);
 
   // Madinah paper-box normalization — the page-turn dance fix. The
   // sufone scans frame the paper differently per page (two widths,
@@ -3882,7 +4144,7 @@ export default function QuranMushafPage({
                 <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تتبع الإمام</p>
                 {followHelpShow ? (<>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-2">
-                  اضغط بدء الاستماع، وقرّب الجهاز منك. أول ما يلقط الإمام ٥ كلمات، المصحف هيفتح لوحده على الصفحة ويظلّل الآية — من غير ما تدوس حاجة تانية. وبعد ما يفتح على الآية، المتابعة بتقف عندها — لو الإمام تقدّم لآية تانية، اقلب الصفحة يدويًا أو اضغط «مش دي؟ كمّل الاستماع» لالتقاط موضع جديد. هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.
+                  اضغط بدء الاستماع، وقرّب الجهاز منك. أول ما يلقط الإمام كام كلمة، المصحف هيفتح لوحده على الصفحة — من غير ما تدوس حاجة تانية. لو أذن المصحف متنزّلة على جهازك، الهايلايت بيمشي مع الإمام كلمة بكلمة وبيقلب الصفحة معاه لحد ما تدوس إيقاف. من غيرها، بيفتح على الآية ويقف عندها — اضغط «مش دي؟ كمّل الاستماع» لموضع جديد. هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.
                 </p>
                 <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس، وبعدين تقدر تفتحها من «التعليمات».</p>
                 <button type="button" onClick={() => { try { localStorage.setItem(FOLLOW_HELP_KEY, '99'); } catch { /* ignore */ } setFollowHelpShow(false); }}
@@ -3963,6 +4225,15 @@ export default function QuranMushafPage({
                     )}
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {followEngine === 'live' && <p className="text-xs text-emerald-200 mt-2">المحرك: مباشر من المتصفح</p>}
+                    {followEngine === 'lab' && (
+                      <p className="text-xs text-emerald-200 mt-2">
+                        المحرك: أذن المصحف على جهازك — الهايلايت هيمشي مع الإمام كلمة بكلمة
+                        {followEarStatus === 'loading' ? ' • بنحمّل الأذن…' : ''}
+                      </p>
+                    )}
+                    {followEngine === 'lab' && followCands.length === 2 && (
+                      <p className="text-xs text-amber-200 mt-1">متشابهات: {SURAHS.find((x) => x.no === followCands[0].surah)?.name} ولا {SURAHS.find((x) => x.no === followCands[1].surah)?.name}؟ — مستني كلمات أكتر</p>
+                    )}
                     {followEngine === 'whisper' && (
                       <p className="text-xs text-emerald-200 mt-2">
                         المحرك: على جهازك (بدون خادم) — تأخير ~١٠ ثوانٍ
@@ -3995,6 +4266,7 @@ export default function QuranMushafPage({
                   </p>
                 )}
                 {followError && <p className="text-xs text-red-300 mt-2">{followError}</p>}
+                {followEarNote && <p className="text-xs text-amber-200 mt-2">{followEarNote}</p>}
               </div>
             </div>
           )}
@@ -4057,6 +4329,17 @@ export default function QuranMushafPage({
                 <BackButton label="عودة" onBack={() => { if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
               </div>
             </>
+          )}
+
+          {/* W5-N3: tiny follow status while the chrome is faded (the
+              follow bar with its stop button fades with the rest after
+              5 s; any tap brings it back). Corner pill, no touch, off the
+              page text. */}
+          {followOn && followEngine === 'lab' && followPos && !fsOverlaysVisible && (
+            <div className="absolute z-30 pointer-events-none text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/35 text-white/90 ring-1 ring-white/20"
+              style={{ right: 'max(0.5rem, env(safe-area-inset-right))', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.4rem)' }}>
+              {followTrack === 'following' ? 'تابعت' : followTrack === 'searching' ? 'بدوّر على الموضع…' : 'بسمع…'}
+            </div>
           )}
 
           {/* MERGED top bar (STREAM S2): the worship timer and the
@@ -4278,9 +4561,13 @@ export default function QuranMushafPage({
                       .map((b) => ({ ...b, wordNo: Number(b.key.split(':')[2]) || 0 }))
                       .sort((a, b) => a.wordNo - b.wordNo);
                     if (boxes.length === 0) return null;
+                    // W5-N3: while the lab ear searches for its place again,
+                    // the last highlight stays, faded (never jumps, never vanishes).
                     return (
-                      <MushafHighlightLayer currentWord={followPos.word}
-                        boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
+                      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${followEngine === 'lab' && followTrack === 'searching' ? 'opacity-40' : 'opacity-100'}`}>
+                        <MushafHighlightLayer currentWord={followPos.word}
+                          boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
+                      </div>
                     );
                   })()}
                   {/* Search-jump highlight: the ayah tapped in لوحتي,
@@ -4454,12 +4741,14 @@ export default function QuranMushafPage({
                   <div className="mb-2 flex items-center gap-2 bg-amber-700 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
                     <StudioMic className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">
-                      {followStatus === 'locked' && followPos
+                      {followEngine === 'lab'
+                        ? (followTrack === 'following' ? 'تابعت' : followTrack === 'searching' ? 'بدوّر على الموضع…' : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'بسمع…')
+                        : followStatus === 'locked' && followPos
                         ? 'تتبع الإمام شغال'
                         : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
                     <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
-                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
+                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0 flex items-center gap-1"><Square className="w-4 h-4" />{followEngine === 'lab' && <span className="text-xs pl-1">إيقاف</span>}</button>
                   </div>
                 )}
                 {/* W5-E: guidance sentence removed (thin footer); the
