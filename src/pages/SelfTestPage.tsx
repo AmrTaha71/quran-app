@@ -133,7 +133,9 @@ const QUIET_GAP_MS = 1500;
 // (utterance rate), so the choice never silently changes meaning.
 type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
 type CorrRate = 'slow' | 'normal' | 'fast' | 'veryFast';
-const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.25, veryFast: 1.5 };
+const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.15, veryFast: 1.25 };
+// C-3: veryFast tops out at 1.25 so it stays distinct from fast even where the
+// reader's hadr is capped at 1.25 (continuous mode); 1.5x was hard to hear.
 const CORR_RATE_LABEL: Record<CorrRate, string> = { slow: 'بطيء', normal: 'عادي', fast: 'سريع', veryFast: 'سريع جدًا' };
 // Iteration 2 continuous-prompt audio cache: PERSISTENT (IndexedDB
 // blobs) with a synchronous in-memory mirror for the prompt path.
@@ -5994,7 +5996,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-xs font-medium text-accent-700 mb-1">سرعة نطق الكلمة الصحيحة</p>
+                  <p className="text-xs font-medium text-accent-700 mb-1">سرعة التصحيح</p>
                   <div className="grid grid-cols-4 gap-1.5">
                     {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
                       <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelayMode, r)}

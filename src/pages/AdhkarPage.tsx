@@ -57,8 +57,9 @@ const POS_VERSION = 2;
 
 function readVoice(): AdhkarVoice {
   try {
-    const v = localStorage.getItem(VOICE_KEY);
-    if (v === 'female' || v === 'male') return v;
+    // B-17: male voice only. A stored 'female' choice is migrated to
+    // 'male' silently; the female clip URLs stay in adhkarClips data.
+    if (localStorage.getItem(VOICE_KEY) === 'female') localStorage.setItem(VOICE_KEY, 'male');
   } catch { /* ignore */ }
   return 'male';
 }
@@ -238,7 +239,7 @@ function isRecitation(clip: AdhkarClip, voice: AdhkarVoice): boolean {
 
 export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate: (r: Route) => void; visible?: boolean }) {
   const [wird, setWird] = useState<AdhkarWird>(readWird);
-  const [voice, setVoice] = useState<AdhkarVoice>(readVoice);
+  const [voice] = useState<AdhkarVoice>(readVoice);
   const [pos, setPos] = useState(() => readPosition(readWird()));
   const [playing, setPlaying] = useState(false);
   const [completed, setCompleted] = useState(false);
@@ -734,25 +735,6 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
     setPlaying(false);
   }, [wird]);
 
-  const switchVoice = useCallback((v: AdhkarVoice) => {
-    if (v === voice) return;
-    try {
-      localStorage.setItem(VOICE_KEY, v);
-    } catch { /* ignore */ }
-    setVoice(v);
-    setError(null);
-    // Restart the current dhikr in the new voice (rep 1).
-    setPos({ index, rep: 1 });
-    setSeg(0);
-    savePosition(wird, index, 1);
-    if (playing) {
-      const el = ensureElement();
-      loadClip(clip, v, el);
-      setMediaSession(clip, wird, true);
-      void el.play().catch(() => setPlaying(false));
-    }
-  }, [voice, index, playing, clip, wird, ensureElement, loadClip, savePosition, setMediaSession]);
-
   const restart = useCallback(() => {
     setCompleted(false);
     setError(null);
@@ -790,22 +772,6 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
             className={`py-3 font-semibold rounded-xl polish-press ${wird === 'evening' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
           >
             أذكار المساء
-          </button>
-        </div>
-
-        {/* Voice toggle */}
-        <div className="grid grid-cols-2 gap-2 mt-2">
-          <button
-            onClick={() => switchVoice('male')}
-            className={`py-3 font-bold rounded-xl text-base polish-press ${voice === 'male' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
-          >
-            صوت رجالي
-          </button>
-          <button
-            onClick={() => switchVoice('female')}
-            className={`py-3 font-bold rounded-xl text-base polish-press ${voice === 'female' ? 'grad-emerald-door text-white' : 'bg-white border border-hairline text-accent-700'}`}
-          >
-            صوت نسائي
           </button>
         </div>
 

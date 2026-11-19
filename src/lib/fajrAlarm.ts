@@ -75,7 +75,21 @@ function toneUrl(id: string): string {
       out[n0 + i] += x * env * gain * 0.8;
     }
   }
+  normalizeLoud(out);
   const u = wavBlobUrl(out); urlCache.set(id, u); return u;
+}
+// 2026-11-19: every tone is brought to the same, much higher loudness (iOS keeps
+// <audio>.volume at 1, so wave amplitude is the only control). Soft-saturate
+// toward RMS ~0.3 with tanh, then peak-normalize to a safe 0.95 (no clipping).
+const TARGET_RMS = 0.3, MAX_DRIVE = 6, SAFE_PEAK = 0.95;
+function normalizeLoud(out: Float32Array): void {
+  let sum = 0; for (let i = 0; i < out.length; i++) sum += out[i] * out[i];
+  const rms = Math.sqrt(sum / out.length);
+  if (rms < 1e-6) return;
+  const drive = Math.min(MAX_DRIVE, TARGET_RMS / rms);
+  let peak = 0;
+  for (let i = 0; i < out.length; i++) { out[i] = Math.tanh(out[i] * drive); peak = Math.max(peak, Math.abs(out[i])); }
+  if (peak > 0) { const k = SAFE_PEAK / peak; for (let i = 0; i < out.length; i++) out[i] *= k; }
 }
 function silentUrl(): string {
   const hit = urlCache.get('silent'); if (hit) return hit;
