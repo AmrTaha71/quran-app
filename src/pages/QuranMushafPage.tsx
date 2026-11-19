@@ -31,7 +31,7 @@ import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, AlertTriangle, Headphones } from 'lucide-react';
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, Headphones } from 'lucide-react';
 import { useUserLists } from '../components/UserLists';
 import type { Route } from '../lib/routes';
 
@@ -583,6 +583,9 @@ export default function QuranMushafPage({
   // (with a choice of three published tafsirs inside it). Links is
   // the default tab; hopping between similar ayahs keeps the
   // mutashabihat tab so verses can still be compared by hopping.
+  // W5-D: one-line feedback under «احفظها لبعدين» (cleared per ayah).
+  const [saveLaterMsg, setSaveLaterMsg] = useState<string | null>(null);
+  useEffect(() => { setSaveLaterMsg(null); }, [selectedVerse]);
   const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'asbab' | 'tafsir'>('links');
   const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
   const [tafsirText, setTafsirText] = useState<string | null>(null);
@@ -4534,18 +4537,13 @@ export default function QuranMushafPage({
                       ) : (
                         <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
                       )}
-                      {/* 2026-11-14 (agreed): six tiles on top — روابط الحفظ، استمع للآية، المتشابهات، الإعراب، أسباب النزول، معاني الكلمات. */}
+                      {/* W5-D (2026-11-19): six tiles on top — تربيطات الحفظ، المتشابهات، الإعراب، أسباب النزول، معاني الكلمات، التفسير. «استمع» moved to the bottom row (middle). */}
                       <div className="grid grid-cols-3 gap-1.5 mb-2">
                         <button onClick={() => setPopupTab('links')}
                           className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 grad-amber-door text-white polish-press ${popupTab === 'links' ? 'ring-2 ring-amber-300' : ''}`}>
                           <Link className="w-4 h-4" /> تربيطات الحفظ
                         </button>
-                        <button onClick={() => selectedVerse && handleListenButton(selectedVerse)}
-                          className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${reciting ? 'grad-amber-door text-white' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-                          {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                          {reciting ? 'إيقاف' : 'استمع للآية'}
-                        </button>
-                        {([['mutashabihat','المتشابهات'],['irab','الإعراب'],['asbab','أسباب النزول'],['meanings','معاني الكلمات']] as const).map(([k,l]) => (
+                        {([['mutashabihat','المتشابهات'],['irab','الإعراب'],['asbab','أسباب النزول'],['meanings','معاني الكلمات'],['tafsir','التفسير']] as const).map(([k,l]) => (
                           <button key={k} onClick={() => setPopupTab(k as any)}
                             className={`py-2.5 rounded-xl text-xs font-bold transition-smooth polish-press flex flex-col items-center justify-center gap-0.5 ${popupTab === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                             {l}
@@ -4709,35 +4707,61 @@ export default function QuranMushafPage({
                       )}
                     </div>
                     <div className="p-2.5 border-t border-gray-100">
-                      <div className="mb-2 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-center [&>div>button]:py-2 [&>div>button]:text-sm">
-                        <ShareButton verseText={selectedVerse.ayah_text} surahName={selectedVerse.surah_name} ayahNo={selectedVerse.ayah_no} surahNo={selectedVerse.surah_no} />
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button onClick={() => setPopupTab('tafsir')}
-                          className={`py-2.5 rounded-xl text-xs font-bold transition-smooth polish-press ${popupTab === 'tafsir' ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
-                          التفسير
-                        </button>
-                        {session && (<>
-                          <button onClick={() => { void userLists.toggleList(selectedVerse.id, 'difficult'); }}
-                            aria-pressed={userLists.lists.difficult.has(selectedVerse.id)}
-                            className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${userLists.lists.difficult.has(selectedVerse.id) ? 'grad-amber-door text-white' : 'bg-white border border-hairline-amber text-accent-800'}`}>
-                            <AlertTriangle className="w-4 h-4" /> صعبة
+                      {/* W5-D (2026-11-19, Dr. Amr): RTL row — «احفظها لبعدين» (right) | «استمع للآية» (middle) | «اقترح تربيطة» (left);
+                          then «مشاركة التربيط»; then a big «تمام» at the very bottom. «احفظها لبعدين» merges the old
+                          «صعبة» + «ارجع لها بعدين»: it writes the verse to BOTH lists (difficult + read_later) and, when
+                          links are shown, each shown link (read_later + link_id). Tapping again removes all of them. */}
+                      {(() => {
+                        const v = selectedVerse;
+                        const saved = userLists.lists.difficult.has(v.id) || userLists.lists.read_later.has(v.id);
+                        const shownLinks = popupTab === 'links' ? verseLinks : [];
+                        const toggleSaveLater = async () => {
+                          if (!session) { setSaveLaterMsg('سجّل دخولك الأول عشان تحفظ الآية'); return; }
+                          setSaveLaterMsg(null);
+                          if (saved) {
+                            if (userLists.lists.difficult.has(v.id)) await userLists.toggleList(v.id, 'difficult');
+                            if (userLists.lists.read_later.has(v.id)) await userLists.toggleList(v.id, 'read_later');
+                            return;
+                          }
+                          await userLists.toggleList(v.id, 'difficult');
+                          await userLists.toggleList(v.id, 'read_later');
+                          for (const l of shownLinks) {
+                            if (!userLists.linkLists.read_later.has(`${v.id}:${l.id}`)) await userLists.toggleLinkList(v.id, l.id, 'read_later');
+                          }
+                          setSaveLaterMsg(shownLinks.length > 0 ? 'اتحفظت الآية مع التربيطة' : 'اتحفظت الآية');
+                        };
+                        const shareLink = verseLinks[0];
+                        const shareText = shareLink
+                          ? `${v.ayah_text}\n\nالتربيط: ${shareLink.link_title ? `${shareLink.link_title} — ` : ''}${shareLink.link_content}`
+                          : v.ayah_text;
+                        return (<>
+                          <div className="grid grid-cols-3 gap-1.5 mb-2">
+                            <button onClick={() => { void toggleSaveLater(); }}
+                              aria-pressed={saved}
+                              className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${saved ? 'grad-amber-door text-white' : 'bg-white border border-hairline-amber text-accent-800'}`}>
+                              <Bookmark className="w-4 h-4" /> احفظها لبعدين
+                            </button>
+                            <button onClick={() => handleListenButton(v)}
+                              className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${reciting ? 'grad-amber-door text-white' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                              {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                              {reciting ? 'إيقاف' : 'استمع للآية'}
+                            </button>
+                            <button onClick={() => setSuggestOpen(!suggestOpen)}
+                              className="py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 polish-press">
+                              <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيطة' : 'اقترح تربيطة'}
+                            </button>
+                          </div>
+                          {saveLaterMsg && <p className="text-xs font-semibold text-center text-accent-700 mb-2">{saveLaterMsg}</p>}
+                          <div className="mb-2 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-center [&>div>button]:py-2 [&>div>button]:text-sm">
+                            <ShareButton verseText={shareText} surahName={v.surah_name} ayahNo={v.ayah_no} surahNo={v.surah_no}
+                              label={shareLink ? 'مشاركة التربيط' : 'مشاركة الآية'} />
+                          </div>
+                          <button onClick={() => setSelectedVerse(null)}
+                            className="w-full py-3.5 mb-2 rounded-xl text-lg font-bold grad-emerald-door text-white polish-press">
+                            تمام
                           </button>
-                          <button onClick={() => { void userLists.toggleList(selectedVerse.id, 'read_later'); }}
-                            aria-pressed={userLists.lists.read_later.has(selectedVerse.id)}
-                            className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${userLists.lists.read_later.has(selectedVerse.id) ? 'grad-emerald-door text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>
-                            <Bookmark className="w-4 h-4" /> ارجع لها بعدين
-                          </button>
-                        </>)}
-                        <button onClick={() => setSuggestOpen(!suggestOpen)}
-                          className="py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 polish-press">
-                          <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيطة جديدة' : 'اقترح تربيطة جديدة'}
-                        </button>
-                        <button onClick={() => setSelectedVerse(null)}
-                          className="py-2.5 rounded-xl text-sm font-bold grad-emerald-door text-white polish-press">
-                          تمام
-                        </button>
-                      </div>
+                        </>);
+                      })()}
                       {suggestOpen && (
                         <div className="mb-2">
                           <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
