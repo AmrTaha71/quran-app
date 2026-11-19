@@ -29,6 +29,7 @@ import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
+import Collapsible from '../components/Collapsible';
 import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import DeleteAccountButton from '../components/DeleteAccountButton';
@@ -385,6 +386,55 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     await deleteDownloadedSurah(reciter, surah);
     refreshAudioLists();
   };
+  // W3-S3: bulk delete (per reciter / per kind / all). Two taps: the first
+  // arms the button («تأكيد المسح»), the second deletes. The same delete
+  // functions as the per-surah buttons, just looped.
+  const [confirmClear, setConfirmClear] = useState<string | null>(null);
+  const tafsirItems = audioList.filter((e) => e.kind === 'tafsir');
+  const juhaniItems = audioList.filter((e) => e.kind === 'juhani');
+  const khatmaByReciter = Object.values(khatmaList.reduce<Record<string, { reciter: string; items: DownloadedSurah[]; bytes: number }>>((acc, e) => {
+    const g = acc[e.reciter] ?? (acc[e.reciter] = { reciter: e.reciter, items: [], bytes: 0 });
+    g.items.push(e);
+    g.bytes += e.bytes;
+    return acc;
+  }, {}));
+  const clearKhatmaReciter = async (reciter: string) => {
+    for (const e of khatmaList.filter((x) => x.reciter === reciter)) await deleteDownloadedSurah(e.reciter, e.surah);
+    refreshAudioLists();
+  };
+  const clearAudioKind = async (kind: AudioDownloadKind) => {
+    for (const e of audioList.filter((x) => x.kind === kind)) await deleteAudioDownload(kind, e.surah);
+    refreshAudioLists();
+  };
+  const clearAllAudio = async () => {
+    for (const e of khatmaList) await deleteDownloadedSurah(e.reciter, e.surah);
+    for (const e of audioList) await deleteAudioDownload(e.kind, e.surah);
+    refreshAudioLists();
+  };
+  const clearButton = (id: string, label: string, action: () => Promise<void>, wide = false) =>
+    confirmClear === id ? (
+      <span className={`flex gap-2 ${wide ? 'w-full' : ''}`}>
+        <button
+          onClick={() => { setConfirmClear(null); void action(); }}
+          className={`px-4 py-2 min-h-[44px] bg-red-600 text-white font-bold rounded-xl polish-press ${wide ? 'flex-1' : ''}`}
+        >
+          تأكيد المسح
+        </button>
+        <button
+          onClick={() => setConfirmClear(null)}
+          className="px-4 py-2 min-h-[44px] bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
+        >
+          إلغاء
+        </button>
+      </span>
+    ) : (
+      <button
+        onClick={() => setConfirmClear(id)}
+        className={`px-4 py-2 min-h-[44px] bg-cream border border-red-300 text-red-700 font-semibold rounded-xl polish-press whitespace-nowrap ${wide ? 'w-full' : ''}`}
+      >
+        {label}
+      </button>
+    );
   // Installed-app (PWA standalone) detection for the install card:
   // standalone means no Safari chrome, no link bar, no fullscreen
   // banner — the app already opens like a native app.
@@ -652,12 +702,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     const job = audioJob?.kind === kind ? audioJob : null;
     const pickDownloaded = isAudioDownloaded(kind, pick);
     return (
-      <div className="border-t border-hairline mt-5 pt-4">
-        <p className="font-semibold text-accent-800 mb-1">{isTafsir ? 'تفسير الآيات (صوت)' : 'ملفات الجهني (حدر)'}</p>
+      <div>
+        <p className="sr-only">{isTafsir ? 'تفسير الآيات (صوت)' : 'ملفات الجهني (حدر)'}</p>
         <Hint id="set-audio-kind"><p className="text-sm text-accent-600 mb-3">
           {isTafsir
-            ? 'مقاطع تفسير الميسر — تسجيل مجمع الملك فهد، مقطع لكل آية. المقطع الواحد حوالي ٢٥٠ كيلوبايت — سورة الفاتحة حوالي ٢ ميجابايت، والبقرة حوالي ٧٠ ميجابايت.'
-            : 'ملف السورة كامل بصوت الجهني — للاستماع الحدر، ولتصحيحات التسميع (من جهازك بدل النت فتبقى أسرع). سور جزء عم (٧٨–١١٤) هي اللي التصحيح بيستخدمها دلوقتي، بس أي سورة تنفع للحدر. ملف البقرة حوالي ٩٦ ميجابايت.'}
+            ? 'تفسير الميسر بصوت مجمع الملك فهد، مقطع لكل آية. الفاتحة حوالي ٢ ميجا، والبقرة حوالي ٧٠ ميجا.'
+            : 'السورة كاملة بصوت الجهني للحدر، وتخلّي تصحيح التسميع أسرع (سور جزء عم ٧٨–١١٤). البقرة حوالي ٩٦ ميجا.'}
         </p></Hint>
         {isTafsir && !tafsirConfigured() ? (
           <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
@@ -1153,44 +1203,85 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <CorrRecitersPanel />
             </>)}
             {openDoor === 'audio' && (<>
-        {/* Audio downloads manager — tafsir clips + Juhani surah
-            files, per surah, Cache API; the khatma surah downloads
-            (IndexedDB) are listed here too with delete, so every
-            downloaded sound lives in one place. Nothing downloads
-            on its own: every start is a user tap on a surah, after
-            a size estimate + space preflight. Offline playback
-            needs no code change: the SW serves these URLs
-            cache-first, so the players keep asking for the same
-            URLs and get the cached file when offline. */}
-        <section id="sec-audio" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
-          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Headphones className="w-5 h-5 text-emerald-600" /> التنزيلات الصوتية
-          </h2>
-          <Hint id="set-audio"><p className="text-sm text-accent-600 mb-4">
-            حمّل الصوت على جهازك واسمعه من غير نت — سورة سورة، مش كله مرة واحدة. اللي تحمّله هنا بيشتغل من جهازك حتى لو النت مقطوع، واللي ما تحمّلش بيفضل يشتغل من النت زي قبل كده. مفيش حاجة بتتحمل لوحدها.
-          </p></Hint>
+        {/* Audio downloads manager (W3-S3). Top: what is on the device now,
+            with clear delete buttons per reciter / tafsir / Juhani / all.
+            Below: per-kind download cards and the per-surah list, each in a
+            Collapsible. Nothing downloads on its own: every start is a user
+            tap on a surah, after a size estimate + space preflight. Offline
+            playback needs no code change: the SW serves these URLs
+            cache-first. */}
+        <section id="sec-audio" className="space-y-3 scroll-mt-36">
           {!audioSupported ? (
             <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
-              جهازك مش بيدعم التحميل على الجهاز — الصوت هيفضل يشتغل من النت زي قبل كده.
+              جهازك مش بيدعم التحميل على الجهاز — الصوت هيفضل يشتغل من النت.
             </p>
           ) : (
             <>
-              <p className="text-sm font-semibold text-accent-700 mb-2">
-                {audioStorage === null
-                  ? 'جارٍ فحص المساحة…'
-                  : audioStorage.freeMB !== null
-                    ? `المتاح على جهازك حوالي ${audioStorage.freeMB.toFixed(0)} ميجابايت`
-                    : 'المساحة المتاحة غير معروفة على جهازك'}
-                {' • '}الصوت المحمل هنا: {formatAudioSize(audioDownloadsTotalBytes())}
-                {audioDownloadsHaveUnknownSize() ? ' (بعض الأحجام غير معروفة)' : ''}
-              </p>
-              {audioKindCard('tafsir')}
-              {audioKindCard('juhani')}
-              <div className="border-t border-hairline mt-5 pt-4">
-                <p className="font-semibold text-accent-800 mb-1">سور الختمة المحملة</p>
-                <p className="text-sm text-accent-600 mb-3">دي السور اللي حمّلتها من صفحة «استمع للقرآن» — تقدر تمسحها من هنا، والتحميل نفسه من هناك.</p>
+              <div className="glass-card rounded-2xl p-4">
+                <p className="text-sm text-accent-700 leading-relaxed">
+                  نزّل سورة تسمعها من غير نت. مفيش حاجة بتتنزّل لوحدها.
+                </p>
+                <p className="text-sm font-semibold text-accent-700 mt-2">
+                  {audioStorage === null
+                    ? 'جارٍ فحص المساحة…'
+                    : audioStorage.freeMB !== null
+                      ? `المتاح حوالي ${audioStorage.freeMB.toFixed(0)} ميجا`
+                      : 'المساحة المتاحة غير معروفة'}
+                  {' • '}المنزّل: {formatAudioSize(audioDownloadsTotalBytes() + khatmaList.reduce((a, e) => a + (e.bytes ?? 0), 0))}
+                  {audioDownloadsHaveUnknownSize() ? ' (تقريبي)' : ''}
+                </p>
+              </div>
+
+              <div className="glass-card rounded-2xl p-4">
+                <p className="font-bold text-accent-800 mb-3">المنزّل على جهازك — امسح من هنا</p>
+                {khatmaByReciter.length === 0 && !tafsirItems.length && !juhaniItems.length ? (
+                  <p className="text-sm text-accent-600">مفيش صوت منزّل.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {khatmaByReciter.map((g) => (
+                      <div key={g.reciter} className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-accent-800 truncate">قارئ: {RECITERS.find((r) => r.id === g.reciter)?.name ?? g.reciter}</p>
+                          <p className="text-sm text-accent-600">{g.items.length.toLocaleString('ar-EG')} سورة • {formatApproxSize(g.bytes)}</p>
+                        </div>
+                        {clearButton(`reciter:${g.reciter}`, 'امسح القارئ', () => clearKhatmaReciter(g.reciter))}
+                      </div>
+                    ))}
+                    {tafsirItems.length > 0 && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-accent-800">تفسير الآيات</p>
+                          <p className="text-sm text-accent-600">{tafsirItems.length.toLocaleString('ar-EG')} سورة • {formatAudioSize(tafsirItems.reduce((a, e) => a + (e.bytes ?? 0), 0))}</p>
+                        </div>
+                        {clearButton('kind:tafsir', 'امسح التفسير', () => clearAudioKind('tafsir'))}
+                      </div>
+                    )}
+                    {juhaniItems.length > 0 && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-accent-800">ملفات الجهني</p>
+                          <p className="text-sm text-accent-600">{juhaniItems.length.toLocaleString('ar-EG')} سورة • {formatAudioSize(juhaniItems.reduce((a, e) => a + (e.bytes ?? 0), 0))}</p>
+                        </div>
+                        {clearButton('kind:juhani', 'امسح الجهني', () => clearAudioKind('juhani'))}
+                      </div>
+                    )}
+                    <div className="pt-1">
+                      {clearButton('all', 'امسح كل الصوت المنزّل', clearAllAudio, true)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Collapsible title="تنزيل تفسير الآيات (صوت)" summary={tafsirItems.length ? `${tafsirItems.length.toLocaleString('ar-EG')} سورة` : undefined} storageKey="audio-tafsir">
+                {audioKindCard('tafsir')}
+              </Collapsible>
+              <Collapsible title="تنزيل ملفات الجهني (حدر)" summary={juhaniItems.length ? `${juhaniItems.length.toLocaleString('ar-EG')} سورة` : undefined} storageKey="audio-juhani">
+                {audioKindCard('juhani')}
+              </Collapsible>
+              <Collapsible title="سور الختمة (مسح بالسورة)" summary={khatmaList.length ? `${khatmaList.length.toLocaleString('ar-EG')} سورة` : undefined} storageKey="audio-khatma">
+                <p className="text-sm text-accent-600 mb-3">التنزيل نفسه من صفحة «استمع للقرآن».</p>
                 {khatmaList.length === 0 ? (
-                  <p className="text-sm text-accent-600">مفيش سور ختمة محملة لسه.</p>
+                  <p className="text-sm text-accent-600">مفيش سور ختمة منزّلة.</p>
                 ) : (
                   <div className="grid gap-2">
                     {khatmaList.map((e) => (
@@ -1201,7 +1292,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </div>
                         <button
                           onClick={() => void clearKhatmaDownload(e.reciter, e.surah)}
-                          className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
+                          className="px-4 py-2 min-h-[44px] bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
                         >
                           مسح
                         </button>
@@ -1209,14 +1300,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ))}
                   </div>
                 )}
-              </div>
-              <Hint id="set-audio-note"><p className="text-xs text-accent-600 mt-5 leading-relaxed">
-                ملحوظة: التسميع بالميكروفون نفسه بيحتاج نت — دي حدود المتصفح، مش التطبيق. اللي بيشتغل دون نت هنا هو الاستماع (الختمة والتفسير والحدر)، وملفات الجهني المحملة بتخلي تصحيحات التسميع أسرع لأنها من جهازك بدل النت.
-              </p></Hint>
-              <p className="text-xs text-accent-600 mt-2 leading-relaxed">
-                {audioStorage?.persisted === true
-                  ? 'التخزين محمي من المسح التلقائي على جهازك ✓ — والقوائم هنا هتبين الناقص لو حصل أي مسح، وتحميله تاني بيرجّعه.'
-                  : 'ملحوظة: المتصفح ممكن يمسح الصوت لو مساحة الجهاز ضاقت — ارجع هنا وحمّل اللي ناقص.'}
+              </Collapsible>
+              <p className="text-xs text-accent-600 leading-relaxed px-1">
+                التسميع بالميكروفون نفسه محتاج نت. {audioStorage?.persisted === true
+                  ? 'التخزين محمي من المسح التلقائي ✓'
+                  : 'المتصفح ممكن يمسح الصوت لو مساحة الجهاز ضاقت، ارجع هنا وحمّل الناقص.'}
               </p>
             </>
           )}
