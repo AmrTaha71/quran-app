@@ -9,7 +9,7 @@ import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
 import { useIsAdminView } from '../lib/adminPreview';
 import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
-import { SURAH_AYAH_COUNTS, SURAHS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
+import { SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange, planRangeReciters, downloadRange, isRangeDownloaded, rangeSizeMb, formatSize, type RangeReciterPart } from '../lib/corrDownload';

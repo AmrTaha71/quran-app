@@ -30,6 +30,8 @@ import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
 import RoundRecite, { RoundReveal } from './RoundRecite';
 import MutashabihatOral, { type OralResult } from './MutashabihatOral';
 import SurahTiles from './SurahTiles';
+import RangeVoiceButton from './RangeVoiceButton';
+import { bankInSpan } from '../lib/mutRange';
 
 type Step = 'scope' | 'positions' | 'mutashabihat' | 'tajweed' | 'tilawa' | 'done';
 type ScopeId = 'surah' | 'juz' | 'first5' | 'juz30';
@@ -43,11 +45,19 @@ const SCOPES: { id: ScopeId; label: string }[] = [
   { id: 'juz30', label: 'جزء ٣٠' },
 ];
 
-function buildMut(count: number): MutQ[] {
-  const pool = [...(BANK as MutQ[])];
+/** W4-M: clues with an ayah inside the scope first; filled from the whole bank when the scope has few. */
+function buildMut(count: number, span: { start: number; end: number }): { list: MutQ[]; filled: boolean } {
+  const inScope = bankInSpan(BANK as MutQ[], span);
+  const pool = [...inScope];
   const out: MutQ[] = [];
   while (out.length < count && pool.length > 0) out.push(pool.splice(randomInt(0, pool.length - 1), 1)[0]);
-  return out;
+  let filled = false;
+  if (out.length < count) {
+    filled = true;
+    const rest = (BANK as MutQ[]).filter((b) => !out.includes(b));
+    while (out.length < count && rest.length > 0) out.push(rest.splice(randomInt(0, rest.length - 1), 1)[0]);
+  }
+  return { list: out, filled };
 }
 
 /** Global ayah range [start, end] (inclusive) of the chosen scope. */
@@ -81,6 +91,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [askSurah, setAskSurah] = useState<RoundResult | null>(null);
   const [mut, setMut] = useState<MutQ[]>([]);
   const [mutIdx, setMutIdx] = useState(0);
+  const [mutFilled, setMutFilled] = useState(false);
   const [mutFrac, setMutFrac] = useState<number[]>([]);
   const [tajQ, setTajQ] = useState<TajweedQuestion[]>([]);
   const [tajIdx, setTajIdx] = useState(0);
@@ -130,7 +141,9 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     setPositions([]);
     setScores({});
     setChecks({});
-    setMut(buildMut(MUT_QUESTIONS));
+    const mq = buildMut(MUT_QUESTIONS, span);
+    setMut(mq.list);
+    setMutFilled(mq.filled);
     setMutIdx(0);
     setMutFrac([]);
     setTajQ(pickTajweedQuestions(5, tajLevel()));
@@ -299,6 +312,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
               <DrumSelect label="عدد المواضع" value={count} onChange={setCount}
                 options={COMP_COUNT_OPTIONS.map((n) => ({ value: n, label: `${arNum(n)} موضع (كل موضع ${arNum(positionMax(n))} درجة)` }))} />
             </div>
+            <div className="mb-3"><RangeVoiceButton allowAll={false} onRange={(r) => { if (r.scope === 'surah') { setScopeId('surah'); setNum(r.n); } else if (r.scope === 'juz') { setScopeId(r.n === 30 ? 'juz30' : 'juz'); setNum(r.n); } }} /></div>
             <p className="text-xs text-accent-600 mb-3">التسميع من ٤٠ درجة موزّعة على المواضع اللي تختارها: القارئ بيسمّعك كلمات وانت تكمّل الآية بصوتك. بعدها المتشابهات{isAdmin ? '، التجويد' : ''} والتلاوة.</p>
             {err && <p className="text-sm text-amber-700 mb-3">{err}</p>}
             <button onClick={() => void begin()} disabled={busy || !text} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
@@ -347,6 +361,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
           <>
             <p className="font-bold text-accent-800 mb-1">{partName('mutashabihat')} — {arNum(partMax('mutashabihat'))} درجة</p>
             <p className="text-sm text-accent-600 mb-3">سؤال {arNum(mutIdx + 1)} من {arNum(mut.length)}</p>
+            {mutFilled && mutIdx === 0 && <p className="text-xs text-amber-700 mb-2">متشابهات النطاق قليلة، فكمّلنا من باقي القرآن.</p>}
             <MutashabihatOral key={mutIdx} clue={mut[mutIdx].clue} answers={mut[mutIdx].answers} text={text} onDone={onMutDone} />
           </>
         )}

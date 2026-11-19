@@ -10,6 +10,8 @@ import { SURAHS, SURAH_AYAH_COUNTS } from '../lib/surahs';
 import { playClap, playCelebrate, playBuzz } from '../lib/gameSounds';
 import { loadQuranText, HINT_COST, HINT_WORDS, MAX_HINTS, arNum } from '../lib/roundTest';
 import { wordsAfterClue } from '../lib/mutHint';
+import { MUT_ALL, bankInSpan, mutRangeLabel, mutSpan, type MutRange } from '../lib/mutRange';
+import RangeVoiceButton from './RangeVoiceButton';
 
 type Level = 'easy' | 'medium' | 'hard';
 interface BankItem { id: string; clue: string; answers: string[]; level: Level }
@@ -40,6 +42,7 @@ export function countAyat(n: number): string {
 
 export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [level, setLevel] = useState<Level | null>(null);
+  const [range, setRange] = useState<MutRange>(MUT_ALL);
   const [queue, setQueue] = useState<BankItem[]>([]);
   const [idx, setIdx] = useState(0);
   const [found, setFound] = useState<Set<string>>(new Set());
@@ -56,14 +59,16 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
 
   const current = queue[idx];
+  // W4-M: the pool is the clues with at least one ayah inside the chosen range.
+  const inRange = useMemo(() => bankInSpan(BANK as BankItem[], mutSpan(range)), [range]);
   const counts = useMemo(() => ({
-    easy: (BANK as BankItem[]).filter((b) => b.level === 'easy').length,
-    medium: (BANK as BankItem[]).filter((b) => b.level === 'medium').length,
-    hard: (BANK as BankItem[]).filter((b) => b.level === 'hard').length,
-  }), []);
+    easy: inRange.filter((b) => b.level === 'easy').length,
+    medium: inRange.filter((b) => b.level === 'medium').length,
+    hard: inRange.filter((b) => b.level === 'hard').length,
+  }), [inRange]);
 
   function startRound(lvl: Level) {
-    const pool = (BANK as BankItem[]).filter((b) => b.level === lvl);
+    const pool = inRange.filter((b) => b.level === lvl);
     setLevel(lvl);
     setQueue(shuffle(pool).slice(0, ROUND_SIZE));
     setIdx(0);
@@ -155,9 +160,25 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
         {level === null && (
           <div className="space-y-3">
             <p className="text-ink-2 text-sm">هتشوف جملة من القرآن، ومطلوب منك تذكر كل الآيات اللي فيها الجملة دي.</p>
+            <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+              <p className="text-sm font-bold text-ink">النطاق: {mutRangeLabel(range)}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {([['all', 'كل القرآن'], ['surah', 'سورة'], ['juz', 'جزء']] as const).map(([sc, label]) => (
+                  <button key={sc} type="button" onClick={() => setRange(sc === 'all' ? MUT_ALL : { scope: sc, n: range.scope === sc ? range.n : 1 })}
+                    className={`min-h-[44px] rounded-xl text-sm font-bold ${range.scope === sc ? 'grad-emerald-door text-white' : 'bg-white text-ink-2 border border-hairline-emerald'}`}>{label}</button>
+                ))}
+              </div>
+              {range.scope === 'surah' && (
+                <DrumSelect label="السورة" value={range.n} onChange={(n) => setRange({ scope: 'surah', n })} options={SURAHS.map((s) => ({ value: s.no, label: `${s.no}. ${s.name}` }))} />
+              )}
+              {range.scope === 'juz' && (
+                <DrumSelect label="الجزء" value={range.n} onChange={(n) => setRange({ scope: 'juz', n })} options={Array.from({ length: 30 }, (_, i) => ({ value: i + 1, label: `الجزء ${arNum(i + 1)}` }))} />
+              )}
+              <RangeVoiceButton onRange={setRange} />
+            </div>
             {LEVELS.map((l) => (
-              <button key={l.id} onClick={() => startRound(l.id)}
-                className="w-full min-h-[56px] grad-emerald-door text-white font-bold rounded-xl text-lg polish-press">
+              <button key={l.id} onClick={() => startRound(l.id)} disabled={counts[l.id] === 0}
+                className="w-full min-h-[56px] disabled:opacity-40 grad-emerald-door text-white font-bold rounded-xl text-lg polish-press">
                 {l.label} <span className="text-sm opacity-80">({counts[l.id]} جملة)</span>
               </button>
             ))}
