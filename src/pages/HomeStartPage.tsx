@@ -27,8 +27,6 @@ import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
 import type { Route } from '../lib/routes';
-import HomeQuizView from '../components/home/HomeQuizView';
-import HomeHifzView from '../components/home/HomeHifzView';
 
 
 // Light start page (الرئيسية) for logged-in users: NOT a second
@@ -155,7 +153,6 @@ export default function HomeStartPage({ session, onNavigate }: {
   const openNearestMosque = () => { window.open(nearestMosqueUrl(), '_blank', 'noopener'); };
   const [tarteelOpen, setTarteelOpen] = useState(false);
   const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
-  const [view, setView] = useState<'main' | 'hifz' | 'quiz'>('main');
   // Tile captions: shown the first three visits, then icon + title only.
   const showHints = useHint('home-tiles');
   useEffect(() => {
@@ -255,19 +252,6 @@ export default function HomeStartPage({ session, onNavigate }: {
     );
   }
 
-  if (view === 'hifz') return <HomeHifzView onNavigate={onNavigate} onClose={() => setView('main')} />;
-  if (view === 'quiz') {
-    return (
-      <>
-        <HomeQuizView onNavigate={onNavigate} onClose={() => setView('main')}
-          onTarteel={() => setTarteelOpen(true)} onMutashabihat={() => setMutOpen(true)} onComprehensive={() => setComprehensiveOpen(true)} />
-        {mutOpen && <MutashabihatGame onClose={() => setMutOpen(false)} />}
-        {tarteelOpen && <TarteelQuizModal onClose={() => setTarteelOpen(false)} />}
-        {comprehensiveOpen && <ComprehensiveTestModal onClose={() => setComprehensiveOpen(false)} />}
-      </>
-    );
-  }
-
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <main className="max-w-5xl mx-auto px-4 py-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
@@ -305,11 +289,11 @@ export default function HomeStartPage({ session, onNavigate }: {
         {/* The four main doors. Each one opens its own screen/page. */}
         <div className="home-tiles mb-3">
           <HomeTile icon={<MushafIcon />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
-            onClick={() => setView('hifz')} />
+            onClick={() => onNavigate('hifz')} />
           <HomeTile icon={<EarListenIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             onClick={() => openTest(onNavigate)} />
           <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
-            onClick={() => setView('quiz')} />
+            onClick={() => onNavigate('quiz')} />
           <HomeTile icon={<AudioLines />} glaze="emerald" title="الْحَقِ الإِمَامَ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
         </div>

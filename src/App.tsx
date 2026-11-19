@@ -30,6 +30,8 @@ import ListenPage from './pages/ListenPage';
 import AdhkarPage from './pages/AdhkarPage';
 import RadioPage from './pages/RadioPage';
 import SharedRoomPage from './pages/SharedRoomPage';
+import HifzPage from './pages/HifzPage';
+import QuizPage from './pages/QuizPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
@@ -55,7 +57,7 @@ import type { Route } from './lib/routes';
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are
 // excluded: a SIGNED_OUT there is normal, not an expiry.
-const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room'];
+const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room', 'hifz', 'quiz'];
 
 // Routes that show the shell back control (2026-11-06, back-button
 // part 1; moved to the bottom-left in wave 2, W2-3): every tab route
@@ -576,6 +578,10 @@ function AppContent() {
     // The wrapper above IS the page on these routes — nothing else
     // renders beside it.
     page = null;
+  } else if (route === 'hifz') {
+    page = <HifzPage onNavigate={navigate} />;
+  } else if (route === 'quiz') {
+    page = <QuizPage onNavigate={navigate} />;
   } else if (route === 'radio') {
     page = <RadioPage onNavigate={navigate} />;
   } else if (route === 'room') {
