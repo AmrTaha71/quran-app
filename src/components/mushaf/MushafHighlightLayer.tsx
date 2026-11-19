@@ -25,6 +25,20 @@ export default function MushafHighlightLayer({ boxes, currentWord }: {
   currentWord?: number;
 }) {
   if (boxes.length === 0) return null;
+  // 2026-11-19 (Dr. Amr): while an audio source is tracking (imam / recorded
+  // reciter) ONE highlight glides over the word being recited — not a strip of
+  // glued word boxes over the whole ayah. A single persistent element, so the
+  // browser animates the move from word to word.
+  if (currentWord !== undefined) {
+    const cur = boxes.find((b) => b.wordNo - 1 === currentWord);
+    if (!cur) return null;
+    const f = insetHighlightBox(cur);
+    return (
+      <div className="mushaf-hl mushaf-hl--current"
+        style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`,
+          transition: 'left 140ms ease-out, top 140ms ease-out, width 140ms ease-out, height 140ms ease-out' }} />
+    );
+  }
   // 2026-11-19: no gaps between words — the highlight runs as one
   // continuous band along each line. Boxes on the same line are stretched
   // to meet their neighbour at the midpoint of the gap.
