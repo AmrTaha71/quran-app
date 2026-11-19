@@ -49,11 +49,17 @@ export function tarteelFinal(roundTotals: number[]): number {
   return r1((roundTotals.reduce((a, b) => a + b, 0) / roundTotals.length) * 4);
 }
 
-export const COMP_POSITIONS = 5;
-export const COMP_POINTS = 8;
-/** Comprehensive position: 8 points by the share of words right. */
-export function positionScore(r: RoundResult): number {
-  return r1(COMP_POINTS * (r.total ? r.credited / r.total : 0));
+/** W4-I: the comprehensive recitation part is ALWAYS out of 40; the user picks how many
+ *  positions it has and the 40 is shared equally between them. */
+export const COMP_TOTAL = 40;
+export const COMP_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50];
+export const COMP_COUNT_DEFAULT = 5;
+export const positionMax = (n: number) => r1(COMP_TOTAL / Math.max(1, n));
+/** Points of ONE position out of positionMax(n), from its 0..1 share. */
+export const positionScore = (frac: number, n: number) => r1(positionMax(n) * frac);
+/** The part's final /40 = 40 x the mean share of the positions that were played. */
+export function positionsFinal(fracs: number[]): number {
+  return fracs.length ? r1(COMP_TOTAL * (fracs.reduce((a, b) => a + b, 0) / fracs.length)) : 0;
 }
 export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited === r.total && !r.locked && r.corrected === 0;
 

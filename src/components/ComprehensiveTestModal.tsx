@@ -22,8 +22,9 @@ import {
   PARTS, MUT_QUESTIONS, activeParts, rangeOf, randomInt, readResults, saveResult, totalOf,
   type PartId, type SavedResult,
 } from '../lib/comprehensiveTest';
+import DrumSelect from './DrumSelect';
 import {
-  COMP_POSITIONS, COMP_POINTS, arNum, currentHistoryLevel, pickRoundAyah, positionPerfect, positionScore,
+  COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, pickRoundAyah, positionMax, positionPerfect, positionScore, positionsFinal,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
@@ -32,7 +33,7 @@ import MutashabihatOral from './MutashabihatOral';
 
 type Step = 'scope' | 'positions' | 'mutashabihat' | 'tajweed' | 'tilawa' | 'done';
 type ScopeId = 'surah' | 'juz' | 'first5' | 'juz30';
-type Done = { ayah: PickedAyah; result: RoundResult; score: number };
+type Done = { ayah: PickedAyah; result: RoundResult; frac: number; score: number };
 type MutQ = { clue: string; answers: string[] };
 
 const SCOPES: { id: ScopeId; label: string }[] = [
@@ -85,6 +86,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [reciter, setReciter] = useState('');
+  const [count, setCount] = useState(COMP_COUNT_DEFAULT);
   const [positions, setPositions] = useState<Done[]>([]);
   const [cur, setCur] = useState<PickedAyah | null>(null);
   const [showRes, setShowRes] = useState<Done | null>(null);
@@ -147,8 +149,16 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     const picked = await pickRoundAyah({ start: c.span.start, end: c.span.end }, c.folderAt, text, c.used);
     setBusy(false);
     if (!picked) {
-      setErr('النطاق ده ما فيهوش آيات تكفي لموضع (محتاجة أكتر من ٦ كلمات وتوقيت للقارئ). اختار نطاق أكبر.');
-      if (first) setStep('scope');
+      if (first || positions.length === 0) {
+        setErr('النطاق ده ما فيهوش آيات تكفي لموضع (محتاجة أكتر من ٦ كلمات وتوقيت للقارئ). اختار نطاق أكبر.');
+        setStep('scope');
+        return;
+      }
+      // Ran out of usable ayat before the chosen count: close with what was played
+      // (the /40 is the mean of the played positions, so it stays out of 40).
+      setCount(positions.length);
+      setScores({ tasmee: positionsFinal(positions.map((p) => p.frac)) });
+      setStep('mutashabihat');
       return;
     }
     setCur(picked);
@@ -157,14 +167,15 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
 
   function onPositionDone(result: RoundResult) {
     if (!cur) return;
-    const d: Done = { ayah: cur, result, score: positionScore(result) };
+    const frac = result.total ? result.credited / result.total : 0;
+    const d: Done = { ayah: cur, result, frac, score: positionScore(frac, count) };
     setPositions((p) => [...p, d]);
     setShowRes(d);
   }
 
   function afterPositions() {
-    if (positions.length >= COMP_POSITIONS) {
-      setScores({ tasmee: Math.round(positions.reduce((a, p) => a + p.score, 0) * 10) / 10 });
+    if (positions.length >= count) {
+      setScores({ tasmee: positionsFinal(positions.map((p) => p.frac)) });
       setStep('mutashabihat');
     } else void nextPosition();
   }
@@ -275,7 +286,11 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 />
               </div>
             )}
-            <p className="text-xs text-accent-600 mb-3">{arNum(COMP_POSITIONS)} مواضع × {arNum(COMP_POINTS)} درجات: القارئ بيسمّعك ٥ كلمات وانت تكمّل الآية بصوتك. بعدها المتشابهات{isAdmin ? '، التجويد' : ''} والتلاوة.</p>
+            <div className="mb-3">
+              <DrumSelect label="عدد المواضع" value={count} onChange={setCount}
+                options={COMP_COUNT_OPTIONS.map((n) => ({ value: n, label: `${arNum(n)} موضع (كل موضع ${arNum(positionMax(n))} درجة)` }))} />
+            </div>
+            <p className="text-xs text-accent-600 mb-3">التسميع من ٤٠ درجة موزّعة على المواضع اللي تختارها: القارئ بيسمّعك كلمات وانت تكمّل الآية بصوتك. بعدها المتشابهات{isAdmin ? '، التجويد' : ''} والتلاوة.</p>
             {err && <p className="text-sm text-amber-700 mb-3">{err}</p>}
             <button onClick={() => void begin()} disabled={busy || !text} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
 
@@ -295,7 +310,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
 
         {step === 'positions' && (
           <>
-            <p className="font-bold text-accent-800 mb-1">التسميع — الموضع {arNum(Math.min(COMP_POSITIONS, positions.length + (showRes ? 0 : 1)))} من {arNum(COMP_POSITIONS)}</p>
+            <p className="font-bold text-accent-800 mb-1">التسميع — الموضع {arNum(Math.min(count, positions.length + (showRes ? 0 : 1)))} من {arNum(count)}</p>
             <p className="text-xs text-accent-600 mb-3">القارئ: {reciterName(reciter)} · غلطة واحدة بيصحّحها، والتانية بتقفل الموضع</p>
             {busy && <p className="text-center text-accent-700 font-bold py-6">بنجهّز الموضع…</p>}
             {!busy && cur && !showRes && <RoundRecite key={positions.length} ayah={cur} corrections={1} onFinish={onPositionDone} />}
@@ -304,10 +319,10 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 <p className={`text-2xl font-bold mb-2 ${positionPerfect(showRes.result) ? 'text-emerald-700' : 'text-rose-700'}`}>{positionPerfect(showRes.result) ? '✓ صح' : '✗ غلط'}</p>
                 <RoundReveal ayah={showRes.ayah} result={showRes.result} />
                 <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}</p>
-                <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(COMP_POINTS)}{showRes.result.locked ? ' (اتقفل بغلطة تانية)' : ''}</p>
+                <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل بغلطة تانية)' : ''}</p>
                 {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
                 <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">
-                  {positions.length >= COMP_POSITIONS ? 'كمّل للمتشابهات' : 'الموضع التالي'}
+                  {positions.length >= count ? 'كمّل للمتشابهات' : 'الموضع التالي'}
                 </button>
               </>
             )}
