@@ -350,25 +350,16 @@ export default function HomeStartPage({ session, onNavigate }: {
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
-      <header className="sticky top-0 z-40 app-header">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
-          <img src="/brand/icon-192.png" alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-ink">تربيطات آيات القرآن</h1>
-            <p className="text-sm text-ink-2">للحفظ بالتربيطات</p>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 py-4">
+      <main className="max-w-5xl mx-auto px-4 py-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
         {/* Hero: the mark beside the greeting, compact, so the doors are
             on screen at once (2026-11-10: was a 224px mark that pushed
             every door below the fold). */}
         {/* 2026-11-12 (agreed): «صفحة جدو» on the right of the logo and the
             «الشاشة الكبيرة» on the left, one matching pair around the mark. */}
         <div className="rounded-2xl glass-card polish-card polish-fade-up p-3 mb-4 flex items-center gap-3 justify-center">
-          <img src="/brand/tarbitat-logo.webp" alt="تربيطات آيات القرآن" className="w-20 h-20 object-contain drop-shadow-md polish-hero-medal shrink-0" />
+          <img src="/brand/tarbitat-logo.webp" alt="تربيطات آيات القرآن" className="w-28 h-28 object-contain drop-shadow-md polish-hero-medal shrink-0" />
           <div className="min-w-0">
+            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-ink leading-tight mb-1">تربيطات آيات القرآن</h1>
             <p className="text-lg md:text-xl font-bold text-ink leading-snug">{ISLAMIC_GREETING}{preferredName ? ` يا ${preferredName}` : ''}</p>
             <p className="text-sm text-ink-2 mt-0.5 leading-relaxed">{dailyDua()}</p>
           </div>
