@@ -44,6 +44,8 @@ import { tickStats } from './lib/dailyStats';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
 import BottomBackBar from './components/BottomBackBar';
+import AdminViewToggle from './components/AdminViewToggle';
+import { resetAdminView, setRealAdmin } from './lib/adminPreview';
 import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
 import type { Route } from './lib/routes';
@@ -221,6 +223,24 @@ function AppContent() {
       // ignore
     }
   }, [session]);
+
+  // Admin preview (W2-4): learn whether this account is an admin so the
+  // «شوف كمستخدم» switch can show. Display-only: it never grants anything.
+  // A lookup ERROR leaves the state untouched (never flips it off/on).
+  const sessionUid = session?.user.id ?? null;
+  useEffect(() => {
+    if (!sessionUid) {
+      resetAdminView();
+      return;
+    }
+    let cancelled = false;
+    supabase.from('admin_users').select('user_id').eq('user_id', sessionUid).maybeSingle()
+      .then(({ data: row, error }) => {
+        if (cancelled || error) return;
+        setRealAdmin(!!row);
+      });
+    return () => { cancelled = true; };
+  }, [sessionUid]);
 
   // [LISTEN_RECOVERY] diagnostics: every route change, with the hash
   // that produced it (state/hash divergence is the bug's signature).
@@ -576,6 +596,9 @@ function AppContent() {
       <div key={routeKey} className={routeEnterClass}>
         {page}
       </div>
+      {/* Admin-only «شوف كأدمن / كمستخدم» switch (W2-4); renders nothing for
+          non-admins. Skipped where the UI is already crowded or admin. */}
+      {session && !isMushafRoute(route) && route !== 'room' && <AdminViewToggle />}
       {/* Bottom-left back control (W2-3). Fixed, so it can never move the
           Listen/Adhkar wrappers above; the spacer keeps the last bit of a
           page from hiding under it (skipped on the Mushaf, whose reading

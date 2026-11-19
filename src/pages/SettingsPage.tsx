@@ -39,6 +39,7 @@ import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onbo
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
 import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import { setBackTarget } from '../lib/backTarget';
+import { useAdminView, getAdminView } from '../lib/adminPreview';
 import type { Route } from '../lib/routes';
 
 
@@ -443,6 +444,10 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Normal users never see this section — and BottomNav stays at
   // its final 5 items, so الإدارة lives here, not as a tab.
   const [isAdmin, setIsAdmin] = useState(false);
+  // Admin preview (W2-4): «شوف كمستخدم» hides the admin door and the
+  // diagnostics without touching the real isAdmin check above.
+  const { viewAsUser } = useAdminView();
+  const showAdminUi = isAdmin && !viewAsUser;
   // S5: same gate-retry rule as AdminPage — a transient failure must
   // surface a retry, never silently hide the admin section (which
   // looked exactly like "not an admin"). maybeSingle(): a non-admin
@@ -459,7 +464,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           if (error) { setAdminGateError(true); return; }
           // Diagnostics (stamp lines, diag door) are admin-only; the flag
           // lets SelfTest hide its debug lines for normal users.
-          try { localStorage.setItem('quran-show-diag', row ? '1' : '0'); } catch { /* storage off */ }
+          try { localStorage.setItem('quran-show-diag', row && !getAdminView().viewAsUser ? '1' : '0'); } catch { /* storage off */ }
           if (row) setIsAdmin(true);
         });
     });
@@ -782,7 +787,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {openDoor === null && <TodayDatesCard />}
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => (d.id !== 'admin' || adminGateError || isAdmin) && (d.id !== 'diag' || isAdmin)).map((d, i) => (
+            {doors.filter((d) => (d.id !== 'admin' || adminGateError || showAdminUi) && (d.id !== 'diag' || showAdminUi)).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
                 style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
                 className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
@@ -1355,7 +1360,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </section>
         )}
 
-        {isAdmin && (
+        {showAdminUi && (
           <section id="sec-admin" className="bg-cream rounded-2xl border border-hairline-emerald shadow-sm scroll-mt-36 p-5 md:p-6 lg:p-7">
             <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
@@ -1367,7 +1372,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </section>
         )}
-              {!adminGateError && !isAdmin && (
+              {!adminGateError && !showAdminUi && (
                 <p className="text-sm text-accent-600">لا توجد صلاحية إدارة على هذا الحساب — ارجع للأبواب.</p>
               )}
             </>)}
