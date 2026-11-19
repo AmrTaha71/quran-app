@@ -413,7 +413,8 @@ export default function QuranMushafPage({
   function pokeFsOverlays() {
     setFsOverlaysVisible(true);
     if (fsOverlayTimer.current) clearTimeout(fsOverlayTimer.current);
-    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 3000);
+    // W5-E: 5s idle before the chrome fades (was 3s, Dr. Amr 2026-11-19).
+    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 5000);
   }
   useEffect(() => {
     if (!showFullscreen) return;
@@ -4052,15 +4053,16 @@ export default function QuranMushafPage({
                   wrapper carries the old button's absolute position
                   and enter animation; its click stops propagation
                   so the tap never turns a page underneath. */}
-              <div className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-[8.75rem] z-30 mushaf-chrome-enter"
+              {/* W5-E (2026-11-19, decision 9): ONE «عودة» at the PHYSICAL
+                  bottom-left, lifted above the home indicator (the
+                  Dynamic Island blocks the top). The old top-right
+                  عودة + X pair (same exit path) is gone. It fades with
+                  the other chrome after 5s; any tap brings it back. */}
+              <div className={`absolute z-30 mushaf-chrome-enter transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                style={{ left: 'max(0.5rem, env(safe-area-inset-left))', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.4rem)' }}
                 onClick={(e) => e.stopPropagation()}>
                 <BackButton label="عودة" onBack={() => { if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
               </div>
-              <button onClick={(e) => { e.stopPropagation(); if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }}
-                title="إغلاق" aria-label="إغلاق"
-                className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-4 p-2.5 bg-black/60 backdrop-blur hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg mushaf-chrome-enter">
-                <X className="w-7 h-7" />
-              </button>
             </>
           )}
 
@@ -4078,22 +4080,22 @@ export default function QuranMushafPage({
               the intro splash. Safe-area top (S6) so the notch never
               covers it. */}
           {!showRatelIntro && cleanMode && (
-            <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
               <WorshipTimer dark flash />
             </div>
           )}
           {!showRatelIntro && !cleanMode && (
-            <div className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-2 max-w-[calc(100vw-8.5rem)] md:max-w-[calc(100vw-31rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
+            <div className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-1.5 max-w-[calc(100vw-8.5rem)] md:max-w-[calc(100vw-31rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
               <WorshipTimer dark flash />
-              <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">صفحة {labelPage}</span>
+              <span className="px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">صفحة {labelPage}</span>
               {/* Juz/Hizb collapse below 420px: on a 320-360px phone the
                   timer + page + surah already fill one line, and a
                   second wrapped line would cover the page's top
                   ornament — the full set still shows on wider screens
                   and in normal view. */}
-              <span className="hidden px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">{labelJuz.name}</span>
-              <span className="hidden px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">الحزب {labelHizb.number}</span>
-              <span className="px-2.5 py-1 bg-black/60 backdrop-blur text-white text-[11px] font-bold rounded-lg ring-1 ring-white/30 shadow whitespace-nowrap">سورة {labelSurahName}</span>
+              <span className="hidden px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">{labelJuz.name}</span>
+              <span className="hidden px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">الحزب {labelHizb.number}</span>
+              <span className="px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">سورة {labelSurahName}</span>
             </div>
           )}
           {/* Slow page-load indicator (STREAM S2): appears only once a
@@ -4130,8 +4132,8 @@ export default function QuranMushafPage({
           {!showRatelIntro && !showEditionPickerInFullscreen && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(false); setCleanMode(true); requestNativeFullscreen(); }}
               title="قراءة نظيفة — إخفاء كل الأدوات"
-              className="absolute top-[calc(1rem_+_env(safe-area-inset-top))] right-20 p-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth ring-1 ring-white/40 shadow-lg">
-              <Maximize2 className="w-7 h-7" />
+              className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] right-2 p-1.5 bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white rounded-lg z-30 transition-opacity duration-300 ring-1 ring-white/20 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <Maximize2 className="w-5 h-5" />
             </button>
           )}
 
@@ -4143,8 +4145,8 @@ export default function QuranMushafPage({
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
-              className={`absolute top-[calc(1rem_+_env(safe-area-inset-top))] left-20 flex items-center gap-2 px-4 py-2.5 bg-black/60 hover:bg-black/75 text-white rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 ring-white/40 shadow-lg ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-              <Layers className="w-5 h-5" /> {edition.name}
+              className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              <Layers className="w-4 h-4" /> {edition.name}
             </button>
           )}
 
@@ -4153,7 +4155,7 @@ export default function QuranMushafPage({
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); toggleHifzMode(); }}
               title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار تربيطاتها أولًا'}
-              className={`absolute top-[calc(68px_+_env(safe-area-inset-top))] left-4 flex items-center gap-2 px-4 py-2.5 rounded-lg z-30 transition-smooth text-sm font-semibold ring-1 shadow-lg ${hifzMode ? 'bg-amber-700/90 text-white ring-amber-300' : 'bg-black/60 hover:bg-black/75 text-white ring-white/40'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              className={`absolute top-[calc(2.6rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 backdrop-blur-sm ${hifzMode ? 'bg-amber-700/70 text-white ring-amber-300/70' : 'bg-black/30 hover:bg-black/50 text-white ring-white/20'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               وضع الحفظ {hifzMode ? '✓' : ''}
             </button>
           )}
@@ -4390,17 +4392,17 @@ export default function QuranMushafPage({
                   a boundary page's dead zone vanishes entirely. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
                 aria-label="الصفحة السابقة"
-                className="absolute top-0 bottom-0 right-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/40 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
-                <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="p-2.5 sm:p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
-                    <ChevronRight className="w-8 h-8 sm:w-10 sm:h-10" />
+                className="absolute top-0 bottom-0 right-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/10 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
+                <div className={`relative z-10 flex flex-col items-center gap-1 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="p-2 sm:p-3 bg-black/25 backdrop-blur-sm group-hover:bg-black/45 text-white rounded-full ring-1 ring-white/25 transition-smooth group-disabled:opacity-20">
+                    <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                  <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded-full ring-1 ring-white/30 shadow">السابق</span>
+                  <span className="text-[10px] font-bold text-white/90 bg-black/25 px-2 py-0.5 rounded-full ring-1 ring-white/20">السابق</span>
                 </div>
               </button>
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
                 aria-label="الصفحة التالية"
-                className="absolute top-0 bottom-0 left-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/40 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
+                className="absolute top-0 bottom-0 left-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/10 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
                 {/* FACING STRIP REMOVED 2026-10-27 per user ("الغي الهوامش"):
                     no side sliver in fullscreen — the main page only, so
                     no second page's text ever overlaps its left edge. */}
@@ -4445,23 +4447,21 @@ export default function QuranMushafPage({
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>
                 )}
-                <div className="relative z-10 flex flex-col items-center gap-1">
-                  <div className="p-2.5 sm:p-4 bg-black/60 group-hover:bg-black/75 text-white rounded-full shadow-xl ring-1 ring-white/50 transition-smooth group-disabled:opacity-20">
-                    <ChevronLeft className="w-8 h-8 sm:w-10 sm:h-10" />
+                <div className={`relative z-10 flex flex-col items-center gap-1 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
+                  <div className="p-2 sm:p-3 bg-black/25 backdrop-blur-sm group-hover:bg-black/45 text-white rounded-full ring-1 ring-white/25 transition-smooth group-disabled:opacity-20">
+                    <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                  <span className="text-xs font-bold text-white bg-black/60 px-2.5 py-1 rounded-full ring-1 ring-white/30 shadow">التالي</span>
+                  <span className="text-[10px] font-bold text-white/90 bg-black/25 px-2 py-0.5 rounded-full ring-1 ring-white/20">التالي</span>
                 </div>
               </button>
 
               {/* Verse selector — only the ayahs printed on this page */}
               {/* Fades out with the other fullscreen overlays (auto-hide after 3s, tap to show). */}
-              <div className={`absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(1rem_+_env(safe-area-inset-bottom))] px-4 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+              <div className={`absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(0.25rem_+_env(safe-area-inset-bottom))] pr-2 pl-24 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
                 onClick={(e) => e.stopPropagation()}>
                 {followStatus === 'locked' && followPos && !followOn && (
                   <div className="mb-2 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
-                    <span className="truncate">
-                      الإمام الآن: سورة {SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية {followPos.ayah}
-                    </span>
+                    {/* W5-E: no «سورة X — آية N» text — the mushaf page itself shows where the imam is. */}
                     <button onClick={resumeFollowAfterWrongLock}
                       className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0">
                       مش دي؟ كمّل الاستماع
@@ -4475,21 +4475,22 @@ export default function QuranMushafPage({
                     <StudioMic className="w-4 h-4 flex-shrink-0" />
                     <span className="truncate">
                       {followStatus === 'locked' && followPos
-                        ? `الإمام الآن: سورة ${SURAHS.find((s) => s.no === followPos.surah)?.name || ''} — آية ${followPos.ayah}`
+                        ? 'تتبع الإمام شغال'
                         : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
                     <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
                       className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
                   </div>
                 )}
-                <p className="text-white/90 text-xs font-semibold mb-1.5 bg-black/60 px-3 py-1 rounded-full">آيات هذه الصفحة — اضغط رقم الآية لفتح تربيطاتها • النقطة الذهبية تعني أن للآية تربيطات</p>
-                <div className="bg-black/85 backdrop-blur rounded-xl p-2.5 max-w-[95vw] overflow-x-auto">
-                  <div className="flex gap-2">
+                {/* W5-E: guidance sentence removed (thin footer); the
+                    gold dot keeps its title tooltip. */}
+                <div className="bg-black/30 backdrop-blur-sm rounded-lg p-1 max-w-full overflow-x-auto">
+                  <div className="flex gap-1">
                     {stripVerses.map((v) => (
                       <button key={v.id} onClick={() => handleVerseClick(v)}
                         disabled={displayedPage !== currentPage}
                         title={displayedPage !== currentPage ? 'جارٍ تحميل الصفحة…' : undefined}
-                        className={`relative flex items-center justify-center w-10 h-10 rounded-lg text-sm font-bold transition-smooth flex-shrink-0 disabled:opacity-40 ${
+                        className={`relative flex items-center justify-center w-8 h-8 rounded-md text-xs font-bold transition-smooth flex-shrink-0 disabled:opacity-40 ${
                           followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           searchHighlight && searchHighlight.surah === v.surah_no && searchHighlight.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
                           selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
