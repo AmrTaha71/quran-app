@@ -3,11 +3,13 @@ import { deleteRecording, loadRecordings, recToneId, saveRecording, startRecordi
 import { ALARM_CLIPS, isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
 import DrumSelect from './DrumSelect';
-import { Bell, MapPin, Volume2 } from 'lucide-react';
+import { MapPin } from 'lucide-react';
+import Collapsible from './Collapsible';
 import {
   ADHAN_AUDIO_CREDIT,
   ADHAN_VOICES, getAdhanVoice, setAdhanVoice, availableAdhanVoices, isAdhanVoiceDownloaded, downloadAdhanVoice,
   ADHAN_COUNTRIES,
+  ADHAN_METHODS, getAdhanMethod, setAdhanMethod,
   ADHAN_PRAYERS,
   ADHAN_CHOICES,
   adhanLocationLabel,
@@ -49,6 +51,7 @@ export default function AdhanSettingsSection() {
   const [pushStatus, setPushStatus] = useState<PushStatus | null>(null);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState('');
+  const [method, setMethod] = useState<number | null>(() => getAdhanMethod());
 
   const refreshPushStatus = async () => {
     setPushStatus(await getPushStatus());
@@ -181,43 +184,28 @@ export default function AdhanSettingsSection() {
   const nextPrayer = day
     ? ADHAN_PRAYERS.find((p) => (day.timings[p.key] ?? '') > nowInTz)
     : undefined;
+  const methodLabel = method === null ? 'تلقائي' : ADHAN_METHODS.find((m) => m.id === method)?.label ?? 'تلقائي';
+  const soundLabel = settings.sound === 'full' ? 'أذان كامل' : settings.sound === 'takbir' ? 'الله أكبر' : 'تنبيه قصير';
 
+  // Wave 3 (W3-S1): every block is a Collapsible (arrow open/close), in the
+  // owner's order: location, times, calculation method, alerts on/off,
+  // alert type. The rest (per-prayer, Fajr alarm, closed-app push) follow,
+  // closed. Content stays mounted while closed (GPS fix, recording, push
+  // state survive). No long intro text.
   return (
-    <section id="sec-adhan" className="bg-white rounded-2xl border border-hairline shadow-sm scroll-mt-36 p-5">
-      <h2 className="text-base font-semibold text-accent-800 flex items-center gap-2 mb-1">
-        <Bell className="w-5 h-5 text-emerald-600" /> مواعيد الأذان
-      </h2>
-      <p className="text-sm text-accent-600 mb-4">
-        مواقيت الصلاة لموقعك، وتنبيه بالأذان وقت كل صلاة — التنبيه يشتغل والتطبيق مفتوح فقط، لأن تطبيقات الويب على آيفون لا تعمل في الخلفية.
-      </p>
-
-      {/* Master switch */}
-      <button
-        onClick={() => update({ enabled: !settings.enabled })}
-        className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald polish-press"
+    <div id="sec-adhan" className="scroll-mt-36 space-y-3">
+      <Collapsible
+        title={<span className="flex items-center gap-2"><MapPin className="w-5 h-5 text-emerald-600" /> الموقع</span>}
+        summary={settings.location ? adhanLocationLabel(settings.location) : 'غير محدد'}
+        defaultOpen={!settings.location}
+        storageKey="adhan-location"
       >
-        <span className="text-right">
-          <span className="block font-medium text-accent-800">تفعيل تنبيهات الأذان</span>
-          <span className="block text-sm text-accent-600">
-            {settings.enabled ? 'مفعّلة — التنبيه هيشتغل وقت كل صلاة والتطبيق مفتوح' : 'متوقفة — فعّلها بعد ضبط الموقع'}
-          </span>
-        </span>
-        <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${settings.enabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
-          <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${settings.enabled ? 'mr-auto' : ''}`} />
-        </span>
-      </button>
-
-      {/* Location */}
-      <div className="mt-4">
-        <p className="font-semibold text-accent-800 flex items-center gap-2 mb-2">
-          <MapPin className="w-5 h-5 text-emerald-600" /> الموقع
-        </p>
         {settings.location ? (
           <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-emerald-50 border border-hairline-emerald">
             <span className="font-medium text-accent-800">{adhanLocationLabel(settings.location)}</span>
             <button
               onClick={() => update({ location: null })}
-              className="text-sm font-medium text-red-600 px-2 py-1"
+              className="text-sm font-medium text-red-600 px-3 py-2 min-h-[44px]"
             >
               تغيير
             </button>
@@ -232,7 +220,7 @@ export default function AdhanSettingsSection() {
               {gpsBusy ? 'جارٍ تحديد موقعك…' : '📍 اكتشف موقعي تلقائيًا (GPS)'}
             </button>
             {gpsError && <p className="text-sm text-red-600 mt-2">{gpsError}</p>}
-            <p className="text-sm text-accent-600 my-3 text-center">أو حدّد موقعك يدويًا — الدولة أولًا، ثم المدينة:</p>
+            <p className="text-sm text-accent-600 my-3 text-center">أو يدويًا: الدولة ثم المدينة</p>
             <div className="grid gap-3">
               <label className="block">
                 <span className="block text-sm font-medium text-accent-700 mb-1">الدولة</span>
@@ -258,97 +246,92 @@ export default function AdhanSettingsSection() {
             </div>
           </>
         )}
-      </div>
+      </Collapsible>
 
-      {/* Today's times */}
-      {settings.location && (
-        <div className="mt-4">
-          <div className="flex items-center justify-between mb-2">
-            <p className="font-semibold text-accent-800">مواقيت اليوم</p>
-            <button onClick={() => void refreshDay(settings.location)} className="text-sm font-semibold text-emerald-700 px-2 py-1">
-              تحديث المواقيت
-            </button>
-          </div>
-          {dayLoading && <p className="text-sm text-accent-600">جارٍ جلب المواقيت…</p>}
-          {dayError && <p className="text-sm text-red-600">{dayError}</p>}
-          {day && !dayLoading && (
-            <>
-              <div className="grid grid-cols-5 gap-2 text-center">
-                {ADHAN_PRAYERS.map((p) => (
-                  <div
-                    key={p.key}
-                    className={`rounded-xl border p-2 ${nextPrayer?.key === p.key ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
-                  >
-                    <p className="text-xs text-accent-600">{p.label}</p>
-                    <p className="font-bold text-accent-800 text-sm" dir="ltr">
-                      {day.timings[p.key] ?? '—'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-sm text-accent-700 mt-3">
-                {nextPrayer
-                  ? `الصلاة القادمة: ${nextPrayer.label} — ${day.timings[nextPrayer.key]}`
-                  : 'انتهت صلوات اليوم — الصلاة القادمة فجر الغد.'}
-              </p>
-              <p className="text-xs text-accent-600 mt-1">
-                {day.hijri && `${day.hijri} • `}
-                {day.methodName && `طريقة الحساب: ${day.methodName} • `}
-                النطاق الزمني: {day.timezone}
-              </p>
-            </>
-          )}
-        </div>
-      )}
+      <Collapsible
+        title="المواقيت"
+        summary={nextPrayer && day ? `${nextPrayer.label} ${day.timings[nextPrayer.key]}` : undefined}
+        storageKey="adhan-times"
+      >
+        {!settings.location ? (
+          <p className="text-sm text-accent-600">حدّد الموقع الأول.</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-end mb-2">
+              <button onClick={() => void refreshDay(settings.location)} className="text-sm font-semibold text-emerald-700 px-3 py-2 min-h-[44px]">
+                تحديث
+              </button>
+            </div>
+            {dayLoading && <p className="text-sm text-accent-600">جارٍ جلب المواقيت…</p>}
+            {dayError && <p className="text-sm text-red-600">{dayError}</p>}
+            {day && !dayLoading && (
+              <>
+                <div className="grid grid-cols-5 gap-2 text-center">
+                  {ADHAN_PRAYERS.map((p) => (
+                    <div
+                      key={p.key}
+                      className={`rounded-xl border p-2 ${nextPrayer?.key === p.key ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+                    >
+                      <p className="text-xs text-accent-600">{p.label}</p>
+                      <p className="font-bold text-accent-800 text-sm" dir="ltr">
+                        {day.timings[p.key] ?? '—'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-accent-600 mt-2">
+                  {day.hijri && `${day.hijri} • `}
+                  {day.timezone}
+                </p>
+              </>
+            )}
+          </>
+        )}
+      </Collapsible>
 
-      {/* Alert type */}
-      <div className="mt-4">
-        <p className="font-semibold text-accent-800 mb-2">نوع التنبيه</p>
+      <Collapsible title="طريقة الحساب" summary={methodLabel} storageKey="adhan-method">
+        <DrumSelect<number>
+          label="طريقة الحساب"
+          value={method ?? 0}
+          onChange={(v) => { const m = v === 0 ? null : v; setAdhanMethod(m); setMethod(m); void refreshDay(settings.location); }}
+          options={[{ value: 0, label: 'تلقائي (حسب الدولة)' }, ...ADHAN_METHODS.map((m) => ({ value: m.id, label: m.label }))]}
+        />
+        {day?.methodName && <p className="text-xs text-accent-600 mt-2">المستخدمة الآن: {day.methodName}</p>}
+      </Collapsible>
+
+      <Collapsible title="تفعيل التنبيهات" summary={settings.enabled ? 'مفعّلة' : 'متوقفة'} storageKey="adhan-enable">
+        <button
+          onClick={() => update({ enabled: !settings.enabled })}
+          aria-pressed={settings.enabled}
+          className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald polish-press"
+        >
+          <span className="font-medium text-accent-800">{settings.enabled ? 'مفعّلة' : 'متوقفة'}</span>
+          <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${settings.enabled ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+            <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${settings.enabled ? 'mr-auto' : ''}`} />
+          </span>
+        </button>
+      </Collapsible>
+
+      <Collapsible title="نوع التنبيه" summary={soundLabel} storageKey="adhan-type">
         <div className="grid gap-2">
-          <button
-            onClick={() => update({ alertType: 'both' })}
-            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.alertType === 'both' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
-          >
-            <span className="block font-medium text-accent-800">صوتي + على الشاشة</span>
-            <span className="block text-sm text-accent-600">الأذان يُسمَع وتظهر رسالة وقت الصلاة</span>
-          </button>
-          <button
-            onClick={() => update({ alertType: 'audio' })}
-            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.alertType === 'audio' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
-          >
-            <span className="block font-medium text-accent-800">صوتي فقط</span>
-            <span className="block text-sm text-accent-600">الأذان يُسمَع من غير رسالة على الشاشة</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Sound */}
-      <div className="mt-4">
-        <p className="font-semibold text-accent-800 mb-2 flex items-center gap-2">
-          <Volume2 className="w-5 h-5 text-emerald-600" /> صوت التنبيه
-        </p>
-        <div className="grid gap-2">
-          <button
-            onClick={() => update({ sound: 'full' })}
-            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
-          >
-            <span className="block font-medium text-accent-800">أذان كامل</span>
-            <span className="block text-sm text-accent-600">اختار المؤذن من تحت</span>
-          </button>
-          {settings.sound === 'full' && <AdhanVoicePicker />}
           <button
             onClick={() => update({ sound: 'beep' })}
             className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'beep' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-medium text-accent-800">تنبيه صوتي قصير</span>
-            <span className="block text-sm text-accent-600">نغمة تنبيه مولّدة من الجهاز — من غير ملف صوتي</span>
           </button>
+          <button
+            onClick={() => update({ sound: 'full' })}
+            className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+          >
+            <span className="block font-medium text-accent-800">أذان كامل</span>
+          </button>
+          {settings.sound === 'full' && <AdhanVoicePicker />}
           <button
             onClick={() => update({ sound: 'takbir' })}
             className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'takbir' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
           >
             <span className="block font-medium text-accent-800">«الله أكبر الله أكبر» فقط</span>
-            <span className="block text-sm text-accent-600">أول جملة من الأذان كتنبيه قصير (بصوت المؤذن المختار)</span>
           </button>
           {settings.sound === 'takbir' && <AdhanVoicePicker />}
         </div>
@@ -356,18 +339,29 @@ export default function AdhanSettingsSection() {
           onClick={toggleTest}
           className="w-full mt-3 py-3 bg-white border-2 border-emerald-500 text-emerald-700 text-base font-bold rounded-xl transition-smooth polish-press"
         >
-          {testing ? '⏹ إيقاف التجربة' : '▶ جرّب الصوت المختار'}
+          {testing ? '⏹ إيقاف التجربة' : '▶ جرّب الصوت'}
         </button>
-        <p className="text-xs text-accent-600 mt-2" dir="auto">{getAdhanVoice().credit || ADHAN_AUDIO_CREDIT}</p>
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <button
+            onClick={() => update({ alertType: 'both' })}
+            className={`p-3 rounded-xl border-2 polish-press font-medium text-accent-800 ${settings.alertType === 'both' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+          >
+            صوت + رسالة
+          </button>
+          <button
+            onClick={() => update({ alertType: 'audio' })}
+            className={`p-3 rounded-xl border-2 polish-press font-medium text-accent-800 ${settings.alertType === 'audio' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}
+          >
+            صوت فقط
+          </button>
+        </div>
+        <p className="text-xs text-accent-600 mt-3" dir="auto">{getAdhanVoice().credit || ADHAN_AUDIO_CREDIT}</p>
         <p className="text-xs text-accent-600 mt-1">
-          ملحوظة: آيفون/آيباد ممكن يمنع تشغيل الصوت قبل ما تلمس أي حاجة في التطبيق — زرار «جرّب الصوت» بيفتح الصوت، وأي ضغطة بعد فتح التطبيق تكفي للتنبيهات اللي بعدها.
+          آيفون ممكن يمنع الصوت قبل أول لمسة في التطبيق، وزر «جرّب الصوت» بيفتحه.
         </p>
-      </div>
+      </Collapsible>
 
-      {/* Per-prayer alert */}
-      <div className="mt-4">
-        <p className="font-semibold text-accent-800 mb-1">تنبيه كل صلاة لوحدها</p>
-        <p className="text-xs text-accent-600 mb-2">اختار لكل صلاة نوع تنبيهها، أو «زي الإعداد العام» عشان تمشي على الصوت والنوع اللي فوق. الفجر: لو شغّلت منبه الفجر تحت، المنبه هو اللي يرن.</p>
+      <Collapsible title="تنبيه كل صلاة لوحدها" storageKey="adhan-perprayer">
         <div className="grid gap-2">
           {ADHAN_PRAYERS.map((p) => (
             <div key={p.key} className="flex items-center gap-2">
@@ -380,34 +374,37 @@ export default function AdhanSettingsSection() {
             </div>
           ))}
         </div>
-      </div>
+        <p className="text-xs text-accent-600 mt-2">الفجر: لو شغّلت منبه الفجر، المنبه هو اللي يرن.</p>
+      </Collapsible>
 
-      <FajrAlarmSetting />
+      <Collapsible title="⏰ منبه الفجر" storageKey="adhan-fajr">
+        <FajrAlarmSetting />
+      </Collapsible>
 
-      {/* Web Push — adhan notification even when the app is closed.
-          The notification itself carries no audio (iOS cannot
-          auto-play audio from a closed app): tapping it opens the
-          app and the adhan plays. iOS needs the app added to the
-          Home Screen + iOS 16.4 or newer. */}
-      <div className="mt-4">
-        <p className="font-semibold text-accent-800 mb-2 flex items-center gap-2">
-          <Bell className="w-5 h-5 text-emerald-600" /> تنبيه الأذان والتطبيق مقفول
-        </p>
+      {/* Web Push — adhan notification even when the app is closed. The
+          notification carries no audio (iOS cannot auto-play audio from a
+          closed app): tapping it opens the app and the adhan plays. iOS needs
+          the app added to the Home Screen + iOS 16.4 or newer. */}
+      <Collapsible
+        title="تنبيه والتطبيق مقفول"
+        summary={pushStatus?.subscribed ? 'مفعّل' : undefined}
+        storageKey="adhan-push"
+      >
         <p className="text-sm text-accent-600 mb-3">
-          إشعار يوصلك وقت كل صلاة حتى لو التطبيق مقفول — تضغط عليه فيفتح التطبيق ويشتغل الأذان. الصوت نفسه لا يشتغل من التطبيق المقفول (نظام آيفون يمنع ذلك)، الإشعار هو اللي يوصلك والضغطة هي اللي تشغّل الأذان.
+          إشعار وقت كل صلاة حتى والتطبيق مقفول. الإشعار من غير صوت أذان، ولما تضغط عليه التطبيق يفتح والأذان يشتغل.
         </p>
         {isIOSDevice() && !isStandaloneApp() && (
           <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3">
-            على آيفون/آيباد: الإشعارات لا تعمل إلا إذا أضفت التطبيق إلى الشاشة الرئيسية — من متصفح سفاري اضغط زر المشاركة ثم «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من الأيقونة المضافة، ثم فعّل التنبيهات من هنا.
+            على آيفون/آيباد الإشعارات تشتغل بس لو أضفت التطبيق للشاشة الرئيسية (iOS 16.4 أو أحدث).
           </p>
         )}
         {!settings.enabled || !settings.location ? (
           <p className="text-sm text-accent-600 bg-gray-50 border border-hairline rounded-xl p-3">
-            فعّل تنبيهات الأذان وحدّد الموقع أولًا من الأقسام اللي فوق، وبعدها تقدر تفعّل الإشعار هنا.
+            فعّل التنبيهات وحدّد الموقع الأول.
           </p>
         ) : pushStatus && !pushStatus.supported ? (
           <p className="text-sm text-accent-600 bg-gray-50 border border-hairline rounded-xl p-3">
-            جهازك أو متصفحك لا يدعم إشعارات الويب — على آيفون/آيباد لازم التطبيق يكون مضافًا للشاشة الرئيسية، ونظام iOS 16.4 أو أحدث.
+            جهازك أو متصفحك مش بيدعم إشعارات الويب (على آيفون: أضف التطبيق للشاشة الرئيسية، iOS 16.4 أو أحدث).
           </p>
         ) : (
           <>
@@ -417,13 +414,13 @@ export default function AdhanSettingsSection() {
               className="w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth border-hairline hover:border-hairline-emerald polish-press disabled:opacity-60"
             >
               <span className="text-right">
-                <span className="block font-medium text-accent-800">تفعيل إشعار الأذان والتطبيق مقفول</span>
+                <span className="block font-medium text-accent-800">إشعار الأذان والتطبيق مقفول</span>
                 <span className="block text-sm text-accent-600">
                   {pushStatus?.subscribed
-                    ? 'مفعّلة — هيوصلك إشعار وقت كل صلاة حتى لو التطبيق مقفول'
+                    ? 'مفعّل'
                     : pushStatus?.permission === 'denied'
-                      ? 'مرفوضة — إذن الإشعارات مرفوض من إعدادات المتصفح/النظام'
-                      : 'متوقفة — اضغط للتفعيل والسماح بالإشعارات'}
+                      ? 'مرفوض — فعّله من إعدادات المتصفح/النظام'
+                      : 'متوقف — اضغط للتفعيل'}
                 </span>
               </span>
               <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${pushStatus?.subscribed ? 'bg-emerald-500' : 'bg-gray-300'}`}>
@@ -431,15 +428,10 @@ export default function AdhanSettingsSection() {
               </span>
             </button>
             {pushError && <p className="text-sm text-red-600 mt-2">{pushError}</p>}
-            {pushStatus?.subscribed && (
-              <p className="text-xs text-accent-600 mt-2">
-                لو غيّرت الموقع من القسم اللي فوق، الاشتراك بيتحدّث تلقائيًا مع فتح التطبيق — من غير ما تعيد التفعيل.
-              </p>
-            )}
           </>
         )}
-      </div>
-    </section>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -496,8 +488,7 @@ function FajrAlarmSetting() {
     ['smart', 'منبه ذكي', 'لو كتمته يرن تاني بعد دقيقة، ولا يقف إلا بعد حل ٣ أسئلة (حساب، رقم، شكل مختلف)'],
   ];
   return (
-    <div className="mt-4">
-      <p className="font-semibold text-accent-800 mb-2">⏰ منبه الفجر</p>
+    <div>
       <div className="grid gap-2">
         {opts.map(([k, t, d]) => (
           <button key={k} onClick={() => { setMode(k); saveFajrAlarm(k); void rescheduleNativeAlarms(); }}

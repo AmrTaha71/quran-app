@@ -44,6 +44,34 @@ export interface AdhanSettings {
 export const ADHAN_SETTINGS_KEY = 'quran-adhan-settings';
 export const ADHAN_DAY_KEY = 'quran-adhan-day';
 export const ADHAN_FIRED_KEY = 'quran-adhan-fired';
+// Calculation method (W3-S1). Own key so the settings JSON schema stays
+// untouched: absent / 'auto' = the old behaviour (Egypt 5, Saudi 4, others
+// = API default). A number = an AlAdhan method id chosen by the user.
+export const ADHAN_METHOD_KEY = 'quran-adhan-method';
+export const ADHAN_METHODS: { id: number; label: string }[] = [
+  { id: 4, label: 'أم القرى (مكة)' },
+  { id: 5, label: 'الهيئة المصرية العامة للمساحة' },
+  { id: 3, label: 'رابطة العالم الإسلامي' },
+  { id: 8, label: 'الخليج' },
+  { id: 9, label: 'الكويت' },
+  { id: 10, label: 'قطر' },
+  { id: 2, label: 'أمريكا الشمالية (ISNA)' },
+  { id: 1, label: 'كراتشي' },
+];
+export function getAdhanMethod(): number | null {
+  try {
+    const n = Number(localStorage.getItem(ADHAN_METHOD_KEY));
+    return ADHAN_METHODS.some((m) => m.id === n) ? n : null;
+  } catch { return null; }
+}
+export function setAdhanMethod(id: number | null): void {
+  try {
+    if (id === null) localStorage.removeItem(ADHAN_METHOD_KEY);
+    else localStorage.setItem(ADHAN_METHOD_KEY, String(id));
+    // The cached day was computed with the old method.
+    localStorage.removeItem(ADHAN_DAY_KEY);
+  } catch { /* storage off */ }
+}
 // Hosted in the public `adhan` Storage bucket (push-files carries
 // UTF-8 code only, so the MP3 cannot ride the repo push). The file
 // itself is the Commons CC BY audio, converted to MP3, unmodified.
@@ -172,7 +200,8 @@ export function adhanLocationLabel(loc: AdhanLocation): string {
 }
 
 function adhanLocationKey(loc: AdhanLocation): string {
-  return JSON.stringify(loc);
+  const m = getAdhanMethod();
+  return m === null ? JSON.stringify(loc) : `${JSON.stringify(loc)}|m${m}`;
 }
 
 function toApiDate(dateKey: string): string {
@@ -231,10 +260,12 @@ interface AlAdhanDay {
 export async function fetchDayFromApi(location: AdhanLocation, dateKey: string): Promise<AdhanDay> {
   let url: string;
   if (location.kind === 'gps') {
-    url = `https://api.aladhan.com/v1/timings/${toApiDate(dateKey)}?latitude=${location.lat}&longitude=${location.lng}`;
+    const gpsMethod = getAdhanMethod();
+    url = `https://api.aladhan.com/v1/timings/${toApiDate(dateKey)}?latitude=${location.lat}&longitude=${location.lng}${gpsMethod !== null ? `&method=${gpsMethod}` : ''}`;
   } else {
     const country = ADHAN_COUNTRIES.find((c) => c.code === location.country);
-    const method = country?.method ? `&method=${country.method}` : '';
+    const chosen = getAdhanMethod() ?? country?.method;
+    const method = chosen ? `&method=${chosen}` : '';
     url = `https://api.aladhan.com/v1/timingsByCity/${toApiDate(dateKey)}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(country?.api ?? location.countryName)}${method}`;
   }
   const res = await fetch(url);
