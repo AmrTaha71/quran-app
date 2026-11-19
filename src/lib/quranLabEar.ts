@@ -167,6 +167,8 @@ export class QuranLabRecognition {
   maxAlternatives = 1;
   onstart: (() => void) | null = null;
   onaudiostart: (() => void) | null = null;
+  /** Fires when the microphone permission is granted (the model may still be loading). */
+  onmicgranted: (() => void) | null = null;
   onspeechstart: (() => void) | null = null;
   onspeechend: (() => void) | null = null;
   onaudioend: (() => void) | null = null;
@@ -225,7 +227,7 @@ export class QuranLabRecognition {
     // gesture is gone and iOS may never show the prompt / return a stream.
     try {
       this.streamP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
-      this.streamP.catch(() => {});
+      this.streamP.then(() => { if (!this.stopped) this.onmicgranted?.(); }).catch(() => {});
     } catch { this.streamP = null; }
     void this.begin();
   }

@@ -1666,6 +1666,10 @@ export default function QuranMushafPage({
   // from a 2-minute one; the ticker makes a stuck prompt visible, and
   // the "press stop" hint appears only after 8s so a normal short
   // wait does not nag the user.
+  // A stopped / closed follow session must never leave the mic on (iOS keeps the
+  // orange indicator while the parked 60 s stream lives).
+  useEffect(() => { if (!followOn) releaseEarMic(); }, [followOn]);
+  useEffect(() => () => { releaseEarMic(); }, []);
   const [followMicWaitElapsed, setFollowMicWaitElapsed] = useState(0);
   useEffect(() => {
     if (!followMicWaiting || followMicWaitStartedAt === null) { setFollowMicWaitElapsed(0); return; }
@@ -2338,6 +2342,13 @@ export default function QuranMushafPage({
     resetLabFollow();
     const rec = new QuranLabPhonemeTap();
     const mine = () => startGen === followStartGenRef.current && recognitionRef.current === rec;
+    // 2026-11-19: permission granted but the ear model (~73 MB, first time only)
+    // is still loading — say so, instead of «waiting for the microphone».
+    rec.onmicgranted = () => {
+      if (!mine()) return;
+      markMicGranted();
+      setFollowWaitRetryNote('تم السماح بالميكروفون — جارٍ تحميل نموذج الأذن (أول مرة فقط)');
+    };
     rec.onstart = () => {
       if (!mine()) return;
       markMicGranted();
