@@ -2,34 +2,27 @@ import StudioMic from '../components/StudioMic';
 import { MosqueIcon, MushafIcon, EarListenIcon } from '../components/HomeIcons';
 import { roomLabel } from '../lib/roomLabel';
 import Sama3 from '../components/Sama3';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import GrandpaIcon from '../components/GrandpaIcon';
 import TarteelQuizModal from '../components/TarteelQuizModal';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
-import { BookOpen, BookMarked, Mic, MicVocal, AudioLines, Award, Headphones, Settings, Link, SunMoon, ChevronDown, Play, MapPin, Map, Glasses, Users, Cast, Compass, Landmark, Clock, Radio } from 'lucide-react';
+import { BookOpen, AudioLines, Award, Headphones, Settings, Link, SunMoon, Users, Cast, Compass, Clock, Radio } from 'lucide-react';
 import NextPrayerTile from '../components/NextPrayerTile';
 import QiblaSheet from '../components/QiblaSheet';
-import DrumSelect from '../components/DrumSelect';
 import { nearestMosqueUrl } from '../lib/qibla';
 import { useHint } from '../lib/hints';
 import BigScreenSheet from '../components/BigScreenSheet';
 import BottomNav from '../components/BottomNav';
 import Collapsible from '../components/Collapsible';
 import QRCodeSection from '../components/QRCodeSection';
-import MemorizationMap from '../components/MemorizationMap';
 import MutashabihatGame from '../components/MutashabihatGame';
-import { useUserLists } from '../components/UserLists';
-import { memorizedFromStart } from '../lib/homeFeatures';
 import { pressFeedback } from '../lib/pressFeedback';
 import { dailyDua, ISLAMIC_GREETING } from '../lib/personalTouch';
-import { SURAHS, SURAH_AYAH_COUNTS, surahPlace } from '../lib/surahs';
+import { SURAHS } from '../lib/surahs';
 import { readListeningWird } from '../lib/listenPlayback';
-import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
-import { getJuzFromPage } from '../lib/quranIndex';
-import { JUZ_STARTS } from '../lib/quranBoundaries';
-import { normalizeDigits, toArabicIndic } from '../lib/numerals';
+import { toArabicIndic } from '../lib/numerals';
 import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
@@ -44,26 +37,6 @@ import HomeHifzView from '../components/home/HomeHifzView';
 // "continue" lands exactly where the user left off), and quick
 // buttons only. Lists, search and filters
 // stay on لوحتي — this page must stay light enough to read at a glance.
-function readLastPage(): { page: number; visited: boolean } {
-  try {
-    const raw = localStorage.getItem('quran-mushaf-page');
-    const n = Number(raw);
-    if (raw !== null && Number.isInteger(n) && n >= 1 && n <= TOTAL_MUSHAF_PAGES) {
-      return { page: n, visited: true };
-    }
-  } catch {}
-  return { page: 1, visited: false };
-}
-
-function pageSurah(page: number): string {
-  let result = 1;
-  for (const { surah, page: startPage } of SURAH_START_PAGES) {
-    if (startPage <= page) result = surah;
-    else break;
-  }
-  return SURAHS.find((s) => s.no === result)?.name || '';
-}
-
 // Jump the Mushaf to a specific ayah: QuranMushafPage consumes the stored
 // target on mount (goes to the ayah's actual page, opens fullscreen at
 // once, highlights the ayah). Same mechanism as the تربيط اليوم card.
@@ -71,13 +44,6 @@ function goAdhanSettings(onNavigate: (r: Route) => void): void {
   try { sessionStorage.setItem('quran-settings-door', 'adhan'); } catch { /* ignore */ }
   onNavigate('settings');
 }
-function jumpToAyah(surah: number, ayah: number, onNavigate: (r: Route) => void): void {
-  try {
-    localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah, ayah }));
-  } catch { /* ignore */ }
-  onNavigate('mushaf');
-}
-
 // Resume from the saved page (the 'quran-mushaf-page' key QuranMushafPage
 // itself reads on open): open fullscreen at once. Same as the old
 // resume button on the الحفظ card.
@@ -226,7 +192,7 @@ export default function HomeStartPage({ session, onNavigate }: {
           setPreferredName(data.preferred_name);
           try { sessionStorage.setItem(nameKey, data.preferred_name); } catch { /* ignore */ }
         }
-      } catch {}
+      } catch { /* ignore */ }
     };
     loadName();
   }, [session]);
