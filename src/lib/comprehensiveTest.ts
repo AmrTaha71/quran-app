@@ -23,6 +23,13 @@ export const PARTS = [
 
 export type PartId = (typeof PARTS)[number]['id'];
 
+/** W4-F: «الربط والاستحضار» is out of the test for now (back after Rana's review);
+ *  the tajweed part is admin-only until its question bank is reviewed. */
+export function activeParts(isAdmin: boolean) {
+  return PARTS.filter((p) => p.id !== 'rabt' && (p.id !== 'tajweed' || isAdmin));
+}
+export const MUT_QUESTIONS = 3;
+
 export const TOTAL_AYAT = SURAH_AYAH_COUNTS.reduce((a, b) => a + b, 0);
 
 /** Global ayah range [start, end) for a scope and number (1-based). */
@@ -58,6 +65,10 @@ export type SavedResult = {
   level: TestLevel;
   scores: Record<PartId, number>;
   total: number;
+  /** W4-F: max of the parts that were in the test (older results: 100). */
+  max?: number;
+  /** W4-F: range label («أول ٥ أجزاء»…). */
+  label?: string;
 };
 
 const RESULTS_KEY = 'quran-comprehensive-results';

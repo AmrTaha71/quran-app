@@ -4,7 +4,8 @@
 // (alignWords). Optional corrections: the reciter says the wrong word ONCE and
 // the user goes on from it; the next mistake closes the position.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, preloadEarLab } from '../lib/quranLabEar';
+import { earLabOn, preloadEarLab } from '../lib/quranLabEar';
+import { createRecognizer, readResults, type Rec } from '../lib/voiceCapture';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
@@ -14,27 +15,6 @@ import { firstMistake, PROMPT_WORDS, type PickedAyah, type RoundResult } from '.
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
 const QUIET_MS = 1800;
-
-type Rec = {
-  onresult: ((e: RecEvent) => void) | null; onerror: ((e: { error?: string }) => void) | null; onend: (() => void) | null;
-  start(): void; stop(): void; abort(): void;
-};
-type RecEvent = { resultIndex: number; results: ArrayLike<{ isFinal?: boolean; [i: number]: { transcript?: string; isFinal?: boolean } }> };
-function createRecognizer(expectedNorms: string[]): { rec: Rec; kind: 'lab' | 'browser' } | null {
-  const W = window as unknown as { SpeechRecognition?: new () => Rec & Record<string, unknown>; webkitSpeechRecognition?: new () => Rec & Record<string, unknown> };
-  const SR = W.SpeechRecognition || W.webkitSpeechRecognition;
-  // Same choice as the tasmee' test: device ear once loaded, else the browser's.
-  const useLab = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
-  if (useLab) return { rec: new QuranLabRecognition(expectedNorms.map((norm) => ({ norm, ayahIdx: 0 })), 0) as unknown as Rec, kind: 'lab' };
-  if (SR) {
-    const r = new SR();
-    r.lang = 'ar-SA';
-    r.continuous = true;
-    r.interimResults = true;
-    return { rec: r, kind: 'browser' };
-  }
-  return null;
-}
 
 export default function RoundRecite({ ayah, corrections, onFinish }: {
   ayah: PickedAyah;
@@ -159,15 +139,9 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     recRef.current = rec;
     rec.onresult = (e) => {
       if (recRef.current !== rec) return;
-      let inter = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i];
-        const tr = res[0]?.transcript || '';
-        if (!tr) continue;
-        if (res.isFinal || res[0]?.isFinal) finals.current = `${finals.current} ${tr}`.trim();
-        else inter += ` ${tr}`;
-      }
-      interim.current = inter.trim();
+      const r = readResults(e, finals.current);
+      finals.current = r.finals;
+      interim.current = r.interim;
       if (phaseRef.current !== 'listening') return;
       if (quietT.current) clearTimeout(quietT.current);
       quietT.current = setTimeout(() => evaluate(false), QUIET_MS);
