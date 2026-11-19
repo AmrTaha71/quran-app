@@ -117,8 +117,25 @@ function getWorker(): Promise<Worker> {
   }
   return ready!.then(() => worker!);
 }
-/** Start downloading / loading the model ahead of time. */
-export function preloadEarLab(): void { void getWorker().catch(() => {}); }
+/** W4-P: Wi-Fi only when the browser says so. Cellular, saveData or an unknown
+ *  connection (no navigator.connection, e.g. Safari; or no `type`) count as
+ *  mobile data: the ~100 MB download then needs an explicit tap every time. */
+export function earOnMobileData(): boolean {
+  const c = (typeof navigator === 'undefined' ? undefined : (navigator as unknown as { connection?: { type?: string; saveData?: boolean } }).connection);
+  if (!c) return true;
+  if (c.saveData === true || c.type === 'cellular') return true;
+  return !(c.type === 'wifi' || c.type === 'ethernet');
+}
+/** Start loading the model ahead of time. A cached model always loads (no
+ *  download). A real download starts only after an explicit confirm
+ *  (`confirmed`), or on Wi-Fi after the one-time consent. Anything else is a
+ *  silent no-op, so no caller can pull 100 MB over mobile data unasked. */
+export function preloadEarLab(confirmed = false): void {
+  void earModelCached().then((cached) => {
+    if (!cached && !confirmed && !(earDownloadConsented() && !earOnMobileData())) return;
+    return getWorker().then(() => undefined);
+  }).catch(() => {});
+}
 
 function downsample(input: Float32Array, fromRate: number): Float32Array {
   if (fromRate === TARGET) return new Float32Array(input);
