@@ -34,6 +34,7 @@ import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
 import LiteModeButton from '../components/LiteModeButton';
 import type { Route } from '../lib/routes';
+import HomeQuizView from '../components/home/HomeQuizView';
 import HomeHifzView from '../components/home/HomeHifzView';
 
 
@@ -87,13 +88,11 @@ function resumeHifz(onNavigate: (r: Route) => void): void {
   onNavigate('mushaf');
 }
 
-// Self-test range choice: SelfTestPage consumes the stored choice on
-// mount (opens that range door's small detail page). Same mechanism as
-// the Mushaf target / fullscreen flags above.
-function openTestRange(choice: 'surah' | 'juz' | 'page' | 'passage', onNavigate: (r: Route) => void): void {
-  try {
-    sessionStorage.setItem('quran-test-range-choice', choice);
-  } catch { /* ignore */ }
+// سمّعلي goes straight to the self-test page, whose own lobby offers the
+// range choice (surah / juz / page / passage). Clear any stale range flag
+// so an old choice never auto-opens.
+function openTest(onNavigate: (r: Route) => void): void {
+  try { sessionStorage.removeItem('quran-test-range-choice'); } catch { /* ignore */ }
   onNavigate('test');
 }
 
@@ -190,24 +189,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   const openNearestMosque = () => { window.open(nearestMosqueUrl(), '_blank', 'noopener'); };
   const [tarteelOpen, setTarteelOpen] = useState(false);
   const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
-  // Home doors with choices (الحفظ / سـمّع لي / اختبر نفسك): one panel
-  // open at a time, shown right under the tile grid and scrolled into
-  // view so the choices are never hidden below the fold.
-  const [view, setView] = useState<'main' | 'hifz'>('main');
-  const [panel, setPanel] = useState<null | 'test' | 'quiz'>(null);
-  const testOpen = panel === 'test';
-  const quizOpen = panel === 'quiz';
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  function togglePanel(which: 'test' | 'quiz'): void {
-    setPanel((p) => (p === which ? null : which));
-  }
-  useEffect(() => {
-    if (!panel) return;
-    const t = window.setTimeout(() => {
-      try { panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch { /* ignore */ }
-    }, 60);
-    return () => window.clearTimeout(t);
-  }, [panel]);
+  const [view, setView] = useState<'main' | 'hifz' | 'quiz'>('main');
   // Tile captions: shown the first three visits, then icon + title only.
   const showHints = useHint('home-tiles');
   useEffect(() => {
@@ -308,6 +290,17 @@ export default function HomeStartPage({ session, onNavigate }: {
   }
 
   if (view === 'hifz') return <HomeHifzView onNavigate={onNavigate} onClose={() => setView('main')} />;
+  if (view === 'quiz') {
+    return (
+      <>
+        <HomeQuizView onNavigate={onNavigate} onClose={() => setView('main')}
+          onTarteel={() => setTarteelOpen(true)} onMutashabihat={() => setMutOpen(true)} onComprehensive={() => setComprehensiveOpen(true)} />
+        {mutOpen && <MutashabihatGame onClose={() => setMutOpen(false)} />}
+        {tarteelOpen && <TarteelQuizModal onClose={() => setTarteelOpen(false)} />}
+        {comprehensiveOpen && <ComprehensiveTestModal onClose={() => setComprehensiveOpen(false)} />}
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
@@ -343,68 +336,17 @@ export default function HomeStartPage({ session, onNavigate }: {
           </button>
         </div>
 
-        {/* The four main doors. A tile with choices opens its panel right
-            under the grid; only one panel is open at a time. */}
+        {/* The four main doors. Each one opens its own screen/page. */}
         <div className="home-tiles mb-3">
           <HomeTile icon={<MushafIcon />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
             onClick={() => setView('hifz')} />
           <HomeTile icon={<EarListenIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
-            expanded={testOpen} onClick={() => togglePanel('test')} />
+            onClick={() => openTest(onNavigate)} />
           <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
-            expanded={quizOpen} onClick={() => togglePanel('quiz')} />
+            onClick={() => setView('quiz')} />
           <HomeTile icon={<AudioLines />} glaze="emerald" title="الْحَقِ الإِمَامَ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
         </div>
-
-        {/* سـمّع لي: 4 range choices. Only a choice tap navigates (to
-            'test', with the chosen range stored for SelfTestPage). */}
-        {testOpen && (
-          <div ref={panelRef} className="home-panel mb-4">
-            <p className="home-panel-title"><Sama3 /> لي — اختار النطاق</p>
-            <div className="grid grid-cols-2 gap-3 alive-subdoors">
-              {([['surah', 'بالسورة'], ['juz', 'بالجزء'], ['page', 'بالصفحة'], ['passage', 'فقرة معينة']] as const).map(([id, label]) => (
-                <button
-                  key={id}
-                  onPointerDown={pressFeedback}
-                  onClick={() => openTestRange(id, onNavigate)}
-                  className="py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* اختبر نفسك: ترتيل, المتشابهات, and the comprehensive test. */}
-        {quizOpen && (
-          <div ref={panelRef} className="home-panel mb-4">
-            <p className="home-panel-title">اختبر نفسك</p>
-            <div className="grid grid-cols-2 gap-3 alive-subdoors">
-              <button
-                onPointerDown={pressFeedback}
-                onClick={() => setTarteelOpen(true)}
-                className="py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-              >
-                ترتيل
-              </button>
-              <button
-                onPointerDown={pressFeedback}
-                onClick={() => setMutOpen(true)}
-                className="py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-              >
-                المتشابهات
-              </button>
-              <button
-                onPointerDown={pressFeedback}
-                onClick={() => setComprehensiveOpen(true)}
-                className="col-span-2 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus"
-              >
-                اختبار شامل (١٠٠ درجة)
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Listening + modes: smaller tiles, one glance. */}
         <div className="home-tiles mb-4">
