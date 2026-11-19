@@ -635,12 +635,12 @@ function AppContent() {
       <VoiceAssistant onNavigate={navigate} />
       {/* First-run onboarding overlay (home route only; the app works
           normally behind it once finished or skipped). */}
-      {showOnboarding && route === 'home' && (
+      {showOnboarding && (route === 'home' || route === 'settings') && !!loadDeviceChoice() && (
         (referralDone ? <Onboarding onDone={closeOnboarding} /> : <ReferralSurvey onDone={() => setReferralDone(true)} />)
       )}
       <DailyReportWatcher />
       {/* Device picker (drums): first run per browser, or reopened from Settings. */}
-      {(!loadDeviceChoice() || devicePickerOpen) && !showOnboarding && (
+      {(!loadDeviceChoice() || devicePickerOpen) && (
         <DevicePicker userId={session?.user.id} onDone={() => { setDevicePickerOpen(false); setDeviceTick((n) => n + 1); }}
           onClose={loadDeviceChoice() ? () => setDevicePickerOpen(false) : undefined} />
       )}
