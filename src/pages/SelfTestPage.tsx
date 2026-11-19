@@ -41,7 +41,7 @@ import { addReRecite, totalReRecites, type ReRecites } from '../lib/practiceHist
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
-  Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
+  Mic, Square, Award, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
 } from 'lucide-react';
 import type { Route } from '../lib/routes';
 
@@ -5765,10 +5765,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800"><Sama3 /> لي</h1>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
-          <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"
-            className="mr-auto icon-action flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg polish-press">
-            <Home className="w-5 h-5" /> لوحتي
-          </button>
         </div>
       </header>
 

@@ -91,6 +91,7 @@ import {
 import type { SleepTimerMinutes } from '../lib/sleepTimer';
 import { clearNowPlaying, setNowPlaying } from '../lib/nowPlaying';
 import { setBackTarget } from '../lib/backTarget';
+import { useBottomChromeRef } from '../lib/bottomChrome';
 import type { ListenEngine, ListenMode, ListenPosition } from '../lib/listenPlayback';
 import { ListenEngine as ListenEngineClass } from '../lib/listenPlayback';
 import {
@@ -514,6 +515,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // Route visibility: App keeps this page mounted while hidden so
   // audio can resume across routes (anywhere-resume). Mirrored in
   // a ref for the mount effect (which runs once).
+  const bottomChromeRef = useBottomChromeRef();
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
   // [LISTEN_RECOVERY] diagnostics: live overlay state for the hide log
@@ -2380,7 +2382,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           Fixed to the bottom of the screen so the user never has to scroll back
           to the top to stop or lock while the page follows the ayah. */}
       {(playing || journeyMode !== null) && (
-        <div className="fixed bottom-0 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-white/95 backdrop-blur border-t border-hairline-emerald shadow-2xl">
+        <div ref={bottomChromeRef} className="fixed bottom-0 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-white/95 backdrop-blur border-t border-hairline-emerald shadow-2xl">
           <div className="max-w-5xl mx-auto grid grid-cols-2 gap-3">
             <button
               onClick={stopPlayback}

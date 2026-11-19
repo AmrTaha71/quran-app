@@ -2,6 +2,7 @@ import { useState, useEffect, cloneElement } from 'react';
 import { LayoutDashboard, BookOpen, Home, AudioLines, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { pressFeedback } from '../lib/pressFeedback';
+import { useBottomChromeRef } from '../lib/bottomChrome';
 import type { Route } from '../lib/routes';
 
 
@@ -64,6 +65,7 @@ export default function BottomNav({
     };
     loadLabel();
   }, []);
+  const chromeRef = useBottomChromeRef();
   const items = [
     { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
     // لوحتي is a board (wird, self-test, lists, greeting), not just
@@ -81,6 +83,7 @@ export default function BottomNav({
   const isRtl = typeof document !== 'undefined' && document.documentElement.dir !== 'ltr';
   return (
     <nav
+      ref={chromeRef}
       aria-label="التنقل الرئيسي"
       className="fixed bottom-0 right-0 left-0 z-40 glass-nav nav-enter pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]"
     >
