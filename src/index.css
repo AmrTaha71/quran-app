@@ -762,3 +762,13 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
 .mushaf-hl--passed { background: rgba(var(--mushaf-hl-rgb), 0.22); box-shadow: none; }
 .mushaf-hl--ahead { background: rgba(var(--mushaf-hl-rgb), 0.10); box-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } }
+
+/* Landing banner: big, attention-grabbing pulse (off for reduced motion) */
+@keyframes free-banner-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+}
+.free-banner { animation: free-banner-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .free-banner { animation: none; }
+}

@@ -1,12 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Headphones, Globe, BookMarked, Share2, Link, Brain, Moon, BookOpen, HeartHandshake } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useState } from 'react';
+import { Headphones, Globe, BookMarked, Link, Brain, Moon, BookOpen, HeartHandshake } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
-import { TOTAL_VERSES } from '../lib/types';
 import { useLang } from '../lib/LanguageContext';
-import { formatNum } from '../lib/numerals';
 import { LANGUAGES } from '../lib/translations';
-import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import ShareButton from '../components/ShareButton';
 import QRCodeSection from '../components/QRCodeSection';
 import type { Route } from '../lib/routes';
@@ -14,20 +10,7 @@ import type { Route } from '../lib/routes';
 
 export default function LandingPage({ session, onNavigate }: { session: Session | null; onNavigate: (r: Route) => void }) {
   const { t, lang, setLang } = useLang();
-  const [stats, setStats] = useState({ total: TOTAL_VERSES, withLinks: 0 });
   const [showLangMenu, setShowLangMenu] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      const { count } = await supabase
-        .from('quran_verses')
-        .select('*', { count: 'exact', head: true })
-        .eq('has_links', true);
-      setStats({ total: TOTAL_VERSES, withLinks: count || 0 });
-    })();
-  }, []);
-
-  const percentage = Math.round((stats.withLinks / stats.total) * 100);
 
   return (
     <div className="min-h-screen page-bg">
@@ -95,26 +78,13 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
           </h2>
           <p className="text-xl text-accent-600 mb-10 max-w-2xl mx-auto leading-relaxed">
             {(lang === 'ar' || lang === 'ar-EG')
-              ? 'احفظ القرآن بالتربيطات: كل آية مربوطة بما قبلها وما بعدها، عشان تثبت في ذهنك.'
-              : 'Memorize the Quran through links: every ayah connected to what comes before and after it, so it sticks.'}
+              ? 'احفظ القرآن بالتربيطات: ربط الآيات بالمعنى عشان تثبت في ذهنك.'
+              : 'Memorize the Quran through links: connect ayahs by meaning so they stick.'}
           </p>
 
-          <div className="inline-flex items-center gap-2 px-5 py-2.5 mb-10 rounded-full bg-emerald-600 text-white font-bold shadow-lg">
-            <HeartHandshake className="w-5 h-5" />
-            مجاني بالكامل: بلا إعلانات، وبلا اشتراكات، ولن يكون فيه إعلانات ولا مقابل مادي إن شاء الله
-          </div>
-
-          <div className="flex flex-col items-center gap-6 mb-10">
-            <CircularProgressIndicator value={percentage} size={160} label={t('progress')} />
-            <div className="text-center">
-              <p className="text-3xl font-bold text-emerald-600">
-                {formatNum(stats.withLinks, lang)} {t('indexedVerses')}
-              </p>
-              <p className="text-base text-accent-500">
-                {(lang === 'ar' || lang === 'ar-EG') ? 'من أصل' : 'out of'} {formatNum(stats.total, lang)} {t('verse')}
-              </p>
-              <p className="text-sm text-amber-link mt-1">{formatNum(stats.total - stats.withLinks, lang)} {t('remaining')}</p>
-            </div>
+          <div className="free-banner flex items-center justify-center gap-3 w-full max-w-2xl mx-auto px-6 py-5 mb-10 rounded-2xl bg-emerald-600 text-white font-extrabold text-2xl md:text-4xl leading-snug shadow-2xl">
+            <HeartHandshake className="w-8 h-8 md:w-10 md:h-10 shrink-0" />
+            مجاني بالكامل، بلا إعلانات ولا اشتراكات
           </div>
 
           <div className="flex flex-wrap justify-center gap-4 mb-10">
@@ -123,7 +93,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
               className="flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-semibold rounded-xl shadow-lg hover:shadow-xl transition-smooth"
             >
               <Headphones className="w-6 h-6" />
-              {session ? 'لوحتي' : 'ابدأ الحفظ مجاناً'}
+              {session ? 'لوحتي' : 'ابدأ الحفظ'}
             </button>
             <button
               onClick={() => onNavigate('mushaf')}
@@ -137,7 +107,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
           {/* What the app gives you: visible benefits before the share block. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-right mb-12">
             {[
-              { icon: Link, title: 'تربيطات تثبّت الحفظ', text: 'كل آية مربوطة بما قبلها وما بعدها، فالحفظ بيتثبت في الذهن بسرعة.' },
+              { icon: Link, title: 'تربيطات تثبّت الحفظ', text: 'الآيات مربوطة ببعضها بالمعنى، فالحفظ بيتثبت في الذهن بسرعة.' },
               { icon: Brain, title: 'اختبر نفسك', text: 'اختبار المتشابهات المشهورة، واختبار الترتيل بالميكروفون بالنطاق اللي تختاره: جزء أو حزب أو ربع أو سورة.' },
               { icon: Headphones, title: 'استمع في أي وقت', text: 'تلاوة متواصلة، ومؤقت نوم، والصوت مستمر حتى لو قفلت الشاشة.' },
               { icon: BookOpen, title: 'فهم الآية', text: 'معاني الكلمات، أسباب النزول، المشابهات، والتفسير في نفس الصفحة.' },

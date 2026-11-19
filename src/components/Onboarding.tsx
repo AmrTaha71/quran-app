@@ -52,7 +52,7 @@ const SCREENS = [
     kind: 'links' as DemoKind,
     icon: BookMarked,
     title: 'احفظ بالتربيطات',
-    line: 'كل آية ليها تربيطات تربطها باللي قبلها وبعدها — احفظ بالمعنى، مش بالتكرار بس.',
+    line: 'التربيطات بتربط الآيات ببعضها بالمعنى — احفظ بالفهم، مش بالتكرار بس.',
   },
   {
     kind: 'tasmee' as DemoKind,
