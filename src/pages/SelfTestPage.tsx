@@ -6085,7 +6085,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p></Hint>
-                <TajwidSkillPicker />
+                {isAdminView && <TajwidSkillPicker />}
                 {!micSupported && (
                   <p className="col-span-2 text-xs text-amber-link leading-snug">{micAbsentSetupNote}</p>
                 )}

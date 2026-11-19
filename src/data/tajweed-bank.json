@@ -1,0 +1,20 @@
+[
+  {
+    "id": "t-iqlab-1",
+    "skillId": "iqlab",
+    "tier": "good",
+    "question": "عند أي حرف تُقلب النون الساكنة أو التنوين ميمًا مخفاة؟",
+    "options": ["الباء", "الميم", "الفاء", "الواو"],
+    "correct": 0,
+    "reviewed": false
+  },
+  {
+    "id": "t-qalqalah-1",
+    "skillId": "qalqalah",
+    "tier": "good",
+    "question": "حروف القلقلة خمسة، وهي:",
+    "options": ["ق ط ب ج د", "ب ت ث ج ح", "ق ك ط ض د", "ء ه ع ح غ خ"],
+    "correct": 0,
+    "reviewed": false
+  }
+]

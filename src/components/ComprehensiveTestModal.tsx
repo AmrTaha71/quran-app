@@ -16,6 +16,7 @@ import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange, planRangeReciters } from '../lib/corrDownload';
 import { useIsAdminView } from '../lib/adminPreview';
+import type { SkillTier } from '../lib/tajwidSkills';
 import { addTestHistoryV1 } from '../lib/testHistory';
 import {
   PARTS, MUT_QUESTIONS, activeParts, rangeOf, randomInt, readResults, saveResult, totalOf,
@@ -25,6 +26,7 @@ import {
   COMP_POSITIONS, COMP_POINTS, arNum, currentHistoryLevel, pickRoundAyah, positionPerfect, positionScore,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
+import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
 import RoundRecite, { RoundReveal } from './RoundRecite';
 import MutashabihatOral from './MutashabihatOral';
 
@@ -69,6 +71,11 @@ function scopeSpan(id: ScopeId, n: number): { start: number; end: number; label:
   return { start: r.start, end: r.end - 1, label: 'جزء ٣٠' };
 }
 
+const tajLevel = (): SkillTier => {
+  const l = currentHistoryLevel(true);
+  return l === 'master' ? 'hafiz' : l === 'advanced' ? 'veryGood' : 'good' // trial bank has no 'beginner' items yet;
+};
+
 export default function ComprehensiveTestModal({ onClose }: { onClose: () => void }) {
   const isAdmin = useIsAdminView();
   const [step, setStep] = useState<Step>('scope');
@@ -84,6 +91,9 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [mut, setMut] = useState<MutQ[]>([]);
   const [mutIdx, setMutIdx] = useState(0);
   const [mutFrac, setMutFrac] = useState<number[]>([]);
+  const [tajQ, setTajQ] = useState<TajweedQuestion[]>([]);
+  const [tajIdx, setTajIdx] = useState(0);
+  const [tajRight, setTajRight] = useState(0);
   const [scores, setScores] = useState<Partial<Record<PartId, number>>>({});
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [history, setHistory] = useState<SavedResult[]>(() => readResults());
@@ -122,6 +132,9 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     setMut(buildMut(MUT_QUESTIONS));
     setMutIdx(0);
     setMutFrac([]);
+    setTajQ(pickTajweedQuestions(5, tajLevel()));
+    setTajIdx(0);
+    setTajRight(0);
     setSaved(null);
     await nextPosition(true);
   }
@@ -166,6 +179,13 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
       const pts = Math.round((next.reduce((a, b) => a + b, 0) / mut.length) * 25);
       goNext('mutashabihat', pts);
     }
+  }
+
+  function answerTajweed(choice: number) {
+    const right = tajRight + (choice === tajQ[tajIdx].correct ? 1 : 0);
+    setTajRight(right);
+    if (tajIdx + 1 < tajQ.length) setTajIdx(tajIdx + 1);
+    else goNext('tajweed', Math.round((right / tajQ.length) * partMax('tajweed')));
   }
 
   function goNext(current: PartId, value: number) {
@@ -306,8 +326,23 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
         {step === 'tajweed' && (
           <>
             <p className="font-bold text-accent-800 mb-1">{partName('tajweed')} — {arNum(partMax('tajweed'))} درجة</p>
-            <p className="text-sm text-accent-600 mb-3">قيّم نفسك على الأحكام اللي استخرجتها من المقطع:</p>
-            {selfGradeBox('tajweed', partMax('tajweed'), ['استخرجت أحكام المدود', 'استخرجت أحكام الغنة والإدغام والإقلاب والإخفاء', 'استخرجت أحكام التفخيم والترقيق'])}
+            <p className="text-xs text-amber-700 mb-3">للأدمن بس — بنك تجريبي، الأسئلة لسه بتتراجع من الدكتور/متخصص.</p>
+            {tajQ[tajIdx] ? (
+              <>
+                <p className="text-sm text-accent-600 mb-2">سؤال {arNum(tajIdx + 1)} من {arNum(tajQ.length)}</p>
+                <p className="font-bold text-accent-800 mb-3 leading-loose">{tajQ[tajIdx].question}</p>
+                <div className="space-y-2">
+                  {tajQ[tajIdx].options.map((o, i) => (
+                    <button key={i} onClick={() => answerTajweed(i)} className="w-full text-right py-3 px-4 rounded-xl bg-white border border-hairline-emerald text-accent-800 font-semibold">{o}</button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-accent-600 mb-3">مفيش أسئلة تجويد في البنك للمستوى ده لسه.</p>
+                <button onClick={() => goNext('tajweed', 0)} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">كمّل</button>
+              </>
+            )}
           </>
         )}
 
