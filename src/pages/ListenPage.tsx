@@ -445,8 +445,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const [interrupted, setInterrupted] = useState(false);
   const [currentAyah, setCurrentAyah] = useState(1);
   const [ayahs, setAyahs] = useState<CachedTextRow[] | null>(null);
-  const [textLoading, setTextLoading] = useState(false);
-  const [textError, setTextError] = useState<string | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [offlineChecking, setOfflineChecking] = useState(false);
@@ -1940,19 +1938,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       // read-along either (the text block hides, same as riwaya).
       if (riwayaId !== null || hadrOn) {
         setAyahs(null);
-        setTextLoading(false);
-        setTextError(null);
         return;
       }
-      setTextLoading(true);
-      setTextError(null);
       const expected = surahCount(surah);
       try {
         const cached = await getQuranTextCache().getSurah(surah, expected);
         if (cancelled) return;
         if (cached) {
           setAyahs(cached);
-          setTextLoading(false);
           return;
         }
         const { data, error } = await supabase
@@ -1963,7 +1956,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         if (cancelled) return;
         if (error || !data || data.length !== expected) {
           setAyahs(null);
-          setTextError('تعذر تحميل نص السورة — تحقق من الاتصال وحاول مجددا.');
         } else {
           setAyahs(data as CachedTextRow[]);
           void getQuranTextCache().putRows(data);
@@ -1971,10 +1963,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       } catch {
         if (!cancelled) {
           setAyahs(null);
-          setTextError('تعذر تحميل نص السورة — تحقق من الاتصال وحاول مجددا.');
         }
-      } finally {
-        if (!cancelled) setTextLoading(false);
       }
     };
     void loadText();
@@ -3170,41 +3159,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             timer after playback stopped. */}
         {journeyMode !== null && sleepTimerBlock}
 
-        {/* Read-along text — Hafs only: riwaya mode is
-            listening-only (the Hafs text does not match a non-Hafs
-            voice), and hadr is surah-file (no ayah steps), so this
-            block hides under either. */}
-        {riwayaId === null && !hadrOn && hubView !== 'hub' && (
-        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
-          <p className="font-semibold text-accent-800 mb-3">سورة {surahName(surah)}</p>
-          {textLoading && <p className="text-accent-600">جارٍ تحميل نص السورة…</p>}
-          {textError && <p className="text-red-600 font-medium">{textError}</p>}
-          {!textLoading && !textError && ayahs && (
-            <div className="space-y-2">
-              {ayahs.map((row) => (
-                <button
-                  key={row.id}
-                  id={`listen-ayah-${row.ayah_no}`}
-                  onClick={() => {
-                    // Hafs single-surah only: journeys advance
-                    // automatically (no intra-journey seeking in
-                    // v1), and riwaya files have no ayah steps.
-                    if (active && engineRef.current) void engineRef.current.seekTo(row.ayah_no);
-                  }}
-                  className={`w-full text-right p-3 rounded-xl border leading-loose ${
-                    active && row.ayah_no === currentAyah
-                      ? 'bg-amber-100 border-amber-300'
-                      : 'bg-white border-hairline-emerald'
-                  }`}
-                  style={{ fontFamily: "'Noto Naskh Arabic', serif", fontSize: '1.25rem' }}
-                >
-                  <span className="text-accent-800">{row.ayah_text}</span>
-                  <span className="text-emerald-700 font-bold mr-2">﴿{row.ayah_no}﴾</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>)}
+        {/* W5-L (2026-11-19, Dr. decision): the spread-out ayah list
+            under the player is gone — listening is by ear (the current
+            ayah still shows in the bar above). */}
 
         {/* Offline section (redirect E: additive only — playback,
             highlight and resume above never wait on any download
