@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio, ExternalLink as HubExternal } from 'lucide-react';
+import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio } from 'lucide-react';
 import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
 import DrumSelect from '../components/DrumSelect';
@@ -2565,34 +2565,16 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span></Hint>
               </span></span>
             </button>
-            <button
-              disabled={locked}
-              onClick={() => {
-                // Quran radio: every reciter, random order, shown in the
-                // varied panel so the user starts it there (same engine).
-                writeVariedPlan({ kind: 'random', ids: RECITERS.map((r) => r.id), seed: Math.floor(Math.random() * 1e6) + 1 });
-                setHadrOn(false);
-                setHadrSelected(false);
-                changeRiwaya(null);
-                setHubView('varied');
-              }}
-              className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
-            >
-              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true"><HubRadio className="w-6 h-6" /></span><span className="flex-1 min-w-0">
-              <span className="block text-lg">إذاعة التطبيق</span>
-              <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">تلاوات متواصلة من كل القراء بترتيب عشوائي. اضغط ابدأ بالداخل.</span></Hint>
-              </span></span>
-            </button>
             <a
               href="https://makkahlive.net/en/radio/quran-cairo"
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 shadow-sm polish-hub-item"
+              className="block w-full p-5 rounded-2xl font-semibold text-right grad-emerald-door glass-door-highlight text-white shadow-sm polish-listen-card polish-hub-item"
             >
-              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-emerald-50 shrink-0" aria-hidden="true"><HubExternal className="w-6 h-6 text-emerald-700" /></span><span className="flex-1 min-w-0">
+              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true"><HubRadio className="w-6 h-6" /></span><span className="flex-1 min-w-0">
               <span className="block text-lg">إذاعة القرآن الكريم</span>
-              <span className="block text-sm font-normal text-accent-800 mt-1">من القاهرة</span>
-              <span className="block text-sm font-normal text-accent-600 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
+              <span className="block text-sm font-normal text-emerald-100 mt-1">من القاهرة</span>
+              <span className="block text-sm font-normal text-emerald-100 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
               </span></span>
             </a>
           </div>
