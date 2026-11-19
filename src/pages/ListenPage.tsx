@@ -1,3 +1,4 @@
+import { requestDayRecap } from '../lib/dailyStats';
 import { useEffect, useRef, useState } from 'react';
 import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio } from 'lucide-react';
 import Hint from '../components/Hint';
@@ -496,6 +497,11 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // long-press (>=1000ms) or swipe (>60px) only — never a single
   // tap, so pocket touches cannot dismiss it.
   const [blackScreen, setBlackScreen] = useState(false);
+  // «تقبّل الله منك» first (W4-H popup), then the screen goes black a moment later.
+  const closeScreenWithRecap = () => {
+    requestDayRecap();
+    window.setTimeout(() => setBlackScreen(true), 3500);
+  };
   const [showBlackHint, setShowBlackHint] = useState(false);
   const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
@@ -2391,7 +2397,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <Square className="w-6 h-6" /> إيقاف
             </button>
             <button
-              onClick={() => setBlackScreen(true)}
+              onClick={closeScreenWithRecap}
               className="py-4 bg-stone-800 hover:bg-stone-900 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
             >
               <Moon className="w-6 h-6" /> قفل الشاشة
@@ -3225,7 +3231,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
             </div>
             <button
-              onClick={() => setBlackScreen(true)}
+              onClick={closeScreenWithRecap}
               className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press"
               aria-label="شاشة سوداء"
             >
