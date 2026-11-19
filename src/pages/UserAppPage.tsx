@@ -1,4 +1,5 @@
 import DrumSelect from '../components/DrumSelect';
+import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Sama3 from '../components/Sama3';
@@ -801,7 +802,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                           <span className="text-base font-semibold text-ink-2">{verse.surah_name}</span>
                         </div>
                         <p className="font-arabic text-2xl text-ink leading-loose">
-                          {verse.ayah_text}
+                          {blankMarks(verse.ayah_text)}
                         </p>
                       </div>
                       {session && (

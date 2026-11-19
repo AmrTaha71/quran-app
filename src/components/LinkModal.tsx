@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { blankMarks } from '../lib/arabicNormalize';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { currentSpeechLocale } from '../lib/LanguageContext';
@@ -497,7 +498,7 @@ export default function LinkModal({
           {/* Verse context */}
           <div className="bg-gray-50 rounded-2xl p-3">
             <p className="text-xs text-accent-600 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
-            <p className="font-arabic text-base text-accent-700 line-clamp-2">{verse.ayah_text}</p>
+            <p className="font-arabic text-base text-accent-700 line-clamp-2">{blankMarks(verse.ayah_text)}</p>
           </div>
 
           {/* Multi-type selection */}

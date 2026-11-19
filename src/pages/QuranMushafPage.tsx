@@ -1,4 +1,5 @@
 import DrumSelect from '../components/DrumSelect';
+import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { transcribeBlob } from '../lib/quranEar';
@@ -28,6 +29,7 @@ import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { parseHash } from '../lib/shareLinks';
 import { HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import { useElderlyMode } from '../lib/elderlyMode';
+import { currentListenWord } from '../lib/listenWordTrack';
 import { getNowPlaying, subscribeNowPlaying, type NowPlayingAyah } from '../lib/nowPlaying';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
@@ -305,6 +307,24 @@ export default function QuranMushafPage({
     update();
     return subscribeNowPlaying(update);
   }, []);
+  // 2026-11-19: word-by-word highlight for the recitation playing in Listen.
+  const [listenWord, setListenWord] = useState(-1);
+  const pageWordBoxesRef = useRef<WordBox[] | null>(null);
+  useEffect(() => {
+    if (!nowPlayingAyah || nowPlayingAyah.kind !== 'ayah') { setListenWord(-1); return; }
+    const np = nowPlayingAyah;
+    const id = window.setInterval(() => {
+      const boxes = (pageWordBoxesRef.current ?? []).filter((b) => b.surah === np.surah && b.ayah === np.ayah);
+      if (boxes.length === 0) { setListenWord((w) => (w === -1 ? w : -1)); return; }
+      const sorted = boxes
+        .map((b) => ({ n: Number(b.key.split(':')[2]) || 0, w: Math.max(0.5, b.width) }))
+        .sort((a, b) => a.n - b.n);
+      const idx = currentListenWord(np.surah, np.ayah, sorted.map((x) => x.w));
+      const w = idx < 0 ? -1 : sorted[idx].n - 1;
+      setListenWord((prev) => (prev === w ? prev : w));
+    }, 100);
+    return () => window.clearInterval(id);
+  }, [nowPlayingAyah]);
   // ELDERLY MODE (وضع كبار السن): big zoom + tap-an-ayah-reads-aloud.
   // The hook (src/lib/elderlyMode.ts) reads the persisted mode
   // synchronously, so the zoom initializer below sees it on first render.
@@ -1296,6 +1316,20 @@ export default function QuranMushafPage({
     // resetting to 1× on every page would defeat the big-text zoom.
     if (!elderlyMode) setZoom(1);
   };
+
+  // Turn the page by itself when the ayah being played is on another page.
+  useEffect(() => {
+    if (!nowPlayingAyah || nowPlayingAyah.kind !== 'ayah' || !showFullscreen || followOn) return;
+    const np = nowPlayingAyah;
+    let dead = false;
+    loadSurahPageList(np.surah).then((list) => {
+      if (dead) return;
+      const e = list.find((a) => a.number === np.ayah);
+      if (e && e.page_number !== currentPage) goToPage(e.page_number);
+    }).catch(() => { /* stay on this page */ });
+    return () => { dead = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nowPlayingAyah, showFullscreen]);
 
   // Page swipe navigation (touch): attached only to the page image so
   // swipes over the verse strip still scroll the strip. Normal view:
@@ -3331,10 +3365,9 @@ export default function QuranMushafPage({
   // border open nothing.
   type WordBox = { key: string; surah: number; ayah: number; left: number; top: number; width: number; height: number };
   const [pageWordBoxes, setPageWordBoxes] = useState<WordBox[] | null>(null);
+  pageWordBoxesRef.current = pageWordBoxes;
   const wordBoxCache = useRef<Record<number, WordBox[]>>({});
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
-  const [tapFlash, setTapFlash] = useState<WordBox | null>(null);
-  const tapFlashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (edition.id !== 'madinah') { setPageWordBoxes(null); return; }
@@ -3370,6 +3403,24 @@ export default function QuranMushafPage({
           if (h.x >= 880) continue;
           const parts = key.split(':').map(Number);
           if (parts.length < 2 || !parts[0] || !parts[1]) continue;
+          // 2026-11-19 re-calibration (measured on the 1240x1754 page PNGs, pages
+          // 42/43/293): the dataset grid is 840 wide x 1381 tall (x from 40, y from
+          // 22), and the text block really spans 64.9% of the image width
+          // (even pages start at 22.6%, odd at 12.5%) and image rows 190..1580 px.
+          // The old 77%-wide / hand-tuned map stretched every line ~18% past the
+          // text, giving empty edge boxes and uneven highlights. Pages 1-2 (circle
+          // layout) keep the old map until they are measured separately.
+          if (currentPage >= 3) {
+            const L = currentPage % 2 === 0 ? 22.6 : 12.5;
+            boxes.push({
+              key, surah: parts[0], ayah: parts[1],
+              left: L + ((h.x - 40) / 840) * 64.9,
+              top: ((190 + (h.y - 22) * (1390 / 1381)) / 1754) * 100,
+              width: (h.w / 840) * 64.9,
+              height: ((h.h * (1390 / 1381)) / 1754) * 100,
+            });
+            continue;
+          }
           const left = calA + ((h.x - 40) / 840) * 77;
           boxes.push({
             key,
@@ -3618,9 +3669,9 @@ export default function QuranMushafPage({
       if (best && bestD < 4) box = best;
     }
     if (!box) return;
-    setTapFlash(box);
-    if (tapFlashTimer.current) clearTimeout(tapFlashTimer.current);
-    tapFlashTimer.current = setTimeout(() => setTapFlash(null), 700);
+    // 2026-11-19: mark the tapped ayah word by word (never one big box over
+    // two lines) and keep it until the page turns, instead of a 0.7 s flash.
+    setSearchHighlight({ surah: box.surah, ayah: box.ayah });
     const pool = [...stripVerses, ...surahVerses, ...spannedVerses];
     let row = pool.find((v) => v.surah_no === box.surah && v.ayah_no === box.ayah);
     if (!row) {
@@ -3944,7 +3995,7 @@ export default function QuranMushafPage({
                             </span>
                           )}
                         </div>
-                        <p className="font-arabic text-xl text-accent-800 leading-loose">{verse.ayah_text}</p>
+                        <p className="font-arabic text-xl text-accent-800 leading-loose">{blankMarks(verse.ayah_text)}</p>
 
                         {/* Links display when verse is selected */}
                         {isSelected && (
@@ -4543,11 +4594,17 @@ export default function QuranMushafPage({
                       REQUESTED page, so follow/search/tap highlights
                       are suppressed until the displayed image lands
                       rather than marking the wrong page's words. */}
-                  {tapFlash && displayedPage === currentPage && (() => {
-                    const f = insetHighlightBox(imageBoxToContainer(clampBoxToPaper(tapFlash)));
+                  {/* Listen playback: word-by-word highlight (2026-11-19) */}
+                  {nowPlayingAyah && nowPlayingAyah.kind === 'ayah' && listenWord >= 0 && !followOn && pageWordBoxes && displayedPage === currentPage && (() => {
+                    const boxes = pageWordBoxes
+                      .filter((b) => b.surah === nowPlayingAyah.surah && b.ayah === nowPlayingAyah.ayah)
+                      .map((b) => ({ ...b, wordNo: Number(b.key.split(':')[2]) || 0 }));
+                    if (boxes.length === 0) return null;
                     return (
-                      <div className="mushaf-hl mushaf-hl--current"
-                        style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
+                      <div className="absolute inset-0 pointer-events-none">
+                        <MushafHighlightLayer currentWord={listenWord}
+                          boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
+                      </div>
                     );
                   })()}
                   {/* Follow-the-imam highlight: the whole tracked ayah is
@@ -4590,38 +4647,28 @@ export default function QuranMushafPage({
                       (stopPropagation); in clean mode it also restores
                       the controls, like any other page tap. */}
                   {showFullscreen && !followOn && !selectedVerse && !showEditionPickerInFullscreen && pageWordBoxes && displayedPage === currentPage && (() => {
-                    const byAyah: Record<string, { surah: number; ayah: number; left: number; top: number; right: number; bottom: number }> = {};
+                    // 2026-11-19: one zone per WORD (not one rectangle per ayah): the
+                    // bounding rect of a multi-line ayah overlapped the neighbouring
+                    // ayah's lines, so a tap landed on the wrong ayah.
+                    const zones: { verse: QuranVerse; key: string; left: number; top: number; width: number; height: number }[] = [];
                     for (const b of pageWordBoxes) {
-                      const key = `${b.surah}:${b.ayah}`;
-                      const cur = byAyah[key];
-                      if (!cur) {
-                        byAyah[key] = { surah: b.surah, ayah: b.ayah, left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height };
-                      } else {
-                        cur.left = Math.min(cur.left, b.left);
-                        cur.top = Math.min(cur.top, b.top);
-                        cur.right = Math.max(cur.right, b.left + b.width);
-                        cur.bottom = Math.max(cur.bottom, b.top + b.height);
-                      }
-                    }
-                    const zones: { verse: QuranVerse; left: number; top: number; width: number; height: number }[] = [];
-                    for (const key of Object.keys(byAyah)) {
-                      const z = byAyah[key];
-                      const verse = stripVerses.find((v) => v.surah_no === z.surah && v.ayah_no === z.ayah);
+                      const verse = stripVerses.find((v) => v.surah_no === b.surah && v.ayah_no === b.ayah);
                       if (!verse) continue;
-                      const f = imageBoxToContainer(clampBoxToPaper({ key: `${z.surah}:${z.ayah}`, surah: z.surah, ayah: z.ayah, left: z.left, top: z.top, width: z.right - z.left, height: z.bottom - z.top }));
+                      const f = imageBoxToContainer(clampBoxToPaper(b));
                       if (f.width <= 0 || f.height <= 0) continue;
-                      zones.push({ verse, left: f.left, top: f.top, width: f.width, height: f.height });
+                      zones.push({ verse, key: b.key, left: f.left, top: f.top, width: f.width, height: f.height });
                     }
                     if (zones.length === 0) return null;
                     return (<>
                       {zones.map((z) => (
-                        <button key={`tap-${z.verse.id}`} aria-label={`فتح آية ${z.verse.ayah_no}`}
+                        <button key={`tap-${z.key}`} aria-label={`فتح آية ${z.verse.ayah_no}`}
                           className="absolute bg-transparent border-0 p-0 cursor-pointer"
                           style={{ left: `${z.left}%`, top: `${z.top}%`, width: `${z.width}%`, height: `${z.height}%` }}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (Date.now() - lastSwipeAt.current < 500) return;
                             if (cleanMode) setCleanMode(false);
+                            setSearchHighlight({ surah: z.verse.surah_no, ayah: z.verse.ayah_no });
                             handleVerseClick(z.verse);
                           }} />
                       ))}
@@ -4805,7 +4852,7 @@ export default function QuranMushafPage({
                           </button>
                         </div>
                       ) : (
-                        <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{selectedVerse.ayah_text}</p>
+                        <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{blankMarks(selectedVerse.ayah_text)}</p>
                       )}
                       {/* W5-D (2026-11-19): six tiles on top — تربيطات الحفظ، المتشابهات، الإعراب، أسباب النزول، معاني الكلمات، التفسير. «استمع» moved to the bottom row (middle). */}
                       <div className="grid grid-cols-3 gap-1.5 mb-2">
@@ -4863,7 +4910,7 @@ export default function QuranMushafPage({
                                   <button key={o.key} onClick={() => handleSimilarClick(o.row)}
                                     className="block w-full text-right bg-white hover:bg-emerald-50 rounded-lg p-3 border border-emerald-200">
                                     <p className="text-sm font-bold text-accent-700 mb-1">{o.surah_name} — آية {o.ayah_no}</p>
-                                    <p className="font-arabic text-lg text-accent-800 leading-loose">{renderWithRanges(o.row.ayah_text, o.ranges)}</p>
+                                    <p className="font-arabic text-lg text-accent-800 leading-loose">{renderWithRanges(blankMarks(o.row.ayah_text), o.ranges)}</p>
                                   </button>
                                 ))}
                                 {e.others.length > 12 && <span className="text-sm text-accent-600 self-center">و{e.others.length - 12} آية أخرى</span>}
@@ -4878,7 +4925,7 @@ export default function QuranMushafPage({
                             <button key={`${s.verse.surah_no}:${s.verse.ayah_no}`} onClick={() => handleSimilarClick(s.verse)}
                               className="block w-full text-right bg-gray-50 hover:bg-emerald-50 rounded-lg p-3 border border-emerald-100">
                               <p className="text-sm font-bold text-accent-700 mb-1">{s.verse.surah_name} — آية {s.verse.ayah_no} <span className="text-emerald-700 font-semibold">· {s.run} كلمات مشتركة</span></p>
-                              <p className="font-arabic text-lg text-accent-800 leading-loose">{renderWithShared(s.verse.ayah_text, s.shared)}</p>
+                              <p className="font-arabic text-lg text-accent-800 leading-loose">{renderWithShared(blankMarks(s.verse.ayah_text), s.shared)}</p>
                             </button>
                           ))}
                         </div>

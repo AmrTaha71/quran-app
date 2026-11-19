@@ -687,7 +687,7 @@ export const MADINAH_NORMALIZED_ASPECT = 0.7070;
 // width those marks were off screen. The frame now takes the share that
 // leaves 12.1 image-% on BOTH sides (both, so the frame still lands on
 // the same screen rect on odd and even pages: no sideways jump).
-export const MADINAH_MARK_MARGIN = 12.1;
+export const MADINAH_MARK_MARGIN = 5; // 2026-11-19: was 12.1 — page was ~77% of screen width; now ~89%
 export const MADINAH_COVER_K = 78.71 / (78.71 + 2 * MADINAH_MARK_MARGIN);
 export const MADINAH_COVER_MAX_ASPECT = 0.90;
 export const MADINAH_IMAGE_ASPECT = 1240 / 1754;
