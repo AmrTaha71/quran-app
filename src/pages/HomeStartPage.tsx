@@ -34,6 +34,7 @@ import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
 import LiteModeButton from '../components/LiteModeButton';
 import type { Route } from '../lib/routes';
+import HomeHifzView from '../components/home/HomeHifzView';
 
 
 // Light start page (الرئيسية) for logged-in users: NOT a second
@@ -170,23 +171,18 @@ export default function HomeStartPage({ session, onNavigate }: {
     setShowIntro(false);
   };
   useEscapeClose(showIntro, dismissIntro);
-  const [lastPage] = useState(readLastPage);
   // Saved listening wird (display only here — the resume action
   // lives on ListenPage). Read once on mount; a missing/stub module
   // value simply hides the line.
   const [listeningWird] = useState(() => {
     try { return readListeningWird(); } catch { return null; }
   });
-  const juz = getJuzFromPage(lastPage.page);
   // Memorized state — the SAME source Lawhati reads (user_lists
   // 'memorized' via useUserLists), reduced to the contiguous
   // from-start run by the shared helper. The map and the review
   // card below both read this run; nothing here is hardcoded.
-  const { lists } = useUserLists();
-  const memorizedRun = memorizedFromStart(lists.memorized);
   // خريطة حفظي door: expands to the 30-Juz map below it; collapsed
   // by default — same pattern as the الحفظ / سمّع لنفسك doors.
-  const [mapOpen, setMapOpen] = useState(false);
   const [mutOpen, setMutOpen] = useState(false);
   const [bigOpen, setBigOpen] = useState(false);
   const [qiblaOpen, setQiblaOpen] = useState(false);
@@ -197,12 +193,12 @@ export default function HomeStartPage({ session, onNavigate }: {
   // Home doors with choices (الحفظ / سـمّع لي / اختبر نفسك): one panel
   // open at a time, shown right under the tile grid and scrolled into
   // view so the choices are never hidden below the fold.
-  const [panel, setPanel] = useState<null | 'hifz' | 'test' | 'quiz'>(null);
-  const hifzOpen = panel === 'hifz';
+  const [view, setView] = useState<'main' | 'hifz'>('main');
+  const [panel, setPanel] = useState<null | 'test' | 'quiz'>(null);
   const testOpen = panel === 'test';
   const quizOpen = panel === 'quiz';
   const panelRef = useRef<HTMLDivElement | null>(null);
-  function togglePanel(which: 'hifz' | 'test' | 'quiz'): void {
+  function togglePanel(which: 'test' | 'quiz'): void {
     setPanel((p) => (p === which ? null : which));
   }
   useEffect(() => {
@@ -214,43 +210,6 @@ export default function HomeStartPage({ session, onNavigate }: {
   }, [panel]);
   // Tile captions: shown the first three visits, then icon + title only.
   const showHints = useHint('home-tiles');
-  const [showPicker, setShowPicker] = useState(false);
-  // "ابدأ من مكان معين" picker: chosen surah + ayah. The surah number
-  // input and the name dropdown stay in sync through this state.
-  const [pickerSurah, setPickerSurah] = useState(1);
-  const [pickerSurahText, setPickerSurahText] = useState('١');
-  const [pickerAyah, setPickerAyah] = useState(1);
-  const [pickerAyahText, setPickerAyahText] = useState('١');
-  const pickerMaxAyah = SURAH_AYAH_COUNTS[pickerSurah - 1] ?? 1;
-  function onSurahNoChange(text: string): void {
-    setPickerSurahText(text);
-    const n = Number(normalizeDigits(text));
-    if (Number.isInteger(n) && n >= 1 && n <= 114) {
-      setPickerSurah(n);
-      const max = SURAH_AYAH_COUNTS[n - 1] ?? 1;
-      if (pickerAyah > max) { setPickerAyah(max); setPickerAyahText(toArabicIndic(max)); }
-    }
-  }
-  function onSurahSelect(no: number): void {
-    setPickerSurah(no);
-    setPickerSurahText(toArabicIndic(no));
-    const max = SURAH_AYAH_COUNTS[no - 1] ?? 1;
-    if (pickerAyah > max) { setPickerAyah(max); setPickerAyahText(toArabicIndic(max)); }
-  }
-  function onAyahNoChange(text: string): void {
-    setPickerAyahText(text);
-    const n = Number(normalizeDigits(text));
-    if (Number.isInteger(n) && n >= 1 && n <= pickerMaxAyah) setPickerAyah(n);
-  }
-  function startFromPicker(): void {
-    const s = Number(normalizeDigits(pickerSurahText));
-    const surah = Number.isInteger(s) && s >= 1 && s <= 114 ? s : pickerSurah;
-    const a = Number(normalizeDigits(pickerAyahText));
-    const max = SURAH_AYAH_COUNTS[surah - 1] ?? 1;
-    const ayah = Number.isInteger(a) && a >= 1 ? Math.min(a, max) : pickerAyah;
-    jumpToAyah(surah, ayah, onNavigate);
-  }
-
   useEffect(() => {
     const loadLinkOfDay = async () => {
       if (readLinkOfDayCache()) return;
@@ -348,6 +307,8 @@ export default function HomeStartPage({ session, onNavigate }: {
     );
   }
 
+  if (view === 'hifz') return <HomeHifzView onNavigate={onNavigate} onClose={() => setView('main')} />;
+
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
       <main className="max-w-5xl mx-auto px-4 py-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
@@ -386,7 +347,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             under the grid; only one panel is open at a time. */}
         <div className="home-tiles mb-3">
           <HomeTile icon={<MushafIcon />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
-            expanded={hifzOpen} onClick={() => { togglePanel('hifz'); setShowPicker(false); }} />
+            onClick={() => setView('hifz')} />
           <HomeTile icon={<EarListenIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             expanded={testOpen} onClick={() => togglePanel('test')} />
           <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
@@ -394,101 +355,6 @@ export default function HomeStartPage({ session, onNavigate }: {
           <HomeTile icon={<AudioLines />} glaze="emerald" title="الْحَقِ الإِمَامَ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
         </div>
-
-        {hifzOpen && (
-          <div ref={panelRef} className="home-panel mb-4 alive-subdoors">
-            <p className="home-panel-title">الحفظ</p>
-            {/* (a) resume from the saved position — hidden when the user
-                never opened the Mushaf (nothing to resume from). */}
-            {lastPage.visited && (
-              <button
-                onPointerDown={pressFeedback}
-                onClick={() => resumeHifz(onNavigate)}
-                className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white rounded-xl flex flex-col items-center justify-center polish-press polish-press-depth polish-focus"
-              >
-                <span className="font-semibold text-base flex items-center gap-2">
-                  <Play className="w-5 h-5 text-white" />
-                  أكمل من حيث توقفت
-                </span>
-                <span className="text-xs text-amber-100 mt-0.5">
-                  صفحة {lastPage.page.toLocaleString('ar-EG')} — سورة {pageSurah(lastPage.page)} — جزء {juz.number.toLocaleString('ar-EG')}
-                </span>
-              </button>
-            )}
-            {/* (b) pick a place: Juz grid, or surah (number + name) + ayah. */}
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => setShowPicker(!showPicker)}
-              aria-expanded={showPicker}
-              className="w-full py-3 mb-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              <MapPin className="w-5 h-5 text-white" />
-              ابدأ من مكان معين
-              <ChevronDown className={`w-4 h-4 text-white alive-chevron ${showPicker ? 'rotate-180' : ''}`} />
-            </button>
-            {showPicker && (
-              <div className="rounded-2xl glass-card polish-card p-4 mb-3">
-                <p className="font-bold text-ink text-base mb-2">اختر الجزء</p>
-                <div className="grid grid-cols-5 sm:grid-cols-6 gap-2 mb-4">
-                  {JUZ_STARTS.map((j) => (
-                    <button
-                      key={j.juz}
-                      onPointerDown={pressFeedback}
-                      onClick={() => jumpToAyah(j.surah, j.ayah, onNavigate)}
-                      className="py-2.5 rounded-lg bg-emerald-50 text-emerald-800 font-bold text-lg polish-press polish-focus"
-                    >
-                      {toArabicIndic(j.juz)}
-                    </button>
-                  ))}
-                </div>
-                <p className="font-bold text-ink text-base mb-2">أو اختر السورة والآية</p>
-                <div className="flex gap-2 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <DrumSelect label="اسم السورة" value={pickerSurah} onChange={onSurahSelect}
-                      options={SURAHS.map((s) => ({ value: s.no, label: `${toArabicIndic(s.no)} — ${s.name} (${surahPlace(s.no)})` }))} />
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div className="w-32 shrink-0">
-                    <DrumSelect label="رقم الآية" value={pickerAyah} onChange={(n) => onAyahNoChange(toArabicIndic(n))}
-                      options={Array.from({ length: pickerMaxAyah }, (_, k) => ({ value: k + 1, label: `آية ${toArabicIndic(k + 1)}` }))} />
-                  </div>
-                  <button
-                    onPointerDown={pressFeedback}
-                    onClick={startFromPicker}
-                    className="flex-1 py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl polish-press polish-press-depth polish-focus"
-                  >
-                    ابدأ من هنا
-                  </button>
-                </div>
-                <p className="text-xs text-ink-2 mt-2">
-                  سورة {SURAHS[pickerSurah - 1]?.name} فيها {toArabicIndic(pickerMaxAyah)} آية
-                </p>
-              </div>
-            )}
-            {/* خريطة حفظي (feature #1): the 30-Juz map (gold = memorized,
-                amber tint = in progress, grey = not yet); tapping a Juz
-                jumps to it in the Mushaf. */}
-            <button
-              onPointerDown={pressFeedback}
-              onClick={() => setMapOpen(!mapOpen)}
-              aria-expanded={mapOpen}
-              className="w-full py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
-            >
-              <Map className="w-5 h-5 text-white" />
-              خريطة حفظي
-              <ChevronDown className={`w-4 h-4 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {mapOpen && (
-              <div className="mt-3">
-                <MemorizationMap
-                  run={memorizedRun}
-                  onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)}
-                />
-              </div>
-            )}
-          </div>
-        )}
 
         {/* سـمّع لي: 4 range choices. Only a choice tap navigates (to
             'test', with the chosen range stored for SelfTestPage). */}
