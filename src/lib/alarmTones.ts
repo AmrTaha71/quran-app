@@ -16,6 +16,12 @@ export const ALARM_TONES: { id: string; name: string; period: number; notes: Not
   { id: 'calm', name: 'هادئ متصاعد', period: 3, notes: [[0, 440, 1, 'sine', .35], [.8, 554, 1, 'sine', .35], [1.6, 659, 1.3, 'sine', .4]] },
   { id: 'whistle', name: 'صافرة', period: 1.2, notes: [[0, 500, .5, 'sawtooth', .2, 1800], [.6, 1800, .3, 'square', .15]] },
   { id: 'trio', name: 'ثلاثية مرحة', period: 1.4, notes: [[0, 523, .15, 'square', .25], [.2, 659, .15, 'square', .25], [.4, 784, .3, 'square', .25], [.9, 784, .15, 'square', .2]] },
+  { id: 'ping', name: 'نغمة حادة', period: 1, notes: [[0, 1760, .35, 'sine', .6], [.4, 1760, .35, 'sine', .6]] },
+  { id: 'dbl', name: 'نقرتين', period: 1.2, notes: [[0, 1200, .12, 'square', .35], [.18, 1200, .12, 'square', .35]] },
+  { id: 'buzz', name: 'طنين', period: 1, notes: [[0, 440, .6, 'sawtooth', .35]] },
+  { id: 'chirp', name: 'زقزقة', period: 1.3, notes: [[0, 1500, .12, 'sine', .5, 2600], [.2, 1500, .12, 'sine', .5, 2600], [.4, 1500, .12, 'sine', .5, 2600]] },
+  { id: 'alert', name: 'تحذير', period: 1.2, notes: [[0, 880, .3, 'square', .3], [.4, 660, .3, 'square', .3]] },
+  { id: 'chime', name: 'جرس خفيف', period: 2.4, notes: [[0, 1047, 1, 'sine', .5], [.35, 1319, 1, 'sine', .5], [.7, 1568, 1.4, 'sine', .5]] },
   { id: 'drums', name: 'طبول', period: .9, notes: [[0, 90, .18, 'sine', 1], [.15, 90, .18, 'sine', 1], [.45, 110, .25, 'sine', 1], [.6, 70, .25, 'sine', 1]] },
 ];
 

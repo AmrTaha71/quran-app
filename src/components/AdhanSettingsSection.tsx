@@ -16,6 +16,8 @@ import {
   ensureAdhanDay,
   loadAdhanSettings,
   playAdhanSound,
+  loadBeepTone,
+  saveBeepTone,
   saveAdhanSettings,
   timeInTimezone,
   type AdhanDay,
@@ -157,6 +159,7 @@ export default function AdhanSettingsSection() {
     });
   };
 
+  const [beepTone, setBeepTone] = useState(loadBeepTone());
   const toggleTest = () => {
     if (testing) {
       testAudioRef.current?.pause();
@@ -321,6 +324,24 @@ export default function AdhanSettingsSection() {
           >
             <span className="block font-medium text-accent-800">تنبيه صوتي قصير</span>
           </button>
+          {settings.sound === 'beep' && (
+            <div>
+              <p className="text-xs text-accent-700 mb-1">اختار النغمة (اضغط للتجربة):</p>
+              <div className="grid grid-cols-3 gap-2">
+                {ALARM_TONES.map((t) => (
+                  <button key={t.id}
+                    onClick={() => {
+                      saveBeepTone(t.id); setBeepTone(t.id);
+                      testAudioRef.current?.pause();
+                      const a = playAdhanSound('beep');
+                      testAudioRef.current = a;
+                      window.setTimeout(() => { a?.pause(); }, 2500);
+                    }}
+                    className={`py-2 rounded-lg text-xs font-bold polish-press ${beepTone === t.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-700'}`}>{t.name}</button>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             onClick={() => update({ sound: 'full' })}
             className={`text-right p-3 rounded-xl border-2 polish-press ${settings.sound === 'full' ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}

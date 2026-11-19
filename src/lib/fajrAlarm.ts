@@ -44,7 +44,7 @@ function wavBlobUrl(samples: Float32Array): string {
   for (let i = 0; i < samples.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, samples[i])) * 32767, true);
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
-function toneUrl(id: string): string {
+export function toneUrl(id: string): string {
   const hit = urlCache.get(id); if (hit) return hit;
   const out = renderTone(id, 0, SR);
   normalizeLoud(out);
