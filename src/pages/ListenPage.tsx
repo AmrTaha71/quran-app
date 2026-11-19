@@ -484,6 +484,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // 2026-11-19: the «قفل الشاشة» button first asks what to show while listening:
   // a fullscreen Mushaf (audio + the highlight following it) or the black screen.
   const [showScreenChoice, setShowScreenChoice] = useState(false);
+  const backHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openMushafWhileListening = () => {
     setShowScreenChoice(false);
     try {
@@ -3355,13 +3356,20 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             <p className="text-white/20 text-sm font-medium">اضغط مطوّلًا للعودة</p>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); setBlackScreen(false); }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              if (backHoldRef.current) clearTimeout(backHoldRef.current);
+              backHoldRef.current = setTimeout(() => { backHoldRef.current = null; setBlackScreen(false); }, 800);
+            }}
+            onPointerUp={() => { if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; } }}
+            onPointerLeave={() => { if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; } }}
+            onPointerCancel={() => { if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; } }}
             onTouchStart={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             className="absolute bottom-[calc(1.25rem_+_env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 px-8 py-3 rounded-full bg-white/10 text-white/50 text-base font-semibold"
             aria-label="رجوع"
           >
-            رجوع
+            اضغط مطوّلًا للرجوع
           </button>
         </div>
       )}
