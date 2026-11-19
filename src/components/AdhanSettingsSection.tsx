@@ -52,6 +52,7 @@ export default function AdhanSettingsSection() {
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState('');
   const [method, setMethod] = useState<number | null>(() => getAdhanMethod());
+  const [ringSilent, setRingSilent] = useState(() => loadRingOnSilent());
 
   const refreshPushStatus = async () => {
     setPushStatus(await getPushStatus());
@@ -355,6 +356,26 @@ export default function AdhanSettingsSection() {
             صوت فقط
           </button>
         </div>
+        {/* W3-S6: «الأذان حتى لو الموبايل صامت». Only stores the choice (same key
+            nativeAlarm.ts already reads on Android); the playback logic is not
+            changed here. The text states the real limits per platform. */}
+        <button
+          onClick={() => { const v = !ringSilent; setRingSilent(v); saveRingOnSilent(v); void rescheduleNativeAlarms(); }}
+          aria-pressed={ringSilent}
+          className="w-full mt-3 flex items-center justify-between gap-3 p-3 rounded-xl border-2 border-hairline polish-press text-start"
+        >
+          <span className="font-medium text-accent-800">الأذان حتى لو الموبايل صامت</span>
+          <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${ringSilent ? 'bg-emerald-500' : 'bg-gray-300'}`}>
+            <span className={`block w-5 h-5 bg-white rounded-full shadow transition-smooth ${ringSilent ? 'mr-auto' : ''}`} />
+          </span>
+        </button>
+        <p className="text-xs text-accent-700 mt-2 leading-relaxed">
+          {isNativeApp() && platformName() === 'android'
+            ? 'أندرويد: الأذان والمنبه بيرنوا من نظام الجهاز حتى لو الموبايل صامت والتطبيق مقفول.'
+            : isNativeApp()
+              ? 'آيفون: آبل بتكتم صوت الإشعارات في وضع الصامت ومش بتسمح لتطبيق عادي يتخطاه. التطبيق مقفول + الموبايل صامت = مفيش صوت. افتح الصامت.'
+              : 'الاختيار بيتحفظ بس، وبيشتغل في نسخة أندرويد من المتجر (لسه ما نزلتش). على الآيفون والتطبيق مقفول والموبايل صامت: مش ممكن خالص، ده قيد من آبل. وعلى الويب مفيش أذان بصوت والتطبيق مقفول، الإشعار بس.'}
+        </p>
         <p className="text-xs text-accent-600 mt-3" dir="auto">{getAdhanVoice().credit || ADHAN_AUDIO_CREDIT}</p>
         <p className="text-xs text-accent-600 mt-1">
           آيفون ممكن يمنع الصوت قبل أول لمسة في التطبيق، وزر «جرّب الصوت» بيفتحه.
@@ -462,7 +483,6 @@ function FajrAlarmSetting() {
   const [tone, setTone] = useState(loadFajrTone());
   const [night, setNight] = useState(isNightMode());
   const [recs, setRecs] = useState<AlarmRec[]>([]);
-  const [silent, setSilent] = useState(loadRingOnSilent());
   const [recName, setRecName] = useState('');
   const [recording, setRecording] = useState<{ stop: () => Promise<Blob> } | null>(null);
   const [recErr, setRecErr] = useState('');
@@ -533,14 +553,6 @@ function FajrAlarmSetting() {
           <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 p-3">
             <button onClick={() => { void enableNativeAlarms().then((r) => alert(r.ok ? 'تم تفعيل الأذان والمنبه حتى والتطبيق مقفول' : 'لازم تسمح بالإشعارات (وبالمنبهات الدقيقة في أندرويد)')); }}
               className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl polish-press">تفعيل الأذان والمنبه والتطبيق مقفول</button>
-            {platformName() === 'android' ? (
-              <label className="flex items-center gap-2 mt-3 text-sm font-semibold text-accent-800">
-                <input type="checkbox" checked={silent} onChange={(e) => { setSilent(e.target.checked); saveRingOnSilent(e.target.checked); void rescheduleNativeAlarms(); }} className="w-5 h-5" />
-                الأذان والمنبه يرنّوا حتى لو التليفون صامت
-              </label>
-            ) : (
-              <p className="text-xs text-amber-800 mt-3 leading-relaxed">على آيفون وآيباد: نظام iOS يكتم صوت الإشعارات في وضع الصامت ولا يسمح لتطبيق عادي بتجاوزه (تحتاج Critical Alerts بموافقة آبل). الأذان يرن لو الصامت مقفول.</p>
-            )}
             <p className="text-xs text-accent-700 mt-2 leading-relaxed">بيشتغل من نظام الجهاز نفسه فيرن حتى لو التطبيق مقفول أو الشاشة مقفولة. على آيفون النغمة بتتكرر كل دقيقة لحد ما تفتح التطبيق وتحل الأسئلة.</p>
           </div>
         )}
