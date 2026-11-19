@@ -46,6 +46,7 @@ import OfflineBanner from './components/OfflineBanner';
 import BottomBackBar from './components/BottomBackBar';
 import AdminViewToggle from './components/AdminViewToggle';
 import { resetAdminView, setRealAdmin } from './lib/adminPreview';
+import { useKeepAwake } from './lib/useKeepAwake';
 import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
 import type { Route } from './lib/routes';
@@ -62,6 +63,10 @@ const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow
 // (open Settings door, Listen detail view, SelfTest sub-view). Home,
 // landing, auth, admin and splash never show it.
 const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room'];
+// Screen stays awake ONLY on these (W2-5): the Mushaf (mushaf/follow),
+// tasmee (test) and Listen. Mounted in the shell by route so the lock is
+// released the moment the user leaves; no other page is listed.
+const KEEP_AWAKE_ROUTES: Route[] = ['mushaf', 'follow', 'test', 'listen'];
 // Of those, the routes whose page renders the bottom nav (which already
 // carries الرئيسية): there the bar shows a single back button.
 const BOTTOM_NAV_ROUTES: Route[] = ['settings', 'test', 'app', 'mushaf', 'follow'];
@@ -223,6 +228,9 @@ function AppContent() {
       // ignore
     }
   }, [session]);
+
+  // Screen Wake Lock for the reading/tasmee/listening pages (W2-5).
+  useKeepAwake(!!session && KEEP_AWAKE_ROUTES.includes(route));
 
   // Admin preview (W2-4): learn whether this account is an admin so the
   // «شوف كمستخدم» switch can show. Display-only: it never grants anything.
