@@ -4635,7 +4635,7 @@ export default function QuranMushafPage({
                     // the last highlight stays, faded (never jumps, never vanishes).
                     return (
                       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${followEngine === 'lab' && followTrack === 'searching' ? 'opacity-40' : 'opacity-100'}`}>
-                        <MushafHighlightLayer currentWord={followPos.word}
+                        <MushafHighlightLayer currentWord={followPos.word ?? -1}
                           boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
                       </div>
                     );
@@ -4643,7 +4643,7 @@ export default function QuranMushafPage({
                   {/* Search-jump highlight: the ayah tapped in لوحتي,
                       marked amber exactly on its words until the page
                       turns or fullscreen exits. */}
-                  {searchHighlight && (!followOn || !followPos) && pageWordBoxes && displayedPage === currentPage && (() => {
+                  {searchHighlight && !followOn && pageWordBoxes && displayedPage === currentPage && (() => {
                     const boxes = pageWordBoxes.filter((b) => b.surah === searchHighlight.surah && b.ayah === searchHighlight.ayah);
                     return (
                       <MushafHighlightLayer

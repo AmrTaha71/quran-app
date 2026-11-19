@@ -24,16 +24,13 @@ export default function MushafHighlightLayer({ boxes: allBoxes, currentWord }: {
    *  whole-ayah highlight (search jump / static mark). */
   currentWord?: number;
 }) {
-  let boxes = allBoxes;
+  const boxes = allBoxes;
   if (boxes.length === 0) return null;
-  // 2026-11-19 (Dr. Amr): while an audio source is tracking (imam / recorded
-  // reciter) the band runs from the FIRST word of the ayah to the word being
-  // recited now and grows with it; the next ayah starts a new band.
-  if (currentWord !== undefined) boxes = boxes.filter((b) => b.wordNo - 1 <= currentWord);
-  if (boxes.length === 0) return null;
-  // 2026-11-19: no gaps between words — the highlight runs as one
-  // continuous band along each line. Boxes on the same line are stretched
-  // to meet their neighbour at the midpoint of the gap.
+  // 2026-11-19 (Dr. Amr): ONE continuous band — like a snake / train. Boxes are
+  // grouped into lines using ALL the ayah's words (so each line's top/height is
+  // stable while the band grows); each line is drawn as a single strip from the
+  // first word of the ayah (right end) to the word being recited now (left
+  // end). With no `currentWord` the whole ayah is covered (static mark).
   const fitted = boxes.map((b) => insetHighlightBox(b));
   const order = fitted.map((_, i) => i).sort((a, b) => fitted[a].top - fitted[b].top);
   const lines: number[][] = [];
@@ -41,32 +38,21 @@ export default function MushafHighlightLayer({ boxes: allBoxes, currentWord }: {
     const line = lines.find((l) => Math.abs(fitted[l[0]].top - fitted[i].top) < fitted[i].height * 0.6);
     if (line) line.push(i); else lines.push([i]);
   }
-  for (const line of lines) {
-    // One common top/height per line, so the band is a straight strip.
+  const strips: { key: string; left: number; top: number; width: number; height: number }[] = [];
+  lines.forEach((line, li) => {
     const t = line.reduce((a, i) => a + fitted[i].top, 0) / line.length;
     const h = line.reduce((a, i) => a + fitted[i].height, 0) / line.length;
-    for (const i of line) { fitted[i].top = t; fitted[i].height = h; }
-    line.sort((a, b) => fitted[a].left - fitted[b].left);
-    for (let k = 0; k < line.length - 1; k++) {
-      const a = fitted[line[k]]; const b = fitted[line[k + 1]];
-      const aRight = a.left + a.width;
-      const gap = b.left - aRight;
-      if (gap > 0 && gap < 6) {
-        const mid = aRight + gap / 2;
-        a.width = mid - a.left;
-        const bRight = b.left + b.width;
-        b.left = mid; b.width = bRight - mid;
-      }
-    }
-  }
+    const used = currentWord === undefined ? line : line.filter((i) => boxes[i].wordNo - 1 <= currentWord);
+    if (used.length === 0) return;
+    const l = Math.min(...used.map((i) => fitted[i].left));
+    const r = Math.max(...used.map((i) => fitted[i].left + fitted[i].width));
+    strips.push({ key: `ln-${li}`, left: l, top: t, width: r - l, height: h });
+  });
   return (<>
-    {boxes.map((b, bi) => {
-      const f = fitted[bi];
-      const state = '';
-      return (
-        <div key={b.key} className={`mushaf-hl${state}`}
-          style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`, boxShadow: 'none', borderRadius: 4 }} />
-      );
-    })}
+    {strips.map((f) => (
+      <div key={f.key} className="mushaf-hl"
+        style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`, boxShadow: 'none', borderRadius: 6,
+          transition: 'left 160ms linear, width 160ms linear' }} />
+    ))}
   </>);
 }
