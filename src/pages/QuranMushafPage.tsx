@@ -1909,7 +1909,10 @@ export default function QuranMushafPage({
     // normal-view panel): the start button lives in the fullscreen
     // lobby below, which is also the gesture browsers honour for mic.
     setShowFullscreen(true);
-    requestNativeFullscreen();
+    // 2026-11-19: NO native fullscreen here. It hides Safari's toolbar, which is
+    // where the microphone-permission prompt appears, so the user could not see
+    // it. Native fullscreen is requested later, when the imam is locked
+    // (jumpToTracked), by which time permission has been answered.
     followActiveRef.current = true;
     setFollowReady(true);
     setFollowStatus('listening');
