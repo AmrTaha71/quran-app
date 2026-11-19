@@ -18,27 +18,19 @@ export type HighlightBox = {
   height: number;
 };
 
-export default function MushafHighlightLayer({ boxes, currentWord }: {
+export default function MushafHighlightLayer({ boxes: allBoxes, currentWord }: {
   boxes: HighlightBox[];
   /** 0-based index of the word being recited now. Omit for a uniform
    *  whole-ayah highlight (search jump / static mark). */
   currentWord?: number;
 }) {
+  let boxes = allBoxes;
   if (boxes.length === 0) return null;
   // 2026-11-19 (Dr. Amr): while an audio source is tracking (imam / recorded
-  // reciter) ONE highlight glides over the word being recited — not a strip of
-  // glued word boxes over the whole ayah. A single persistent element, so the
-  // browser animates the move from word to word.
-  if (currentWord !== undefined) {
-    const cur = boxes.find((b) => b.wordNo - 1 === currentWord);
-    if (!cur) return null;
-    const f = insetHighlightBox(cur);
-    return (
-      <div className="mushaf-hl mushaf-hl--current"
-        style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`,
-          transition: 'left 140ms ease-out, top 140ms ease-out, width 140ms ease-out, height 140ms ease-out' }} />
-    );
-  }
+  // reciter) the band runs from the FIRST word of the ayah to the word being
+  // recited now and grows with it; the next ayah starts a new band.
+  if (currentWord !== undefined) boxes = boxes.filter((b) => b.wordNo - 1 <= currentWord);
+  if (boxes.length === 0) return null;
   // 2026-11-19: no gaps between words — the highlight runs as one
   // continuous band along each line. Boxes on the same line are stretched
   // to meet their neighbour at the midpoint of the gap.
@@ -70,9 +62,7 @@ export default function MushafHighlightLayer({ boxes, currentWord }: {
   return (<>
     {boxes.map((b, bi) => {
       const f = fitted[bi];
-      const state = currentWord === undefined ? ''
-        : b.wordNo - 1 === currentWord ? ' mushaf-hl--current'
-        : b.wordNo - 1 < currentWord ? ' mushaf-hl--passed' : ' mushaf-hl--ahead';
+      const state = '';
       return (
         <div key={b.key} className={`mushaf-hl${state}`}
           style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`, boxShadow: 'none', borderRadius: 4 }} />
