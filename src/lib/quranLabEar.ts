@@ -10,8 +10,40 @@ import { buildPhonWords, PhonemeStream, type PhonWord } from './phonemeEar';
 import { expectedWordList } from './expectedWords';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
-export function earLabOn(): boolean { try { return localStorage.getItem(EAR_LAB_KEY) === '1'; } catch { return false; } }
-export function setEarLab(on: boolean): void { try { if (on) localStorage.setItem(EAR_LAB_KEY, '1'); else localStorage.removeItem(EAR_LAB_KEY); } catch { /* ignore */ } }
+// W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
+// key stays readable: '1' = on, absent = on (new default), '0' = turned off
+// on purpose (ear-lab page). It is only USED once the model is ready, see
+// earLabUsable(); until then the test falls back to the browser ear.
+export function earLabOn(): boolean { try { return localStorage.getItem(EAR_LAB_KEY) !== '0'; } catch { return false; } }
+export function setEarLab(on: boolean): void { try { localStorage.setItem(EAR_LAB_KEY, on ? '1' : '0'); } catch { /* ignore */ } }
+
+// One-time consent for the ~100 MB first download (asked once, then automatic).
+export const EAR_DL_CONSENT_KEY = 'quran-ear-dl-consent-v1';
+export function earDownloadConsented(): boolean { try { return localStorage.getItem(EAR_DL_CONSENT_KEY) === '1'; } catch { return false; } }
+export function setEarDownloadConsent(): void { try { localStorage.setItem(EAR_DL_CONSENT_KEY, '1'); } catch { /* ignore */ } }
+
+/** Load state of the model in this tab (for the download card + ear choice). */
+export type EarLabState = { status: 'idle' | 'loading' | 'ready' | 'error'; loaded: number; total: number };
+let earState: EarLabState = { status: 'idle', loaded: 0, total: 0 };
+const earSubs = new Set<() => void>();
+function setEarState(next: Partial<EarLabState>): void {
+  earState = { ...earState, ...next };
+  for (const cb of [...earSubs]) { try { cb(); } catch { /* ignore */ } }
+}
+export function getEarLabState(): EarLabState { return earState; }
+export function subscribeEarLab(cb: () => void): () => void { earSubs.add(cb); return () => { earSubs.delete(cb); }; }
+/** A live session failed to load the model: use the browser ear for the
+ *  rest of this tab (no error loops); the card offers a retry. */
+export function markEarLabFailed(): void { setEarState({ status: 'error' }); }
+/** Use the device ear for a test now? Only when it is on AND loaded. */
+export function earLabUsable(): boolean { return earLabOn() && earState.status === 'ready'; }
+/** Is the model file already in the Cache API (downloaded before)? */
+export async function earModelCached(): Promise<boolean> {
+  try {
+    const cache = await caches.open('quranlab-model-v1');
+    return !!(await cache.match('/models/quranlab/zipformer_p_arabic_v3.int8.onnx'));
+  } catch { return false; }
+}
 
 const TARGET = 16000;
 const softSkeleton = (w: string) => w.replace(/ة/g, 'ه').replace(/(?<=.)ا(?=.)/g, '').replace(/يي+/g, 'ي').replace(/لل+/g, 'ل');
@@ -64,11 +96,20 @@ function getWorker(): Promise<Worker> {
     const w0 = worker;
     ready = new Promise<void>((res, rej) => {
       const prev = listener;
-      const timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; rej(new Error('model-load-timeout')); }, LOAD_TIMEOUT_MS);
-      w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); rej(new Error('worker-error')); };
+      setEarState({ status: 'loading' });
+      // W4-B: a slow first download (~100 MB) must not hit the 40 s load
+      // timeout while bytes still arrive: each progress message re-arms it.
+      let timer = setTimeout(() => {}, 0);
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; setEarState({ status: 'error' }); rej(new Error('model-load-timeout')); }, LOAD_TIMEOUT_MS);
+      };
+      arm();
+      w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error('worker-error')); };
       listener = (m) => {
-        if (m.type === 'ready') { clearTimeout(timer); listener = prev; res(); }
-        else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); rej(new Error(m.message)); }
+        if (m.type === 'progress') { arm(); setEarState({ loaded: Number(m.loaded) || 0, total: Number(m.total) || 0 }); }
+        else if (m.type === 'ready') { clearTimeout(timer); listener = prev; setEarState({ status: 'ready' }); res(); }
+        else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error(m.message)); }
       };
       w0.postMessage({ type: 'load' });
     });

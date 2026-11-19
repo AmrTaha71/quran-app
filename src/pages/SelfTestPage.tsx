@@ -4,9 +4,9 @@ import Sama3 from '../components/Sama3';
 import { IMLA_ALT, IMLA_PAIR_ALT } from '../lib/imlaAlt';
 import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
-import QuranAsrLab from '../components/QuranAsrLab';
+import EarDownloadCard from '../components/EarDownloadCard';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
-import { QuranLabRecognition, earLabOn, preloadEarLab } from '../lib/quranLabEar';
+import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
 import TajwidSkillPicker from '../components/TajwidSkillPicker';
@@ -1041,7 +1041,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [mixedPlan, setMixedPlan] = useState<RangeReciterPart[] | null>(null);
   const [reciterNote, setReciterNote] = useState('');
   // Warm the on-device ear as soon as the page opens when it is chosen.
-  useEffect(() => { if (earLabOn()) preloadEarLab(); else if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
+  // W4-B: the device ear (Quran-Lab) is the default; EarDownloadCard asks
+  // once and then preloads it. The old whisper ear warms only when the
+  // device ear is turned off on purpose.
+  useEffect(() => { if (!earLabOn() && getEar() === 'model') void loadEar().catch(() => {}); }, []);
+  // Which ear the current/last mic session really uses (stall timing).
+  const labEarInUseRef = useRef(false);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
@@ -3574,7 +3579,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Ayah-by-ayah uses the on-device Quran ear too when chosen (2026-11-09).
     // Batch 4 fallback (2026-11-10): no browser speech API (e.g. iOS Chrome) -> the on-device ear,
     // automatically. Nothing is uploaded, so no consent prompt is needed for this path.
-    const useLabEarAyah = earLabOn();
+    // W4-B: device ear by default, but only once it is loaded; until then
+    // (or after a failure) the browser ear, with no error. No browser ear
+    // at all (iOS home-screen app) and download already agreed: wait for it.
+    const useLabEarAyah = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+    labEarInUseRef.current = useLabEarAyah;
     const useModelEarAyah = useLabEarAyah || getEar() === 'model' || !SR;
     if (!SR && !useModelEarAyah) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
@@ -3723,6 +3732,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const stallMessage = 'الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع';
       if (code === 'no-speech' || code === 'aborted') {
         armTransientSafety(rec, () => tripAyahStalled(stallMessage));
+        return;
+      }
+      if (code === 'network' && rec instanceof QuranLabRecognition) {
+        // W4-B: the device ear could not load (not a network problem for
+        // the user). Use the browser ear from now on; «كمّل» resumes with it.
+        markEarLabFailed();
+        tripAyahStalled('اللي سمعته محفوظ — اضغط «كمّل» وكمّل عادي');
         return;
       }
       if (code === 'network') {
@@ -4903,7 +4919,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // 1 s stall timer fired while he was still reciting (false "missed"
     // marks, then the correction audio muted the mic and the rest of the
     // ayah was lost). Add the ear latency when the lab ear is on.
-    }, ((corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) + (earLabOn() ? 1.3 : 0)) * 1000);
+    }, ((corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) + (labEarInUseRef.current ? 1.3 : 0)) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
@@ -5263,7 +5279,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
     // Batch 4 fallback (2026-11-10): no browser speech API -> the on-device ear, automatically.
     // 2026-11-13: the new phoneme ear (Quran-Lab), per-device flag.
-    const useLabEar = earLabOn();
+    const useLabEar = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+    labEarInUseRef.current = useLabEar;
     const useModelEar = useLabEar || getEar() === 'model' || !SR;
     if (!SR && !useModelEar) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
@@ -5467,6 +5484,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       diagPush('error', { code: String(code || 'unknown') });
       if (code === 'no-speech' || code === 'aborted') {
         armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
+        return;
+      }
+      if (code === 'network' && rec instanceof QuranLabRecognition) {
+        // W4-B: device ear failed to load -> browser ear on «كمّل».
+        markEarLabFailed();
+        tripContStalled('اللي سمعته محفوظ — اضغط «كمّل التسميع المتصل» وكمّل عادي');
         return;
       }
       if (code === 'network') {
@@ -5894,8 +5917,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </div>
             )}
-            {/* Pilot (2026-11-08): on-device recitation recognizer, on every lobby screen. */}
-            <QuranAsrLab />
+            {/* W4-B: device ear download / status (default ear). */}
+            <EarDownloadCard />
             {lobbyDoor === null && (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -6436,7 +6459,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="w-3 h-3 bg-red-500 rounded-full" />
                     <p className="text-lg font-bold text-accent-700">بسمعك… كمّل من غير توقف</p>
                   </div>
-                  <p className="text-xs text-accent-500 mb-3">{getEar() === 'model' ? 'بيسمعك برنامج التلاوة على جهازك — من غير إنترنت' : 'الاستماع المباشر محتاج إنترنت'}</p>
+                  <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                   {ayahs[contProgress.ayahIdx] && (
                     <p className="text-sm font-semibold text-emerald-700 mb-4">
                       الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
@@ -6686,7 +6709,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         );
                       })()}
-                      <p className="text-xs text-accent-500 mb-3">{getEar() === 'model' ? 'بيسمعك برنامج التلاوة على جهازك — من غير إنترنت' : 'الاستماع المباشر محتاج إنترنت'}</p>
+                      <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                       {postCorrHint && (
                         <p className="text-sm font-semibold text-emerald-700 mb-3">التصحيح خلص — كمّل باقي الآية بصوتك؛ اللي قلته أثناء التصحيح ما اتسمعش، فقولوه تاني</p>
                       )}
