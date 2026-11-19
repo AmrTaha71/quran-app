@@ -16,6 +16,7 @@ import { nearestMosqueUrl } from '../lib/qibla';
 import { useHint } from '../lib/hints';
 import BigScreenSheet from '../components/BigScreenSheet';
 import BottomNav from '../components/BottomNav';
+import Collapsible from '../components/Collapsible';
 import QRCodeSection from '../components/QRCodeSection';
 import MemorizationMap from '../components/MemorizationMap';
 import MutashabihatGame from '../components/MutashabihatGame';
@@ -32,7 +33,6 @@ import { normalizeDigits, toArabicIndic } from '../lib/numerals';
 import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
-import LiteModeButton from '../components/LiteModeButton';
 import type { Route } from '../lib/routes';
 import HomeQuizView from '../components/home/HomeQuizView';
 import HomeHifzView from '../components/home/HomeHifzView';
@@ -364,19 +364,19 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="mb-4 grid grid-cols-4 gap-2 items-stretch [&>*]:min-w-0">
           <NextPrayerTile icon={<Clock />} onNoLocation={() => goAdhanSettings(onNavigate)} onPress={() => goAdhanSettings(onNavigate)} />
           <button type="button" onPointerDown={pressFeedback} onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } }} aria-label="إذاعة القرآن الكريم"
-            className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Radio /></span>
-            <span className="home-tile-title !text-[0.8rem] !leading-tight">إذاعة القرآن الكريم</span>
+            className="small-tile grad-emerald-door glass-door-highlight text-white polish-focus">
+            <span className="small-tile-icon text-white" aria-hidden="true"><Radio /></span>
+            <span className="small-tile-label !text-white">إذاعة القاهرة</span>
           </button>
           <button type="button" onPointerDown={pressFeedback} onClick={openNearestMosque} aria-label="أقرب مسجد"
-            className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-gold" aria-hidden="true"><MosqueIcon /></span>
-            <span className="home-tile-title !text-[0.8rem] !leading-tight">أقرب مسجد</span>
+            className="small-tile polish-focus">
+            <span className="small-tile-icon text-amber-700" aria-hidden="true"><MosqueIcon /></span>
+            <span className="small-tile-label">أقرب مسجد</span>
           </button>
           <button type="button" onPointerDown={pressFeedback} onClick={() => setQiblaOpen(true)} aria-label="اتجاه القبلة"
-            className="home-tile polish-focus !min-h-0">
-            <span className="tile-medal tile-medal-emerald" aria-hidden="true"><Compass /></span>
-            <span className="home-tile-title !text-[0.8rem] !leading-tight">اتجاه القبلة</span>
+            className="small-tile polish-focus">
+            <span className="small-tile-icon text-emerald-800" aria-hidden="true"><Compass /></span>
+            <span className="small-tile-label">القبلة</span>
           </button>
         </div>
         {qiblaOpen && <QiblaSheet onClose={() => setQiblaOpen(false)} />}
@@ -419,11 +419,11 @@ export default function HomeStartPage({ session, onNavigate }: {
           </div>
         )}
 
-        <div className="mb-4"><LiteModeButton /></div>
-
         {/* Share app: last, out of the way of the daily doors. */}
         <div className="mb-4 qr-home">
-          <QRCodeSection />
+          <Collapsible title="شارك التطبيق (QR)" storageKey="home-qr">
+            <QRCodeSection />
+          </Collapsible>
         </div>
 
         <p className="text-center text-sm text-emerald-800 font-semibold mt-6">
