@@ -741,3 +741,24 @@ html.lite-shadows *, html.lite-shadows *::before, html.lite-shadows *::after {
   box-shadow: none !important; text-shadow: none !important;
 }
 html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }
+
+/* W5-B (2026-11-19): mushaf word highlight. ONE variable controls the
+   colour: dark beige now; to switch to light grey set it to
+   `200, 200, 200` (or `150, 150, 150` on night mode). Alphas are fixed
+   per state so the swap is a single-line change. Clean edges, no glow,
+   no pulse; inset vertically so a box never bleeds into the next line. */
+:root {
+  --mushaf-hl-rgb: 180, 150, 90;
+}
+.mushaf-hl {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 3px;
+  background: rgba(var(--mushaf-hl-rgb), 0.35);
+  box-shadow: inset 0 0 0 1px rgba(var(--mushaf-hl-rgb), 0.55);
+  transition: background-color 120ms linear, box-shadow 120ms linear;
+}
+.mushaf-hl--current { background: rgba(var(--mushaf-hl-rgb), 0.45); box-shadow: inset 0 0 0 1.5px rgba(var(--mushaf-hl-rgb), 0.8); }
+.mushaf-hl--passed { background: rgba(var(--mushaf-hl-rgb), 0.22); box-shadow: none; }
+.mushaf-hl--ahead { background: rgba(var(--mushaf-hl-rgb), 0.10); box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } }

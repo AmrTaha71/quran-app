@@ -3258,6 +3258,16 @@ export default function QuranMushafPage({
   // measured paper box trims only that overshoot — it never moves a
   // box, never changes tap calibration, and never hides an interior
   // word (interior boxes are already inside the paper).
+  // W5-B: highlight boxes are drawn slightly inside the word box — the
+  // dataset's boxes are a bit taller than the glyphs and touch the next
+  // line, so we trim 12% of the height top+bottom and 4% of the width
+  // each side (never below the glyph core). Taps/zones keep raw boxes.
+  const hlInset = <T extends { left: number; top: number; width: number; height: number }>(f: T): T => {
+    if (f.width <= 0 || f.height <= 0) return f;
+    const dx = f.width * 0.04;
+    const dy = f.height * 0.12;
+    return { ...f, left: f.left + dx, top: f.top + dy, width: f.width - 2 * dx, height: f.height - 2 * dy };
+  };
   const clampBoxToPaper = (b: WordBox): WordBox => {
     if (!madinahPaperBox) return b;
     const [pl, pt, pr, pb] = madinahPaperBox;
@@ -4232,9 +4242,9 @@ export default function QuranMushafPage({
                       are suppressed until the displayed image lands
                       rather than marking the wrong page's words. */}
                   {tapFlash && displayedPage === currentPage && (() => {
-                    const f = imageBoxToContainer(clampBoxToPaper(tapFlash));
+                    const f = hlInset(imageBoxToContainer(clampBoxToPaper(tapFlash)));
                     return (
-                      <div className="absolute rounded-md ring-2 ring-amber-300 bg-amber-300/20 pointer-events-none"
+                      <div className="mushaf-hl mushaf-hl--current"
                         style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
                     );
                   })()}
@@ -4250,22 +4260,12 @@ export default function QuranMushafPage({
                       .sort((a, b) => a.wordNo - b.wordNo);
                     if (boxes.length === 0) return null;
                     return (<>
-                      <style>{`
-                        @keyframes mushaf-follow-pulse {
-                          0%, 100% { box-shadow: 0 0 10px 2px rgba(251,191,36,0.35); }
-                          50% { box-shadow: 0 0 20px 5px rgba(251,191,36,0.55); }
-                        }
-                        .mushaf-follow-pulse { animation: mushaf-follow-pulse 2s ease-in-out 3; }
-                        @media (prefers-reduced-motion: reduce) {
-                          .mushaf-follow-pulse { animation: none; }
-                        }
-                      `}</style>
                       {boxes.map((b) => {
-                        const f = imageBoxToContainer(clampBoxToPaper(b));
+                        const f = hlInset(imageBoxToContainer(clampBoxToPaper(b)));
                         const isCurrent = b.wordNo - 1 === followPos.word;
                         const isPassed = b.wordNo - 1 < followPos.word;
                         return (
-                          <div key={b.key} className={`absolute rounded-md pointer-events-none ${isCurrent ? 'bg-amber-400/30 shadow-[0_0_14px_3px_rgba(251,191,36,0.45)] mushaf-follow-pulse' : isPassed ? 'bg-amber-400/40' : 'bg-amber-300/25'}`}
+                          <div key={b.key} className={`mushaf-hl ${isCurrent ? 'mushaf-hl--current' : isPassed ? 'mushaf-hl--passed' : 'mushaf-hl--ahead'}`}
                             style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
                         );
                       })}
@@ -4279,9 +4279,9 @@ export default function QuranMushafPage({
                     if (boxes.length === 0) return null;
                     return (<>
                       {boxes.map((b) => {
-                        const f = imageBoxToContainer(clampBoxToPaper(b));
+                        const f = hlInset(imageBoxToContainer(clampBoxToPaper(b)));
                         return (
-                          <div key={b.key} className="absolute rounded-md pointer-events-none bg-amber-400/30 shadow-[0_0_14px_3px_rgba(251,191,36,0.45)]"
+                          <div key={b.key} className="mushaf-hl"
                             style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
                         );
                       })}
