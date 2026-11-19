@@ -729,10 +729,15 @@ html[data-device="tv"] .home-tiles { gap: 1.25rem; }
 html[data-device="tv"] .home-tile { min-height: 11rem; }
 html[data-device="tablet"] .home-tile { min-height: 9rem; }
 
-/* وضع التوفير (liteMode.ts): no motion or heavy effects, soft dim over the screen. */
-html.lite *, html.lite *::before, html.lite *::after {
+/* وضع التوفير (liteMode.ts): each effect has its own class (W3-S2), set from
+   the options on the battery page; the master `lite` class stays for old checks. */
+html.lite-motion *, html.lite-motion *::before, html.lite-motion *::after {
   animation: none !important; transition: none !important;
-  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
-  box-shadow: none !important; text-shadow: none !important; filter: none !important;
 }
-html.lite body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }
+html.lite-blur *, html.lite-blur *::before, html.lite-blur *::after {
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; filter: none !important;
+}
+html.lite-shadows *, html.lite-shadows *::before, html.lite-shadows *::after {
+  box-shadow: none !important; text-shadow: none !important;
+}
+html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }

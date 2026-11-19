@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info, BatteryCharging } from 'lucide-react';
 import ShareSheet from '../components/ShareSheet';
 import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
@@ -32,7 +32,7 @@ import AdhanSettingsSection from '../components/AdhanSettingsSection';
 import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import DeleteAccountButton from '../components/DeleteAccountButton';
-import LiteModeButton from '../components/LiteModeButton';
+import BatterySaverSection from '../components/BatterySaverSection';
 import { DailyReportSettings } from '../components/DailyReport';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
@@ -622,6 +622,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'battery', icon: BatteryCharging, title: 'توفير البطارية', sub: 'خيارات تقلل الاستهلاك', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'device', icon: Smartphone, title: 'جهازك', sub: 'نوعه وحجمه وطريقة مسكه', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'download', icon: Download, title: 'تحميل المصحف', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -909,6 +910,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </span>
           </button>
         </section>
+            </>)}
+            {openDoor === 'battery' && (<>
+        <BatterySaverSection />
             </>)}
             {openDoor === 'device' && (<>
         <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5 space-y-3">
@@ -1247,7 +1251,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </div>
           {!linkGender && <p className="text-xs text-accent-600 mt-2">لم تختر بعد — التطبيق يستخدم الصوت النسائي حتى تختار.</p>}
-          <LiteModeButton className="mt-5" />
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setOpenDoor('battery')}
+            className="mt-5 w-full flex items-center justify-between gap-3 p-3 rounded-xl border-2 border-hairline bg-white polish-press">
+            <span className="flex items-center gap-2 font-bold text-accent-800"><BatteryCharging className="w-5 h-5 text-emerald-600" /> توفير البطارية</span>
+            <span className="text-sm font-semibold text-emerald-700">افتح ←</span>
+          </button>
           <DailyReportSettings />
           <button
             onPointerDown={pressFeedback}
