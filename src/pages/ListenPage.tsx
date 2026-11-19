@@ -60,19 +60,6 @@ import type { TadabburTafsirOrder, ThreeMode, ThreeModePosition, VariedPlan } fr
 import { readVariedPlan, writeVariedPlan } from '../lib/threeModeListen';
 import { JourneyEngine as JourneyEngineClass } from '../lib/threeModePlayback';
 import type { JourneyEngine, JourneyPlayable } from '../lib/threeModePlayback';
-// Tafsir voice variety (Feature 1, 2026-11-05): natural King Fahd
-// recording (default), generated voice, or alternation by quarter.
-import {
-  TAFSIR_VOICES,
-  readTafsirVoice,
-  resolveDialogueAudio,
-  resolveTafsirAudio,
-  tafsirVoiceLabelForAyah,
-  warmDialogueAudio,
-  warmTafsirAudio,
-  writeTafsirVoice,
-} from '../lib/tafsirVoice';
-import type { TafsirVoice } from '../lib/tafsirVoice';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import type { CachedTextRow } from '../lib/quranTextCache';
 import {
@@ -421,12 +408,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // keeps the order it started with (see startJourney).
   const [tadabburTafsirOrder, setTadabburTafsirOrder] =
     useState<TadabburTafsirOrder>(readTadabburTafsirOrder);
-  // Tadabbur tafsir voice (Feature 1, 2026-11-05): persisted,
-  // default 'natural' (the King Fahd recording). Unlike the order
-  // toggle, this is a LIVE preference: the engine's resolver reads
-  // the stored setting on every clip, so a change takes effect at
-  // the next tafsir clip — including inside a resumed journey.
-  const [tafsirVoice, setTafsirVoice] = useState<TafsirVoice>(readTafsirVoice);
   const [savedJourneys, setSavedJourneys] = useState<
     Partial<Record<ThreeMode, ThreeModePosition>>
   >(() => {
@@ -1132,22 +1113,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             ? (fromSaved.tafsirOrder ?? 'after')
             : tadabburTafsirOrder
           : undefined,
-      // Tafsir voice (Feature 1): the resolver reads the live
-      // setting per clip (natural / generated / alternate by
-      // quarter) and falls back to the natural recording on any
-      // failure; the warmer prefetches generated audio while the
-      // quarter plays. Dialogue mode ('حوار التفسير') plays each
-      // tafsir clip as a 3-part sequence — generated male host,
-      // natural recording as guest, generated female host — via
-      // the dialogue resolver/warmer below; any dialogue failure
-      // plays the natural clip alone. All are no-ops outside
-      // tadabbur (the engine only calls them for tafsir items /
-      // tadabbur ayahs).
-      resolveTafsirUrl: (s, a) => resolveTafsirAudio(s, a),
-      warmTafsirAudio: (s, a) => warmTafsirAudio(s, a),
-      resolveDialogueAudio: (s, a) => resolveDialogueAudio(s, a),
-      warmDialogueAudio: (s, a) => warmDialogueAudio(s, a),
-      isDialogueTafsir: () => readTafsirVoice() === 'dialogue',
+      // Tafsir = the King Fahd recordings only (W5-H, 2026-11-19):
+      // no generated/alternate/dialogue voice; the engine plays the
+      // natural clips and joins an interstitial's clips gaplessly.
       startItem: fromSaved
         ? { kind: fromSaved.kind, surah: fromSaved.surah, ayah: fromSaved.ayah }
         : undefined,
@@ -2883,43 +2851,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
             </div>
           )}
-          {/* Tadabbur tafsir voice (Feature 1, 2026-11-05): the
-              King Fahd recording is the default; the generated voice
-              matches the user's gender and each clip is generated
-              once and cached for everyone; 'alternate' flips by
-              quarter; 'حوار التفسير' plays each clip as a dialogue
-              — generated male host, the recording as guest,
-              generated female host. A change applies at the next
-              tafsir clip, and any generation failure plays the
-              natural recording instead — never silence. */}
-          {hubView === 'tadabbur' && (
-            <div className="mt-4">
-              <p className="font-semibold text-accent-800 mb-2">صوت التفسير</p>
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="صوت التفسير">
-                {TAFSIR_VOICES.map((v) => (
-                  <button
-                    key={v.id}
-                    disabled={locked}
-                    onClick={() => {
-                      setTafsirVoice(v.id);
-                      writeTafsirVoice(v.id);
-                    }}
-                    className={`py-3 px-2 font-semibold rounded-xl disabled:opacity-50 ${
-                      tafsirVoice === v.id
-                        ? 'grad-emerald-door text-white polish-press'
-                        : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
-                    }`}
-                  >
-                    {v.name}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-accent-600 mt-2">
-                {TAFSIR_VOICES.find((v) => v.id === tafsirVoice)?.description}
-                {' '}يسري التغيير من وقفة التفسير التالية.
-              </p>
-            </div>
-          )}
           {/* B-14: electronic speed chips for the khatma journeys too
               (same persisted 'quran-playback-rate' + changeRate as
               سماع حر). Picked before start; locked while playing. */}
@@ -3148,14 +3079,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 starts). */}
             {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
               <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
-            )}
-            {/* Which tafsir voice is actually playing now (Feature 1):
-                the label reads the live setting for this ayah, the
-                same mapping the engine's resolver used for the clip. */}
-            {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
-              <p className="text-xs text-accent-600 mt-1">
-                {tafsirVoiceLabelForAyah(journeyItem.surah, journeyItem.ayah)}
-              </p>
             )}
             {engineError && <p className="text-sm text-red-600 font-medium mt-2">{engineError}</p>}
             {/* Redirect B: interruption resume — prominent, tap-only */}
