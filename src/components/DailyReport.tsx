@@ -25,6 +25,18 @@ function cheer(score: number): string {
   return 'لسه فيه وقت — دقايق مع كتاب الله تغيّر يومك';
 }
 
+// Full words, never the bare abbreviation «د» / «ص» (the user could not
+// tell what "١ د" meant): ١ دقيقة، ٢ دقيقتان، ٣ دقائق، ١٢ دقيقة.
+function minWord(n: number): string {
+  const unit = n === 1 ? 'دقيقة' : n === 2 ? 'دقيقتان' : n >= 3 && n <= 10 ? 'دقائق' : 'دقيقة';
+  return n === 2 ? unit : `${ar(n)} ${unit}`;
+}
+function pageWord(n: number): string {
+  if (n === 1) return 'صفحة';
+  if (n === 2) return 'صفحتان';
+  return `${ar(n)} ${n >= 3 && n <= 10 ? 'صفحات' : 'صفحة'}`;
+}
+
 function openLabel(sec: number): string {
   const m = Math.floor(sec / 60), h = Math.floor(m / 60);
   if (m < 1) return 'أقل من دقيقة';
@@ -68,9 +80,9 @@ export function DailyReportCard({ onClose, recap = false }: { onClose: () => voi
   const tc = tests.reduce((a, r) => a + r.correct, 0), tt = tests.reduce((a, r) => a + r.total, 0);
   const pct = tt ? Math.round((tc / tt) * 100) : 0;
   const bars = [
-    { label: 'سمعت', val: `${ar(mins(d.listen))} د`, f: Math.min(1, d.listen / 1800), c: 'bg-sky-500' },
-    { label: 'قرأت', val: `${ar(mins(d.read))} د`, f: Math.min(1, d.read / 900), c: 'bg-amber-500' },
-    { label: 'حفظت', val: wirdDone ? `${ar(pages)} ص` : '—', f: wirdDone ? 1 : 0, c: 'bg-emerald-600' },
+    { label: 'سمعت', val: minWord(mins(d.listen)), f: Math.min(1, d.listen / 1800), c: 'bg-sky-500' },
+    { label: 'قرأت', val: minWord(mins(d.read)), f: Math.min(1, d.read / 900), c: 'bg-amber-500' },
+    { label: 'حفظت', val: wirdDone ? pageWord(pages) : '—', f: wirdDone ? 1 : 0, c: 'bg-emerald-600' },
     { label: 'اختباراتك', val: tests.length ? `${ar(pct)}٪` : '—', f: pct / 100, c: 'bg-rose-500' },
   ];
   const score = (d.listen >= 600 ? 1 : 0) + (d.read >= 300 ? 1 : 0) + (wirdDone ? 1 : 0) + (tests.length ? 1 : 0);
