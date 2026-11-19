@@ -4529,10 +4529,12 @@ export default function QuranMushafPage({
                 // on tall portrait screens 100vw still binds, so the
                 // page stays maximal there.
                 <div ref={pageWrapRef}
-                  className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
+                  className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] transition-transform duration-300 ${madinahNorm && !(useMadinahCover && fsOverlaysVisible) ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
-                      ? { width: '100vw', height: '100dvh', background: '#f8f1de' }
+                      // 2026-11-19: on a tap the page shrinks for 5 s so the
+                      // edge juz/hizb medallion shows, then returns to full-bleed.
+                      ? { width: '100vw', height: '100dvh', background: '#f8f1de', transform: fsOverlaysVisible ? 'scale(0.72)' : 'none' }
                       : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: '#f8f1de' })
                     : { aspectRatio: String(imgAspect), background: '#f8f1de' }}
                   onClick={(e) => {
