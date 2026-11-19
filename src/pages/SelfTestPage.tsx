@@ -1184,6 +1184,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         sessionStorage.removeItem('quran-test-range-preset');
       }
     } catch { /* ignore — fall through to the choice flag */ }
+    // W4-C «أمرني» (voice assistant): 'quran-test-voice-prefill' =
+    // {surah, reciter?}. Preselect the surah in the range (the assistant
+    // also sets the choice flag to 'surah', handled below), take the
+    // reciter if it is a known correction reciter, then clear the key.
+    // Never starts the test by itself (decision 23).
+    try {
+      const raw = sessionStorage.getItem('quran-test-voice-prefill');
+      if (raw) {
+        sessionStorage.removeItem('quran-test-voice-prefill');
+        const pre = JSON.parse(raw) as { surah?: unknown; reciter?: unknown };
+        const n = Number(pre.surah);
+        if (Number.isInteger(n) && n >= 1 && n <= 114) {
+          setSurah(n);
+          setFrom(1);
+          setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
+          if (!sessionStorage.getItem('quran-test-range-choice')) sessionStorage.setItem('quran-test-range-choice', 'surah');
+        }
+        const rc = typeof pre.reciter === 'string' && CORR_RECITERS.some((r) => r.folder === pre.reciter) ? pre.reciter : null;
+        if (rc) { setCorrReciter(rc); setCorrReciterState(rc); }
+      }
+    } catch { /* ignore a malformed prefill */ }
     try {
       const flag = sessionStorage.getItem('quran-test-range-choice');
       if (flag === 'surah' || flag === 'juz' || flag === 'page' || flag === 'passage') {
