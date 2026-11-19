@@ -1,6 +1,6 @@
 // Tajweed question bank (W4-G, 2026-11-19). STRUCTURE ONLY: the data file
-// src/data/tajweed-bank.json holds a couple of trial questions on rules that
-// are settled (no invented rulings). It grows by appending items to that file;
+// src/data/tajweed-bank.json holds 20 questions (W4-N) on agreed rulings only
+// (no invented rulings, no disputed ones). It grows by appending items to that file;
 // nothing here needs to change. EVERY item must be reviewed by Dr. Amr or a
 // tajweed specialist before it is shown beyond the admin view: `reviewed`
 // stays false until then. Admin-only in the UI (useIsAdminView).
@@ -16,6 +16,11 @@ export type TajweedQuestion = {
   /** index of the right option in `options` */
   correct: number;
   reviewed: boolean;
+  /** one/two-line plain-Arabic explanation of the ruling (W4-N) */
+  explanation?: string;
+  /** reference ayah as "surah:ayah" and the quoted phrase (W4-N) */
+  ref?: string;
+  example?: string;
 };
 
 const RANK: Record<SkillTier, number> = { beginner: 0, good: 1, veryGood: 2, hafiz: 3 };
