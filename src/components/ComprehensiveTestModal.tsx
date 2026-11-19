@@ -24,7 +24,7 @@ import {
 } from '../lib/comprehensiveTest';
 import DrumSelect from './DrumSelect';
 import {
-  COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, pickRoundAyah, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
+  COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
@@ -91,6 +91,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   const [positions, setPositions] = useState<Done[]>([]);
   const [cur, setCur] = useState<PickedAyah | null>(null);
   const [showRes, setShowRes] = useState<Done | null>(null);
+  const [note, setNote] = useState('');
   const [askSurah, setAskSurah] = useState<RoundResult | null>(null);
   const [mut, setMut] = useState<MutQ[]>([]);
   const [mutIdx, setMutIdx] = useState(0);
@@ -127,6 +128,16 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
       folderAt = (g) => plan.find((p) => g >= p.start && g <= p.end)?.folder ?? plan[0].folder;
       chosen = plan[0].folder;
     }
+    // W4-K: only ayat whose opening words are unique in the Quran make positions, so a
+    // small range may hold fewer than the chosen count: the test shrinks to what exists.
+    const cand = roundCandidates(span, text);
+    if (cand.list.length === 0) { setErr('النطاق ده ما فيهوش آيات مناسبة للتسميع. اختار نطاق أكبر.'); return; }
+    const n = Math.min(count, cand.list.length);
+    if (n < count) setCount(n);
+    setNote([
+      n < count ? `النطاق ده فيه ${arNum(n)} موضع مناسب بس، فالاختبار ${arNum(n)} مواضع (والدرجة برضه من ٤٠).` : '',
+      cand.tier === 'relaxed' ? 'نطاق قصير: القارئ بيسمّعك أول نصف الآية تقريباً.' : '',
+    ].filter(Boolean).join(' '));
     ctx.current = { span, folderAt, used: new Set(), pool: surahsOfRange(span) };
     setReciter(chosen);
     setErr('');
@@ -153,7 +164,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     setBusy(false);
     if (!picked) {
       if (first || positions.length === 0) {
-        setErr('النطاق ده ما فيهوش آيات تكفي لموضع (محتاجة أكتر من ٦ كلمات وتوقيت للقارئ). اختار نطاق أكبر.');
+        setErr('النطاق ده ما فيهوش آيات مناسبة لموضع (محتاجة توقيت كلمات للقارئ). اختار نطاق أكبر.');
         setStep('scope');
         return;
       }
@@ -324,6 +335,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
           <>
             <p className="font-bold text-accent-800 mb-1">التسميع — الموضع {arNum(Math.min(count, positions.length + (showRes ? 0 : 1)))} من {arNum(count)}</p>
             <p className="text-xs text-accent-600 mb-3">القارئ: {reciterName(reciter)} · غلطة واحدة بيصحّحها، والتانية بتقفل الموضع</p>
+            {note && <p className="text-xs text-amber-700 mb-2">{note}</p>}
             {busy && <p className="text-center text-accent-700 font-bold py-6">بنجهّز الموضع…</p>}
             {!busy && cur && !showRes && !askSurah && <RoundRecite key={positions.length} ayah={cur} corrections={1} onFinish={onPositionDone} />}
             {!busy && cur && askSurah && ctx.current && (

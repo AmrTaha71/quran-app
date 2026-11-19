@@ -131,7 +131,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     setErr('');
     setPhase('loading');
     const picked = await pickRoundAyah({ start: range.start, end: range.end - 1 }, folderAt, text, used.current);
-    if (!picked) { setErr('ما لقيناش آية مناسبة في النطاق ده (محتاجة أكتر من ٦ كلمات وتوقيت للقارئ). غيّر النطاق أو القارئ.'); setPhase(rounds.length ? 'score' : 'setup'); return; }
+    if (!picked) { setErr(rounds.length ? 'خلصت الآيات المميزة المتاحة في النطاق ده. اختار نطاق تاني لو عايز تكمّل.' : 'ما لقيناش آية مناسبة في النطاق ده (محتاجة توقيت كلمات للقارئ). غيّر النطاق أو القارئ.'); setPhase(rounds.length ? 'score' : 'setup'); return; }
     setCur({ ayah: picked });
     setPhase('recite');
   }

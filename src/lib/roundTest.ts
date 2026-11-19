@@ -7,9 +7,8 @@ import { expectedWordList } from './expectedWords';
 import { SURAHS } from './surahs';
 import { fromGlobal } from './comprehensiveTest';
 
+/** Most words an ayah starts with as the prompt (shorter ayat use fewer, see promptLenFor). */
 export const PROMPT_WORDS = 5;
-/** 5 prompt words + at least 2 to complete (shorter ayat are skipped). */
-export const MIN_AYAH_WORDS = PROMPT_WORDS + 2;
 
 export type RoundResult = {
   total: number;      // words to complete
@@ -17,6 +16,7 @@ export type RoundResult = {
   wrong: number[];    // indexes (in the completed part) not credited
   locked: boolean;    // a 2nd mistake closed the position
   corrected: number;  // how many corrections the reciter gave
+  promptLen: number;  // words heard before the user started (the prompt + any hints)
   ear: 'lab' | 'browser' | 'manual';
 };
 
@@ -24,6 +24,10 @@ export type PickedAyah = {
   surah: number; ayah: number; folder: string;
   words: { orig: string; norm: string }[];
   timings: number[];
+  /** Words the reciter says first. */
+  promptLen: number;
+  /** Very short range: relaxed picking (no uniqueness check). */
+  relaxed?: boolean;
 };
 
 /** First word the user got wrong WHILE later words were heard (a skipped /
@@ -111,11 +115,64 @@ export function currentHistoryLevel(isAdmin: boolean): 'beginner' | 'advanced' |
 
 export const arNum = (n: number) => n.toLocaleString('ar-EG', { maximumFractionDigits: 1 });
 
-/** A timing row is usable when it has exactly one finite, increasing [start,end] pair per word. */
-function timingsOk(t: number[] | null, wordCount: number): t is number[] {
+/** Words of an ayah to say as the prompt: 5, fewer for short ayat (always leaves >= 3
+ *  words to complete). 0 = the ayah is too short for the strict rule. */
+export const promptLenFor = (wordCount: number) => (wordCount >= 6 ? Math.min(PROMPT_WORDS, wordCount - 3) : 0);
+/** Relaxed rule for very short ranges (e.g. surah 112): half the ayah is the prompt. */
+const relaxedPromptLen = (wordCount: number) => (wordCount >= 4 ? Math.max(2, Math.floor(wordCount / 2)) : 0);
+
+type TextIndex = { words: ({ orig: string; norm: string }[] | null)[]; grams: Map<number, Map<string, number>> };
+const indexCache = new WeakMap<Map<string, string>, TextIndex>();
+
+/** Per-ayah word lists + how many times every 3/4/5-word run occurs in the WHOLE
+ *  Quran text. Built once per text map (~80k runs). */
+function indexOf(text: Map<string, string>): TextIndex {
+  const hit = indexCache.get(text);
+  if (hit) return hit;
+  const words: TextIndex['words'] = [null];
+  const grams = new Map<number, Map<string, number>>([[3, new Map()], [4, new Map()], [5, new Map()]]);
+  for (let g = 1; g <= 6236; g++) {
+    const p = fromGlobal(g);
+    const t = text.get(`${p.s}:${p.a}`);
+    const w = t ? expectedWordList(t) : null;
+    words.push(w);
+    if (!w) continue;
+    const norms = w.map((x) => x.norm);
+    for (const [n, m] of grams) {
+      for (let i = 0; i + n <= norms.length; i++) { const k = norms.slice(i, i + n).join(' '); m.set(k, (m.get(k) ?? 0) + 1); }
+    }
+  }
+  const idx = { words, grams };
+  indexCache.set(text, idx);
+  return idx;
+}
+
+/** Ayat of [start, end] (global, inclusive) that make a good position.
+ *  W4-K criterion: the ayah has >= 6 words and the words said as the prompt
+ *  (5, or fewer in a short ayah) appear NOWHERE else in the Quran, so the
+ *  user can tell which ayah it is and continue it. Never the basmala (1:1).
+ *  A range with no such ayah (e.g. surah 112) falls back to the relaxed tier:
+ *  any ayah of >= 4 words, half of it as the prompt. */
+export function roundCandidates(range: { start: number; end: number }, text: Map<string, string>): { tier: 'strict' | 'relaxed'; list: number[] } {
+  const { words, grams } = indexOf(text);
+  const strict: number[] = [], relaxed: number[] = [];
+  for (let g = Math.max(2, range.start); g <= Math.min(6236, range.end); g++) {
+    const w = words[g];
+    if (!w) continue;
+    const n = promptLenFor(w.length);
+    if (n >= 3 && grams.get(n)?.get(w.slice(0, n).map((x) => x.norm).join(' ')) === 1) strict.push(g);
+    if (relaxedPromptLen(w.length) > 0) relaxed.push(g);
+  }
+  return strict.length > 0 ? { tier: 'strict', list: strict } : { tier: 'relaxed', list: relaxed };
+}
+
+/** A timing row is usable when it has exactly one finite, increasing [start,end] pair per
+ *  word for the prompt and the words a «كلمتين كمان» hint can add. */
+function timingsOk(t: number[] | null, wordCount: number, promptLen: number): t is number[] {
   if (!t || t.length !== wordCount * 2) return false;
   let prev = 0;
-  for (let i = 0; i < PROMPT_WORDS; i++) {
+  const upto = Math.min(wordCount, promptLen + 2 * MAX_HINTS);
+  for (let i = 0; i < upto; i++) {
     const a = t[2 * i], b = t[2 * i + 1];
     if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a || a + 0.001 < prev || b - a > 15) return false;
     prev = b;
@@ -123,30 +180,28 @@ function timingsOk(t: number[] | null, wordCount: number): t is number[] {
   return Number.isFinite(t[2 * (wordCount - 1) + 1]);
 }
 
-/** Random ayah inside [start, end] (global, inclusive) that has >= 7 words and
- *  usable word timings for the reciter of that ayah. Never the basmala (1:1). */
+/** Random usable ayah from roundCandidates() that has timings for its reciter. */
 export async function pickRoundAyah(
   range: { start: number; end: number },
   folderAt: (g: number) => string,
   text: Map<string, string>,
   avoid: Set<number>,
 ): Promise<PickedAyah | null> {
-  const span = range.end - range.start + 1;
-  for (let tries = 0; tries < 60; tries++) {
-    const g = range.start + Math.floor(Math.random() * span);
-    if (g === 1) continue;
-    if (avoid.has(g) && span > avoid.size + 3) continue;
-    const p = fromGlobal(g);
-    const t = text.get(`${p.s}:${p.a}`);
-    if (!t) continue;
-    const words = expectedWordList(t);
-    if (words.length < MIN_AYAH_WORDS) continue;
+  const { tier, list } = roundCandidates(range, text);
+  const pool = list.filter((g) => !avoid.has(g));
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const words = indexOf(text).words;
+  for (const g of pool.slice(0, 80)) {
+    const w = words[g];
+    if (!w) continue;
+    const promptLen = tier === 'strict' ? promptLenFor(w.length) : relaxedPromptLen(w.length);
     const folder = folderAt(g);
     if (!folder) continue;
+    const p = fromGlobal(g);
     const timings = await reciterWordTimings(folder, p.s, p.a);
-    if (!timingsOk(timings, words.length)) continue;
+    if (!timingsOk(timings, w.length, promptLen)) continue;
     avoid.add(g);
-    return { surah: p.s, ayah: p.a, folder, words, timings };
+    return { surah: p.s, ayah: p.a, folder, words: w, timings, promptLen, relaxed: tier === 'relaxed' };
   }
   return null;
 }

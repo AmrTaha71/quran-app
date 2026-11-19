@@ -11,7 +11,7 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { firstMistake, PROMPT_WORDS, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { firstMistake, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
 const QUIET_MS = 1800;
@@ -22,7 +22,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   corrections: number;
   onFinish: (r: RoundResult) => void;
 }) {
-  const rest = useMemo(() => ayah.words.slice(PROMPT_WORDS), [ayah]);
+  const rest = useMemo(() => ayah.words.slice(ayah.promptLen), [ayah]);
   const restNorms = useMemo(() => rest.map((w) => w.norm), [rest]);
   const [phase, setPhaseState] = useState<Phase>('idle');
   const phaseRef = useRef<Phase>('idle');
@@ -65,13 +65,13 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   async function playPrompt() {
     setMsg('');
     setPhase('prompting');
-    await span(Math.max(0, t[0] - 0.25), t[2 * (PROMPT_WORDS - 1) + 1] + 0.15);
+    await span(Math.max(0, t[0] - 0.25), t[2 * (ayah.promptLen - 1) + 1] + 0.15);
     if (!finished.current) setPhase('ready');
   }
 
   async function playCorrection() {
     setPhase('correcting');
-    const abs = PROMPT_WORDS + base.current;
+    const abs = ayah.promptLen + base.current;
     const nextW = Math.min(abs + 1, ayah.words.length - 1);
     await span(Math.max(0, t[2 * abs] - 0.1), t[2 * nextW + 1] + 0.1);
     if (!finished.current) setPhase('afterCorr');
@@ -99,7 +99,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     const credited = got.current.filter(Boolean).length;
     const wrong: number[] = [];
     got.current.forEach((g, i) => { if (!g) wrong.push(i); });
-    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, ear: kindRef.current });
+    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, promptLen: ayah.promptLen, ear: kindRef.current });
   }
 
   function evaluate(final: boolean) {
@@ -178,7 +178,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   function finishManual() {
     const credited = rest.length - manualWrong.size;
     finished.current = true;
-    onFinish({ total: rest.length, credited, wrong: [...manualWrong].sort((a, b) => a - b), locked: false, corrected: 0, ear: 'manual' });
+    onFinish({ total: rest.length, credited, wrong: [...manualWrong].sort((a, b) => a - b), locked: false, corrected: 0, promptLen: ayah.promptLen, ear: 'manual' });
   }
 
   const btn = 'w-full py-3 text-white font-bold rounded-xl disabled:opacity-50';
@@ -186,7 +186,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     <div className="space-y-3">
       {phase === 'idle' && (
         <>
-          <p className="text-sm text-accent-700">هتسمع أول {PROMPT_WORDS.toLocaleString('ar-EG')} كلمات من آية بصوت القارئ، وبعدين كمّل الآية بصوتك.</p>
+          <p className="text-sm text-accent-700">هتسمع أول {ayah.promptLen.toLocaleString('ar-EG')} كلمات من آية بصوت القارئ، وبعدين كمّل الآية بصوتك.</p>
           <button onClick={() => void playPrompt()} className={`${btn} grad-amber-door`}>اسمع الكلمات</button>
         </>
       )}
@@ -224,13 +224,13 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   );
 }
 
-/** The ayah after a position: the 5 prompt words grey, right words green, wrong red. */
+/** The ayah after a position: the prompt words grey, right words green, wrong red. */
 export function RoundReveal({ ayah, result }: { ayah: PickedAyah; result: RoundResult }) {
   const wrong = new Set(result.wrong);
   return (
     <p className="font-arabic text-xl leading-loose">
       {ayah.words.map((w, i) => {
-        const j = i - PROMPT_WORDS;
+        const j = i - result.promptLen;
         const cls = j < 0 ? 'text-accent-400' : wrong.has(j) ? 'text-rose-700 font-bold' : 'text-emerald-700';
         return <span key={i} className={`${cls} mx-0.5`}>{w.orig}</span>;
       })}
