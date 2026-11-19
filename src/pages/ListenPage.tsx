@@ -621,25 +621,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     setCurrentAyah(ayah);
   };
 
-  // Black screen must be black edge to edge: iOS paints the status-bar
-  // strip from the theme-color / page background, which showed as a
-  // light band above the overlay. Turn both black while it is open.
-  useEffect(() => {
-    if (!blackScreen) return;
-    const meta = document.querySelector('meta[name="theme-color"]');
-    const prevMeta = meta?.getAttribute('content') ?? null;
-    const prevHtml = document.documentElement.style.backgroundColor;
-    const prevBody = document.body.style.backgroundColor;
-    meta?.setAttribute('content', '#000000');
-    document.documentElement.style.backgroundColor = '#000';
-    document.body.style.backgroundColor = '#000';
-    return () => {
-      if (meta && prevMeta !== null) meta.setAttribute('content', prevMeta);
-      document.documentElement.style.backgroundColor = prevHtml;
-      document.body.style.backgroundColor = prevBody;
-    };
-  }, [blackScreen]);
-
   // Faint exit hint: shows when the overlay opens, hides itself.
   useEffect(() => {
     if (!blackScreen) return;
