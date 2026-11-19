@@ -50,6 +50,10 @@ export default function MushafHighlightLayer({ boxes, currentWord }: {
     if (line) line.push(i); else lines.push([i]);
   }
   for (const line of lines) {
+    // One common top/height per line, so the band is a straight strip.
+    const t = line.reduce((a, i) => a + fitted[i].top, 0) / line.length;
+    const h = line.reduce((a, i) => a + fitted[i].height, 0) / line.length;
+    for (const i of line) { fitted[i].top = t; fitted[i].height = h; }
     line.sort((a, b) => fitted[a].left - fitted[b].left);
     for (let k = 0; k < line.length - 1; k++) {
       const a = fitted[line[k]]; const b = fitted[line[k + 1]];
@@ -71,7 +75,7 @@ export default function MushafHighlightLayer({ boxes, currentWord }: {
         : b.wordNo - 1 < currentWord ? ' mushaf-hl--passed' : ' mushaf-hl--ahead';
       return (
         <div key={b.key} className={`mushaf-hl${state}`}
-          style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%` }} />
+          style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`, boxShadow: 'none', borderRadius: 4 }} />
       );
     })}
   </>);
