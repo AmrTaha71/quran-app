@@ -33,8 +33,8 @@ import { useElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import ElderlyHome from '../components/ElderlyHome';
 import OrderMeButton from '../components/OrderMeButton';
 import LiteModeButton from '../components/LiteModeButton';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room' | 'radio';
 
 // Light start page (الرئيسية) for logged-in users: NOT a second
 // dashboard. One resume card (last Mushaf page, from the same

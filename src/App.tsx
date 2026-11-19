@@ -46,8 +46,8 @@ import OfflineBanner from './components/OfflineBanner';
 import { BackButton, useBackTarget } from './components/BackButton';
 import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
+import type { Route } from './lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room' | 'radio';
 
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are

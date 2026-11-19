@@ -16,8 +16,8 @@ import {
 } from 'lucide-react';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
 const PAGE_SIZE = 25;
 

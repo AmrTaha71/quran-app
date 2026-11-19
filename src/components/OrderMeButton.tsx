@@ -5,8 +5,8 @@
 import { useEffect, useState } from 'react';
 import Hint from './Hint';
 import { pressFeedback } from '../lib/pressFeedback';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 interface Props {
   onNavigate: (r: Route) => void;

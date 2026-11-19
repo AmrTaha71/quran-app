@@ -43,8 +43,8 @@ import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
   Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
 } from 'lucide-react';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
 interface TestAyah {
   id: number;

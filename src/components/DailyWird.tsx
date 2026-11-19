@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { CalendarDays, Flame, Check, Settings } from 'lucide-react';
 import { loadWird, saveWird, type WirdState } from '../lib/wird';
 import { playSuccessCue } from '../lib/pressFeedback';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
 function todayStr(d = new Date()): string {
   return d.toLocaleDateString('en-CA');

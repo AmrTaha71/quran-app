@@ -9,8 +9,8 @@ import { LANGUAGES } from '../lib/translations';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import ShareButton from '../components/ShareButton';
 import QRCodeSection from '../components/QRCodeSection';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
 export default function LandingPage({ session, onNavigate }: { session: Session | null; onNavigate: (r: Route) => void }) {
   const { t, lang, setLang } = useLang();

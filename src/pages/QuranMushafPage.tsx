@@ -33,8 +33,8 @@ import {
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
   LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, AlertTriangle, Headphones } from 'lucide-react';
 import { useUserLists } from '../components/UserLists';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
 

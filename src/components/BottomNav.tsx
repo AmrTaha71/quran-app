@@ -2,8 +2,8 @@ import { useState, useEffect, cloneElement } from 'react';
 import { LayoutDashboard, BookOpen, Home, AudioLines, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { pressFeedback } from '../lib/pressFeedback';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
 // Remember the kunya label per user so each page's nav starts with the
 // right label instead of flashing 'لوحتي'. 'quran-uid' is mirrored by App.

@@ -9,8 +9,8 @@ import { RECITERS } from '../lib/reciters';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
 import { recitersForRange } from '../lib/corrDownload';
 import { speechErrorMessage } from '../lib/speechErrors';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 type Step = { k: 'root' } | { k: 'surah'; surah: number } | { k: 'reciter'; surah: number } | { k: 'recite'; surah: number };
 
 const STOP_WORDS = ['خلاص', 'كفايه', 'انهاء', 'انتهينا', 'اقفل', 'قفل المايك', 'وقف المايك', 'شكرا', 'تمام كده'];

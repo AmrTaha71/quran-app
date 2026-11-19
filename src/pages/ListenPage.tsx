@@ -116,17 +116,8 @@ import {
   type AudioSizeEstimate,
 } from '../lib/audioDownload';
 import { getSharedAudio, registerResume, unregisterResume, clearResumeStack, currentAudioOwner, hasWaitingResumes, releaseAudio } from '../lib/sharedAudio';
+import type { Route } from '../lib/routes';
 
-type Route =
-  | 'home'
-  | 'admin'
-  | 'app'
-  | 'auth'
-  | 'mushaf'
-  | 'settings'
-  | 'follow'
-  | 'test'
-  | 'listen';
 
 function readPersistedReciter(): string {
   try {

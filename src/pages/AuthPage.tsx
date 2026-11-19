@@ -9,8 +9,8 @@ import {
   BookOpen, Lock, Mail, User, Phone, Calendar, Eye, EyeOff,
   Globe, ArrowRight, Shield, Heart, RotateCcw,
 } from 'lucide-react';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
 type AuthMode = 'login' | 'signup' | 'recover' | 'reset';
 
 export default function AuthPage({

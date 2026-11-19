@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { BookOpen, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'follow';
 
 export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [username, setUsername] = useState('');

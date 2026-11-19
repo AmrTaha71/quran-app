@@ -43,8 +43,8 @@ import {
 import { adhkarClipUrl, adhkarList, type AdhkarClip, type AdhkarVoice, type AdhkarWird } from '../lib/adhkarClips';
 import { DEFAULT_RECITER_ID, RECITERS, type Reciter } from '../lib/reciters';
 import { hadrAudioUrl, HADR_NAME } from '../lib/hadr';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'adhkar';
 
 const VOICE_KEY = 'quran-adhkar-voice';
 const WIRD_KEY = 'quran-adhkar-wird';
