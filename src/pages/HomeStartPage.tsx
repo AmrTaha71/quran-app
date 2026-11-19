@@ -314,9 +314,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="mb-4 grid grid-cols-4 gap-2 items-stretch [&>*]:min-w-0">
           <NextPrayerTile icon={<Clock />} onNoLocation={() => goAdhanSettings(onNavigate)} onPress={() => goAdhanSettings(onNavigate)} />
           <button type="button" onPointerDown={pressFeedback} onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } }} aria-label="إذاعة القرآن الكريم"
-            className="small-tile grad-emerald-door glass-door-highlight text-white polish-focus">
-            <span className="small-tile-icon text-white" aria-hidden="true"><Radio /></span>
-            <span className="small-tile-label !text-white">إذاعة القاهرة</span>
+            className="small-tile polish-focus">
+            <span className="small-tile-icon text-emerald-700" aria-hidden="true"><Radio /></span>
+            <span className="small-tile-label">إذاعة القرآن الكريم</span>
           </button>
           <button type="button" onPointerDown={pressFeedback} onClick={openNearestMosque} aria-label="أقرب مسجد"
             className="small-tile polish-focus">
