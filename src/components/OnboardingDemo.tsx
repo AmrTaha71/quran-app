@@ -57,7 +57,7 @@ export default function OnboardingDemo({ kind }: { kind: DemoKind }) {
   if (kind === 'imam') {
     const hi = Math.min(WORDS.length - 1, Math.floor(t / 3));
     return (
-      <Frame bar="الْحَقِ الإِمَامَ">
+      <Frame bar="تَتَبُّعُ الإِمَامِ">
         <p dir="rtl" style={quran} className="text-lg leading-loose text-center">
           {WORDS.map((w, i) => (
             <span key={w} className={`inline-block mx-0.5 px-1 rounded-md transition-colors duration-200 ${i === hi ? 'bg-amber-300 text-emerald-950' : 'text-ink'}`}>{w}</span>
