@@ -31,6 +31,7 @@ import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
 import Collapsible from '../components/Collapsible';
 import PageHeader from '../components/PageHeader';
+import InstallGuide from '../components/InstallGuide';
 import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import DeleteAccountButton from '../components/DeleteAccountButton';
@@ -451,61 +452,6 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {label}
       </button>
     );
-  // Installed-app (PWA standalone) detection for the install card:
-  // standalone means no Safari chrome, no link bar, no fullscreen
-  // banner — the app already opens like a native app.
-  const [isStandalone] = useState(() => {
-    try {
-      return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    } catch { return false; }
-  });
-  // Install prompt + platform branching (2026-10-28): the old card
-  // gave Safari Share steps to EVERY non-standalone browser, which
-  // is unusable on Android. Now: capture beforeinstallprompt and
-  // offer a real install button where the browser provides one;
-  // otherwise branch the manual steps by platform (Android menu vs
-  // iOS Safari Share). iOS detection covers iPadOS 13+ (which reports
-  // MacIntel + touch) as well as iPhone/iPod.
-  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
-  const installPromptRef = useRef<typeof installPrompt>(null);
-  const [installOutcome, setInstallOutcome] = useState('');
-  const [installPlatform] = useState<'ios' | 'android' | 'other'>(() => {
-    try {
-      const ua = window.navigator.userAgent || '';
-      const isIOS = /iPad|iPhone|iPod/.test(ua) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
-      if (isIOS) return 'ios';
-      if (/Android/.test(ua)) return 'android';
-      return 'other';
-    } catch { return 'other'; }
-  });
-  useEffect(() => {
-    const handler = (e: Event) => {
-      // Prevent the browser's automatic mini-infobar so our own
-      // install button is the one the user taps.
-      e.preventDefault();
-      const ev = e as unknown as { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
-      installPromptRef.current = ev;
-      setInstallPrompt(ev);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-  const runInstallPrompt = async () => {
-    const ev = installPromptRef.current;
-    if (!ev) return;
-    try {
-      await ev.prompt();
-      const choice = await ev.userChoice;
-      setInstallOutcome(choice.outcome === 'accepted'
-        ? 'تم قبول التثبيت — افتح التطبيق من أيقونة الشاشة الرئيسية.'
-        : 'تم إلغاء التثبيت — تقدر تحاول تاني في أي وقت من هنا.');
-    } catch {
-      setInstallOutcome('تعذر فتح نافذة التثبيت — جرّب الخطوات اليدوية تحت.');
-    } finally {
-      installPromptRef.current = null;
-      setInstallPrompt(null);
-    }
-  };
   // ADMIN ENTRY (2026-10-27): shown ONLY to users in admin_users.
   // Normal users never see this section — and BottomNav stays at
   // its final 5 items, so الإدارة lives here, not as a tab.
@@ -1006,56 +952,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         <AdhanSettingsSection />
             </>)}
             {openDoor === 'pwa' && (<>
-        {/* Part 1 — install the app itself (PWA): no Safari, no link
-            bar, no fullscreen banner. Part 2 (the pages download
-            below) is separate, so the app itself stays light. */}
-        <section id="sec-pwa" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
-          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Smartphone className="w-5 h-5 text-emerald-600" /> ثبّت التطبيق على جهازك
-          </h2>
-          {isStandalone ? (
-            <p className="text-sm text-emerald-700 font-semibold">
-              التطبيق مثبّت على جهازك ✓ — بيفتح من أيقونة الشاشة الرئيسية من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-accent-600 mb-3">
-                الخطوة الأولى قبل تحميل الصفحات: ثبّت التطبيق على الشاشة الرئيسية — كده بيشتغل زي تطبيقات الموبايل، من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
-              </p>
-              {/* iOS PWA-orphan warning: the installed app has SEPARATE
-                  storage from Safari (fresh login, counters at 0, and
-                  any pages downloaded in Safari are NOT in the
-                  installed app). Say so before the user installs, and
-                  recommend install-first-then-download ordering. */}
-              {installPlatform === 'ios' && (
-                <p className="text-sm text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-3 leading-relaxed">
-                  تنبيه مهم قبل التثبيت على آيفون/آيباد: النسخة المثبتة لها مساحة تخزين منفصلة عن سفاري — بعد التثبيت هتحتاج تسجيل دخول من جديد، وأي صفحات حمّلتها من سفاري مش هتكون موجودة في النسخة المثبتة وهتحتاج تحميلها تاني. عشان كده: ثبّت الأول، وبعدين حمّل الصفحات من داخل التطبيق المثبت.
-                </p>
-              )}
-              {installPrompt ? (
-                <>
-                  <button onClick={runInstallPrompt}
-                    className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
-                    ثبّت التطبيق الآن
-                  </button>
-                  {installOutcome && <p className="text-sm text-accent-500 mt-2">{installOutcome}</p>}
-                </>
-              ) : installPlatform === 'android' ? (
-                <p className="text-sm text-accent-700 leading-relaxed">
-                  من متصفح كروم على جهازك: افتح قائمة المتصفح (⋮) ثم اختر «إضافة إلى الشاشة الرئيسية» أو «تثبيت التطبيق»، وبعدين افتح التطبيق من الأيقونة الجديدة.
-                </p>
-              ) : installPlatform === 'ios' ? (
-                <p className="text-sm text-accent-700 leading-relaxed">
-                  من سفاري: اضغط زر المشاركة (Share) ثم «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)، وبعدين افتح التطبيق من أيقونة الشاشة الرئيسية.
-                </p>
-              ) : (
-                <p className="text-sm text-accent-700 leading-relaxed">
-                  من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»، وبعدين افتح التطبيق من الأيقونة الجديدة.
-                </p>
-              )}
-            </>
-          )}
-        </section>
+        <InstallGuide />
             </>)}
             {openDoor === 'download' && (<>
         {/* Mushaf pages on the device — one-tap full download (Hafidz
