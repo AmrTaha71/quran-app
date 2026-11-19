@@ -77,7 +77,7 @@ import {
   unregisterSleepStopHandler,
 } from '../lib/sleepTimer';
 import type { SleepTimerMinutes } from '../lib/sleepTimer';
-import { clearNowPlaying, setNowPlaying } from '../lib/nowPlaying';
+import { clearNowPlaying, setNowPlaying, getNowPlaying } from '../lib/nowPlaying';
 import { setBackTarget } from '../lib/backTarget';
 import { useBottomChromeRef } from '../lib/bottomChrome';
 import type { ListenEngine, ListenMode, ListenPosition } from '../lib/listenPlayback';
@@ -480,6 +480,20 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const closeScreenWithRecap = () => {
     requestDayRecap();
     window.setTimeout(() => setBlackScreen(true), 3500);
+  };
+  // 2026-11-19: the «قفل الشاشة» button first asks what to show while listening:
+  // a fullscreen Mushaf (audio + the highlight following it) or the black screen.
+  const [showScreenChoice, setShowScreenChoice] = useState(false);
+  const openMushafWhileListening = () => {
+    setShowScreenChoice(false);
+    try {
+      const np = getNowPlaying();
+      const ayah = np ? np.ayah : currentAyahRef.current;
+      const sr = np ? np.surah : surah;
+      localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: sr, ayah }));
+      localStorage.setItem('quran-mushaf-from-listen', '1');
+    } catch { /* ignore */ }
+    onNavigate('mushaf');
   };
   const [showBlackHint, setShowBlackHint] = useState(false);
   const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
@@ -2354,7 +2368,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <Square className="w-6 h-6" /> إيقاف
             </button>
             <button
-              onClick={closeScreenWithRecap}
+              onClick={() => setShowScreenChoice(true)}
               className="py-4 bg-stone-800 hover:bg-stone-900 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
             >
               <Moon className="w-6 h-6" /> قفل الشاشة
@@ -3143,7 +3157,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
             </div>
             <button
-              onClick={closeScreenWithRecap}
+              onClick={() => setShowScreenChoice(true)}
               className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press"
               aria-label="شاشة سوداء"
             >
@@ -3340,6 +3354,34 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           {showBlackHint && (
             <p className="text-white/20 text-sm font-medium">اضغط مطوّلًا للعودة</p>
           )}
+          <button
+            onClick={(e) => { e.stopPropagation(); setBlackScreen(false); }}
+            onTouchStart={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="absolute bottom-[calc(1.25rem_+_env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 px-8 py-3 rounded-full bg-white/10 text-white/50 text-base font-semibold"
+            aria-label="رجوع"
+          >
+            رجوع
+          </button>
+        </div>
+      )}
+      {showScreenChoice && (
+        <div className="fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setShowScreenChoice(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()} dir="rtl">
+            <p className="text-center font-bold text-lg text-accent-900">اعرض إيه وانت بتسمع؟</p>
+            <button onClick={openMushafWhileListening}
+              className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl polish-press">
+              المصحف بملء الشاشة مع الصوت والتظليل
+            </button>
+            <button onClick={() => { setShowScreenChoice(false); closeScreenWithRecap(); }}
+              className="w-full py-4 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl polish-press">
+              شاشة سوداء
+            </button>
+            <button onClick={() => setShowScreenChoice(false)}
+              className="w-full py-3 bg-stone-100 text-stone-700 font-semibold rounded-xl polish-press">
+              رجوع
+            </button>
+          </div>
         </div>
       )}
     </div>
