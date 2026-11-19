@@ -58,11 +58,22 @@ body {
   font-size: clamp(1.02rem, 2vw + 0.6rem, 1.15rem);
 }
 
+/* B-6: U+08E2 (ARABIC DISPUTED END OF AYAH) sits after «القيّوم» in the
+   IndoPak text (ayat al-kursi) and neither Noto Naskh nor Amiri draws it,
+   so it showed as an empty box. This 572-byte inline font maps ONLY that
+   codepoint to a blank zero-width glyph (display only: the stored text,
+   word indexes, highlight ranges and matching are untouched). */
+@font-face {
+  font-family: 'QuranBlankMarks';
+  src: url(data:font/woff;base64,d09GRgABAAAAAAI8AAoAAAAAAngAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAABPUy8yAAABWAAAACQAAABgSdhIJmNtYXAAAAGEAAAALQAAADQADAk1Z2x5ZgAAAbwAAAABAAAAAQAAAABoZWFkAAAA9AAAADYAAAA2LV5sgmhoZWEAAAEsAAAAFwAAACQDIf86aG10eAAAAXwAAAAGAAAABgAAAABsb2NhAAABtAAAAAYAAAAGAAAAAG1heHAAAAFEAAAAEwAAACAAAwACbmFtZQAAAcAAAABeAAAAeBnydA1wb3N0AAACIAAAABkAAAAutKE3rQABAAAAAQAAE6HLRF8PPPUAAwPoAAAAAOckFdEAAAAA5yQV0QAAAAAAAAAAAAAAAwACAAAAAAAAeJxjYGRgYFb4b8GAAIwMqIARACjTAV4AeJxjYGRgYGBigAEECwoAAJcABgB4nGNgZmBgnMDAysDCQCKwt7e3Z2DgeMTxCKcSBQYGAJNYA44AAAAAAAAAAHicJcmxEQAQFMDQh18YQM/+Y1lCyaFJLhdkFDRFeg4DIW7Xuffn6u87YHwHRgAAAAAAAAAAAAAAAAAAAHicLYkxDoAgEAQHNTE20ln6CuMD6CngB1cQCgjFGf5vJE6xs8kACzeGD4Md+zGxYpkxy4bh5Pj/xM4VukpzVVrxouWJKfcqSqCjCA1HHS54BKXwEElk+ij6Avl1En4AAHicY2BiwA+YGBgYmdhL8zINLFyNAAruAjoAAAA=) format('woff');
+  unicode-range: U+08E2;
+}
+
 .font-arabic {
   /* Amiri is the fallback when Noto Naskh Arabic is unavailable (offline
      or blocked font fetch): same Naskh style, no binary self-hosting —
      the push tool accepts text only, so no font files are bundled. */
-  font-family: 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
+  font-family: 'QuranBlankMarks', 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
   /* Ayah text: scales with the viewport instead of a fixed small size. */
   font-size: clamp(1.5rem, 4vw + 0.9rem, 2.25rem);
   line-height: 2.1;
@@ -277,7 +288,7 @@ body {
 .page-bg { background-color: var(--page-bg); background-image: var(--page-wash); }
 .app-header { background: var(--header-bg); border-bottom: 1px solid var(--polish-hairline); }
 .border-hairline { border-color: var(--polish-hairline); }
-.font-quran { font-family: "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif; font-synthesis: none; }
+.font-quran { font-family: 'QuranBlankMarks', "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif; font-synthesis: none; }
 .font-display-ar { font-family: "Noto Naskh Arabic", "Amiri", "Geeza Pro", serif; }
 .font-ui { font-family: "Cairo", system-ui, -apple-system, sans-serif; }
 html { -webkit-text-size-adjust: 100%; }
