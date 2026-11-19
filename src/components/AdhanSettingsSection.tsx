@@ -1,3 +1,4 @@
+import { enableNativeAlarms, isNativeApp, loadRingOnSilent, platformName, rescheduleNativeAlarms, saveRingOnSilent } from '../lib/nativeAlarm';
 import { deleteRecording, loadRecordings, recToneId, saveRecording, startRecording, type AlarmRec } from '../lib/alarmRecordings';
 import { ALARM_CLIPS, isNightMode, startNightMode, stopNightMode, ALARM_TONES, loadFajrTone, saveFajrTone, startAlarmTone, loadFajrAlarm, saveFajrAlarm, type FajrAlarmMode } from '../lib/fajrAlarm';
 import { useEffect, useRef, useState } from 'react';
@@ -469,6 +470,7 @@ function FajrAlarmSetting() {
   const [tone, setTone] = useState(loadFajrTone());
   const [night, setNight] = useState(isNightMode());
   const [recs, setRecs] = useState<AlarmRec[]>([]);
+  const [silent, setSilent] = useState(loadRingOnSilent());
   const [recName, setRecName] = useState('');
   const [recording, setRecording] = useState<{ stop: () => Promise<Blob> } | null>(null);
   const [recErr, setRecErr] = useState('');
@@ -498,7 +500,7 @@ function FajrAlarmSetting() {
       <p className="font-semibold text-accent-800 mb-2">⏰ منبه الفجر</p>
       <div className="grid gap-2">
         {opts.map(([k, t, d]) => (
-          <button key={k} onClick={() => { setMode(k); saveFajrAlarm(k); }}
+          <button key={k} onClick={() => { setMode(k); saveFajrAlarm(k); void rescheduleNativeAlarms(); }}
             className={`text-right p-3 rounded-xl border-2 polish-press ${mode === k ? 'border-emerald-500 bg-emerald-50' : 'border-hairline'}`}>
             <span className="block font-medium text-accent-800">{t}</span>
             <span className="block text-sm text-accent-600">{d}</span>
@@ -509,7 +511,7 @@ function FajrAlarmSetting() {
             <p className="font-semibold text-accent-800 mt-1 mb-1 text-sm">نغمة المنبه (اضغط للتجربة)</p>
             <div className="grid grid-cols-3 gap-1.5">
               {[...recs.map((r) => ({ id: recToneId(r.id), name: '🎙 ' + r.name })), ...ALARM_CLIPS, ...ALARM_TONES].map((t) => (
-                <button key={t.id} onClick={() => { setTone(t.id); saveFajrTone(t.id); preview(t.id); }}
+                <button key={t.id} onClick={() => { setTone(t.id); saveFajrTone(t.id); preview(t.id); void rescheduleNativeAlarms(); }}
                   className={`py-2 rounded-lg text-xs font-bold polish-press ${tone === t.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-700'}`}>{t.name}</button>
               ))}
             </div>
@@ -536,7 +538,22 @@ function FajrAlarmSetting() {
             ))}
           </div>
         )}
-        {mode !== 'off' && (
+        {isNativeApp() && (
+          <div className="rounded-xl border-2 border-emerald-500 bg-emerald-50 p-3">
+            <button onClick={() => { void enableNativeAlarms().then((r) => alert(r.ok ? 'تم تفعيل الأذان والمنبه حتى والتطبيق مقفول' : 'لازم تسمح بالإشعارات (وبالمنبهات الدقيقة في أندرويد)')); }}
+              className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl polish-press">تفعيل الأذان والمنبه والتطبيق مقفول</button>
+            {platformName() === 'android' ? (
+              <label className="flex items-center gap-2 mt-3 text-sm font-semibold text-accent-800">
+                <input type="checkbox" checked={silent} onChange={(e) => { setSilent(e.target.checked); saveRingOnSilent(e.target.checked); void rescheduleNativeAlarms(); }} className="w-5 h-5" />
+                الأذان والمنبه يرنّوا حتى لو التليفون صامت
+              </label>
+            ) : (
+              <p className="text-xs text-amber-800 mt-3 leading-relaxed">على آيفون وآيباد: نظام iOS يكتم صوت الإشعارات في وضع الصامت ولا يسمح لتطبيق عادي بتجاوزه (تحتاج Critical Alerts بموافقة آبل). الأذان يرن لو الصامت مقفول.</p>
+            )}
+            <p className="text-xs text-accent-700 mt-2 leading-relaxed">بيشتغل من نظام الجهاز نفسه فيرن حتى لو التطبيق مقفول أو الشاشة مقفولة. على آيفون النغمة بتتكرر كل دقيقة لحد ما تفتح التطبيق وتحل الأسئلة.</p>
+          </div>
+        )}
+        {mode !== 'off' && !isNativeApp() && (
           <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
             <button onClick={() => { if (night) { stopNightMode(); setNight(false); } else { setNight(startNightMode()); } }}
               className={`w-full py-3 rounded-xl font-bold polish-press ${night ? 'grad-amber-door text-white' : 'bg-white border-2 border-amber-400 text-amber-800'}`}>
