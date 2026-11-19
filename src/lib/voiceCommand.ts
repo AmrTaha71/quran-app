@@ -1,4 +1,5 @@
-// «اؤمرني» voice command parser (2026-11-08). Keyword + surah-name
+// «اؤمرني» voice command parser (follow-the-imam is now «تتبع الإمام»;
+// «الحق الإمام» stays as a synonym) (2026-11-08). Keyword + surah-name
 // matching only: no AI, no network, no cost. Returns null when the
 // sentence is not understood, so nothing wrong ever opens.
 import { SURAHS, SURAH_AYAH_COUNTS } from './surahs';
@@ -45,7 +46,7 @@ export function parseVoiceCommand(raw: string): VoiceAction | null {
   const surah = findSurah(raw);
   if (has(t, ['متشابه', 'المتشابهات'])) return { kind: 'mutashabihat' };
   if (has(t, ['اذكار', 'الاذكار', 'ذكر الصباح', 'ذكر المساء'])) return { kind: 'route', route: 'adhkar' };
-  if (has(t, ['الامام', 'الحق الامام', 'صلاه', 'التراويح'])) return { kind: 'route', route: 'follow' };
+  if (has(t, ['تتبع الامام', 'تابع الامام', 'الامام', 'الحق الامام', 'صلاه', 'التراويح'])) return { kind: 'route', route: 'follow' };
   if (has(t, ['اعدادات', 'الاعدادات'])) return { kind: 'route', route: 'settings' };
   if (has(t, ['رفيق', 'صديق', 'الغرفه', 'رفيقتي'])) return { kind: 'route', route: 'room' };
   if (has(t, ['جدو', 'جده', 'كبير السن'])) return { kind: 'elderly' };
