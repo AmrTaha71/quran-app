@@ -29,6 +29,7 @@ import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrA
 import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnits';
 import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import MushafRevealStage from '../components/mushaf/MushafRevealStage';
+import { recordAyahWords, listWeakWords, weakWordAyahs, clearWeakWords, type WeakWord } from '../lib/wordMistakes';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
@@ -2491,6 +2492,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     await startTestGlobal(list[0].id, list[list.length - 1].id, null, undefined, null, { explicitAyahs: list, recentLabel: weakTestLabel(list.length) });
   };
 
+  // 2026-11-20: word-level weak log (lib/wordMistakes). Refreshed whenever the
+  // weak door opens or a test ends; practice starts the ayahs that hold weak words.
+  const [wordLogTick, setWordLogTick] = useState(0);
+  const weakWordList: WeakWord[] = useMemo(() => listWeakWords(), [wordLogTick, lobbyDoor, phase]);
+  const startWeakWordsTest = async () => {
+    const pairs = weakWordAyahs();
+    if (pairs.length === 0) return;
+    const ids = pairs.map(([sNo, aNo]) => getGlobalAyahNumber(sNo, aNo));
+    const rows = await fetchAyahsByIds(ids);
+    if (!rows.length) return;
+    await startTestGlobal(rows[0].id, rows[rows.length - 1].id, null, undefined, null, { explicitAyahs: rows, recentLabel: `كلماتي الغلط (${rows.length.toLocaleString('ar-EG')} آية)` });
+  };
+
   // Global-range test (unit mode + resume): verse ids are sequential
   // 1..6236 in surah order, so id range = global ayah range.
   const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null, opts?: { explicitAyahs?: TestAyah[]; recentLabel?: string; reciterChosen?: boolean }) => {
@@ -2879,6 +2893,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setAyahAudioFailed(false);
       ayahCorrFailedForRef.current = -1;
       playCorrectChime();
+      // Word log: a spoken, fully correct ayah counts toward mastering its logged weak words.
+      try {
+        const okWords = expectedWordList(ayah.ayah_text);
+        if (spokenTokens(liveRef.current.finals).length > 0) recordAyahWords(ayah.surah_no, ayah.ayah_no, okWords, okWords.map(() => true));
+      } catch { /* tracking is best-effort */ }
       liveRef.current.micState = 'done-correct';
       setMicState('done-correct');
     } else {
@@ -2893,6 +2912,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
       setWrongIndices(expected.map((_, i) => i).filter((i) => !result.matched[i]));
       const wrongWords = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
+      try { recordAyahWords(ayah.surah_no, ayah.ayah_no, expected, result.matched); } catch { /* best-effort */ }
       setWrongByAyah((prev) => ({ ...prev, [index]: wrongWords }));
       setWrongExtras(result.extras);
       if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
@@ -5240,6 +5260,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         (missedByAyah[w.ayahIdx] ||= []).push(w.orig);
       }
     });
+    // Word log (continuous): per ayah, only ayahs where something was matched are recorded.
+    try {
+      const perAyah: Record<number, { orig: string; ok: boolean }[]> = {};
+      expected.forEach((w, i) => { (perAyah[w.ayahIdx] ||= []).push({ orig: w.orig, ok: !!matched[i] }); });
+      Object.entries(perAyah).forEach(([k, ws]) => {
+        const row = ayahs[Number(k)];
+        if (row) recordAyahWords(row.surah_no, row.ayah_no, ws, ws.map((x) => x.ok));
+      });
+    } catch { /* best-effort */ }
     liveRef.current.grades = gradesArr;
     setGrades(gradesArr);
     const noSkips = new Array(ayahCount).fill(false);
@@ -6455,6 +6484,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {loading ? 'جارٍ تحميل الآيات…' : `ابدأ تسميع الآيات الضعيفة (${weakAyahs.length.toLocaleString('ar-EG')} آية)`}
                       </button>
                       <Hint id="st-weak"><p className="text-xs text-accent-600 leading-relaxed">التسميع بنفس إعداداتك المحفوظة — ولو وقفت في النص، تقدر تكمل من مكانك بعدين.</p></Hint>
+                    </>
+                  )}
+                </div>
+                <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-3 alive-detail-card">
+                  <h2 className="font-semibold text-accent-800">كلماتي اللي بغلط فيها</h2>
+                  {weakWordList.length === 0 ? (
+                    <p className="text-sm text-accent-600 leading-relaxed">لسه مفيش كلمات متسجلة. كل ما تسمّع وتغلط في كلمة، التطبيق هيفتكرها هنا ويقول لك كام مرة غلطت فيها. والكلمة بتتشال لما تقولها صح ٣ مرات ورا بعض.</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-accent-700 leading-relaxed">
+                        {weakWordList.length.toLocaleString('ar-EG')} كلمة محتاجة تركيز في {weakWordAyahs().length.toLocaleString('ar-EG')} آية. الأكتر غلطًا:
+                      </p>
+                      <div className="flex flex-wrap gap-2" dir="rtl">
+                        {weakWordList.slice(0, 12).map((w) => (
+                          <span key={`${w.surah}:${w.ayah}:${w.wordNo}`} className="px-3 py-1.5 bg-amber-50 border border-hairline-amber rounded-xl text-sm font-semibold text-amber-800">
+                            <span className="text-base">{w.word}</span>
+                            <span className="text-xs text-accent-600"> · {SURAHS.find((x) => x.no === w.surah)?.name || ''} {w.ayah.toLocaleString('ar-EG')} · {w.misses.toLocaleString('ar-EG')}×</span>
+                          </span>
+                        ))}
+                      </div>
+                      {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                      <button onClick={() => void startWeakWordsTest()} disabled={loading}
+                        className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
+                        {loading ? 'جارٍ تحميل الآيات…' : `سمّع الآيات اللي فيها كلماتي الغلط (${weakWordAyahs().length.toLocaleString('ar-EG')})`}
+                      </button>
+                      <button onClick={() => { clearWeakWords(); setWordLogTick((n) => n + 1); }}
+                        className="block mx-auto text-xs font-semibold text-accent-500 underline">مسح السجل</button>
                     </>
                   )}
                 </div>
