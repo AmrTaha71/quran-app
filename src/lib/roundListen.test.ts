@@ -19,9 +19,12 @@ type Bundle = {
   firstMistake: (m: boolean[]) => number;
   tarteelRoundScore: (r: { total: number; credited: number; extras?: number; mistakes?: number; beginner?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
   ROUND_CORRECTIONS: number;
+  DeadlineTimer: new (run: () => void) => { sync: (ms: number | null) => void; clear: () => void };
   RoundState: new (total: number, corrections: number) => {
     base: number;
-    evaluate: (m: boolean[], all: boolean, final: boolean) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
+    since: number | null;
+    msUntilDue: (now: number) => number | null;
+    evaluate: (m: boolean[], all: boolean, final: boolean, now?: number) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
     summary: (locked: boolean) => { credited: number; wrong: number[]; locked: boolean; corrected: number; mistakes: number };
   };
   currentHistoryLevel: (isAdmin: boolean) => 'beginner' | 'advanced' | 'master';
@@ -37,7 +40,7 @@ before(async () => {
     `export { alignSpoken } from '${root}src/lib/alignBridge.ts';`,
     `export { expectedWordList } from '${root}src/lib/expectedWords.ts';`,
     `export { firstMistake, tarteelRoundScore, currentHistoryLevel } from '${root}src/lib/roundTest.ts';`,
-    `export { RoundState, ROUND_CORRECTIONS } from '${root}src/lib/roundJudge.ts';`,
+    `export { RoundState, ROUND_CORRECTIONS, DeadlineTimer } from '${root}src/lib/roundJudge.ts';`,
   ].join('\n'));
   buildSync({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile: path.join(dir, 'out.mjs'), logLevel: 'error', jsx: 'automatic',
@@ -379,86 +382,124 @@ describe('ListenSession (fake recognizer, mocked timers)', () => {
 void mock; void QUIET_MS;
 
 
-// ---- When the judge looks: not at a silence --------------------------------------------------
-describe('mistakes are judged at «خلصت» or at the last word, never at a mid-ayah silence', () => {
+// ---- When the reciter cuts in: 3 wrong words, 10 s, end of the ayah / «خلصت» ------------------
+describe('reciter intervention timing', () => {
   const START = 5;
-  const BAD = 'ضضضض';
-  /** Wires FakeRec -> ListenSession -> alignRest -> RoundState exactly like RoundRecite.startMic. */
+  const BADS = ['ضضضض', 'ططططط', 'ظظظظظ', 'غغغغغ'];
+  const AYAT2: [number, number][] = [[2, 255], [2, 23], [2, 282], [2, 30]];
+  /** Wires FakeRec -> ListenSession -> alignRest -> RoundState -> DeadlineTimer like RoundRecite.startMic. */
   function rig(norms: string[], corrections = B.ROUND_CORRECTIONS) {
     const st = new B.RoundState(norms.length - START, corrections);
     const rec = new FakeRec();
     const actions: { kind: string; locked?: boolean }[] = [];
     const judge = (final: boolean) => {
       const al = alignRest(norms, START + st.base, sess.text(), B.alignSpoken);
-      const act = st.evaluate(al.matched, al.allMatched, final);
+      const act = st.evaluate(al.matched, al.allMatched, final, Date.now());
       actions.push(act);
+      if (act.kind === 'continue') dl.sync(st.msUntilDue(Date.now()));
+      else dl.clear();
       return act;
     };
+    const dl = new B.DeadlineTimer(() => { judge(false); });
     const sess: ListenSession = new ListenSession({
       rec, kind: 'lab', readResults, isEmptyEvent, isListening: () => true,
-      onText: () => {}, onQuiet: () => { judge(false); }, onRestartError: () => {},
+      onText: () => { judge(false); }, onQuiet: () => {}, onRestartError: () => {},
     });
     sess.attach();
     return { st, rec, sess, actions, judge };
   }
   const say = (rec: FakeRec, words: string[]) => rec.onresult?.(ev(words.join(' '), false));
+  const kinds = (a: { kind: string }[]) => a.map((x) => x.kind).join(',');
 
-  for (const [s, a] of [[2, 255], [2, 23], [2, 282], [2, 30]] as [number, number][]) {
-    for (const level of ['beginner', 'advanced'] as const) {
-      it(`${s}:${a} ${level}: mistake, 3 s silence, he fixes it himself, goes on = NOT counted (8)`, (t) => {
-        t.mock.timers.enable({ apis: ['setTimeout'] });
-        const norms = ayahOf(s, a);
-        const rest = norms.slice(START);
-        const { st, rec, actions } = rig(norms);
-        say(rec, [...rest.slice(0, 2), BAD]);                       // wrong word in the middle
-        t.mock.timers.tick(3000);                                   // 3 s of silence: the quiet timer fires...
-        assert.deepEqual(actions, [{ kind: 'continue' }], 'the silence judged nothing, the reciter did not cut in');
-        say(rec, [...rest.slice(0, 2), BAD, rest[2]]);              // ...he says the right word himself
-        say(rec, rest);                                             // ...and carries on to the end
-        t.mock.timers.tick(QUIET_MS);
-        const last = actions[actions.length - 1];
-        assert.deepEqual(last, { kind: 'finish', locked: false });
-        const sum = st.summary(false);
-        assert.equal(sum.mistakes, 0);
-        assert.equal(sum.corrected, 0);
-        assert.equal(B.tarteelRoundScore({ total: rest.length, ...sum, extras: 0, beginner: level === 'beginner' }, true).completion, 8);
-      });
-    }
+  for (const [s, a] of AYAT2) {
+    const norms = () => ayahOf(s, a);
+    it(`${s}:${a} 3 wrong words in a row (then the right words go on) = the reciter cuts in at the 3rd`, (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+      const rest = norms().slice(START);
+      const { st, rec, actions } = rig(norms());
+      say(rec, [rest[0], BADS[0], rest[2], rest[3]]);                           // 1 wrong word
+      say(rec, [rest[0], BADS[0], BADS[1], rest[3], rest[4]]);                 // 2 wrong words
+      assert.equal(kinds(actions), 'continue,continue');
+      say(rec, [rest[0], BADS[0], BADS[1], BADS[2], rest[4], rest[5]]);        // 3 wrong words
+      assert.equal(actions[actions.length - 1].kind, 'correct');
+      assert.equal(st.summary(false).mistakes, 1);
+    });
+    it(`${s}:${a} one mistake + 10 s without fixing it = the reciter cuts in (at 10 s, not before)`, (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+      const rest = norms().slice(START);
+      const { st, rec, actions } = rig(norms());
+      say(rec, [rest[0], BADS[0], rest[2], rest[3], rest[4]]);                 // the mistake is seen at t=0
+      t.mock.timers.tick(9999);
+      assert.equal(kinds(actions), 'continue', 'nothing before the 10 s');
+      t.mock.timers.tick(1);
+      assert.equal(actions[actions.length - 1].kind, 'correct');
+      assert.equal(st.summary(false).mistakes, 1);
+    });
+    it(`${s}:${a} a mistake the user fixes himself before 10 s = no intervention, not counted`, (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+      const rest = norms().slice(START);
+      const { st, rec, actions } = rig(norms());
+      say(rec, [rest[0], rest[1], BADS[0], rest[3], rest[4]]);                 // mistake seen
+      t.mock.timers.tick(6000);                                                // 6 s later he restarts from the word
+      say(rec, [rest[0], rest[1], BADS[0], rest[3], rest[4], ...rest.slice(2, 8)]);
+      assert.equal(st.since, null, 'the clock was dropped when the word got fixed');
+      t.mock.timers.tick(20000);                                               // far past the old deadline
+      assert.ok(actions.every((x) => x.kind === 'continue'), kinds(actions));
+      say(rec, [rest[0], rest[1], BADS[0], rest[3], rest[4], ...rest]);       // and goes on to the end
+      const last = actions[actions.length - 1];
+      assert.deepEqual(last, { kind: 'finish', locked: false });
+      assert.equal(st.summary(false).mistakes, 0);
+    });
+    it(`${s}:${a} a mistake + the end of the ayah (before 10 s, under 3 wrong words) = the reciter cuts in`, (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+      const rest = norms().slice(START);
+      const { st, rec, actions } = rig(norms());
+      say(rec, rest.slice(0, 4));
+      say(rec, rest.map((w, i) => (i === 3 ? BADS[0] : w)));                  // whole ayah, word 3 wrong, 1 s total
+      assert.equal(actions[actions.length - 1].kind, 'correct');
+      assert.equal(st.base, 3);
+      assert.equal(st.summary(false).mistakes, 1);
+    });
+    it(`${s}:${a} «خلصت» with an unfixed mistake and nothing else due = the reciter cuts in`, (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+      const rest = norms().slice(START);
+      const { rec, actions, judge } = rig(norms());
+      say(rec, [rest[0], BADS[0], rest[2], rest[3], rest[4]]);
+      assert.equal(kinds(actions), 'continue');
+      assert.equal(judge(true).kind, 'correct');
+    });
   }
 
-  it('an unfixed mistake is NOT judged at a mid-ayah silence even when later words were heard; «خلصت» judges it', (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const norms = ayahOf(2, 255);
-    const rest = norms.slice(START);
-    const { st, rec, actions, judge } = rig(norms);
-    say(rec, [rest[0], BAD, ...rest.slice(2, 8)]);                  // wrong word 1, then 6 right ones, not at the end yet
+  it('the old rules are gone: a silence (1.8 s, 3 s, 9 s) judges nothing', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const rest = ayahOf(2, 255).slice(START);
+    const { rec, actions } = rig(ayahOf(2, 255));
+    say(rec, [rest[0], BADS[0], rest[2], rest[3]]);
+    t.mock.timers.tick(QUIET_MS);
     t.mock.timers.tick(3000);
-    assert.deepEqual(actions, [{ kind: 'continue' }]);
-    assert.equal(st.base, 0, 'nothing was settled');
-    assert.deepEqual(judge(true), { kind: 'correct' });             // «خلصت»: now the reciter corrects (counted)
-    assert.equal(st.base, 1);
-    assert.equal(st.summary(false).mistakes, 1);
+    t.mock.timers.tick(5000);
+    assert.equal(kinds(actions), 'continue');
   });
 
-  it('the ayah is over (last word said) and a word is still wrong -> judged at the quiet timer: reciter corrects', (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const norms = ayahOf(2, 23);
-    const rest = norms.slice(START);
-    const { st, rec, actions } = rig(norms);
-    say(rec, rest.map((w, i) => (i === 3 ? BAD : w)));
-    t.mock.timers.tick(QUIET_MS);
-    assert.deepEqual(actions, [{ kind: 'correct' }]);
-    assert.equal(st.base, 3);
-    assert.equal(st.summary(false).mistakes, 1);
+  it('no mistake: nothing happens until the ayah is complete; then it finishes', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const rest = ayahOf(2, 23).slice(START);
+    const { st, rec, actions } = rig(ayahOf(2, 23));
+    say(rec, rest.slice(0, 5));
+    t.mock.timers.tick(60000);
+    assert.equal(kinds(actions), 'continue');
+    assert.equal(st.msUntilDue(Date.now()), null);
+    say(rec, rest);
+    assert.deepEqual(actions[actions.length - 1], { kind: 'finish', locked: false });
   });
 
-  it('same, with no correction left (engine only): the position closes locked', (t) => {
-    t.mock.timers.enable({ apis: ['setTimeout'] });
-    const norms = ayahOf(2, 23);
-    const rest = norms.slice(START);
-    const { rec, actions } = rig(norms, 0);
-    say(rec, rest.map((w, i) => (i === 3 ? BAD : w)));
-    t.mock.timers.tick(QUIET_MS);
-    assert.deepEqual(actions, [{ kind: 'finish', locked: true }]);
+  it('after the correction the clock starts over (the next mistake gets its own 10 s)', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const rest = ayahOf(2, 282).slice(START);
+    const { st, rec, actions } = rig(ayahOf(2, 282));
+    say(rec, [rest[0], BADS[0], rest[2], rest[3], rest[4]]);
+    t.mock.timers.tick(10000);
+    assert.equal(actions[actions.length - 1].kind, 'correct');
+    assert.equal(st.since, null);
   });
 });

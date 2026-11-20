@@ -14,7 +14,7 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { RoundState } from '../lib/roundJudge';
+import { DeadlineTimer, RoundState } from '../lib/roundJudge';
 import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
@@ -39,6 +39,10 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const stRef = useRef<RoundState | null>(null);
   if (!stRef.current) stRef.current = new RoundState(rest.length, corrections);
   const st = stRef.current;
+  // Re-judges when the 10 s of the first unfixed mistake are up (only while listening).
+  const dlRef = useRef<DeadlineTimer | null>(null);
+  if (!dlRef.current) dlRef.current = new DeadlineTimer(() => { if (phaseRef.current === 'listening') evaluate(false); });
+  const dl = dlRef.current;
   const effRef = useRef(eff);
   effRef.current = eff;
   const sessRef = useRef<ListenSession | null>(null);
@@ -52,8 +56,9 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   useEffect(() => () => {
     finished.current = true;
     audio.current?.cancel();
+    dl.clear();
     sessRef.current?.abort(); sessRef.current = null;
-  }, []);
+  }, [dl]);
 
   const url = reciterAyahUrl(ayah.folder, ayah.surah, ayah.ayah);
   const t = ayah.timings;
@@ -93,6 +98,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   }
 
   function stopRec() {
+    dl.clear();
     sessRef.current?.abort();
     sessRef.current = null;
   }
@@ -111,12 +117,14 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     if (finished.current) return;
     // Whole ayah in, prompt part cut out after matching (see alignRest). Words the user
     // fixed himself are already right here; only what is still wrong reaches the judge, and
-    // the judge only looks at «خلصت» or when the last word was said (not at a silence).
+    // the judge cuts in on 3 wrong words, 10 s since the first unfixed mistake, the end of the
+    // ayah, or «خلصت» (never at a silence).
     const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
     const act = st.evaluate(al.matched, al.allMatched, final);
     if (act.kind === 'correct') { stopRec(); void playCorrection(); }
     else if (act.kind === 'finish') finishAll(act.locked);
+    else dl.sync(st.msUntilDue(Date.now())); // an unfixed mistake is waiting for its 10 s
   }
 
   // A start()/restart that throws used to be swallowed: log it and tell the user.
@@ -139,9 +147,13 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     const sess: ListenSession = new ListenSession({
       rec, kind, readResults, isEmptyEvent,
       isListening: () => phaseRef.current === 'listening',
-      // Live counter follows every real change of finals / interim.
-      onText: (text) => setHeard(alignRest(fullNorms, start, text, alignSpoken).matched.filter(Boolean).length),
-      onQuiet: () => evaluate(false),
+      // Every real change of finals / interim is judged (evaluate also refreshes the live counter).
+      // Judging never waits for a silence: the reciter cuts in on 3 wrong words, 10 s, or the end.
+      onText: (text) => {
+        if (phaseRef.current === 'listening') evaluate(false);
+        else setHeard(alignRest(fullNorms, start, text, alignSpoken).matched.filter(Boolean).length);
+      },
+      onQuiet: () => {}, // a silence is not a reason to judge any more
       onRestartError: (err) => reportStartError('rec.start() in onend', err),
     });
     sessRef.current = sess;
