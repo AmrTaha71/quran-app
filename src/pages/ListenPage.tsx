@@ -488,12 +488,12 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // 2026-11-19: the «قفل الشاشة» button first asks what to show while listening:
   // a fullscreen Mushaf (audio + the highlight following it) or the black screen.
   const [showScreenChoice, setShowScreenChoice] = useState(false);
-  const openMushafWhileListening = () => {
+  const openMushafWhileListening = (at?: { surah: number; ayah: number }) => {
     setShowScreenChoice(false);
     try {
       const np = getNowPlaying();
-      const ayah = np ? np.ayah : currentAyahRef.current;
-      const sr = np ? np.surah : surah;
+      const ayah = at ? at.ayah : np ? np.ayah : currentAyahRef.current;
+      const sr = at ? at.surah : np ? np.surah : surah;
       localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: sr, ayah }));
       localStorage.setItem('quran-mushaf-from-listen', '1');
     } catch { /* ignore */ }
@@ -1163,6 +1163,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     try {
       await engine.play();
       setPlaying(true);
+      // 2026-11-21 (Dr. Amr): a khatma is either read from the screen or listened to with the
+      // screen off. So as soon as it plays, open the fullscreen Mushaf that follows the audio;
+      // its «قفل الشاشة» pill (bottom) turns the screen black to save battery.
+      const np = getNowPlaying();
+      openMushafWhileListening(np
+        ? { surah: np.surah, ayah: np.ayah }
+        : { surah: fromSaved && fromSaved.kind === 'ayah' ? fromSaved.surah : startSurah, ayah: fromSaved && fromSaved.kind === 'ayah' ? fromSaved.ayah : 1 });
     } catch {
       setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
       setPlaying(false);
@@ -3309,7 +3316,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         <div className="fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setShowScreenChoice(false)}>
           <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()} dir="rtl">
             <p className="text-center font-bold text-lg text-accent-900">اعرض إيه وانت بتسمع؟</p>
-            <button onClick={openMushafWhileListening}
+            <button onClick={() => openMushafWhileListening()}
               className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl polish-press">
               المصحف بملء الشاشة مع الصوت والتظليل
             </button>
