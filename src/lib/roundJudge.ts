@@ -1,13 +1,19 @@
 // The grading state of ONE round / position, shared by «اختبار الترتيل» and «الاختبار
 // الشامل» (both run it through components/RoundRecite.tsx).
 //
-// What counts as a mistake: a word the reciter had to correct. A word the user got wrong
-// and then said right again BEFORE the reciter spoke is not a mistake: the aligner
-// (alignRest -> alignWords) already skips the stray words, so `matched` shows that word as
-// right and firstMistake() never sees it. Only `matched` words still wrong at «خلصت» / the
-// quiet timer reach this class, and the reciter plays right after, so the order
-// "wrong word -> right word -> reciter" is exactly what the aligner sees.
+// What counts as a mistake: a word the reciter had to correct (or one still wrong when the
+// ayah is over). A word the user got wrong and then said right again BEFORE the reciter spoke
+// is not a mistake, however long he stayed silent in between: the aligner (alignRest ->
+// alignWords) skips the stray words, so `matched` shows that word as right.
+//
+// WHEN the judge looks: only at «خلصت» (final) or once the user has reached the LAST word of
+// the ayah. A silence in the middle of the ayah (the quiet timer) judges nothing, so a mistake
+// can still be fixed after any pause. The reciter therefore never cuts in mid-ayah.
 import { firstMistake } from './roundTest';
+
+/** The reciter corrects the first counted mistake once, in BOTH tests (tarteel and comprehensive):
+ *  one rule, one setting. The next counted mistake closes the position. */
+export const ROUND_CORRECTIONS = 1;
 
 export type JudgeAction =
   /** Nothing decided yet (the user has more to say). */
@@ -43,8 +49,10 @@ export class RoundState {
     }
   }
 
-  /** Judge what the user said (`matched` is relative to the current start). */
+  /** Judge what the user said (`matched` is relative to the current start). `final` = «خلصت».
+   *  Without it (quiet timer) nothing is decided until the last word of the ayah was said. */
   evaluate(matched: boolean[], allMatched: boolean, final: boolean): JudgeAction {
+    if (!final && !(matched.length > 0 && matched[matched.length - 1])) return { kind: 'continue' };
     const m = firstMistake(matched);
     if (m >= 0) {
       this.creditUpTo(matched, m);

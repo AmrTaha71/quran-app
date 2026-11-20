@@ -21,7 +21,7 @@ type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correct
 
 export default function RoundRecite({ ayah, corrections, onFinish }: {
   ayah: PickedAyah;
-  /** 0 = no correction (tarteel); 1 = the reciter corrects once (comprehensive). */
+  /** How many times the reciter corrects (ROUND_CORRECTIONS in both tests). */
   corrections: number;
   onFinish: (r: RoundResult) => void;
 }) {
@@ -110,7 +110,8 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   function evaluate(final: boolean) {
     if (finished.current) return;
     // Whole ayah in, prompt part cut out after matching (see alignRest). Words the user
-    // fixed himself are already right here; only what is still wrong reaches the judge.
+    // fixed himself are already right here; only what is still wrong reaches the judge, and
+    // the judge only looks at «خلصت» or when the last word was said (not at a silence).
     const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
     const act = st.evaluate(al.matched, al.allMatched, final);

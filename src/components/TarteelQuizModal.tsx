@@ -4,6 +4,7 @@
 // (RoundRecite), then «في أي سورة؟» (tiles). Round = 8 (completion)
 // + 2 (surah name; skipped inside a single surah); final /40 = average of the rounds x 4, kept in the score log.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal, RoundDebugOverlay } from './RoundRecite';
 import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
@@ -281,7 +282,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
         {phase === 'recite' && cur && (
           <>
             <p className="text-xs text-accent-600 mb-2">الجولة {arNum(rounds.length + 1)} · القارئ: {reciterName(cur.ayah.folder)}</p>
-            <RoundRecite key={rounds.length} ayah={cur.ayah} corrections={0} onFinish={onRecited} />
+            <RoundRecite key={rounds.length} ayah={cur.ayah} corrections={ROUND_CORRECTIONS} onFinish={onRecited} />
           </>
         )}
 

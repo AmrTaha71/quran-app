@@ -18,6 +18,7 @@ type Bundle = {
   expectedWordList: (t: string) => { orig: string; norm: string }[];
   firstMistake: (m: boolean[]) => number;
   tarteelRoundScore: (r: { total: number; credited: number; extras?: number; mistakes?: number; beginner?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
+  ROUND_CORRECTIONS: number;
   RoundState: new (total: number, corrections: number) => {
     base: number;
     evaluate: (m: boolean[], all: boolean, final: boolean) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
@@ -36,7 +37,7 @@ before(async () => {
     `export { alignSpoken } from '${root}src/lib/alignBridge.ts';`,
     `export { expectedWordList } from '${root}src/lib/expectedWords.ts';`,
     `export { firstMistake, tarteelRoundScore, currentHistoryLevel } from '${root}src/lib/roundTest.ts';`,
-    `export { RoundState } from '${root}src/lib/roundJudge.ts';`,
+    `export { RoundState, ROUND_CORRECTIONS } from '${root}src/lib/roundJudge.ts';`,
   ].join('\n'));
   buildSync({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile: path.join(dir, 'out.mjs'), logLevel: 'error', jsx: 'automatic',
@@ -154,8 +155,10 @@ describe('round scoring: self-corrected mistakes do not count', () => {
   };
 
   for (const [s, a] of AYAT) {
-    for (const corrections of [0, 1]) { // 0 = tarteel, 1 = comprehensive: the SAME scores
-      const tag = `${s}:${a} corrections=${corrections}`;
+    // ROUND_CORRECTIONS (=1) is what BOTH tests use. corrections=0 is the judge engine with no correction
+    // left (not used by either screen any more): kept to show the scores do not depend on it.
+    for (const corrections of [0, 1]) {
+      const tag = `${s}:${a} corrections=${corrections}${corrections === 0 ? ' (engine only, unused)' : ''}`;
       for (const level of ['beginner', 'advanced'] as Level[]) {
         it(`${tag} ${level}: clean -> 8`, () => {
           const { norms, rest } = restOf(s, a);
@@ -194,7 +197,7 @@ describe('round scoring: self-corrected mistakes do not count', () => {
             (base) => say(rest, base, { wrongBare: [6] }),
             (base) => say(rest, base, {}),
           ]);
-          assert.equal(r.mistakes, corrections === 0 ? 1 : 2); // tarteel closes at the first, comprehensive at the second
+          assert.equal(r.mistakes, corrections === 0 ? 1 : 2); // no correction: closes at the first; with the reciter correction: at the second
           assert.equal(r.score, level === 'beginner' ? 4 : 0);
         });
         it(`${tag} ${level}: one self-fixed + one the reciter corrected -> counts as ONE mistake`, () => {
@@ -210,13 +213,18 @@ describe('round scoring: self-corrected mistakes do not count', () => {
     }
   }
 
-  it('the two tests run the same logic: same recitation, same score with corrections 0 and 1', () => {
+  it('both tests use the same correction setting (ROUND_CORRECTIONS = 1) and therefore the same scores', () => {
+    assert.equal(B.ROUND_CORRECTIONS, 1);
+    for (const f of ['src/components/TarteelQuizModal.tsx', 'src/components/ComprehensiveTestModal.tsx']) {
+      const src = fs.readFileSync(path.join(root, f), 'utf8');
+      assert.match(src, /<RoundRecite [^>]*corrections=\{ROUND_CORRECTIONS\}/, f);
+      assert.doesNotMatch(src, /corrections=\{[01]\}/, f);
+    }
     for (const [s, a] of AYAT) for (const level of ['beginner', 'advanced'] as Level[]) {
       const { norms, rest } = restOf(s, a);
-      const tarteel = play(norms, 0, level, [() => say(rest, 0, { wrongBare: [3] })]);
-      const comp = play(norms, 1, level, [() => say(rest, 0, { wrongBare: [3] }), (b) => say(rest, b, {})]);
-      assert.equal(tarteel.score, comp.score);
-      assert.equal(tarteel.mistakes, 1); assert.equal(comp.mistakes, 1);
+      const one = play(norms, B.ROUND_CORRECTIONS, level, [() => say(rest, 0, { wrongBare: [3] }), (b) => say(rest, b, {})]);
+      assert.equal(one.mistakes, 1);
+      assert.equal(one.score, level === 'beginner' ? 4 : 0);
     }
   });
 
@@ -369,3 +377,88 @@ describe('ListenSession (fake recognizer, mocked timers)', () => {
 });
 
 void mock; void QUIET_MS;
+
+
+// ---- When the judge looks: not at a silence --------------------------------------------------
+describe('mistakes are judged at «خلصت» or at the last word, never at a mid-ayah silence', () => {
+  const START = 5;
+  const BAD = 'ضضضض';
+  /** Wires FakeRec -> ListenSession -> alignRest -> RoundState exactly like RoundRecite.startMic. */
+  function rig(norms: string[], corrections = B.ROUND_CORRECTIONS) {
+    const st = new B.RoundState(norms.length - START, corrections);
+    const rec = new FakeRec();
+    const actions: { kind: string; locked?: boolean }[] = [];
+    const judge = (final: boolean) => {
+      const al = alignRest(norms, START + st.base, sess.text(), B.alignSpoken);
+      const act = st.evaluate(al.matched, al.allMatched, final);
+      actions.push(act);
+      return act;
+    };
+    const sess: ListenSession = new ListenSession({
+      rec, kind: 'lab', readResults, isEmptyEvent, isListening: () => true,
+      onText: () => {}, onQuiet: () => { judge(false); }, onRestartError: () => {},
+    });
+    sess.attach();
+    return { st, rec, sess, actions, judge };
+  }
+  const say = (rec: FakeRec, words: string[]) => rec.onresult?.(ev(words.join(' '), false));
+
+  for (const [s, a] of [[2, 255], [2, 23], [2, 282], [2, 30]] as [number, number][]) {
+    for (const level of ['beginner', 'advanced'] as const) {
+      it(`${s}:${a} ${level}: mistake, 3 s silence, he fixes it himself, goes on = NOT counted (8)`, (t) => {
+        t.mock.timers.enable({ apis: ['setTimeout'] });
+        const norms = ayahOf(s, a);
+        const rest = norms.slice(START);
+        const { st, rec, actions } = rig(norms);
+        say(rec, [...rest.slice(0, 2), BAD]);                       // wrong word in the middle
+        t.mock.timers.tick(3000);                                   // 3 s of silence: the quiet timer fires...
+        assert.deepEqual(actions, [{ kind: 'continue' }], 'the silence judged nothing, the reciter did not cut in');
+        say(rec, [...rest.slice(0, 2), BAD, rest[2]]);              // ...he says the right word himself
+        say(rec, rest);                                             // ...and carries on to the end
+        t.mock.timers.tick(QUIET_MS);
+        const last = actions[actions.length - 1];
+        assert.deepEqual(last, { kind: 'finish', locked: false });
+        const sum = st.summary(false);
+        assert.equal(sum.mistakes, 0);
+        assert.equal(sum.corrected, 0);
+        assert.equal(B.tarteelRoundScore({ total: rest.length, ...sum, extras: 0, beginner: level === 'beginner' }, true).completion, 8);
+      });
+    }
+  }
+
+  it('an unfixed mistake is NOT judged at a mid-ayah silence even when later words were heard; «خلصت» judges it', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const norms = ayahOf(2, 255);
+    const rest = norms.slice(START);
+    const { st, rec, actions, judge } = rig(norms);
+    say(rec, [rest[0], BAD, ...rest.slice(2, 8)]);                  // wrong word 1, then 6 right ones, not at the end yet
+    t.mock.timers.tick(3000);
+    assert.deepEqual(actions, [{ kind: 'continue' }]);
+    assert.equal(st.base, 0, 'nothing was settled');
+    assert.deepEqual(judge(true), { kind: 'correct' });             // «خلصت»: now the reciter corrects (counted)
+    assert.equal(st.base, 1);
+    assert.equal(st.summary(false).mistakes, 1);
+  });
+
+  it('the ayah is over (last word said) and a word is still wrong -> judged at the quiet timer: reciter corrects', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const norms = ayahOf(2, 23);
+    const rest = norms.slice(START);
+    const { st, rec, actions } = rig(norms);
+    say(rec, rest.map((w, i) => (i === 3 ? BAD : w)));
+    t.mock.timers.tick(QUIET_MS);
+    assert.deepEqual(actions, [{ kind: 'correct' }]);
+    assert.equal(st.base, 3);
+    assert.equal(st.summary(false).mistakes, 1);
+  });
+
+  it('same, with no correction left (engine only): the position closes locked', (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const norms = ayahOf(2, 23);
+    const rest = norms.slice(START);
+    const { rec, actions } = rig(norms, 0);
+    say(rec, rest.map((w, i) => (i === 3 ? BAD : w)));
+    t.mock.timers.tick(QUIET_MS);
+    assert.deepEqual(actions, [{ kind: 'finish', locked: true }]);
+  });
+});

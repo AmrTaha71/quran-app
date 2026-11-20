@@ -27,6 +27,7 @@ import {
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
+import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal } from './RoundRecite';
 import MutashabihatOral, { type OralResult } from './MutashabihatOral';
 import SurahTiles from './SurahTiles';
@@ -337,7 +338,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
             <p className="text-xs text-accent-600 mb-3">القارئ: {reciterName(reciter)} · غلطة واحدة بيصحّحها، والتانية بتقفل الموضع</p>
             {note && <p className="text-xs text-amber-700 mb-2">{note}</p>}
             {busy && <p className="text-center text-accent-700 font-bold py-6">بنجهّز الموضع…</p>}
-            {!busy && cur && !showRes && !askSurah && <RoundRecite key={positions.length} ayah={cur} corrections={1} onFinish={onPositionDone} />}
+            {!busy && cur && !showRes && !askSurah && <RoundRecite key={positions.length} ayah={cur} corrections={ROUND_CORRECTIONS} onFinish={onPositionDone} />}
             {!busy && cur && askSurah && ctx.current && (
               <SurahTiles key={positions.length} correct={cur.surah} pool={ctx.current.pool} onAnswer={(sn) => settlePosition(askSurah, sn === cur.surah)} />
             )}
