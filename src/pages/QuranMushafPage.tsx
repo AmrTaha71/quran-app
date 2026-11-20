@@ -37,6 +37,9 @@ import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
 import MushafHighlightLayer from '../components/mushaf/MushafHighlightLayer';
 import { insetHighlightBox } from '../components/mushaf/highlightGeometry';
+import DigitalPageLayer from '../components/mushaf/DigitalPageLayer';
+import { loadTajweed, type TajweedMap } from '../lib/tajweedWords';
+import { TAJWEED_RULES } from '../lib/tajweedColors';
 import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
@@ -397,6 +400,25 @@ export default function QuranMushafPage({
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showEditionPicker, setShowEditionPicker] = useState(false);
   const [showEditionPickerInFullscreen, setShowEditionPickerInFullscreen] = useState(false);
+  // Digital page (2026-11-21): the Madinah page redrawn as text with tajweed colours.
+  // Persisted ('quran-mushaf-digital' = '1'); the colour data loads only when it is on.
+  const [digitalView, setDigitalView] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
+  const [tajweedMap, setTajweedMap] = useState<TajweedMap | null>(null);
+  const [showDigitalLegend, setShowDigitalLegend] = useState(false);
+  useEffect(() => {
+    if (!digitalView || tajweedMap) return;
+    let alive = true;
+    void loadTajweed().then((m) => { if (alive && m) setTajweedMap(m); });
+    return () => { alive = false; };
+  }, [digitalView, tajweedMap]);
+  const toggleDigitalView = () => {
+    setDigitalView((v) => {
+      const n = !v;
+      try { localStorage.setItem('quran-mushaf-digital', n ? '1' : '0'); } catch { /* ignore */ }
+      if (!n) setShowDigitalLegend(false);
+      return n;
+    });
+  };
   // Clean reading mode: hides every fullscreen control (top buttons,
   // chips, side strips, verse strip) so only the page shows. Word taps
   // and swipes keep working; tapping the page margin restores controls.
@@ -4653,6 +4675,39 @@ export default function QuranMushafPage({
             </button>
           )}
 
+          {/* الصفحة الرقمية: نص ملوّن بأحكام التجويد على نفس كلمات صفحة المدينة. */}
+          {!showRatelIntro && !cleanMode && edition.id === 'madinah' && (
+            <>
+              <button onClick={(e) => { e.stopPropagation(); toggleDigitalView(); }}
+                title={digitalView ? 'الصفحة الرقمية شغّالة — اضغط للرجوع لصورة المصحف' : 'الصفحة الرقمية — نص ملوّن بأحكام التجويد'}
+                className={`absolute top-[calc(4.95rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 backdrop-blur-sm ${digitalView ? 'bg-emerald-700/80 text-white ring-emerald-300/70' : 'bg-black/30 hover:bg-black/50 text-white ring-white/20'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                صفحة رقمية {digitalView ? '✓' : ''}
+              </button>
+              {digitalView && (
+                <button onClick={(e) => { e.stopPropagation(); setShowDigitalLegend((v) => !v); }}
+                  className={`absolute top-[calc(7.3rem_+_env(safe-area-inset-top))] left-2 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  دليل الألوان
+                </button>
+              )}
+              {digitalView && showDigitalLegend && (
+                <div dir="rtl" onClick={(e) => e.stopPropagation()}
+                  className="absolute z-40 left-2 right-2 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] max-h-[55vh] overflow-y-auto rounded-2xl bg-white/95 shadow-2xl ring-1 ring-black/10 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <b className="text-sm text-emerald-900">ألوان أحكام التجويد</b>
+                    <button onClick={() => setShowDigitalLegend(false)} className="px-2 py-0.5 text-sm rounded-lg bg-emerald-100 text-emerald-800 font-bold">إغلاق</button>
+                  </div>
+                  <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {Object.entries(TAJWEED_RULES).map(([k, v]) => (
+                      <li key={k} className="flex items-center gap-2 text-[13px] text-accent-800">
+                        <span className="inline-block w-3.5 h-3.5 rounded-full shrink-0" style={{ background: v.color }} />{v.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          )}
+
           {/* (Juz / Hizb / Surah chips now live in the merged top bar
               above — this second top-center div was the pile-up.) */}
 
@@ -4748,6 +4803,12 @@ export default function QuranMushafPage({
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
                     }}
                     onFinalError={() => setImageError(true)} />
+                  {/* Digital page: the words redrawn with tajweed colours on their own boxes
+                      (below the highlights, which come later in this wrapper). */}
+                  {digitalView && tajweedMap && edition.id === 'madinah' && pageWordBoxes && displayedPage === currentPage && (
+                    <DigitalPageLayer tajweed={tajweedMap}
+                      boxes={pageWordBoxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, surah: b.surah, ayah: b.ayah, wordNo: Number(b.key.split(':')[2]) || 0 }))} />
+                  )}
                   {goldFrame && (
                     <div className={`absolute z-10 pointer-events-none shadow-[inset_0_0_0_3px_#b48214,inset_0_0_0_8px_#f0c85a] ${fullscreenNorm && useMadinahCover ? '' : 'inset-0'}`}
                       style={fullscreenNorm && useMadinahCover ? {
