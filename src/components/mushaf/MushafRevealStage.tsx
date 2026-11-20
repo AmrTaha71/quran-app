@@ -10,24 +10,7 @@
 // become percentages of the same box, so no paper-clamp maths is needed.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { madinahPageOfAyah } from '../../lib/madinahPageStarts';
-
-type Box = { s: number; a: number; w: number; x0: number; y0: number; x1: number; y1: number };
-
-const boxCache: Record<number, Box[]> = {};
-
-async function loadBoxes(page: number): Promise<Box[] | null> {
-  if (boxCache[page]) return boxCache[page];
-  try {
-    const file = String(page).padStart(3, '0');
-    const r = await fetch(`${import.meta.env.BASE_URL || '/'}mushaf-boxes/${file}.json`);
-    if (!r.ok) return null;
-    const j = await r.json();
-    if (!j || !Array.isArray(j.w)) return null;
-    const boxes = (j.w as number[][]).map(([s, a, w, x0, y0, x1, y1]) => ({ s, a, w, x0, y0, x1, y1 }));
-    boxCache[page] = boxes;
-    return boxes;
-  } catch { return null; }
-}
+import { loadBoxes, type Box } from '../../lib/mushafBoxes';
 
 // Paper colour of the sufone scans (cream). Slightly warm so the patch
 // disappears into the page; measured on page 3: the scans are RGB(255,255,230).
@@ -45,12 +28,14 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
 }) {
   const page = madinahPageOfAyah(surah, ayah);
   const [boxes, setBoxes] = useState<Box[] | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [imgOk, setImgOk] = useState(true);
 
   useEffect(() => {
     let off = false;
     setBoxes(null);
-    void loadBoxes(page).then((b) => { if (!off) setBoxes(b); });
+    setLoaded(false);
+    void loadBoxes(page).then((b) => { if (!off) { setBoxes(b); setLoaded(true); } });
     return () => { off = true; };
   }, [page]);
 
@@ -66,6 +51,10 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   revealed.forEach((v, i) => { if (v) stickyRef.current.open.add(i); });
   if (!page) return null;
   const wrongSet = new Set(wrong || []);
+  // Not drawable while listening: boxes still loading (never flash the uncovered ayah), the
+  // box file failed, or this ayah has no boxes on its start page. Cover the whole page with
+  // paper colour; once loaded, say why. Done screens (showAll) show the page as it is.
+  const blocked = !showAll && (!loaded || words.length === 0);
 
   return (
     <div className="mx-auto w-full max-w-md" dir="ltr">
@@ -75,6 +64,11 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
           <img src={`https://cdn.jsdelivr.net/gh/sufone/medina-mushaf@master/png-d150/${page}.png`} alt={`صفحة ${page} من مصحف المدينة`}
             className="absolute inset-0 w-full h-full select-none" draggable={false}
             onError={() => setImgOk(false)} />
+        )}
+        {blocked && (
+          <div className="absolute inset-0 flex items-center justify-center p-6 text-center" style={{ background: PAPER }}>
+            {loaded && <p dir="rtl" className="text-base font-bold text-accent-700">ورق المدينة مش متاح للآية دي</p>}
+          </div>
         )}
         {words.map((b) => {
           const i = b.w - 1;

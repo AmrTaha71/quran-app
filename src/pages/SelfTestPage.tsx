@@ -29,6 +29,7 @@ import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrA
 import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnits';
 import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import MushafRevealStage from '../components/mushaf/MushafRevealStage';
+import { useMedinaPaperStatus } from '../components/mushaf/useMedinaPaperStatus';
 import { recordAyahWords, listWeakWords, weakWordAyahs, clearWeakWords, type WeakWord } from '../lib/wordMistakes';
 import { flushPending, SRS_REVIEW_SESSION_KEY, type SrsPending, type SlipNotice } from '../lib/srsTasmee';
 import SrsSlipNotice from '../components/SrsSlipNotice';
@@ -1356,6 +1357,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { return localStorage.getItem('quran-tasmee-paper') !== '0'; } catch { return true; }
   });
   const setPaperView = (v: boolean) => { setPaperViewState(v); try { localStorage.setItem('quran-tasmee-paper', v ? '1' : '0'); } catch { /* storage unavailable */ } };
+  // Per-ayah trust in the paper (lib/paperStatus.ts). count-mismatch: plain text view, no paper.
+  // no-boxes: the stage covers the page while listening and says it is unavailable; the done
+  // screens show the plain text (the paper cannot draw red words without boxes).
+  const paperStatus = useMedinaPaperStatus(ayahs[index]?.surah_no, ayahs[index]?.ayah_no, ayahs[index]?.ayah_text);
+  const paperOn = paperView && paperStatus !== 'count-mismatch';
+  const paperDrawn = paperOn && paperStatus !== 'no-boxes';
   const [contHeardWords, setContHeardWords] = useState(0);
   // DIAG (Claude P0-5): on-screen event log + Copy JSON export.
   // Recording only: every push below is a log call, never a branch
@@ -6769,7 +6776,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               ) : micState === 'done-correct' ? (
                 <>
                   <p className="text-lg font-bold text-emerald-700 mb-3">ما شاء الله — صح!</p>
-                  {paperView
+                  {paperDrawn
                     ? <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} showAll />
                     : <p className="text-2xl leading-[2.2] font-bold text-emerald-700" dir="rtl">{ayahs[index].ayah_text}</p>}
                   <button onClick={nextAfterMic}
@@ -6781,10 +6788,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <>
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
                   <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
-                  {paperView && (
+                  {paperDrawn && (
                     <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} showAll />
                   )}
-                  <p className={paperView ? 'sr-only' : 'text-2xl leading-[2.2] font-bold'} dir="rtl">
+                  <p className={paperDrawn ? 'sr-only' : 'text-2xl leading-[2.2] font-bold'} dir="rtl">
                     {expectedWordList(ayahs[index].ayah_text).map((w, i) => (
                       <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
                     ))}
@@ -6899,7 +6906,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           only: no word is ever shown, so the hidden
                           text stays hidden. Indicative, not grading
                           (grading still uses finals at evaluation). */}
-                      {paperView && ayahs[index] && (() => {
+                      {paperOn && ayahs[index] && (() => {
                         const exp = expectedWordList(ayahs[index].ayah_text);
                         const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
                         const st = alignWordsStrict(exp.map((w) => w.norm), spokenLive);
@@ -6909,7 +6916,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         );
                       })()}
-                      {!paperView && ayahs[index] && (() => {
+                      {!paperOn && ayahs[index] && (() => {
                         const exp = expectedWordList(ayahs[index].ayah_text);
                         const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
                         const al = alignWords(exp.map((w) => w.norm), spokenLive);
