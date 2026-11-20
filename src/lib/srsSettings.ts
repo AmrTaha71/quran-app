@@ -27,9 +27,18 @@ function isDays(x: unknown): x is number {
     x >= SRS_INTERVAL_MIN_DAYS && x <= SRS_INTERVAL_MAX_DAYS;
 }
 
-/** One whole-day gap per stage, same length as the defaults. */
+/** Index of the first stage shorter than the stage before it, or -1 when
+ *  every stage is at least as long as the previous one (equal is allowed). */
+export function findOrderViolation(days: readonly number[]): number {
+  for (let i = 1; i < days.length; i++) if (days[i] < days[i - 1]) return i;
+  return -1;
+}
+
+/** One whole-day gap per stage, same length as the defaults, each stage not
+ *  shorter than the one before it. */
 function isValidList(x: unknown): x is number[] {
-  return Array.isArray(x) && x.length === SRS_DEFAULT_INTERVALS_DAYS.length && x.every(isDays);
+  return Array.isArray(x) && x.length === SRS_DEFAULT_INTERVALS_DAYS.length &&
+    x.every(isDays) && findOrderViolation(x) === -1;
 }
 
 /** The gaps to schedule with: the saved list, or the defaults. */
@@ -66,8 +75,23 @@ export function parseIntervalInputs(values: readonly string[]): number[] | null 
   return out;
 }
 
+export type IntervalCheck =
+  | { ok: true; days: number[] }
+  | { ok: false; reason: 'format' }
+  | { ok: false; reason: 'order'; index: number };
+
+/** Validate the text fields: format first, then the ordering rule (each stage
+ *  at least as long as the one before it). `index` is the 0-based stage that
+ *  breaks the order. */
+export function checkIntervalInputs(values: readonly string[]): IntervalCheck {
+  const days = parseIntervalInputs(values);
+  if (!days) return { ok: false, reason: 'format' };
+  const index = findOrderViolation(days);
+  return index === -1 ? { ok: true, days } : { ok: false, reason: 'order', index };
+}
+
 /** Save the gaps. Returns false (and writes nothing) when the list is not
- *  valid or storage failed. Saving exactly the defaults clears the key. */
+ *  valid (format, range or order) or storage failed. Saving exactly the defaults clears the key. */
 export function saveSrsIntervals(days: readonly number[]): boolean {
   if (!isValidList(days)) return false;
   try {

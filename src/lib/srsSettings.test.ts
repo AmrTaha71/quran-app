@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   SRS_SETTINGS_KEY, SRS_INTERVAL_MIN_DAYS, SRS_INTERVAL_MAX_DAYS,
   loadSrsIntervals, hasCustomSrsIntervals, parseIntervalInputs,
-  saveSrsIntervals, resetSrsIntervals,
+  saveSrsIntervals, resetSrsIntervals, findOrderViolation, checkIntervalInputs,
 } from './srsSettings.ts';
 import { SRS_DEFAULT_INTERVALS_DAYS } from './srs.ts';
 import { SRS_STORE_KEY } from './srsStore.ts';
@@ -58,6 +58,8 @@ describe('loadSrsIntervals', () => {
       '{"iv":[1,3,7,14,999]}',           // above the maximum
       '{"iv":[1,3,7,14,"30"]}',          // wrong type
       '{"iv":[1,3,7,14,null]}',          // NaN is stored as null
+      '{"iv":[5,3,7,14,30]}',            // a stage shorter than the one before
+      '{"iv":[1,3,7,14,10]}',
     ];
     for (const b of bad) {
       ls.map.set(SRS_SETTINGS_KEY, b);
@@ -87,6 +89,16 @@ describe('saveSrsIntervals / resetSrsIntervals', () => {
       assert.equal(saveSrsIntervals(bad), false);
     }
     assert.equal(ls.map.get(SRS_SETTINGS_KEY), before);
+  });
+
+  it('a stage shorter than the one before it is not saved; equal stages are fine', () => {
+    saveSrsIntervals([2, 4, 8, 15, 40]);
+    const before = ls.map.get(SRS_SETTINGS_KEY);
+    assert.equal(saveSrsIntervals([2, 4, 3, 15, 40]), false);
+    assert.equal(saveSrsIntervals([5, 3, 7, 14, 30]), false);
+    assert.equal(ls.map.get(SRS_SETTINGS_KEY), before);
+    assert.equal(saveSrsIntervals([2, 2, 2, 2, 2]), true);
+    assert.deepEqual([...loadSrsIntervals()], [2, 2, 2, 2, 2]);
   });
 
   it('saving exactly the defaults clears the key', () => {
@@ -143,5 +155,23 @@ describe('parseIntervalInputs', () => {
     assert.equal(parseIntervalInputs(ok.slice(0, 4)), null);
     assert.equal(parseIntervalInputs([...ok, '60']), null);
     assert.equal(parseIntervalInputs([]), null);
+  });
+});
+
+describe('ordering rule (each stage at least as long as the one before)', () => {
+  it('findOrderViolation returns the first stage that breaks the order', () => {
+    assert.equal(findOrderViolation([1, 3, 7, 14, 30]), -1);
+    assert.equal(findOrderViolation([2, 2, 2, 2, 2]), -1);
+    assert.equal(findOrderViolation([1, 3, 2, 14, 30]), 2);
+    assert.equal(findOrderViolation([5, 3, 7, 14, 1]), 1);
+    assert.equal(findOrderViolation([]), -1);
+  });
+
+  it('checkIntervalInputs: ok, format error, or order error with the stage index', () => {
+    assert.deepEqual(checkIntervalInputs(['١', '٣', '٧', '١٤', '٣٠']), { ok: true, days: [1, 3, 7, 14, 30] });
+    assert.deepEqual(checkIntervalInputs(['1', '3', '3', '14', '30']), { ok: true, days: [1, 3, 3, 14, 30] });
+    assert.deepEqual(checkIntervalInputs(['1', '3', '', '14', '30']), { ok: false, reason: 'format' });
+    assert.deepEqual(checkIntervalInputs(['1', '3', '2', '14', '30']), { ok: false, reason: 'order', index: 2 });
+    assert.deepEqual(checkIntervalInputs(['٣٠', '١٤', '٧', '٣', '١']), { ok: false, reason: 'order', index: 1 });
   });
 });

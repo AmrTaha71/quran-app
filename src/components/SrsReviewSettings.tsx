@@ -3,7 +3,7 @@ import { BookOpen, Check } from 'lucide-react';
 import { SRS_DEFAULT_INTERVALS_DAYS } from '../lib/srs';
 import {
   SRS_INTERVAL_MIN_DAYS, SRS_INTERVAL_MAX_DAYS,
-  loadSrsIntervals, parseIntervalInputs, saveSrsIntervals, resetSrsIntervals,
+  loadSrsIntervals, checkIntervalInputs, saveSrsIntervals, resetSrsIntervals,
 } from '../lib/srsSettings';
 import { toArabicIndic } from '../lib/numerals';
 
@@ -19,26 +19,35 @@ const toFields = (days: readonly number[]) => days.map((d) => toArabicIndic(d));
 export default function SrsReviewSettings() {
   const [draft, setDraft] = useState<string[]>(() => toFields(loadSrsIntervals()));
   const [msg, setMsg] = useState<Msg>(null);
+  const [badIdx, setBadIdx] = useState<number | null>(null);
 
   const edit = (i: number, v: string) => {
     setDraft((d) => d.map((x, j) => (j === i ? v : x)));
     setMsg(null);
+    setBadIdx(null);
   };
 
   const save = () => {
-    const days = parseIntervalInputs(draft);
-    if (!days) {
-      setMsg({
-        kind: 'err',
-        text: `اكتب عدد أيام صحيح من ${toArabicIndic(SRS_INTERVAL_MIN_DAYS)} إلى ${toArabicIndic(SRS_INTERVAL_MAX_DAYS)} في كل مرحلة.`,
-      });
+    const chk = checkIntervalInputs(draft);
+    if (!chk.ok) {
+      if (chk.reason === 'order') {
+        setBadIdx(chk.index);
+        setMsg({ kind: 'err', text: `المرحلة ${toArabicIndic(chk.index + 1)} دي لازم تكون أطول من اللي قبلها.` });
+      } else {
+        setMsg({
+          kind: 'err',
+          text: `اكتب عدد أيام صحيح من ${toArabicIndic(SRS_INTERVAL_MIN_DAYS)} إلى ${toArabicIndic(SRS_INTERVAL_MAX_DAYS)} في كل مرحلة.`,
+        });
+      }
       return;
     }
+    const days = chk.days;
     if (!saveSrsIntervals(days)) {
       setMsg({ kind: 'err', text: 'ما اتحفظش، جرّب تاني.' });
       return;
     }
     setDraft(toFields(days));
+    setBadIdx(null);
     setMsg({ kind: 'ok', text: 'تم الحفظ. التغيير بيتطبق على المراجعات الجاية بس.' });
   };
 
@@ -48,6 +57,7 @@ export default function SrsReviewSettings() {
       return;
     }
     setDraft(toFields(SRS_DEFAULT_INTERVALS_DAYS));
+    setBadIdx(null);
     setMsg({ kind: 'ok', text: 'رجعنا للمواعيد الأصلية.' });
   };
 
@@ -68,7 +78,8 @@ export default function SrsReviewSettings() {
             id={`srs-stage-${i}`}
             type="text" inputMode="numeric" maxLength={3} value={v}
             onChange={(e) => edit(i, e.target.value)}
-            className="w-20 text-center py-2 bg-gray-50 border border-hairline rounded-xl text-base font-bold text-accent-800 focus:outline-none focus:border-emerald-500 transition-smooth"
+            aria-invalid={badIdx === i}
+            className={`w-20 text-center py-2 bg-gray-50 border rounded-xl text-base font-bold text-accent-800 focus:outline-none focus:border-emerald-500 transition-smooth ${badIdx === i ? 'border-amber-600' : 'border-hairline'}`}
           />
         </div>
       ))}
