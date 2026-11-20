@@ -34,6 +34,7 @@ import PageHeader from '../components/PageHeader';
 import InstallGuide from '../components/InstallGuide';
 import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
+import SrsReviewSettings from '../components/SrsReviewSettings';
 import DeleteAccountButton from '../components/DeleteAccountButton';
 import BatterySaverSection from '../components/BatterySaverSection';
 import { DailyReportSettings } from '../components/DailyReport';
@@ -633,6 +634,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const doors = [
     { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'srs', icon: BookOpen, title: 'مراجعة الآيات الضعيفة', sub: 'كل قد إيه ترجعلك الكلمة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'battery', icon: BatteryCharging, title: 'توفير البطارية', sub: 'خيارات تقلل الاستهلاك', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -873,6 +875,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </p>
         </section>
             </>)}
+            {openDoor === 'srs' && <SrsReviewSettings />}
             {openDoor === 'look' && (<>
         {/* Page look — the section the user asked for by name */}
         <section id="sec-look" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
