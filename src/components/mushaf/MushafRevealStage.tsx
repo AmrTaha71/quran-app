@@ -8,7 +8,7 @@
 // Geometry is self-contained: the image keeps its 1240x1754 aspect in a
 // box, the word boxes (public/mushaf-boxes/NNN.json, px of that image)
 // become percentages of the same box, so no paper-clamp maths is needed.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { madinahPageOfAyah } from '../../lib/madinahPageStarts';
 
 type Box = { s: number; a: number; w: number; x0: number; y0: number; x1: number; y1: number };
@@ -57,6 +57,13 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   // Every word of the tested ayah on this page (an ayah can continue on the
   // next page; only this page's part is drawn).
   const words = useMemo(() => (boxes || []).filter((b) => b.s === surah && b.a === ayah), [boxes, surah, ayah]);
+  // Sticky reveal: a word the caller reported correct stays uncovered for the
+  // rest of this ayah, even if the live alignment later re-hypothesises it
+  // (interim results get revised). Reset only when the ayah changes.
+  const stickyRef = useRef<{ key: string; open: Set<number> }>({ key: '', open: new Set() });
+  const stickyKey = `${surah}:${ayah}`;
+  if (stickyRef.current.key !== stickyKey) stickyRef.current = { key: stickyKey, open: new Set() };
+  revealed.forEach((v, i) => { if (v) stickyRef.current.open.add(i); });
   if (!page) return null;
   const wrongSet = new Set(wrong || []);
 
@@ -71,7 +78,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
         )}
         {words.map((b) => {
           const i = b.w - 1;
-          const open = showAll || !!revealed[i];
+          const open = showAll || !!revealed[i] || stickyRef.current.open.has(i);
           const isWrong = showAll && wrongSet.has(i);
           // Pad: tashkeel and word tails reach a little past the measured box.
           const padX = 0.5, padTop = 1.25, padBot = 0.6;
