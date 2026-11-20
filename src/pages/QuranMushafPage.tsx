@@ -1,4 +1,5 @@
 import DrumSelect from '../components/DrumSelect';
+import { openBlackScreen } from '../lib/blackScreenStore';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
@@ -4527,6 +4528,19 @@ export default function QuranMushafPage({
                 } catch { /* ignore */ }
                 if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
               </div>
+              {/* 2026-11-20: opened from the Listen page → a «قفل الشاشة» pill (fades with the
+                  other chrome) turns the screen black; the audio and the Mushaf underneath keep
+                  going, and closing the black screen returns to this same fullscreen Mushaf. */}
+              {(() => { try { return localStorage.getItem('quran-mushaf-from-listen') === '1'; } catch { return false; } })() && (
+                <div className={`absolute z-30 mushaf-chrome-enter transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                  style={{ right: 'max(0.5rem, env(safe-area-inset-right))', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.4rem)' }}
+                  onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={() => openBlackScreen()}
+                    className="px-4 py-2 rounded-full bg-black/60 text-white text-sm font-bold ring-1 ring-white/20 polish-press">
+                    قفل الشاشة
+                  </button>
+                </div>
+              )}
             </>
           )}
 

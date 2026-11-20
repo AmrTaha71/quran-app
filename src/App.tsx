@@ -27,6 +27,7 @@ import QuranMushafPage from './pages/QuranMushafPage';
 import SettingsPage from './pages/SettingsPage';
 import SelfTestPage from './pages/SelfTestPage';
 import ListenPage from './pages/ListenPage';
+import BlackScreenOverlay from './components/BlackScreenOverlay';
 import AdhkarPage from './pages/AdhkarPage';
 import RadioPage from './pages/RadioPage';
 import SharedRoomPage from './pages/SharedRoomPage';
@@ -605,6 +606,9 @@ function AppContent() {
           <div style={{ display: route === 'adhkar' ? undefined : 'none' }}>
             <AdhkarPage onNavigate={navigate} visible={route === 'adhkar'} />
           </div>
+          {/* Black screen lives above every route (Listen page or fullscreen Mushaf);
+              closing it just reveals the page underneath. */}
+          <BlackScreenOverlay />
         </>
       ) : null}
       <div key={routeKey} className={routeEnterClass}>

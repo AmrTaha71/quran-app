@@ -1,5 +1,6 @@
 import { requestDayRecap } from '../lib/dailyStats';
 import { useEffect, useRef, useState } from 'react';
+import { closeBlackScreen, openBlackScreen, useBlackScreenOpen } from '../lib/blackScreenStore';
 import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio } from 'lucide-react';
 import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
@@ -475,7 +476,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // engine, Media Session, or Wake Lock (none is used here). Exit is
   // long-press (>=1000ms) or swipe (>60px) only — never a single
   // tap, so pocket touches cannot dismiss it.
-  const [blackScreen, setBlackScreen] = useState(false);
+  // Shared with <BlackScreenOverlay /> (mounted in App) so the overlay can
+  // also cover the fullscreen Mushaf; this page keeps the wake lock + diagnostics.
+  const blackScreen = useBlackScreenOpen();
+  const setBlackScreen = (v: boolean) => { if (v) openBlackScreen(); else closeBlackScreen(); };
   // «تقبّل الله منك» first (W4-H popup), then the screen goes black a moment later.
   const closeScreenWithRecap = () => {
     requestDayRecap();
@@ -484,7 +488,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // 2026-11-19: the «قفل الشاشة» button first asks what to show while listening:
   // a fullscreen Mushaf (audio + the highlight following it) or the black screen.
   const [showScreenChoice, setShowScreenChoice] = useState(false);
-  const backHoldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openMushafWhileListening = () => {
     setShowScreenChoice(false);
     try {
@@ -496,8 +499,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     } catch { /* ignore */ }
     onNavigate('mushaf');
   };
-  const [showBlackHint, setShowBlackHint] = useState(false);
-  const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
   const engineRef = useRef<ListenEngine | null>(null);
   const riwayaEngineRef = useRef<RiwayaEngine | null>(null);
@@ -636,14 +637,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     setCurrentAyah(ayah);
   };
 
-  // Faint exit hint: shows when the overlay opens, hides itself.
-  useEffect(() => {
-    if (!blackScreen) return;
-    setShowBlackHint(true);
-    const timer = setTimeout(() => setShowBlackHint(false), 4000);
-    return () => clearTimeout(timer);
-  }, [blackScreen]);
-
   // Sleep timer (#10): register the page's stop handler once, and
   // subscribe to the shared timer so the countdown re-renders on
   // every 1s tick (and clears when the timer fires or is
@@ -698,23 +691,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     }
     return () => clearNowPlaying();
   }, [active, journeyMode, journeyItem, hadrOn, riwayaId, surah, currentAyah]);
-
-  const blackPressStart = (x: number, y: number) => {
-    blackPressRef.current = { t: Date.now(), x, y };
-  };
-  const blackPressMove = (x: number, y: number) => {
-    const p = blackPressRef.current;
-    if (!p) return;
-    if (Math.hypot(x - p.x, y - p.y) > 60) {
-      blackPressRef.current = null;
-      setBlackScreen(false);
-    }
-  };
-  const blackPressEnd = () => {
-    const p = blackPressRef.current;
-    blackPressRef.current = null;
-    if (p && Date.now() - p.t >= 1000) setBlackScreen(false);
-  };
 
   // Black-screen wake lock (2026-10-30 report: the screen went off
   // mid-listen). While the black overlay is open AND audio plays,
@@ -3329,50 +3305,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
         </p>
       </main>
-      {blackScreen && (
-        <div
-          className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none touch-none"
-          style={{ WebkitTouchCallout: 'none' }}
-          onContextMenu={(e) => e.preventDefault()}
-          onTouchStart={(e) => {
-            const t = e.touches[0];
-            if (t) blackPressStart(t.clientX, t.clientY);
-          }}
-          onTouchMove={(e) => {
-            const t = e.touches[0];
-            if (t) blackPressMove(t.clientX, t.clientY);
-          }}
-          onTouchEnd={blackPressEnd}
-          onTouchCancel={() => {
-            blackPressRef.current = null;
-          }}
-          onMouseDown={(e) => blackPressStart(e.clientX, e.clientY)}
-          onMouseMove={(e) => {
-            if (blackPressRef.current) blackPressMove(e.clientX, e.clientY);
-          }}
-          onMouseUp={blackPressEnd}
-        >
-          {showBlackHint && (
-            <p className="text-white/20 text-sm font-medium">اضغط مطوّلًا للعودة</p>
-          )}
-          <button
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              if (backHoldRef.current) clearTimeout(backHoldRef.current);
-              backHoldRef.current = setTimeout(() => { backHoldRef.current = null; setBlackScreen(false); }, 800);
-            }}
-            onPointerUp={() => { if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; } }}
-            onPointerLeave={() => { if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; } }}
-            onPointerCancel={() => { if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; } }}
-            onTouchStart={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="absolute bottom-[calc(1.25rem_+_env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 px-8 py-3 rounded-full bg-white/10 text-white/50 text-base font-semibold"
-            aria-label="رجوع"
-          >
-            اضغط مطوّلًا للرجوع
-          </button>
-        </div>
-      )}
       {showScreenChoice && (
         <div className="fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setShowScreenChoice(false)}>
           <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()} dir="rtl">
