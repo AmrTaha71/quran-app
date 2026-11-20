@@ -14,7 +14,8 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { currentHistoryLevel, firstMistake, firstWordHalfCredit, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { RoundState } from '../lib/roundJudge';
+import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
 
@@ -35,10 +36,9 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const [heard, setHeard] = useState(0);
   const [manualWrong, setManualWrong] = useState<Set<number>>(new Set());
 
-  const base = useRef(0);
-  const got = useRef<boolean[]>(new Array(rest.length).fill(false));
-  const mistaken = useRef<Set<number>>(new Set());
-  const corrLeft = useRef(corrections);
+  const stRef = useRef<RoundState | null>(null);
+  if (!stRef.current) stRef.current = new RoundState(rest.length, corrections);
+  const st = stRef.current;
   const effRef = useRef(eff);
   effRef.current = eff;
   const sessRef = useRef<ListenSession | null>(null);
@@ -76,8 +76,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   async function moreWords() {
     if (!canMore) return;
     const from = eff, to = eff + HINT_WORDS;
-    got.current = new Array(ayah.words.length - to).fill(false);
-    base.current = 0;
+    st.reset(ayah.words.length - to);
     setExtra(extra + 1);
     setMsg('');
     setPhase('prompting');
@@ -87,7 +86,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
 
   async function playCorrection() {
     setPhase('correcting');
-    const abs = effRef.current + base.current;
+    const abs = effRef.current + st.base;
     const nextW = Math.min(abs + 1, ayah.words.length - 1);
     await span(Math.max(0, t[2 * abs] - 0.1), t[2 * nextW + 1] + 0.1);
     if (!finished.current) setPhase('afterCorr');
@@ -98,53 +97,25 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     sessRef.current = null;
   }
 
-  function creditUpTo(matched: boolean[], limit: number) {
-    for (let k = 0; k < limit && k < matched.length; k++) {
-      const idx = base.current + k;
-      if (matched[k] && !mistaken.current.has(idx)) got.current[idx] = true;
-    }
-  }
-
-  function finishAll(locked: boolean, halfFirst = false) {
+  function finishAll(locked: boolean) {
     if (finished.current) return;
     finished.current = true;
     stopRec();
-    const credited = got.current.filter(Boolean).length;
-    const wrong: number[] = [];
-    got.current.forEach((g, i) => { if (!g) wrong.push(i); });
-    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, promptLen: effRef.current, extras: extra, ear: kindRef.current, ...(halfFirst ? { halfFirst: true } : {}) });
+    onFinish({
+      total: rest.length, ...st.summary(locked), beginner: currentHistoryLevel(false) === 'beginner',
+      promptLen: effRef.current, extras: extra, ear: kindRef.current,
+    });
   }
 
   function evaluate(final: boolean) {
     if (finished.current) return;
-    // Whole ayah in, prompt part cut out after matching (see alignRest).
-    const al = alignRest(fullNorms, effRef.current + base.current, sessRef.current?.text() ?? '', alignSpoken);
+    // Whole ayah in, prompt part cut out after matching (see alignRest). Words the user
+    // fixed himself are already right here; only what is still wrong reaches the judge.
+    const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
-    const m = firstMistake(al.matched);
-    // Beginner, no correction left, first word of the part wrong and the whole rest right:
-    // the ayah gets half credit instead of locking at 0.
-    if (m === 0 && base.current === 0 && corrLeft.current === 0 && firstWordHalfCredit(al.matched, currentHistoryLevel(false))) {
-      creditUpTo(al.matched, al.matched.length);
-      finishAll(false, true);
-      return;
-    }
-    if (m >= 0) {
-      creditUpTo(al.matched, m);
-      if (corrLeft.current > 0) {
-        corrLeft.current -= 1;
-        mistaken.current.add(base.current + m);
-        stopRec();
-        base.current += m;
-        void playCorrection();
-      } else {
-        finishAll(true); // the 2nd mistake closes the position
-      }
-      return;
-    }
-    if (al.allMatched || final) {
-      creditUpTo(al.matched, al.matched.length);
-      finishAll(false);
-    }
+    const act = st.evaluate(al.matched, al.allMatched, final);
+    if (act.kind === 'correct') { stopRec(); void playCorrection(); }
+    else if (act.kind === 'finish') finishAll(act.locked);
   }
 
   // A start()/restart that throws used to be swallowed: log it and tell the user.
@@ -158,7 +129,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     stopRec();
     // The ear gets the WHOLE ayah and starts aligning after the words already played
     // (the prompt must not be part of what the user is expected to say).
-    const start = effRef.current + base.current;
+    const start = effRef.current + st.base;
     const made = createRecognizer(fullNorms, start);
     if (!made) { kindRef.current = 'manual'; setPhase('self'); return; }
     const { rec, kind } = made;
@@ -195,7 +166,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     // Snapshot for ?debug=1: what the ear had heard at the moment of stopping.
     const snapAt = (via: string) => {
       if (!roundDebugOn()) return;
-      setRoundDebug({ kind: kindRef.current, finals: sess.finals, interim: sess.interim, start: effRef.current + base.current, total: ayah.words.length, via });
+      setRoundDebug({ kind: kindRef.current, finals: sess.finals, interim: sess.interim, start: effRef.current + st.base, total: ayah.words.length, via });
       bumpDebug((n) => n + 1);
     };
     snapAt('stop');
@@ -234,7 +205,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
       )}
       {phase === 'listening' && (
         <>
-          <p className="text-center text-emerald-700 font-bold py-3">بيسمعك… كمّل الآية ({heard.toLocaleString('ar-EG')} من {(rest.length - base.current).toLocaleString('ar-EG')} كلمة)</p>
+          <p className="text-center text-emerald-700 font-bold py-3">بيسمعك… كمّل الآية ({heard.toLocaleString('ar-EG')} من {(rest.length - st.base).toLocaleString('ar-EG')} كلمة)</p>
           <button onClick={stopAndGrade} className={`${btn} grad-emerald-door`}>خلصت</button>
         </>
       )}

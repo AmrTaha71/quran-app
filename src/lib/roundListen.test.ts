@@ -17,8 +17,12 @@ type Bundle = {
   alignSpoken: (e: string[], s: string) => { matched: boolean[]; allMatched: boolean };
   expectedWordList: (t: string) => { orig: string; norm: string }[];
   firstMistake: (m: boolean[]) => number;
-  tarteelRoundScore: (r: { total: number; credited: number; extras?: number; halfFirst?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
-  firstWordHalfCredit: (m: boolean[], level: 'beginner' | 'advanced' | 'master') => boolean;
+  tarteelRoundScore: (r: { total: number; credited: number; extras?: number; mistakes?: number; beginner?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
+  RoundState: new (total: number, corrections: number) => {
+    base: number;
+    evaluate: (m: boolean[], all: boolean, final: boolean) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
+    summary: (locked: boolean) => { credited: number; wrong: number[]; locked: boolean; corrected: number; mistakes: number };
+  };
   currentHistoryLevel: (isAdmin: boolean) => 'beginner' | 'advanced' | 'master';
 };
 let B: Bundle;
@@ -31,7 +35,8 @@ before(async () => {
     `import '${root}src/pages/SelfTestPage.tsx';`,
     `export { alignSpoken } from '${root}src/lib/alignBridge.ts';`,
     `export { expectedWordList } from '${root}src/lib/expectedWords.ts';`,
-    `export { firstMistake, tarteelRoundScore, firstWordHalfCredit, currentHistoryLevel } from '${root}src/lib/roundTest.ts';`,
+    `export { firstMistake, tarteelRoundScore, currentHistoryLevel } from '${root}src/lib/roundTest.ts';`,
+    `export { RoundState } from '${root}src/lib/roundJudge.ts';`,
   ].join('\n'));
   buildSync({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile: path.join(dir, 'out.mjs'), logLevel: 'error', jsx: 'automatic',
@@ -73,8 +78,6 @@ describe('alignRest on real ayat (prompt = first 5 words)', () => {
       assert.ok(r.matched.slice(1).every(Boolean));
       assert.equal(r.allMatched, false);
       assert.equal(r.matched.filter(Boolean).length, rest - 1);
-      // Product question for Dr. Amr (NOT changed here): with no corrections the position is
-      // locked at this first mistake, so the round credits 0 words, not (rest-1)/rest.
       assert.equal(B.firstMistake(r.matched), 0);
     });
     it(`${s}:${a} (د) empty text -> nothing matched, score 0`, () => {
@@ -110,42 +113,121 @@ describe('alignRest on real ayat (prompt = first 5 words)', () => {
   });
 });
 
-// ---- Half credit for beginners when only the first word is wrong -------------------------
-describe('first word wrong, rest right (beginner half credit)', () => {
+// ---- Mistake rule: only mistakes the reciter had to correct count -------------------------
+// beginner: a counted mistake (1 or more) -> half of the ayah part (4 of 8); any other level -> 0.
+// A word the user said wrong and then right BEFORE the reciter spoke is not a mistake.
+describe('round scoring: self-corrected mistakes do not count', () => {
   const START = 5;
-  const spokenFirstWrong = (norms: string[]) => ['ضضضض', ...norms.slice(START + 1)].join(' ');
-  /** What RoundRecite.evaluate does for this matched array at this level (no corrections left). */
-  const settle = (matched: boolean[], level: 'beginner' | 'advanced' | 'master') => {
-    const total = matched.length;
-    if (B.firstWordHalfCredit(matched, level)) return B.tarteelRoundScore({ total, credited: total - 1, halfFirst: true }, true).completion;
-    const m = B.firstMistake(matched);
-    const credited = m >= 0 ? matched.slice(0, m).filter(Boolean).length : matched.filter(Boolean).length;
-    return B.tarteelRoundScore({ total, credited, extras: 0 }, true).completion;
-  };
-  for (const [s, a] of [[2, 255], [2, 23], [2, 282], [2, 30]] as [number, number][]) {
-    it(`${s}:${a} beginner + first word wrong = 4 of 8, intermediate/advanced = 0`, () => {
-      const norms = ayahOf(s, a);
-      const { matched } = alignRest(norms, START, spokenFirstWrong(norms), B.alignSpoken);
-      assert.equal(settle(matched, 'beginner'), 4);
-      assert.equal(settle(matched, 'advanced'), 0);
-      assert.equal(settle(matched, 'master'), 0);
-    });
-    it(`${s}:${a} beginner + a mistake on a word of the text (not the first) = old rule`, () => {
-      const norms = ayahOf(s, a);
-      const spoken = norms.slice(START).map((w, i) => (i === 2 ? 'ضضضض' : w)).join(' ');
-      const { matched } = alignRest(norms, START, spoken, B.alignSpoken);
-      assert.equal(matched[0], true);
-      assert.equal(B.firstWordHalfCredit(matched, 'beginner'), false);
-      assert.equal(B.firstMistake(matched), 2);
-      assert.equal(settle(matched, 'beginner'), settle(matched, 'advanced'));
-    });
+  const BAD = 'ضضضض', BAD2 = 'ططططط';
+  type Level = 'beginner' | 'advanced';
+  const AYAT: [number, number][] = [[2, 255], [2, 23], [2, 282], [2, 30]];
+  const restOf = (s: number, a: number) => { const norms = ayahOf(s, a); return { norms, rest: norms.slice(START) }; };
+
+  /** Plays one round like RoundRecite does: each attempt is what the user says in one listening
+   *  session (the reciter correction ends a session and the next one starts at the mistaken word). */
+  function play(norms: string[], corrections: number, level: Level, attempts: ((base: number) => string)[]) {
+    const total = norms.length - START;
+    const st = new B.RoundState(total, corrections);
+    let locked: boolean | null = null;
+    let corrections_played = 0;
+    for (const att of attempts) {
+      const al = alignRest(norms, START + st.base, att(st.base), B.alignSpoken);
+      const act = st.evaluate(al.matched, al.allMatched, true);
+      if (act.kind === 'correct') { corrections_played++; continue; }
+      if (act.kind === 'finish') { locked = act.locked!; break; }
+    }
+    assert.notEqual(locked, null, 'the round must finish');
+    const sum = st.summary(locked!);
+    const score = B.tarteelRoundScore({ total, ...sum, extras: 0, beginner: level === 'beginner' }, true).completion;
+    return { ...sum, score, corrections_played };
   }
-  it('first wrong AND another word wrong -> old rule even for beginners', () => {
-    assert.equal(B.firstWordHalfCredit([false, true, false, true], 'beginner'), false);
-    assert.equal(B.firstWordHalfCredit([false, false, false], 'beginner'), false);
-    assert.equal(B.firstWordHalfCredit([false], 'beginner'), false);
-    assert.equal(B.firstWordHalfCredit([true, true, true], 'beginner'), false);
+  /** What a user says from word `from` (relative to the completed part): words with fixes injected. */
+  const say = (rest: string[], from: number, edit: { wrongAt?: number[]; fixAt?: number[]; wrongBare?: number[] }) => {
+    const out: string[] = [];
+    rest.slice(from).forEach((w, k) => {
+      const i = from + k;
+      if (edit.fixAt?.includes(i)) out.push(i % 2 ? BAD : BAD2, w);          // wrong word, then the right one (self-correction)
+      else if (edit.wrongBare?.includes(i)) out.push(i % 2 ? BAD : BAD2);    // wrong word, never fixed
+      else out.push(w);
+    });
+    return out.join(' ');
+  };
+
+  for (const [s, a] of AYAT) {
+    for (const corrections of [0, 1]) { // 0 = tarteel, 1 = comprehensive: the SAME scores
+      const tag = `${s}:${a} corrections=${corrections}`;
+      for (const level of ['beginner', 'advanced'] as Level[]) {
+        it(`${tag} ${level}: clean -> 8`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [() => say(rest, 0, {})]);
+          assert.equal(r.mistakes, 0); assert.equal(r.score, 8);
+        });
+        it(`${tag} ${level}: one mistake the user fixed himself -> not counted, 8`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [() => say(rest, 0, { fixAt: [2] })]);
+          assert.equal(r.mistakes, 0); assert.equal(r.corrected, 0); assert.equal(r.score, 8);
+        });
+        it(`${tag} ${level}: two mistakes both fixed by the user -> 8 (the first word too)`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [() => say(rest, 0, { fixAt: [0, 4] })]);
+          assert.equal(r.mistakes, 0); assert.equal(r.score, 8);
+        });
+        it(`${tag} ${level}: one mistake the reciter corrected -> ${level === 'beginner' ? 4 : 0}`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [
+            () => say(rest, 0, { wrongBare: [2] }),
+            (base) => say(rest, base, {}),       // after the correction the user goes on from the mistaken word
+          ]);
+          assert.equal(r.mistakes, 1);
+          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+        });
+        it(`${tag} ${level}: first word wrong and not fixed -> counted like any other word`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [() => say(rest, 0, { wrongBare: [0] }), (base) => say(rest, base, {})]);
+          assert.equal(r.mistakes, 1);
+          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+        });
+        it(`${tag} ${level}: two mistakes the reciter had to correct -> ${level === 'beginner' ? 4 : 0}`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [
+            () => say(rest, 0, { wrongBare: [2] }),
+            (base) => say(rest, base, { wrongBare: [6] }),
+            (base) => say(rest, base, {}),
+          ]);
+          assert.equal(r.mistakes, corrections === 0 ? 1 : 2); // tarteel closes at the first, comprehensive at the second
+          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+        });
+        it(`${tag} ${level}: one self-fixed + one the reciter corrected -> counts as ONE mistake`, () => {
+          const { norms, rest } = restOf(s, a);
+          const r = play(norms, corrections, level, [
+            () => say(rest, 0, { fixAt: [1], wrongBare: [4] }),
+            (base) => say(rest, base, {}),
+          ]);
+          assert.equal(r.mistakes, 1);
+          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+        });
+      }
+    }
+  }
+
+  it('the two tests run the same logic: same recitation, same score with corrections 0 and 1', () => {
+    for (const [s, a] of AYAT) for (const level of ['beginner', 'advanced'] as Level[]) {
+      const { norms, rest } = restOf(s, a);
+      const tarteel = play(norms, 0, level, [() => say(rest, 0, { wrongBare: [3] })]);
+      const comp = play(norms, 1, level, [() => say(rest, 0, { wrongBare: [3] }), (b) => say(rest, b, {})]);
+      assert.equal(tarteel.score, comp.score);
+      assert.equal(tarteel.mistakes, 1); assert.equal(comp.mistakes, 1);
+    }
   });
+
+  it('a mistake only counts when later words were heard (trailing unsaid words are not a mistake)', () => {
+    const { norms, rest } = restOf(2, 255);
+    const r = play(norms, 1, 'beginner', [() => rest.slice(0, 6).join(' ')]); // said 6 words and stopped
+    assert.equal(r.mistakes, 0);
+    assert.equal(r.credited, 6);
+    assert.equal(B.tarteelRoundScore({ total: rest.length, credited: r.credited, mistakes: 0, beginner: true }, true).completion, Math.round((8 * 6 / rest.length) * 10) / 10);
+  });
+
   it('level is read from quran-test-settings (default beginner; intermediate/advanced/master are not)', () => {
     const g = globalThis as { localStorage?: unknown };
     const store = new Map<string, string>();
