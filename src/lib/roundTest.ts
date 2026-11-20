@@ -7,6 +7,8 @@ import { expectedWordList } from './expectedWords';
 import { SURAHS } from './surahs';
 import { fromGlobal } from './comprehensiveTest';
 import { getQuranTextCache, type CachedTextRow } from './quranTextCache';
+import { supabase } from './supabase';
+import { createTextLoader } from './quranTextLoader';
 
 /** Most words an ayah starts with as the prompt (shorter ayat use fewer, see promptLenFor). */
 export const PROMPT_WORDS = 5;
@@ -209,16 +211,29 @@ export async function pickRoundAyah(
   return null;
 }
 
-let textMap: Promise<Map<string, string> | null> | null = null;
-/** Quran text (key "s:a") from the local cache; null when it is not available. Loaded once. */
-export function loadQuranText(): Promise<Map<string, string> | null> {
-  if (!textMap) {
-    textMap = getQuranTextCache().getAll(6000).then((rows: CachedTextRow[] | null) => {
-      if (!rows) return null;
-      const m = new Map<string, string>();
-      for (const r of rows) m.set(`${r.surah_no}:${r.ayah_no}`, r.ayah_text);
-      return m;
-    }).catch(() => null);
+// Cache miss (fresh device / new origin): fetch all ayat once, then write through
+// so the next visit (and offline) is served from IndexedDB. Same query shape as
+// QuranMushafPage's loader.
+async function fetchAllQuranRows(): Promise<CachedTextRow[] | null> {
+  const fetched: CachedTextRow[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from('quran_verses')
+      .select('id,surah_no,surah_name,ayah_no,ayah_text,ayah_text_clean')
+      .order('surah_no', { ascending: true }).order('ayah_no', { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error || !data) return null;
+    fetched.push(...(data as CachedTextRow[]));
+    if (data.length < PAGE) break;
   }
-  return textMap;
+  if (fetched.length < 6000) return null;
+  void getQuranTextCache().putRows(fetched);
+  return fetched;
 }
+
+/** Quran text (key "s:a"): local cache first, network on a miss; null when neither works.
+ *  A failure is not remembered, so the next call retries (see quranTextLoader.ts). */
+export const loadQuranText = createTextLoader<CachedTextRow>({
+  readCache: () => getQuranTextCache().getAll(6000),
+  fetchRows: fetchAllQuranRows,
+});

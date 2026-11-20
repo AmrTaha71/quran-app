@@ -10,8 +10,22 @@
 
 export type MicPermission = 'granted' | 'denied' | 'error';
 
+/** Why the check did not end in "heard you" (undefined when it did). */
+export type MicReason =
+  | 'denied'       // permission refused (browser / device settings)
+  | 'no-device'    // no microphone found
+  | 'busy'         // mic held by another app / tab, or unreadable
+  | 'unsupported'  // browser has no getUserMedia / AudioContext
+  | 'no-answer'    // the permission prompt was never answered in time
+  | 'suspended'    // permission fine but the audio engine never started (iOS gesture rule)
+  | 'muted'        // the mic track is muted by the system
+  | 'quiet'        // mic is live but the level stayed below the threshold
+  | 'error';       // anything else
+
 export interface MicCheckResult {
   permission: MicPermission;
+  /** Set whenever heardSomething is false. */
+  reason?: MicReason;
   /** Loudest RMS level seen during sampling, 0 (silence) to ~1. */
   maxLevel: number;
   /** True when the mic clearly heard something above background noise. */
@@ -21,9 +35,12 @@ export interface MicCheckResult {
 export interface MicCheckOptions {
   /** How long to sample the mic, in ms. Default 2500. */
   sampleMs?: number;
-  /** Overall deadline, in ms, including the permission prompt. Default 5000. */
+  /** How long to wait for the permission prompt to be answered, in ms. Default 20000.
+   * Only the wait for the stream counts: once the mic is granted, sampling runs its
+   * own course (before 2026-11-20 this deadline also covered sampling, so a prompt
+   * answered after ~2.5s turned a granted mic into an "error"). */
   timeoutMs?: number;
-  /** RMS level that counts as "heard something". Default 0.08 (see below). */
+  /** RMS level that counts as "heard something". Default 0.015 (see below). */
   threshold?: number;
   /** Called roughly every 100ms with the current RMS level (0-1), so the
    * lobby can draw a live volume bar while sampling. Never throws into
@@ -32,28 +49,44 @@ export interface MicCheckOptions {
 }
 
 // Threshold rationale: time-domain silence sits at byte value 128, so
-// RMS is measured as deviation from 128. A quiet room's mic noise floor
-// stays below ~0.03 RMS, while normal speech peaks well above 0.1. The
-// 0.08 threshold therefore means "the mic is live AND somebody actually
-// spoke", not just "the mic opened without error". maxLevel is still
-// reported, so the lobby can apply its own judgement if it wants to.
-const DEFAULT_THRESHOLD = 0.08;
+// RMS is measured as deviation from 128. Phone browsers (iOS Safari
+// especially) apply noise suppression + auto gain, so a quiet room reads
+// ~0.001-0.01 RMS while ordinary speech over a 46 ms window reads about
+// 0.02-0.15 (the old 0.08 was a PEAK-ish figure and rejected normal
+// speech). 0.015 still means "somebody actually spoke", not just "the mic
+// opened". maxLevel is still reported. Estimate from signal reasoning,
+// not measured on a device.
+const DEFAULT_THRESHOLD = 0.015;
 
 const DEFAULT_SAMPLE_MS = 2500;
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 20000;
 
 function clampMs(value: number | undefined, fallback: number, min: number, max: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
 }
 
-function isDenial(err: unknown): boolean {
+function errName(err: unknown): string {
   const name = (err as { name?: unknown } | null)?.name;
+  return typeof name === 'string' ? name : '';
+}
+
+function isDenial(err: unknown): boolean {
+  const name = errName(err);
   return name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError';
 }
 
-function errorResult(): MicCheckResult {
-  return { permission: 'error', maxLevel: 0, heardSomething: false };
+/** Maps a getUserMedia failure to a reason the lobby can show. */
+export function reasonOfError(err: unknown): MicReason {
+  const name = errName(err);
+  if (isDenial(err)) return 'denied';
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') return 'no-device';
+  if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') return 'busy';
+  return 'error';
+}
+
+function errorResult(reason: MicReason = 'error'): MicCheckResult {
+  return { permission: 'error', reason, maxLevel: 0, heardSomething: false };
 }
 
 /**
@@ -67,7 +100,7 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
   // The deadline must leave room for sampling after the prompt, so a
   // too-small timeout is raised instead of self-defeating.
   const timeoutMs = Math.max(
-    clampMs(options.timeoutMs, DEFAULT_TIMEOUT_MS, 1000, 30000),
+    clampMs(options.timeoutMs, DEFAULT_TIMEOUT_MS, 1000, 60000),
     sampleMs + 1000,
   );
   const threshold =
@@ -82,7 +115,7 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
     !navigator.mediaDevices ||
     typeof navigator.mediaDevices.getUserMedia !== 'function'
   ) {
-    return errorResult();
+    return errorResult('unsupported');
   }
 
   return new Promise<MicCheckResult>((resolve) => {
@@ -144,15 +177,36 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
       void cleanup().finally(() => resolve(result));
     };
 
-    // Deadline for the whole check, including a stuck permission
-    // prompt: the caller must never hang forever.
-    timeoutTimer = setTimeout(() => finish(errorResult()), timeoutMs);
+    // Deadline for a stuck permission prompt: the caller must never hang
+    // forever. It is cleared the moment the stream arrives (see below).
+    timeoutTimer = setTimeout(() => finish(errorResult('no-answer')), timeoutMs);
+
+    // iOS Safari only lets an AudioContext run if it is created/resumed in
+    // the tap's own call stack. After `await getUserMedia` that stack is
+    // gone, so a context created there can stay "suspended" and read pure
+    // silence. Create + resume it NOW, synchronously, inside the tap.
+    const AC =
+      typeof window !== 'undefined'
+        ? window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        : undefined;
+    if (!AC) {
+      finish(errorResult('unsupported'));
+      return;
+    }
+    try {
+      ctx = new AC();
+      void ctx.resume().catch(() => {});
+    } catch {
+      finish(errorResult('unsupported'));
+      return;
+    }
 
     let gum: Promise<MediaStream>;
     try {
       gum = navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      finish(errorResult());
+    } catch (err) {
+      finish(errorResult(reasonOfError(err)));
       return;
     }
 
@@ -175,17 +229,15 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
           return;
         }
         stream = acquired;
-
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-        if (!AC) {
-          finish(errorResult());
-          return;
+        // Permission is granted: the prompt deadline has done its job.
+        if (timeoutTimer !== null) {
+          clearTimeout(timeoutTimer);
+          timeoutTimer = null;
         }
+
         let analyser: AnalyserNode;
         try {
-          ctx = new AC();
+          if (!ctx) throw new Error('no context');
           source = ctx.createMediaStreamSource(stream);
           analyser = ctx.createAnalyser();
           analyser.fftSize = 2048;
@@ -194,9 +246,7 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
           finish(errorResult());
           return;
         }
-        // A context created outside a user gesture may start
-        // suspended and report silence; the lobby calls checkMic from
-        // a tap, so resume should succeed — failure is non-fatal.
+        // Resume again now that the stream exists (harmless if running).
         void ctx.resume().catch(() => {});
 
         const data = new Uint8Array(analyser.fftSize);
@@ -224,21 +274,51 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
         }, 100);
 
         sampleTimer = setTimeout(() => {
-          finish({
-            permission: 'granted',
-            maxLevel,
-            heardSomething: maxLevel >= threshold,
-          });
+          const heard = maxLevel >= threshold;
+          let reason: MicReason | undefined;
+          if (!heard) {
+            const track = stream?.getAudioTracks?.()[0];
+            if (ctx && ctx.state !== 'running') reason = 'suspended';
+            else if (track && track.muted) reason = 'muted';
+            else reason = 'quiet';
+          }
+          finish({ permission: 'granted', reason, maxLevel, heardSomething: heard });
         }, sampleMs);
       },
       (err: unknown) => {
         if (settled) return;
         finish({
           permission: isDenial(err) ? 'denied' : 'error',
+          reason: reasonOfError(err),
           maxLevel: 0,
           heardSomething: false,
         });
       },
     );
   });
+}
+
+/** Arabic (Egyptian) one-line explanation of a mic check that did not hear the user. */
+export function micCheckReasonText(r: MicCheckResult): string {
+  const pct = Math.round(r.maxLevel * 100);
+  switch (r.reason) {
+    case 'denied':
+      return 'الإذن مقفول — اسمح بالميكروفون للموقع من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.';
+    case 'no-device':
+      return 'مش لاقي ميكروفون على الجهاز — شوف إن في ميكروفون شغال، أو قيّم نفسك يدوي.';
+    case 'busy':
+      return 'الميكروفون مشغول بتطبيق أو تبويب تاني — اقفله وجرّب تاني.';
+    case 'unsupported':
+      return 'المتصفح ده مش بيدعم الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.';
+    case 'no-answer':
+      return 'طلب الإذن ما اتردّش عليه — اضغط تاني ووافق على استخدام الميكروفون.';
+    case 'suspended':
+      return 'الصوت ما اشتغلش على الجهاز (المتصفح وقّف معالج الصوت) — اضغط الزر تاني، ولو فضل كده أعد فتح الصفحة.';
+    case 'muted':
+      return 'الميكروفون مكتّم من النظام (مكالمة أو تطبيق تاني شغّال عليه) — فكّه وجرّب تاني.';
+    case 'quiet':
+      return `الإذن تمام والميكروفون شغال، بس الصوت ضعيف (مستوى ${pct}٪) — قرّب من الجهاز أو علّي صوتك، واضغط تاني.`;
+    default:
+      return 'ما قدرتش أفتح الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.';
+  }
 }

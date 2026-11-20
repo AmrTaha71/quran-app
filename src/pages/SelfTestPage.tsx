@@ -39,7 +39,7 @@ import {
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
-import { checkMic } from '../lib/micCheck';
+import { checkMic, micCheckReasonText } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
@@ -3882,7 +3882,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       } else if (code === 'audio-capture') {
         setMicError('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط الميكروفون تاني');
       } else if (code === 'service-not-allowed') {
-        setMicError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب متصفح تاني أو قيّم يدوي بدل كده');
+        setMicError('خدمة الاستماع المباشر مقفولة على الجهاز — على iPhone فعّل «الإملاء» من الإعدادات ← عام ← لوحة المفاتيح ← تفعيل الإملاء، أو جرّب متصفح تاني، أو قيّم يدوي بدل كده');
       } else if (code === 'language-not-supported') {
         setMicError('الاستماع المباشر مش بيدعم العربية على الجهاز ده — قيّم يدوي بدل كده');
       } else {
@@ -5660,7 +5660,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       } else if (code === 'audio-capture') {
         setMicError('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط الميكروفون تاني');
       } else if (code === 'service-not-allowed') {
-        setMicError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب متصفح تاني');
+        setMicError('خدمة الاستماع المباشر مقفولة على الجهاز — على iPhone فعّل «الإملاء» من الإعدادات ← عام ← لوحة المفاتيح، أو جرّب متصفح تاني');
       } else if (code === 'language-not-supported') {
         setMicError('الاستماع المباشر مش بيدعم العربية على الجهاز ده');
       } else {
@@ -6476,19 +6476,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <div>
                   <p className="text-sm text-accent-600 mb-2">اتكلم بصوت عادي…</p>
                   <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round(micCheckLevel * 400))}%` }} />
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round(micCheckLevel * 1500))}%` }} />
                   </div>
                 </div>
               )}
               {micCheckState === 'done' && micCheckResult && (
                 micCheckResult.permission === 'granted' && micCheckResult.heardSomething ? (
                   <p className="text-sm font-semibold text-emerald-700">تمام — الميكروفون شغال وسمعك (ده فحص الميكروفون بس، مش اختبار التعرف على الكلام). ابدأ التسميع وانت مطمن.</p>
-                ) : micCheckResult.permission === 'granted' ? (
-                  <p className="text-sm font-semibold text-amber-link">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
-                ) : micCheckResult.permission === 'denied' ? (
-                  <p className="text-sm font-medium text-red-600">الميكروفون مقفول — اسمح بيه من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.</p>
                 ) : (
-                  <p className="text-sm font-medium text-red-600">ما قدرتش أفتح الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.</p>
+                  <p className={`text-sm font-medium ${micCheckResult.reason === 'quiet' ? 'text-amber-link' : 'text-red-600'}`}>
+                    {micCheckReasonText(micCheckResult)}
+                  </p>
                 )
               )}
             </div>

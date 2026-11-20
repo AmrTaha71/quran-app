@@ -70,7 +70,14 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   const used = useRef<Set<number>>(new Set());
   const saved = useRef(false);
 
-  useEffect(() => { loadQuranText().then(setText); }, []);
+  // text === null while loading OR after a failure; textFailed tells them apart so the
+  // disabled «ابدأ» always has a visible reason.
+  const [textFailed, setTextFailed] = useState(false);
+  const loadText = () => {
+    setTextFailed(false);
+    void loadQuranText().then((t) => { setText(t); setTextFailed(!t); });
+  };
+  useEffect(() => { loadText(); }, []);
 
   const count = SCOPE_COUNT[scope];
   // Only readers with word timings for the WHOLE picked range are offered
@@ -174,19 +181,19 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
   const lastRound = rounds[rounds.length - 1];
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={closeAll}>
-      <div dir="rtl" role="dialog" aria-modal="true" aria-label="اختبار الترتيل" className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div dir="rtl" role="dialog" aria-modal="true" aria-label="اختبار الترتيل" className={`bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto p-5 shadow-xl ${phase === 'setup' ? 'min-h-[80vh] flex flex-col' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-accent-800">اختبار الترتيل</h2>
           <button onClick={closeAll} className="text-accent-600 font-bold px-2">إغلاق</button>
         </div>
 
         {phase === 'setup' && (
-          <>
-            <p className="text-sm text-accent-600 mb-2">اختار النطاق اللي عايز تتختبر فيه</p>
+          <div className="flex-1 flex flex-col justify-evenly gap-3">
+            <p className="text-base text-accent-600 mb-2">اختار النطاق اللي عايز تتختبر فيه</p>
             <div className="grid grid-cols-4 gap-2 mb-4">
               {(Object.keys(SCOPE_LABEL) as Scope[]).map((k) => (
                 <button key={k} onClick={() => { setScope(k); setNum(1); setToNum(1); }}
-                  className={`py-2 rounded-lg text-sm font-bold ${scope === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600'}`}>
+                  className={`py-4 rounded-xl text-base font-bold ${scope === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600'}`}>
                   {SCOPE_LABEL[k]}
                 </button>
               ))}
@@ -231,7 +238,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   {options.map((f) => (
                     <button key={f} type="button" onClick={() => setReciterId(f)}
-                      className={`py-2 px-2 rounded-lg text-sm font-bold ${activeId === f ? 'grad-amber-door text-white' : 'bg-gray-100 text-accent-700'}`}>{reciterName(f)}</button>
+                      className={`py-4 px-2 rounded-xl text-base font-bold ${activeId === f ? 'grad-amber-door text-white' : 'bg-gray-100 text-accent-700'}`}>{reciterName(f)}</button>
                   ))}
                 </div>
               </>
@@ -256,8 +263,15 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
             {err && <p className="text-sm text-amber-700 mb-3">{err}</p>}
-            <button onClick={() => void nextRound()} disabled={!canStart} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
-          </>
+            {!text && (
+              <p className="text-sm text-amber-700 mb-3">
+                {textFailed ? (
+                  <>ما قدرناش نحمّل نص القرآن — اتأكد من النت. <button type="button" onClick={loadText} className="underline font-bold">جرّب تاني</button></>
+                ) : 'بنحمّل نص القرآن… الزرار هيتفعّل أول ما يخلص.'}
+              </p>
+            )}
+            <button onClick={() => void nextRound()} disabled={!canStart} className="w-full py-4 text-lg grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
+          </div>
         )}
 
         {phase === 'loading' && <p className="text-center text-accent-700 font-bold py-8">بنجهّز الجولة…</p>}
