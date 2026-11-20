@@ -358,7 +358,7 @@ export default function AuthPage({
 
       {/* Language selector */}
       <div className="fixed top-4 right-4 z-50">
-        <button
+        <button type="button"
           onClick={() => setShowLangMenu(!showLangMenu)}
           className="flex items-center gap-2 px-3 py-2 bg-white/90 backdrop-blur rounded-xl shadow-md border border-hairline text-sm font-semibold text-accent-700 hover:bg-white transition-smooth"
         >
@@ -368,7 +368,7 @@ export default function AuthPage({
         {showLangMenu && (
           <div className="absolute mt-2 bg-white rounded-xl shadow-xl border border-hairline p-2 min-w-[160px] animate-slide-up">
             {LANGUAGES.map((l) => (
-              <button
+              <button type="button"
                 key={l.code}
                 onClick={() => { setLang(l.code); setShowLangMenu(false); }}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-smooth ${
@@ -408,7 +408,7 @@ export default function AuthPage({
           {/* Mode tabs (hidden on the request and reset forms) */}
           {mode !== 'recover' && mode !== 'reset' && (
             <div className="flex bg-gray-50 rounded-xl p-1 mb-5 border border-hairline">
-              <button
+              <button type="button"
                 onClick={() => { setMode('login'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
                   mode === 'login' ? 'bg-emerald-600 text-white shadow-md' : 'text-accent-500 hover:text-accent-700'
@@ -416,7 +416,7 @@ export default function AuthPage({
               >
                 {t('login')}
               </button>
-              <button
+              <button type="button"
                 onClick={() => { setMode('signup'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
                   mode === 'signup' ? 'bg-emerald-600 text-white shadow-md' : 'text-accent-500 hover:text-accent-700'
@@ -524,7 +524,7 @@ export default function AuthPage({
                 <RotateCcw className="w-4 h-4" />
                 {loading ? '...' : t('recoverPassword')}
               </button>
-              <button onClick={() => setMode('login')}
+              <button type="button" onClick={() => setMode('login')}
                 className="w-full text-sm text-accent-600 hover:text-accent-700 py-2">
                 {t('backToHome')}
               </button>
@@ -685,7 +685,7 @@ export default function AuthPage({
             </form>
           )}
 
-          <button onClick={() => onNavigate('home')}
+          <button type="button" onClick={() => onNavigate('home')}
             className="flex items-center gap-1.5 mt-5 text-sm text-accent-600 hover:text-accent-700 transition-smooth mx-auto">
             <ArrowRight className="w-4 h-4" />
             {t('backToHome')}

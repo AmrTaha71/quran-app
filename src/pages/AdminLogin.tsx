@@ -91,7 +91,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
             </button>
           </form>
 
-          <button
+          <button type="button"
             onClick={() => onNavigate('home')}
             className="flex items-center gap-1.5 mt-6 text-sm text-accent-600 hover:text-accent-700 transition-smooth mx-auto"
           >
