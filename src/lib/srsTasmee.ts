@@ -120,6 +120,10 @@ export function applyOutcomes(
     const key = wordKey(surah, ayah, o.wordNo);
     if (o.ok) {
       if (!opts.reviewSession) continue;
+      // Double-call guard: the entry is read from storage right here, not from
+      // an earlier snapshot. After the first success the word is no longer due
+      // (its next gap is at least a day), so recording the same verdict again
+      // (e.g. continuous mode grading twice) does nothing.
       const e = getReviewEntry(key);
       if (!e || !isDue(e, now)) continue;
       const out = recordSuccess(key, now, iv);

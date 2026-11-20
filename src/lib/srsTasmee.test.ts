@@ -220,3 +220,43 @@ describe('flushPending / sessionCovers', () => {
     assert.doesNotThrow(() => flushPending(pend({}), null));
   });
 });
+
+describe('double call guard (the same final verdict recorded twice)', () => {
+  const range = { startGlobal: getGlobalAyahNumber(2, 5), endGlobal: getGlobalAyahNumber(2, 5) };
+  const rightVerdict = (ts: number) => pend({ ok: true, ts, matched: [true, true, true] });
+
+  it('a due word does not move two stages when the same success arrives twice', () => {
+    ls.map.set('quran-srs-v1', JSON.stringify({ '2:5:1': { s: 1, d: T0 - 1000, o: 'خلق' } }));
+    flushPending(rightVerdict(T0), range);
+    flushPending(rightVerdict(T0 + 40), range); // second call, a few ms later (as in continuous mode)
+    assert.deepEqual(getReviewEntry(wordKey(2, 5, 1)), { stage: 2, due: T0 + 3 * DAY, word: 'خلق' });
+  });
+  it('the same holds when both calls carry the very same timestamp', () => {
+    ls.map.set('quran-srs-v1', JSON.stringify({ '2:5:1': { s: 1, d: T0 - 1000, o: 'خلق' } }));
+    flushPending(rightVerdict(T0), range);
+    flushPending(rightVerdict(T0), range);
+    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 2);
+  });
+  it('applyOutcomes reports one success, then none', () => {
+    ls.map.set('quran-srs-v1', JSON.stringify({ '2:5:1': { s: 2, d: T0 - 1, o: 'خلق' } }));
+    const o = [out(1, 'خلق', true)];
+    assert.equal(applyOutcomes(2, 5, o, { reviewSession: true, now: T0 }).succeeded, 1);
+    assert.equal(applyOutcomes(2, 5, o, { reviewSession: true, now: T0 + 5 }).succeeded, 0);
+    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 3);
+  });
+  it('a graduating word graduates once; the second call finds nothing', () => {
+    ls.map.set('quran-srs-v1', JSON.stringify({ '2:5:1': { s: 5, d: T0 - 1, o: 'خلق' } }));
+    const o = [out(1, 'خلق', true)];
+    assert.equal(applyOutcomes(2, 5, o, { reviewSession: true, now: T0 }).graduated, 1);
+    const again = applyOutcomes(2, 5, o, { reviewSession: true, now: T0 + 5 });
+    assert.equal(again.graduated, 0);
+    assert.equal(again.succeeded, 0);
+  });
+  it('a wrong verdict twice stays at stage 1 and adds the word once', () => {
+    const o = [out(3, 'نور', false)];
+    const a = applyOutcomes(2, 5, o, { reviewSession: false, now: T0 });
+    applyOutcomes(2, 5, o, { reviewSession: false, now: T0 + 5 });
+    assert.equal(a.added, 1);
+    assert.equal(getReviewEntry(wordKey(2, 5, 3))?.stage, 1);
+  });
+});
