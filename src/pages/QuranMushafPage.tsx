@@ -467,8 +467,8 @@ export default function QuranMushafPage({
   function pokeFsOverlays() {
     setFsOverlaysVisible(true);
     if (fsOverlayTimer.current) clearTimeout(fsOverlayTimer.current);
-    // W5-E: 5s idle before the chrome fades (was 3s, Dr. Amr 2026-11-19).
-    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 5000);
+    // 3s idle before the chrome fades (Dr. Amr 2026-11-21; was 5s since 2026-11-19).
+    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 3000);
   }
   useEffect(() => {
     if (!showFullscreen) return;
@@ -4321,10 +4321,8 @@ export default function QuranMushafPage({
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
             if (cleanMode) { setCleanMode(false); return; }
-            // While following the imam, a band tap must not drop the
-            // fullscreen view (the phone is held through a long prayer);
-            // the X button and the follow bar's stop button still exit.
-            if (!showRatelIntro && !showEditionPickerInFullscreen && !selectedVerse && !followOn) exitFullscreenView();
+            // Dr. Amr 2026-11-21: a plain tap NEVER leaves fullscreen. Only the
+            // explicit X button (or the follow bar's stop button) exits.
           }}>
 
           {showRatelIntro && (
