@@ -10,7 +10,8 @@
 // fixed:
 //   1. WRONG_WORDS_LIMIT (3) wrong words piled up, or
 //   2. MISTAKE_MS (10 s) since the first unfixed mistake, or
-//   3. the ayah is over (its last word was said) or the user pressed «خلصت».
+//   3. the ayah is over (its last word was said) or the user pressed «خلصت». A wrong LAST
+//      word followed by «خلصت» (ayah unfinished) counts as a mistake, not as missing words.
 // The clock starts the first time a wrong word can be seen as wrong (a later word matched)
 // and is dropped if the user fixes it before anything above holds. A silence by itself judges
 // nothing (the old 1.8 s quiet rule and the «cut in at the last word only» rule are gone).
@@ -77,8 +78,12 @@ export class RoundState {
   }
 
   /** Judge what the user said (`matched` is relative to the current start). `final` = «خلصت». */
-  evaluate(matched: boolean[], allMatched: boolean, final: boolean, now: number = Date.now()): JudgeAction {
-    const m = firstMistake(matched);
+  evaluate(matched: boolean[], allMatched: boolean, final: boolean, now: number = Date.now(), lastWrong = false): JudgeAction {
+    let m = firstMistake(matched);
+    // Dr. Amr 2026-11-21: the LAST word said was wrong and the user pressed «خلصت» without
+    // finishing the ayah: that is a counted mistake (at the first word not matched), not just
+    // missing words.
+    if (m < 0 && final && lastWrong && !allMatched && matched.length > 0) m = matched.lastIndexOf(true) + 1;
     // The clock runs only while a mistake stays unfixed: a fix (the word matches later) drops it.
     if (m < 0) this.since = null;
     else if (this.since === null) this.since = now;

@@ -121,7 +121,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     // ayah, or «خلصت» (never at a silence).
     const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
-    const act = st.evaluate(al.matched, al.allMatched, final);
+    const act = st.evaluate(al.matched, al.allMatched, final, Date.now(), al.lastWrong);
     if (act.kind === 'correct') { stopRec(); void playCorrection(); }
     else if (act.kind === 'finish') finishAll(act.locked);
     else dl.sync(st.msUntilDue(Date.now())); // an unfixed mistake is waiting for its 10 s

@@ -19,12 +19,19 @@ export type AlignFn = (expected: string[], spokenText: string) => { matched: boo
  *     prompt and loses the rest (real data: 509 of 4017 ayat with 8+ words, e.g. 2:23 0/15).
  *  Either alone breaks real ayat (rest only: 65 with the prompt spoken; whole ayah: 509 without);
  *  best-of gets all 4017 right in both cases. `matched[k]` is the word at ayah index `start + k`. */
-export function alignRest(fullNorms: string[], start: number, spokenText: string, align: AlignFn): { matched: boolean[]; allMatched: boolean } {
-  const rest = align(fullNorms.slice(start), spokenText).matched;
-  const cut = align(fullNorms, spokenText).matched.slice(start);
+export function alignRest(fullNorms: string[], start: number, spokenText: string, align: AlignFn): { matched: boolean[]; allMatched: boolean; lastWrong: boolean } {
   const count = (m: boolean[]) => m.reduce((n, v) => n + (v ? 1 : 0), 0);
-  const matched = count(cut) > count(rest) ? cut : rest;
-  return { matched, allMatched: matched.length > 0 && matched.every(Boolean) };
+  const best = (text: string) => {
+    const rest = align(fullNorms.slice(start), text).matched;
+    const cut = align(fullNorms, text).matched.slice(start);
+    return count(cut) > count(rest) ? cut : rest;
+  };
+  const matched = best(spokenText);
+  // The LAST spoken word is wrong when dropping it changes nothing: the aligner shows no
+  // trace of an unmatched spoken word, so this is the only way to see a wrong tail.
+  const words = spokenText.trim().split(/\s+/).filter(Boolean);
+  const lastWrong = words.length > 0 && count(best(words.slice(0, -1).join(' '))) === count(matched);
+  return { matched, allMatched: matched.length > 0 && matched.every(Boolean), lastWrong };
 }
 
 export type ListenOpts = {

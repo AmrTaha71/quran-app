@@ -24,7 +24,7 @@ type Bundle = {
     base: number;
     since: number | null;
     msUntilDue: (now: number) => number | null;
-    evaluate: (m: boolean[], all: boolean, final: boolean, now?: number) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
+    evaluate: (m: boolean[], all: boolean, final: boolean, now?: number, lastWrong?: boolean) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
     summary: (locked: boolean) => { credited: number; wrong: number[]; locked: boolean; corrected: number; mistakes: number };
   };
   currentHistoryLevel: (isAdmin: boolean) => 'beginner' | 'advanced' | 'master';
@@ -501,5 +501,49 @@ describe('reciter intervention timing', () => {
     t.mock.timers.tick(10000);
     assert.equal(actions[actions.length - 1].kind, 'correct');
     assert.equal(st.since, null);
+  });
+});
+
+// ---- Wrong LAST word then «خلصت» (Dr. Amr 2026-11-21): a counted mistake, not missing words ----
+describe('wrong last word then «خلصت» counts as a mistake', () => {
+  const START = 5, BAD = 'ضضضض';
+  const run = (corrections: number, spoken: (rest: string[]) => string) => {
+    const norms = ayahOf(2, 255), rest = norms.slice(START);
+    const al = alignRest(norms, START, spoken(rest), B.alignSpoken);
+    const st = new B.RoundState(rest.length, corrections);
+    const act = st.evaluate(al.matched, al.allMatched, true, Date.now(), al.lastWrong);
+    return { al, act, st, total: rest.length };
+  };
+  it('3 right words, a wrong 4th, «خلصت», no correction left -> mistake, locked', () => {
+    const { al, act, st } = run(0, (r) => [...r.slice(0, 3), BAD].join(' '));
+    assert.equal(al.lastWrong, true);
+    assert.deepEqual(act, { kind: 'finish', locked: true });
+    assert.equal(st.summary(true).mistakes, 1);
+    assert.equal(st.summary(true).credited, 3);
+  });
+  it('same with a correction left -> the reciter corrects it, counted', () => {
+    const { act, st } = run(1, (r) => [...r.slice(0, 3), BAD].join(' '));
+    assert.equal(act.kind, 'correct');
+    assert.equal(st.summary(false).mistakes, 1);
+  });
+  it('only a wrong word said, then «خلصت» -> mistake', () => {
+    const { act } = run(0, () => BAD);
+    assert.deepEqual(act, { kind: 'finish', locked: true });
+  });
+  it('right words then «خلصت» (stopped early, last word right) -> missing words, NOT a mistake', () => {
+    const { al, act, st } = run(0, (r) => r.slice(0, 4).join(' '));
+    assert.equal(al.lastWrong, false);
+    assert.deepEqual(act, { kind: 'finish', locked: false });
+    assert.equal(st.summary(false).mistakes, 0);
+  });
+  it('a wrong word the user fixed himself, last word right, «خلصت» early -> not a mistake', () => {
+    const { al, act } = run(0, (r) => [...r.slice(0, 2), BAD, r[2], r[3]].join(' '));
+    assert.equal(al.lastWrong, false);
+    assert.deepEqual(act, { kind: 'finish', locked: false });
+  });
+  it('whole ayah said right -> no mistake', () => {
+    const { al, act } = run(0, (r) => r.join(' '));
+    assert.equal(al.lastWrong, false);
+    assert.deepEqual(act, { kind: 'finish', locked: false });
   });
 });
