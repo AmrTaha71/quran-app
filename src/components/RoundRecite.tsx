@@ -14,7 +14,7 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { firstMistake, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { currentHistoryLevel, firstMistake, firstWordHalfCredit, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
 
@@ -105,14 +105,14 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     }
   }
 
-  function finishAll(locked: boolean) {
+  function finishAll(locked: boolean, halfFirst = false) {
     if (finished.current) return;
     finished.current = true;
     stopRec();
     const credited = got.current.filter(Boolean).length;
     const wrong: number[] = [];
     got.current.forEach((g, i) => { if (!g) wrong.push(i); });
-    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, promptLen: effRef.current, extras: extra, ear: kindRef.current });
+    onFinish({ total: rest.length, credited, wrong, locked, corrected: mistaken.current.size, promptLen: effRef.current, extras: extra, ear: kindRef.current, ...(halfFirst ? { halfFirst: true } : {}) });
   }
 
   function evaluate(final: boolean) {
@@ -121,6 +121,13 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     const al = alignRest(fullNorms, effRef.current + base.current, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
     const m = firstMistake(al.matched);
+    // Beginner, no correction left, first word of the part wrong and the whole rest right:
+    // the ayah gets half credit instead of locking at 0.
+    if (m === 0 && base.current === 0 && corrLeft.current === 0 && firstWordHalfCredit(al.matched, currentHistoryLevel(false))) {
+      creditUpTo(al.matched, al.matched.length);
+      finishAll(false, true);
+      return;
+    }
     if (m >= 0) {
       creditUpTo(al.matched, m);
       if (corrLeft.current > 0) {

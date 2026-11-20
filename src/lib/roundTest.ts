@@ -22,6 +22,9 @@ export type RoundResult = {
   promptLen: number;  // words heard before the user started (the prompt + any hints)
   extras: number;     // «اديني كلمتين كمان» requests (each costs HINT_COST of the ayah part)
   ear: 'lab' | 'browser' | 'manual';
+  /** Beginner level, only the FIRST word was wrong and the rest right: the ayah part is
+   *  scored at FIRST_WORD_CREDIT (half) instead of the words share. */
+  halfFirst?: boolean;
 };
 
 export type PickedAyah = {
@@ -42,6 +45,17 @@ export function firstMistake(matched: boolean[]): number {
   return -1;
 }
 
+/** Every word after the first was said right, the first one was not. */
+export function firstWordOnlyWrong(matched: boolean[]): boolean {
+  return matched.length > 1 && !matched[0] && matched.slice(1).every(Boolean);
+}
+
+/** Share of the ayah part a beginner gets when only the first word is wrong (4 of 8). */
+export const FIRST_WORD_CREDIT = 0.5;
+/** Beginner level + first word wrong + the rest right. Other levels keep the old rule (0). */
+export const firstWordHalfCredit = (matched: boolean[], level: 'beginner' | 'advanced' | 'master') =>
+  level === 'beginner' && firstWordOnlyWrong(matched);
+
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 /** W4-J: a round / position is out of 10: 8 for completing the ayah itself (by the share
@@ -50,7 +64,7 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 export const AYAH_PART = 8;
 export const SURAH_PART = 2;
 export function tarteelRoundScore(r: RoundResult, surahOk: boolean | null): { completion: number; surah: number; total: number } {
-  const share = r.total ? r.credited / r.total : 0;
+  const share = r.halfFirst ? FIRST_WORD_CREDIT : r.total ? r.credited / r.total : 0;
   const keep = Math.max(0, 1 - HINT_COST * (r.extras ?? 0));
   const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share * keep);
   const surah = surahOk ? SURAH_PART : 0;

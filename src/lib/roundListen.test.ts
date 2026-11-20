@@ -17,7 +17,9 @@ type Bundle = {
   alignSpoken: (e: string[], s: string) => { matched: boolean[]; allMatched: boolean };
   expectedWordList: (t: string) => { orig: string; norm: string }[];
   firstMistake: (m: boolean[]) => number;
-  tarteelRoundScore: (r: { total: number; credited: number; extras?: number }, surahOk: boolean | null) => { total: number };
+  tarteelRoundScore: (r: { total: number; credited: number; extras?: number; halfFirst?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
+  firstWordHalfCredit: (m: boolean[], level: 'beginner' | 'advanced' | 'master') => boolean;
+  currentHistoryLevel: (isAdmin: boolean) => 'beginner' | 'advanced' | 'master';
 };
 let B: Bundle;
 let ayat: { surah: number; ayah: number; text: string }[];
@@ -29,7 +31,7 @@ before(async () => {
     `import '${root}src/pages/SelfTestPage.tsx';`,
     `export { alignSpoken } from '${root}src/lib/alignBridge.ts';`,
     `export { expectedWordList } from '${root}src/lib/expectedWords.ts';`,
-    `export { firstMistake, tarteelRoundScore } from '${root}src/lib/roundTest.ts';`,
+    `export { firstMistake, tarteelRoundScore, firstWordHalfCredit, currentHistoryLevel } from '${root}src/lib/roundTest.ts';`,
   ].join('\n'));
   buildSync({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile: path.join(dir, 'out.mjs'), logLevel: 'error', jsx: 'automatic',
@@ -105,6 +107,56 @@ describe('alignRest on real ayat (prompt = first 5 words)', () => {
     }
     console.log(`sweep: ${n} ayat, failures: ${bad.length}`, bad.slice(0, 20).join(' '));
     assert.deepEqual(bad, []);
+  });
+});
+
+// ---- Half credit for beginners when only the first word is wrong -------------------------
+describe('first word wrong, rest right (beginner half credit)', () => {
+  const START = 5;
+  const spokenFirstWrong = (norms: string[]) => ['ضضضض', ...norms.slice(START + 1)].join(' ');
+  /** What RoundRecite.evaluate does for this matched array at this level (no corrections left). */
+  const settle = (matched: boolean[], level: 'beginner' | 'advanced' | 'master') => {
+    const total = matched.length;
+    if (B.firstWordHalfCredit(matched, level)) return B.tarteelRoundScore({ total, credited: total - 1, halfFirst: true }, true).completion;
+    const m = B.firstMistake(matched);
+    const credited = m >= 0 ? matched.slice(0, m).filter(Boolean).length : matched.filter(Boolean).length;
+    return B.tarteelRoundScore({ total, credited, extras: 0 }, true).completion;
+  };
+  for (const [s, a] of [[2, 255], [2, 23], [2, 282], [2, 30]] as [number, number][]) {
+    it(`${s}:${a} beginner + first word wrong = 4 of 8, intermediate/advanced = 0`, () => {
+      const norms = ayahOf(s, a);
+      const { matched } = alignRest(norms, START, spokenFirstWrong(norms), B.alignSpoken);
+      assert.equal(settle(matched, 'beginner'), 4);
+      assert.equal(settle(matched, 'advanced'), 0);
+      assert.equal(settle(matched, 'master'), 0);
+    });
+    it(`${s}:${a} beginner + a mistake on a word of the text (not the first) = old rule`, () => {
+      const norms = ayahOf(s, a);
+      const spoken = norms.slice(START).map((w, i) => (i === 2 ? 'ضضضض' : w)).join(' ');
+      const { matched } = alignRest(norms, START, spoken, B.alignSpoken);
+      assert.equal(matched[0], true);
+      assert.equal(B.firstWordHalfCredit(matched, 'beginner'), false);
+      assert.equal(B.firstMistake(matched), 2);
+      assert.equal(settle(matched, 'beginner'), settle(matched, 'advanced'));
+    });
+  }
+  it('first wrong AND another word wrong -> old rule even for beginners', () => {
+    assert.equal(B.firstWordHalfCredit([false, true, false, true], 'beginner'), false);
+    assert.equal(B.firstWordHalfCredit([false, false, false], 'beginner'), false);
+    assert.equal(B.firstWordHalfCredit([false], 'beginner'), false);
+    assert.equal(B.firstWordHalfCredit([true, true, true], 'beginner'), false);
+  });
+  it('level is read from quran-test-settings (default beginner; intermediate/advanced/master are not)', () => {
+    const g = globalThis as { localStorage?: unknown };
+    const store = new Map<string, string>();
+    g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) };
+    try {
+      assert.equal(B.currentHistoryLevel(false), 'beginner');
+      for (const [lv, want] of [['beginner', 'beginner'], ['intermediate', 'advanced'], ['advanced', 'advanced'], ['متوسط', 'advanced'], ['متقدم', 'advanced'], ['master', 'advanced']] as const) {
+        store.set('quran-test-settings', JSON.stringify({ level: lv }));
+        assert.equal(B.currentHistoryLevel(false), want, lv);
+      }
+    } finally { delete g.localStorage; }
   });
 });
 
