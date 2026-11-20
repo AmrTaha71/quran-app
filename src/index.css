@@ -748,19 +748,24 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
    per state so the swap is a single-line change. Clean edges, no glow,
    no pulse; inset vertically so a box never bleeds into the next line. */
 :root {
-  --mushaf-hl-rgb: 180, 150, 90;
+  --mushaf-hl-rgb: 186, 222, 248; /* 2026-11-20: sky-blue like the reference app (#D8ECF8 on white) */
 }
 .mushaf-hl {
   position: absolute;
   pointer-events: none;
-  border-radius: 3px;
-  background: rgba(var(--mushaf-hl-rgb), 0.35);
-  box-shadow: inset 0 0 0 1px rgba(var(--mushaf-hl-rgb), 0.55);
-  transition: background-color 120ms linear, box-shadow 120ms linear;
+  /* flat pastel band, no border/shadow; multiply keeps the black text crisp
+     and lets the page paper show through (reference: Madinah Mushaf app) */
+  background: rgb(var(--mushaf-hl-rgb));
+  mix-blend-mode: multiply;
+  border-radius: 5px;
+  box-shadow: none;
+  transition: background-color 120ms linear;
 }
-.mushaf-hl--current { background: rgba(var(--mushaf-hl-rgb), 0.45); box-shadow: inset 0 0 0 1.5px rgba(var(--mushaf-hl-rgb), 0.8); }
-.mushaf-hl--passed { background: rgba(var(--mushaf-hl-rgb), 0.22); box-shadow: none; }
-.mushaf-hl--ahead { background: rgba(var(--mushaf-hl-rgb), 0.10); box-shadow: none; }
+.mushaf-hl--current { background: rgb(var(--mushaf-hl-rgb)); box-shadow: none; }
+.mushaf-hl--passed { background: rgba(var(--mushaf-hl-rgb), 0.6); box-shadow: none; }
+.mushaf-hl--ahead { background: rgba(var(--mushaf-hl-rgb), 0.25); box-shadow: none; }
+@keyframes mushaf-reveal-pop { from { background-color: rgba(186,222,248,0.9); } to { background-color: rgba(186,222,248,0); } }
+.mushaf-reveal-pop { animation: mushaf-reveal-pop 700ms ease-out forwards; mix-blend-mode: multiply; }
 @media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } }
 
 /* Landing banner: big, attention-grabbing pulse (off for reduced motion) */
