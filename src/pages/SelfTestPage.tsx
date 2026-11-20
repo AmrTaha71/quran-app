@@ -30,6 +30,8 @@ import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnit
 import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import MushafRevealStage from '../components/mushaf/MushafRevealStage';
 import { recordAyahWords, listWeakWords, weakWordAyahs, clearWeakWords, type WeakWord } from '../lib/wordMistakes';
+import { flushPending, SRS_REVIEW_SESSION_KEY, type SrsPending, type SlipNotice } from '../lib/srsTasmee';
+import SrsSlipNotice from '../components/SrsSlipNotice';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
@@ -1182,11 +1184,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // precedence over the choice flag below.
     try {
       const raw = sessionStorage.getItem('quran-test-range-preset');
+      // SRS step 5: the weak-words card marks its session with a one-shot flag.
+      // Read it once and clear it now, so a later normal test is never a review.
+      let srsFromCard = false;
+      try {
+        srsFromCard = !!sessionStorage.getItem(SRS_REVIEW_SESSION_KEY);
+        sessionStorage.removeItem(SRS_REVIEW_SESSION_KEY);
+      } catch { /* ignore */ }
       if (raw) {
         const preset = JSON.parse(raw) as { startGlobal: number; endGlobal: number; label?: string; reciter?: string };
         if (typeof preset.startGlobal === 'number' && typeof preset.endGlobal === 'number' && preset.startGlobal >= 1 && preset.endGlobal >= preset.startGlobal) {
           sessionStorage.removeItem('quran-test-range-preset');
           sessionStorage.removeItem('quran-test-range-choice');
+          if (srsFromCard) srsSessionRef.current = { startGlobal: preset.startGlobal, endGlobal: preset.endGlobal };
           // Voice assistant: «سمّع على مين؟» already chose the reciter, so don't ask again.
           const pickedReciter = preset.reciter && CORR_RECITERS.some((r) => r.folder === preset.reciter) ? preset.reciter : null;
           if (pickedReciter) { setCorrReciter(pickedReciter); setCorrReciterState(pickedReciter); }
@@ -1635,6 +1645,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // tells the user the words he said during the correction were not
   // heard, so he says the rest of the ayah again.
   const [postCorrHint, setPostCorrHint] = useState(false);
+  // SRS step 5 (2026-11-20): third+ slip of one letter pair, shown by SrsSlipNotice.
+  const [srsNotices, setSrsNotices] = useState<SlipNotice[]>([]);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
   // Batch 4 part 2 (2026-11-10): practice history. Score never changes on a re-recite.
@@ -2296,6 +2308,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // recites continuously. The provisional false grade is replaced
   // by a pass only if he then says every remaining word correctly.
   const postCorrRef = useRef<{ ayahId: number; index: number; resumeStartLen: number; remaining: string[]; remainingIdx: number[] } | null>(null);
+  // SRS step 5 (2026-11-20): the last verdict of the ayah being tested. A later
+  // grade of the same ayah REPLACES it, so a word fixed before the verdict is
+  // final never reaches the review table; flushSrs() records it once.
+  const srsPendingRef = useRef<SrsPending | null>(null);
+  // Set once from the home card's one-shot flag; null = a normal test.
+  const srsSessionRef = useRef<{ startGlobal: number; endGlobal: number } | null>(null);
   // Batch 3 (reviewer verdicts): which path opened the current
   // correction window — 'finals' (evaluateNow mismatch) or
   // 'interim' (early window). The heal diag records it, because
@@ -2384,7 +2402,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   // Reset every per-ayah mic/manual state (called on ayah change, on
   // test start, and when the user stops listening mid-ayah).
+  // Record the pending ayah verdict (SRS step 5). Touches refs only (it also
+  // runs from the unmount cleanup). Returns the slip notices, or null when
+  // nothing was pending. A manual override (the user marked the ayah the other
+  // way) or a skip drops the pending verdict instead of recording it.
+  const flushSrs = (): SlipNotice[] | null => {
+    const p = srsPendingRef.current;
+    srsPendingRef.current = null;
+    if (!p) return null;
+    const live = liveRef.current;
+    if (live.skipped[p.index] || live.grades[p.index] !== p.ok) return [];
+    return flushPending(p, srsSessionRef.current);
+  };
+
   const resetMicState = () => {
+    // Leaving the ayah (not a retry of the same one) finishes its verdict.
+    const pend = srsPendingRef.current;
+    if (pend && (liveRef.current.ayah?.surah_no !== pend.surah || liveRef.current.ayah?.ayah_no !== pend.ayah)) {
+      const notices = flushSrs();
+      if (notices) setSrsNotices(notices);
+    }
     stopRec();
     clearTimers();
     liveRef.current.finals = '';
@@ -2414,6 +2451,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => () => {
     stopRec();
     clearTimers();
+    flushSrs(); // SRS step 5: leaving the page finishes the pending verdict
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2818,6 +2856,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // onto the done screen.
     postCorrRef.current = null;
     setPostCorrHint(false);
+    // SRS step 5: the test is over, so the last ayah's verdict is final.
+    const srsDone = flushSrs();
+    if (srsDone) setSrsNotices(srsDone);
+    srsSessionRef.current = null;
     const correct = finalGrades.filter(Boolean).length;
     const skippedCount = liveRef.current.skipped.filter(Boolean).length;
     const attempted = Math.max(0, ayahs.length - skippedCount);
@@ -2897,6 +2939,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       try {
         const okWords = expectedWordList(ayah.ayah_text);
         if (spokenTokens(liveRef.current.finals).length > 0) recordAyahWords(ayah.surah_no, ayah.ayah_no, okWords, okWords.map(() => true));
+        // SRS step 5: this all-correct verdict replaces any earlier wrong one.
+        const nSpoken = spokenTokens(liveRef.current.finals).length;
+        srsPendingRef.current = nSpoken > 0
+          ? { surah: ayah.surah_no, ayah: ayah.ayah_no, index, ok: true, ts: Date.now(), words: okWords, matched: okWords.map(() => true), spokenCount: nSpoken }
+          : null;
       } catch { /* tracking is best-effort */ }
       liveRef.current.micState = 'done-correct';
       setMicState('done-correct');
@@ -2913,6 +2960,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setWrongIndices(expected.map((_, i) => i).filter((i) => !result.matched[i]));
       const wrongWords = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
       try { recordAyahWords(ayah.surah_no, ayah.ayah_no, expected, result.matched); } catch { /* best-effort */ }
+      // SRS step 5: keep this verdict as pending (positions index into `spoken`,
+      // the same array the aligner just read); it is recorded when the ayah ends.
+      srsPendingRef.current = spoken.length > 0
+        ? { surah: ayah.surah_no, ayah: ayah.ayah_no, index, ok: false, ts: Date.now(), words: expected, matched: result.matched, positions: result.positions, consumed: result.consumed, tokens: spoken, spokenCount: spoken.length }
+        : null;
       setWrongByAyah((prev) => ({ ...prev, [index]: wrongWords }));
       setWrongExtras(result.extras);
       if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
@@ -5269,6 +5321,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         if (row) recordAyahWords(row.surah_no, row.ayah_no, ws, ws.map((x) => x.ok));
       });
     } catch { /* best-effort */ }
+    // SRS step 5 (continuous): this is the final verdict of the whole range, and
+    // there is no heard text per word here, so every wrong word is an ordinary
+    // mistake. Same rules as the ayah mode (flushPending never throws).
+    {
+      const nSpoken = spokenTokens(liveRef.current.contFinals).length;
+      expected.forEach((_, i) => {
+        if (i > 0 && expected[i - 1].ayahIdx === expected[i].ayahIdx) return;
+        const idx = expected[i].ayahIdx;
+        const row = ayahs[idx];
+        if (!row) return;
+        const own = expected.map((w, j) => ({ w, j })).filter((x) => x.w.ayahIdx === idx);
+        flushPending({
+          surah: row.surah_no, ayah: row.ayah_no, index: idx, ok: gradesArr[idx], ts: Date.now(),
+          words: own.map((x) => ({ orig: x.w.orig })), matched: own.map((x) => !!matched[x.j]), spokenCount: nSpoken,
+        }, srsSessionRef.current);
+      });
+    }
     liveRef.current.grades = gradesArr;
     setGrades(gradesArr);
     const noSkips = new Array(ayahCount).fill(false);
@@ -6517,6 +6586,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </>
             )}
           </div>
+        )}
+
+        {(phase === 'testing' || phase === 'done') && srsNotices.length > 0 && (
+          <SrsSlipNotice notices={srsNotices} onDismiss={() => setSrsNotices([])} />
         )}
 
         {phase === 'testing' && textOfflineNotice && (

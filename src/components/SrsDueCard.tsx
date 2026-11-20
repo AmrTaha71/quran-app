@@ -3,7 +3,8 @@
 // getDueWords and shows how many words are due today, plus one button that
 // opens the self-test on the first due ayah. The ayah goes through the same
 // sessionStorage contract as ReviewDueCard (lib/homeFeatures): preset
-// {startGlobal, endGlobal, label} + choice 'juz', then onNavigate('test').
+// {startGlobal, endGlobal, label} + choice 'juz' + the one-shot review-session
+// flag (step 5), then onNavigate('test').
 // Nothing due: a calm message, never an error. Gold only (grad-amber-door,
 // bg-amber-50, border-hairline-amber); no new colors.
 import { useState } from 'react';
@@ -12,6 +13,7 @@ import { pressFeedback } from '../lib/pressFeedback';
 import { getDueWords } from '../lib/srsStore';
 import { dueWordsText, firstDueAyah, firstDueAyahText } from '../lib/srsHome';
 import { TEST_RANGE_CHOICE_KEY, TEST_RANGE_PRESET_KEY } from '../lib/homeFeatures';
+import { SRS_REVIEW_SESSION_KEY } from '../lib/srsTasmee';
 
 export default function SrsDueCard({
   onNavigate,
@@ -36,6 +38,9 @@ export default function SrsDueCard({
         }),
       );
       sessionStorage.setItem(TEST_RANGE_CHOICE_KEY, 'juz');
+      // One-shot flag: tells the self-test this run is a review from the card,
+      // so right answers on due words move them forward (srsTasmee.ts).
+      sessionStorage.setItem(SRS_REVIEW_SESSION_KEY, '1');
     } catch {
       // ignore — the test page still opens on its range door
     }
