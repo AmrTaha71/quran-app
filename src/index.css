@@ -743,10 +743,9 @@ html.lite-shadows *, html.lite-shadows *::before, html.lite-shadows *::after {
 html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }
 
 /* W5-B (2026-11-19): mushaf word highlight. ONE variable controls the
-   colour: dark beige now; to switch to light grey set it to
-   `200, 200, 200` (or `150, 150, 150` on night mode). Alphas are fixed
-   per state so the swap is a single-line change. Clean edges, no glow,
-   no pulse; inset vertically so a box never bleeds into the next line. */
+   colour (oil-green now, also used by the Madinah-paper reveal pop below);
+   to change it edit that one line. Clean edges, no glow, no pulse; inset
+   vertically so a box never bleeds into the next line. */
 :root {
   --mushaf-hl-rgb: 176, 200, 168; /* 2026-11-20: oil-green (زيتي), chosen by Dr. Amr from 8 candidates on the real page */
 }
@@ -761,12 +760,12 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
   box-shadow: none;
   transition: background-color 120ms linear;
 }
-.mushaf-hl--current { background: rgb(var(--mushaf-hl-rgb)); box-shadow: none; }
-.mushaf-hl--passed { background: rgba(var(--mushaf-hl-rgb), 0.6); box-shadow: none; }
-.mushaf-hl--ahead { background: rgba(var(--mushaf-hl-rgb), 0.25); box-shadow: none; }
-@keyframes mushaf-reveal-pop { from { background-color: rgba(176,200,168,0.9); } to { background-color: rgba(176,200,168,0); } }
+/* A new line's strip fades in (the band reaches the next line) instead of popping. */
+@keyframes mushaf-hl-in { from { opacity: 0; } to { opacity: 1; } }
+.mushaf-hl-in { animation: mushaf-hl-in 160ms ease-out; }
+@keyframes mushaf-reveal-pop { from { background-color: rgba(var(--mushaf-hl-rgb), 0.9); } to { background-color: rgba(var(--mushaf-hl-rgb), 0); } }
 .mushaf-reveal-pop { animation: mushaf-reveal-pop 700ms ease-out forwards; mix-blend-mode: multiply; }
-@media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } .mushaf-hl-in { animation: none; } }
 
 /* Landing banner: big, attention-grabbing pulse (off for reduced motion) */
 @keyframes free-banner-pulse {

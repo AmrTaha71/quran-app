@@ -50,7 +50,7 @@ export default function MushafHighlightLayer({ boxes: allBoxes, currentWord }: {
   });
   return (<>
     {strips.map((f) => (
-      <div key={f.key} className="mushaf-hl"
+      <div key={f.key} className="mushaf-hl mushaf-hl-in"
         style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`, boxShadow: 'none', borderRadius: 6,
           transition: 'left 160ms linear, width 160ms linear' }} />
     ))}

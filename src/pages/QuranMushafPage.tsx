@@ -1449,21 +1449,25 @@ export default function QuranMushafPage({
     setSearchHighlight(null);
   };
 
-  // Resume-to-fullscreen entry: HomeStartPage's resume action sets
-  // sessionStorage 'quran-open-fullscreen' before navigating here.
-  // Consumed once on mount (read then remove): a later refresh or a
-  // shared link never reopens fullscreen, and shared links never
-  // carry the flag. Native fullscreen is fire-and-forget — a silent
-  // refusal (notably iPhone Safari, which lacks the API for page
-  // elements) never shows an error; the fixed overlay is the real
-  // fullscreen and opens regardless.
+  // Fullscreen on EVERY entry to the Mushaf (2026-11-21, Dr. Amr): the bottom-nav
+  // button, the landing page, a home card... not only the resume action. The resume
+  // action still sets sessionStorage 'quran-open-fullscreen' (consumed once, read
+  // then removed). Without the flag the native request is made only while the click
+  // that brought the user here still counts as a user gesture
+  // (navigator.userActivation.isActive), so a refresh or a shared link never asks
+  // for it and never logs a refusal. Native fullscreen is fire-and-forget — a silent
+  // refusal (notably iPhone Safari, which lacks the API for page elements) never
+  // shows an error; the fixed overlay is the real fullscreen and opens regardless.
   useEffect(() => {
     let present = false;
     try {
       present = sessionStorage.getItem('quran-open-fullscreen') !== null;
       if (present) sessionStorage.removeItem('quran-open-fullscreen');
     } catch {}
-    if (!present) return;
+    if (!present) {
+      const ua = (navigator as { userActivation?: { isActive: boolean } }).userActivation;
+      if (ua && !ua.isActive) return;
+    }
     setShowFullscreen(true);
     requestNativeFullscreen();
     // eslint-disable-next-line react-hooks/exhaustive-deps
