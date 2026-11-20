@@ -5,7 +5,10 @@
 // the user goes on from it; the next mistake closes the position.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { earLabOn, preloadEarLab } from '../lib/quranLabEar';
-import { createRecognizer, readResults, type Rec } from '../lib/voiceCapture';
+import { createRecognizer, readResults } from '../lib/voiceCapture';
+import { isEmptyEvent } from '../lib/speechResults';
+import { ListenSession, alignRest } from '../lib/roundListen';
+import { roundDebugOn, setRoundDebug, getRoundDebug } from '../lib/roundDebug';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
@@ -14,7 +17,6 @@ import { reciterAyahUrl } from '../lib/juhaniCorr';
 import { firstMistake, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
-const QUIET_MS = 1800;
 
 export default function RoundRecite({ ayah, corrections, onFinish }: {
   ayah: PickedAyah;
@@ -26,7 +28,6 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const [extra, setExtra] = useState(0);
   const eff = ayah.promptLen + HINT_WORDS * extra;
   const rest = useMemo(() => ayah.words.slice(eff), [ayah, eff]);
-  const restNorms = useMemo(() => rest.map((w) => w.norm), [rest]);
   const [phase, setPhaseState] = useState<Phase>('idle');
   const phaseRef = useRef<Phase>('idle');
   const setPhase = (p: Phase) => { phaseRef.current = p; setPhaseState(p); };
@@ -40,21 +41,18 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const corrLeft = useRef(corrections);
   const effRef = useRef(eff);
   effRef.current = eff;
-  const recRef = useRef<Rec | null>(null);
+  const sessRef = useRef<ListenSession | null>(null);
   const kindRef = useRef<'lab' | 'browser' | 'manual'>('manual');
-  const finals = useRef('');
-  const interim = useRef('');
-  const quietT = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fullNorms = useMemo(() => ayah.words.map((w) => w.norm), [ayah]);
+  const [, bumpDebug] = useState(0);
   const audio = useRef<SpanHandle | null>(null);
   const finished = useRef(false);
 
   useEffect(() => { if (earLabOn()) preloadEarLab(); }, []);
   useEffect(() => () => {
     finished.current = true;
-    if (quietT.current) clearTimeout(quietT.current);
     audio.current?.cancel();
-    const r = recRef.current; recRef.current = null;
-    if (r) { r.onresult = null; r.onend = null; r.onerror = null; try { r.abort(); } catch { /* ignore */ } }
+    sessRef.current?.abort(); sessRef.current = null;
   }, []);
 
   const url = reciterAyahUrl(ayah.folder, ayah.surah, ayah.ayah);
@@ -95,12 +93,9 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     if (!finished.current) setPhase('afterCorr');
   }
 
-  function stopRec(flush = false) {
-    if (quietT.current) { clearTimeout(quietT.current); quietT.current = null; }
-    const r = recRef.current;
-    if (!r) return;
-    if (!flush) { recRef.current = null; r.onresult = null; r.onend = null; r.onerror = null; try { r.abort(); } catch { /* ignore */ } }
-    else { try { r.stop(); } catch { /* ignore */ } }
+  function stopRec() {
+    sessRef.current?.abort();
+    sessRef.current = null;
   }
 
   function creditUpTo(matched: boolean[], limit: number) {
@@ -122,8 +117,8 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
 
   function evaluate(final: boolean) {
     if (finished.current) return;
-    const exp = restNorms.slice(base.current);
-    const al = alignSpoken(exp, `${finals.current} ${interim.current}`);
+    // Whole ayah in, prompt part cut out after matching (see alignRest).
+    const al = alignRest(fullNorms, effRef.current + base.current, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
     const m = firstMistake(al.matched);
     if (m >= 0) {
@@ -145,27 +140,35 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     }
   }
 
+  // A start()/restart that throws used to be swallowed: log it and tell the user.
+  function reportStartError(where: string, err: unknown) {
+    console.warn(`[RoundRecite] ${where} failed`, err);
+    setMsg('الاستماع وقف ومقدرش يكمّل — اضغط «خلصت» أو جرّب تاني');
+  }
+
   function startMic() {
     setMsg('');
-    finals.current = '';
-    interim.current = '';
-    const made = createRecognizer(restNorms.slice(base.current));
+    stopRec();
+    // The ear gets the WHOLE ayah and starts aligning after the words already played
+    // (the prompt must not be part of what the user is expected to say).
+    const start = effRef.current + base.current;
+    const made = createRecognizer(fullNorms, start);
     if (!made) { kindRef.current = 'manual'; setPhase('self'); return; }
     const { rec, kind } = made;
     kindRef.current = kind;
     setExtraWordMin(Infinity);
-    recRef.current = rec;
-    rec.onresult = (e) => {
-      if (recRef.current !== rec) return;
-      const r = readResults(e, finals.current);
-      finals.current = r.finals;
-      interim.current = r.interim;
-      if (phaseRef.current !== 'listening') return;
-      if (quietT.current) clearTimeout(quietT.current);
-      quietT.current = setTimeout(() => evaluate(false), QUIET_MS);
-    };
+    const sess: ListenSession = new ListenSession({
+      rec, kind, readResults, isEmptyEvent,
+      isListening: () => phaseRef.current === 'listening',
+      // Live counter follows every real change of finals / interim.
+      onText: (text) => setHeard(alignRest(fullNorms, start, text, alignSpoken).matched.filter(Boolean).length),
+      onQuiet: () => evaluate(false),
+      onRestartError: (err) => reportStartError('rec.start() in onend', err),
+    });
+    sessRef.current = sess;
+    sess.attach();
     rec.onerror = (e) => {
-      if (recRef.current !== rec) return;
+      if (sessRef.current !== sess) return;
       if (kind === 'lab' && e?.error === 'network') {
         setMsg('تعذّر تحميل برنامج التعرّف على الصوت — قيّم نفسك بإيدك');
         stopRec(); kindRef.current = 'manual'; setPhase('self'); return;
@@ -174,23 +177,23 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
       if (m) setMsg(m.text);
       if (m?.fatal) { stopRec(); kindRef.current = 'manual'; setPhase('self'); }
     };
-    // The browser engine ends by itself after a silence: keep it open while we wait.
-    rec.onend = () => {
-      if (kind === 'browser' && recRef.current === rec && phaseRef.current === 'listening') { try { rec.start(); } catch { /* ignore */ } }
-    };
-    try { rec.start(); } catch { /* ignore */ }
+    try { rec.start(); } catch (err) { reportStartError('rec.start()', err); }
     setPhase('listening');
   }
 
   function stopAndGrade() {
     setPhase('grading');
-    const r = recRef.current;
-    if (!r) { evaluate(true); return; }
-    let done = false;
-    const go = () => { if (done) return; done = true; recRef.current = null; evaluate(true); };
-    r.onend = go;
-    setTimeout(go, 2500);
-    stopRec(true);
+    const sess = sessRef.current;
+    if (!sess) { evaluate(true); return; }
+    // Snapshot for ?debug=1: what the ear had heard at the moment of stopping.
+    const snapAt = (via: string) => {
+      if (!roundDebugOn()) return;
+      setRoundDebug({ kind: kindRef.current, finals: sess.finals, interim: sess.interim, start: effRef.current + base.current, total: ayah.words.length, via });
+      bumpDebug((n) => n + 1);
+    };
+    snapAt('stop');
+    // evaluate(true) reads the session's text; finishAll()/stopRec() then drops the session.
+    sess.stopAndGrade((via) => { snapAt(via); evaluate(true); });
   }
 
   function finishManual() {
@@ -243,6 +246,23 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
         </>
       )}
       {msg && <p className="text-xs text-amber-700 text-center">{msg}</p>}
+      <RoundDebugOverlay />
+    </div>
+  );
+}
+
+/** ?debug=1 only: which ear ran and the finals it had when «خلصت» was pressed. */
+export function RoundDebugOverlay() {
+  if (!roundDebugOn()) return null;
+  const d = getRoundDebug();
+  return (
+    <div dir="ltr" className="fixed bottom-2 left-2 right-2 z-[60] rounded-lg bg-black/80 p-2 text-[11px] leading-snug text-green-300 font-mono pointer-events-none">
+      {d ? (
+        <>
+          <div>kind: {d.kind} · start: {d.start}/{d.total} · via: {d.via}</div>
+          <div className="break-words">finals: “{d.finals}”{d.interim ? ` · interim: “${d.interim}”` : ''}</div>
+        </>
+      ) : <div>debug: no stop yet</div>}
     </div>
   );
 }
