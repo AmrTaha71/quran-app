@@ -28,6 +28,7 @@ import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type Plan
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
 import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnits';
 import { cleanToken, expectedWordList } from '../lib/expectedWords';
+import MushafRevealStage from '../components/mushaf/MushafRevealStage';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
@@ -1337,6 +1338,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // "تسميع جديد", like contZeroMatch.
   const [showFullHeard, setShowFullHeard] = useState(false);
   const [contMatchedWords, setContMatchedWords] = useState(0);
+  // 2026-11-20: show the tested ayah on the real Madinah page (words covered,
+  // uncovered as they are recited right and in place). Default on; the owner
+  // can switch it off from the idle mic screen. Key is new (nothing reads an old one).
+  const [paperView, setPaperViewState] = useState<boolean>(() => {
+    try { return localStorage.getItem('quran-tasmee-paper') !== '0'; } catch { return true; }
+  });
+  const setPaperView = (v: boolean) => { setPaperViewState(v); try { localStorage.setItem('quran-tasmee-paper', v ? '1' : '0'); } catch { /* storage unavailable */ } };
   const [contHeardWords, setContHeardWords] = useState(0);
   // DIAG (Claude P0-5): on-screen event log + Copy JSON export.
   // Recording only: every push below is a log call, never a branch
@@ -6634,7 +6642,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               ) : micState === 'done-correct' ? (
                 <>
                   <p className="text-lg font-bold text-emerald-700 mb-3">ما شاء الله — صح!</p>
-                  <p className="text-2xl leading-[2.2] font-bold text-emerald-700" dir="rtl">{ayahs[index].ayah_text}</p>
+                  {paperView
+                    ? <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} showAll />
+                    : <p className="text-2xl leading-[2.2] font-bold text-emerald-700" dir="rtl">{ayahs[index].ayah_text}</p>}
                   <button onClick={nextAfterMic}
                     className="mt-5 px-6 py-3 grad-emerald-door text-white text-lg font-bold rounded-xl polish-press polish-focus">
                     {index + 1 < ayahs.length ? 'الآية اللي بعدها' : 'إنهاء التسميع'}
@@ -6644,7 +6654,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <>
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
                   <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
-                  <p className="text-2xl leading-[2.2] font-bold" dir="rtl">
+                  {paperView && (
+                    <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} showAll />
+                  )}
+                  <p className={paperView ? 'sr-only' : 'text-2xl leading-[2.2] font-bold'} dir="rtl">
                     {expectedWordList(ayahs[index].ayah_text).map((w, i) => (
                       <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
                     ))}
@@ -6738,6 +6751,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         className="mt-3 text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
                         أو قيّم نفسك يدوي بدل الميكروفون
                       </button>
+                      <button onClick={() => setPaperView(!paperView)}
+                        className="mt-3 block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
+                        {paperView ? 'إخفاء ورق المصحف' : 'إظهار ورق المصحف'}
+                      </button>
                     </>
                   )}
                   {(micState === 'listening' || micState === 'correcting') && (
@@ -6755,7 +6772,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           only: no word is ever shown, so the hidden
                           text stays hidden. Indicative, not grading
                           (grading still uses finals at evaluation). */}
-                      {ayahs[index] && (() => {
+                      {paperView && ayahs[index] && (() => {
+                        const exp = expectedWordList(ayahs[index].ayah_text);
+                        const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
+                        const st = alignWordsStrict(exp.map((w) => w.norm), spokenLive);
+                        return (
+                          <div className="mb-4">
+                            <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={st.matched} />
+                          </div>
+                        );
+                      })()}
+                      {!paperView && ayahs[index] && (() => {
                         const exp = expectedWordList(ayahs[index].ayah_text);
                         const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
                         const al = alignWords(exp.map((w) => w.norm), spokenLive);
