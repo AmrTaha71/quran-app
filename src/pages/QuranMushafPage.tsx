@@ -1519,9 +1519,10 @@ export default function QuranMushafPage({
   const [followHeard, setFollowHeard] = useState('');
   // Follow-imam instructions: shown on the first 3 openings, then hidden
   // (a small «التعليمات» link brings them back).
-  const [followHelpShow, setFollowHelpShow] = useState(() => {
+  const [followHelpShow] = useState(() => {
     try { return Number(localStorage.getItem(FOLLOW_HELP_KEY) || '0') < 3; } catch { return true; }
   });
+  const [followHelpOpen, setFollowHelpOpen] = useState(true);
   const followHelpCountedRef = useRef(false);
   const followLobbyOpen = (followOn || !!startInFollow) && !followPos && !showRatelIntro;
   useEffect(() => {
@@ -2473,7 +2474,7 @@ export default function QuranMushafPage({
       if (e?.error === 'network') {
         // quranLabEar maps a model-load failure to 'network'.
         markEarLabFailed();
-        msg = 'أذن المصحف ما اتحمّلتش دلوقتي — اضغط «ابدأ» تاني (هيشتغل بالطريقة القديمة: يفتح على الآية بس)، أو جرّب «طريقة استماع بديلة»';
+        msg = 'أذن المصحف ما اتحمّلتش دلوقتي — اضغط «ابدأ» تاني (هيشتغل بالطريقة القديمة: يفتح على الآية بس)';
       } else {
         msg = speechErrorMessage(e?.error)?.text ?? 'توقف الاستماع — اضغط «ابدأ» من جديد';
       }
@@ -4333,16 +4334,14 @@ export default function QuranMushafPage({
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
                 <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تتبع الإمام</p>
-                {followHelpShow ? (<>
-                <p className="text-sm text-emerald-100 leading-relaxed mt-2">
-                  اضغط بدء الاستماع، وقرّب الجهاز منك. أول ما يلقط الإمام كام كلمة، المصحف هيفتح لوحده على الصفحة — من غير ما تدوس حاجة تانية. لو أذن المصحف متنزّلة على جهازك، الهايلايت بيمشي مع الإمام كلمة بكلمة وبيقلب الصفحة معاه لحد ما تدوس إيقاف. من غيرها، بيفتح على الآية ويقف عندها — اضغط «مش دي؟ كمّل الاستماع» لموضع جديد. هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.
-                </p>
-                <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس، وبعدين تقدر تفتحها من «التعليمات».</p>
-                <button type="button" onClick={() => { try { localStorage.setItem(FOLLOW_HELP_KEY, '99'); } catch { /* ignore */ } setFollowHelpShow(false); }}
+                {followHelpShow && (followHelpOpen ? (<>
+                <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس.</p>
+                <p className="text-sm text-emerald-100 leading-relaxed mt-1">اضغط «ابدأ الاستماع للإمام»، والتطبيق بيتابع الآيات معاك.</p>
+                <button type="button" onClick={() => { try { localStorage.setItem(FOLLOW_HELP_KEY, '99'); } catch { /* ignore */ } setFollowHelpOpen(false); }}
                   className="mt-2 text-xs underline text-amber-200">فهمت، مش محتاج التعليمات تاني</button>
                 </>) : (
-                  <button type="button" onClick={() => setFollowHelpShow(true)} className="mt-2 text-xs underline text-amber-200">التعليمات</button>
-                )}
+                  <button type="button" onClick={() => setFollowHelpOpen(true)} className="mt-2 text-xs underline text-amber-200">التعليمات</button>
+                ))}
                 {followReady ? (
                   <>
                     {/* The start button also (re-)enters follow mode:
@@ -4350,15 +4349,11 @@ export default function QuranMushafPage({
                         alone would track without showing any highlight
                         or status bar. Entering first is harmless on a
                         fresh entry (it only resets an empty state). */}
+                    <p className="text-xs text-emerald-100 leading-relaxed mt-3">هيطلب إذن الميكروفون أول مرة — اسمح له عشان يشتغل.</p>
                     <button onClick={() => startFollowFromLobby('live')}
                       disabled={followIndexLoading || followMicWaiting}
                       className="mt-4 w-full py-3.5 grad-amber-door disabled:opacity-60 text-white text-base font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press polish-focus">
                       <StudioMic className="w-5 h-5" /> ابدأ الاستماع للإمام
-                    </button>
-                    <button onClick={() => startFollowFromLobby('whisper')}
-                      disabled={followIndexLoading || followMicWaiting}
-                      className="mt-2 w-full py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl transition-smooth flex items-center justify-center gap-2 polish-press">
-                      <StudioMic className="w-4 h-4" /> طريقة استماع بديلة — لو الطريقة العادية مش شغالة
                     </button>
                     {followIndexLoading && <p className="text-xs text-amber-200 mt-2">جارٍ تحميل فهرس الآيات…</p>}
                     {/* B1: the cancel button lives here, in the ready
@@ -4391,15 +4386,17 @@ export default function QuranMushafPage({
                         إلغاء الانتظار — رجوع للبداية من غير إعادة تحميل
                       </button>
                     )}
-                    <p className="text-xs text-emerald-200 mt-4">لو الميكروفون مش شغال — بديل يدوي (اختياري):</p>
+                    {(followError || followMicDenied) && (<>
+                    <p className="text-xs text-emerald-200 mt-4">الميكروفون مش شغال؟ اكتب الآية أو كلمات منها:</p>
                     <div className="flex gap-2 mt-2">
                       <input value={followManual} onChange={(e) => setFollowManual(e.target.value)}
-                        placeholder="اكتب كلمات سمعتها من الإمام..."
+                        placeholder="اكتب الآية هنا..."
                         className="flex-1 px-3 py-2.5 rounded-xl text-sm text-accent-800 bg-white/95 border border-emerald-200 focus:outline-none" />
                       <button onClick={() => { enterFollowMode(); manualFollowLock(); }}
                         disabled={followIndexLoading}
                         className="px-4 py-2.5 bg-white/15 hover:bg-white/25 disabled:opacity-60 text-white text-sm font-bold rounded-xl">ابحث</button>
                     </div>
+                    </>)}
                   </>
                 ) : (
                   <>
