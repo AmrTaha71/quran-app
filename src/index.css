@@ -748,12 +748,12 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
    per state so the swap is a single-line change. Clean edges, no glow,
    no pulse; inset vertically so a box never bleeds into the next line. */
 :root {
-  --mushaf-hl-rgb: 186, 222, 248; /* 2026-11-20: sky-blue like the reference app (#D8ECF8 on white) */
+  --mushaf-hl-rgb: 176, 200, 168; /* 2026-11-20: oil-green (زيتي), chosen by Dr. Amr from 8 candidates on the real page */
 }
 .mushaf-hl {
   position: absolute;
   pointer-events: none;
-  /* flat pastel band, no border/shadow; multiply keeps the black text crisp
+  /* flat muted-green band, no border/shadow; multiply keeps the black text crisp
      and lets the page paper show through (reference: Madinah Mushaf app) */
   background: rgb(var(--mushaf-hl-rgb));
   mix-blend-mode: multiply;
@@ -764,7 +764,7 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
 .mushaf-hl--current { background: rgb(var(--mushaf-hl-rgb)); box-shadow: none; }
 .mushaf-hl--passed { background: rgba(var(--mushaf-hl-rgb), 0.6); box-shadow: none; }
 .mushaf-hl--ahead { background: rgba(var(--mushaf-hl-rgb), 0.25); box-shadow: none; }
-@keyframes mushaf-reveal-pop { from { background-color: rgba(186,222,248,0.9); } to { background-color: rgba(186,222,248,0); } }
+@keyframes mushaf-reveal-pop { from { background-color: rgba(176,200,168,0.9); } to { background-color: rgba(176,200,168,0); } }
 .mushaf-reveal-pop { animation: mushaf-reveal-pop 700ms ease-out forwards; mix-blend-mode: multiply; }
 @media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } }
 
