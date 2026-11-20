@@ -20,6 +20,7 @@ export const ALL_ROUTES = [
   'room',
   'hifz',
   'quiz',
+  'home2',
 ] as const;
 
 export type Route = (typeof ALL_ROUTES)[number];

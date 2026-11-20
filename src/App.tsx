@@ -32,6 +32,7 @@ import AdhkarPage from './pages/AdhkarPage';
 import RadioPage from './pages/RadioPage';
 import SharedRoomPage from './pages/SharedRoomPage';
 import HifzPage from './pages/HifzPage';
+import Home2Page from './pages/Home2Page';
 import QuizPage from './pages/QuizPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
@@ -58,14 +59,14 @@ import type { Route } from './lib/routes';
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are
 // excluded: a SIGNED_OUT there is normal, not an expiry.
-const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room', 'hifz', 'quiz'];
+const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room', 'hifz', 'quiz', 'home2'];
 
 // Routes that show the shell back control (2026-11-06, back-button
 // part 1; moved to the bottom-left in wave 2, W2-3): every tab route
 // goes back to الرئيسية unless the page registered an internal target
 // (open Settings door, Listen detail view, SelfTest sub-view). Home,
 // landing, auth, admin and splash never show it.
-const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room'];
+const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room', 'home2'];
 // Screen stays awake ONLY on these (W2-5): the Mushaf (mushaf/follow),
 // tasmee (test) and Listen. Mounted in the shell by route so the lock is
 // released the moment the user leaves; no other page is listed.
@@ -579,6 +580,8 @@ function AppContent() {
     // The wrapper above IS the page on these routes — nothing else
     // renders beside it.
     page = null;
+  } else if (route === 'home2') {
+    page = <Home2Page onNavigate={navigate} />;
   } else if (route === 'hifz') {
     page = <HifzPage onNavigate={navigate} />;
   } else if (route === 'quiz') {
