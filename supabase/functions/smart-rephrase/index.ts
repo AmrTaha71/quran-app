@@ -8,13 +8,13 @@ const corsHeaders = {
 
 // Estimated-cost log for the Admin OpenAI balance monitor.
 // Best-effort: any failure is swallowed so logging never breaks a response.
-async function logUsage(functionName: string, model: string, costUsd: number) {
+async function logUsage(functionName: string, model: string, costUsd: number, userId?: string) {
   try {
     const url = Deno.env.get("SUPABASE_URL");
     const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!url || !key) return;
     const client = createClient(url, key);
-    await client.from("ai_usage_events").insert({ function_name: functionName, model, cost_usd: costUsd });
+    await client.from("ai_usage_events").insert({ function_name: functionName, model, cost_usd: costUsd, user_id: userId ?? null });
   } catch { /* ignore logging errors */ }
 }
 
@@ -94,8 +94,44 @@ Deno.serve(async (req: Request) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
   try {
+    // v8 (2026-11-20, security): admin-only + daily cap. The function is
+    // deployed with verify_jwt=false, so the check is done here: a real
+    // user JWT is required (the anon key resolves to no user) and that
+    // user must be in admin_users. Without this, anyone could drain the
+    // OpenAI balance.
+    const authToken = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const sbUrl = Deno.env.get("SUPABASE_URL")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    if (!authToken) {
+      return new Response(JSON.stringify({ error: "تسجيل الدخول مطلوب" }), { status: 401, headers: jsonHeaders });
+    }
+    const authClient = createClient(sbUrl, anonKey, { global: { headers: { Authorization: `Bearer ${authToken}` } } });
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "تسجيل الدخول مطلوب" }), { status: 401, headers: jsonHeaders });
+    }
+    const svc = createClient(sbUrl, svcKey);
+    const { data: adminRow } = await svc.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle();
+    if (!adminRow) {
+      return new Response(JSON.stringify({ error: "هذه الخدمة للمشرفين فقط" }), { status: 403, headers: jsonHeaders });
+    }
+    const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    const { count: usedToday } = await svc.from("ai_usage_events").select("id", { count: "exact", head: true })
+      .eq("function_name", "smart-rephrase").gte("created_at", since);
+    if ((usedToday ?? 0) >= 300) {
+      return new Response(JSON.stringify({ error: "تم بلوغ الحد اليومي لإعادة الصياغة" }), { status: 429, headers: jsonHeaders });
+    }
+
     const { text, command, mode } = await req.json();
+    if (typeof text === "string" && text.length > 6000) {
+      return new Response(JSON.stringify({ error: "النص طويل جدًا" }), { status: 413, headers: jsonHeaders });
+    }
+    if (command !== undefined && command !== null && (typeof command !== "string" || command.length > 500)) {
+      return new Response(JSON.stringify({ error: "الأمر غير صالح" }), { status: 400, headers: jsonHeaders });
+    }
 
     if (!text || typeof text !== "string") {
       return new Response(
@@ -168,7 +204,7 @@ Deno.serve(async (req: Request) => {
     // gpt-4o list prices: $2.50/1M input tokens, $10/1M output tokens.
     const usage = data.usage || {};
     await logUsage("smart-rephrase", "gpt-4o",
-      (usage.prompt_tokens || 0) * 0.0000025 + (usage.completion_tokens || 0) * 0.00001);
+      (usage.prompt_tokens || 0) * 0.0000025 + (usage.completion_tokens || 0) * 0.00001, user.id);
 
     return new Response(
       JSON.stringify({ rephrased, ai_used: true }),
@@ -181,4 +217,4 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
-// force redeploy Sun Oct 11 13:28:30 UTC 2026
+// v8 admin-only + daily cap 2026-11-20

@@ -85,7 +85,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}`,
         },
         body: JSON.stringify({ text, command }),
       });

@@ -384,7 +384,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-rephrase`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}` },
         body: JSON.stringify({ text: link.link_content, command: cmd || undefined, mode: 'rephrase' }),
       });
       if (!res.ok) throw new Error('فشل');
