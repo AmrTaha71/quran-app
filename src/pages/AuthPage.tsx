@@ -139,7 +139,7 @@ export default function AuthPage({
     setError('');
     setProfileWarning('');
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setError(t('passwordTooShort'));
       return;
     }
@@ -194,7 +194,7 @@ export default function AuthPage({
         setError('تم تجاوز عدد المحاولات. انتظر دقيقة ثم حاول مرة أخرى.');
         setLoading(false);
       } else if (error.message.includes('password')) {
-        setError('كلمة المرور ضعيفة. استخدم ٦ أحرف على الأقل.');
+        setError('كلمة المرور ضعيفة. استخدم ٨ أحرف على الأقل.');
         setLoading(false);
       } else {
         setError(error.message);
@@ -287,7 +287,7 @@ export default function AuthPage({
     e.preventDefault();
     setError('');
     setSuccess('');
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       setError(t('passwordTooShort'));
       return;
     }
