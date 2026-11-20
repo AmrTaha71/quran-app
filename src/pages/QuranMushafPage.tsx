@@ -4334,14 +4334,15 @@ export default function QuranMushafPage({
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
                 <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تتبع الإمام</p>
-                {followHelpShow && (followHelpOpen ? (<>
+                {followHelpShow && (<>
+                {followHelpOpen && (<>
                 <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس.</p>
                 <p className="text-sm text-emerald-100 leading-relaxed mt-1">اضغط «ابدأ الاستماع للإمام»، والتطبيق بيتابع الآيات معاك.</p>
-                <button type="button" onClick={() => { try { localStorage.setItem(FOLLOW_HELP_KEY, '99'); } catch { /* ignore */ } setFollowHelpOpen(false); }}
-                  className="mt-2 text-xs underline text-amber-200">فهمت، مش محتاج التعليمات تاني</button>
-                </>) : (
-                  <button type="button" onClick={() => setFollowHelpOpen(true)} className="mt-2 text-xs underline text-amber-200">التعليمات</button>
-                ))}
+                <button type="button" onClick={() => setFollowHelpOpen(false)}
+                  className="mt-2 ml-3 text-xs underline text-amber-200">فهمت</button>
+                </>)}
+                <button type="button" onClick={() => setFollowHelpOpen((o) => !o)} className="mt-2 block text-xs underline text-amber-200">التعليمات</button>
+                </>)}
                 {followReady ? (
                   <>
                     {/* The start button also (re-)enters follow mode:
