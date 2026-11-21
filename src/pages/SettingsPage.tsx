@@ -7,7 +7,7 @@ import ShareSheet from '../components/ShareSheet';
 import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
-import { MUSHAF_THEMES, loadThemeId, saveThemeId, type MushafThemeId } from '../lib/mushafThemes';
+import { MUSHAF_THEMES, THEME_HIGHLIGHTS, loadThemeId, saveThemeId, loadHl, saveHl, type MushafThemeId } from '../lib/mushafThemes';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
@@ -126,6 +126,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // "Digital Mushaf" (colour-changeable text page) is a choice here, not only a button inside the Mushaf.
   const [digitalOn, setDigitalOn] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
   const [themeId, setThemeIdState] = useState<MushafThemeId>(loadThemeId);
+  const [hlRgb, setHlRgb] = useState<string>(() => loadHl(loadThemeId()));
   const pickDigital = () => {
     setDigitalOn(true); setEditionIdx(0); setPreviewFailed(false);
     try { localStorage.setItem('quran-mushaf-digital', '1'); localStorage.setItem('quran-mushaf-edition', '0'); } catch { /* ignore */ }
@@ -906,7 +907,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             {digitalOn && (
               <div className="sm:col-span-2 grid grid-cols-5 gap-2">
                 {MUSHAF_THEMES.map((t) => (
-                  <button key={t.id} onClick={() => { setThemeIdState(t.id); saveThemeId(t.id); saved(); }}
+                  <button key={t.id} onClick={() => { setThemeIdState(t.id); saveThemeId(t.id); setHlRgb(loadHl(t.id)); saved(); }}
                     className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${themeId === t.id ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
                     <span className="w-full h-10 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
                       <span style={{ background: `rgba(${t.hl}, 0.85)`, padding: '0 4px', borderRadius: 4 }}>أ</span>
@@ -914,6 +915,19 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="text-[11px] text-accent-800 leading-tight text-center">{t.name}</span>
                   </button>
                 ))}
+                <p className="col-span-5 text-xs font-bold text-accent-700 mt-1">لون التظليل المناسب</p>
+                {THEME_HIGHLIGHTS[themeId].map((h) => {
+                  const t = MUSHAF_THEMES.find((x) => x.id === themeId)!;
+                  return (
+                    <button key={h.id} onClick={() => { setHlRgb(h.rgb); saveHl(themeId, h.rgb); saved(); }}
+                      className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${hlRgb === h.rgb ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
+                      <span className="w-full h-8 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
+                        <span style={{ background: `rgba(${h.rgb}, 0.9)`, padding: '0 6px', borderRadius: 4 }}>بِسْمِ</span>
+                      </span>
+                      <span className="text-[11px] text-accent-800 leading-tight text-center">{h.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
             {EDITIONS.map((ed, i) => (

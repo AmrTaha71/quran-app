@@ -45,3 +45,60 @@ export function adaptRuleColor(hex: string, dark: boolean): string {
   const mix = (c: number) => Math.round(c + (255 - c) * 0.5);
   return `rgb(${mix((n >> 16) & 255)}, ${mix((n >> 8) & 255)}, ${mix(n & 255)})`;
 }
+
+// Matching highlight colours per page colour (2026-11-21, Dr. Amr): the usual reading-app pairings —
+// the first one of each list is the theme's default. "r, g, b" strings for --mushaf-hl-rgb.
+export type HlOption = { id: string; name: string; rgb: string };
+export const THEME_HIGHLIGHTS: Record<MushafThemeId, HlOption[]> = {
+  ivory: [
+    { id: 'green', name: 'أخضر فاتح', rgb: '176, 200, 168' },
+    { id: 'gray', name: 'رمادي هادئ', rgb: '205, 205, 205' },
+    { id: 'sky', name: 'أزرق سماوي', rgb: '176, 208, 232' },
+    { id: 'rose', name: 'وردي هادئ', rgb: '240, 198, 200' },
+    { id: 'gold', name: 'ذهبي فاتح', rgb: '234, 214, 150' },
+  ],
+  white: [
+    { id: 'babyblue', name: 'بيبي بلو', rgb: '190, 214, 238' },
+    { id: 'yellow', name: 'أصفر هادئ', rgb: '255, 236, 150' },
+    { id: 'mint', name: 'نعناعي', rgb: '190, 232, 205' },
+    { id: 'pink', name: 'وردي فاتح', rgb: '248, 200, 214' },
+    { id: 'gray', name: 'رمادي', rgb: '210, 210, 210' },
+  ],
+  sepia: [
+    { id: 'amber', name: 'عنبري', rgb: '214, 178, 124' },
+    { id: 'olive', name: 'زيتوني فاتح', rgb: '188, 196, 140' },
+    { id: 'slate', name: 'أزرق رمادي', rgb: '170, 190, 205' },
+    { id: 'clay', name: 'وردي ترابي', rgb: '226, 176, 164' },
+    { id: 'gold', name: 'ذهبي', rgb: '232, 200, 110' },
+  ],
+  mint: [
+    { id: 'lemon', name: 'أصفر ليموني', rgb: '244, 226, 150' },
+    { id: 'green', name: 'أخضر أغمق', rgb: '150, 200, 160' },
+    { id: 'sky', name: 'أزرق فاتح', rgb: '176, 210, 232' },
+    { id: 'peach', name: 'خوخي', rgb: '244, 200, 170' },
+    { id: 'lilac', name: 'بنفسجي هادئ', rgb: '208, 196, 230' },
+  ],
+  night: [
+    { id: 'green', name: 'أخضر خافت', rgb: '92, 128, 104' },
+    { id: 'gold', name: 'ذهبي خافت', rgb: '150, 130, 70' },
+    { id: 'blue', name: 'أزرق ليلي', rgb: '80, 110, 150' },
+    { id: 'violet', name: 'بنفسجي', rgb: '120, 100, 150' },
+    { id: 'gray', name: 'رمادي', rgb: '100, 110, 110' },
+  ],
+};
+
+const HL_KEY = 'quran-mushaf-hl:';
+
+/** The highlight the reader picked for this page colour (falls back to the theme's own default). */
+export function loadHl(themeId: MushafThemeId): string {
+  const list = THEME_HIGHLIGHTS[themeId];
+  try {
+    const id = localStorage.getItem(HL_KEY + themeId);
+    return (list.find((h) => h.id === id) ?? list[0]).rgb;
+  } catch { return list[0].rgb; }
+}
+
+export function saveHl(themeId: MushafThemeId, rgb: string): void {
+  const h = THEME_HIGHLIGHTS[themeId].find((x) => x.rgb === rgb);
+  try { if (h) localStorage.setItem(HL_KEY + themeId, h.id); } catch { /* ignore */ }
+}

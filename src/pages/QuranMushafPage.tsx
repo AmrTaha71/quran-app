@@ -41,7 +41,7 @@ import ShareButton from '../components/ShareButton';
 import MushafHighlightLayer from '../components/mushaf/MushafHighlightLayer';
 import { insetHighlightBox } from '../components/mushaf/highlightGeometry';
 import DigitalPageLayer, { pageIsFullyDigital } from '../components/mushaf/DigitalPageLayer';
-import { MUSHAF_THEMES, themeById, loadThemeId, saveThemeId, type MushafThemeId } from '../lib/mushafThemes';
+import { MUSHAF_THEMES, THEME_HIGHLIGHTS, themeById, loadThemeId, saveThemeId, loadHl, saveHl, type MushafThemeId } from '../lib/mushafThemes';
 import { loadTajweed, type TajweedMap } from '../lib/tajweedWords';
 import { TAJWEED_RULES } from '../lib/tajweedColors';
 import { BackButton } from '../components/BackButton';
@@ -412,7 +412,8 @@ export default function QuranMushafPage({
   // Page colour of the standalone digital page (calm backgrounds, own ink + highlight each).
   const [mushafThemeId, setMushafThemeId] = useState<MushafThemeId>(loadThemeId);
   const [showThemePicker, setShowThemePicker] = useState(false);
-  const mushafTheme = themeById(mushafThemeId);
+  const [mushafHl, setMushafHl] = useState<string>(() => loadHl(loadThemeId()));
+  const mushafTheme = { ...themeById(mushafThemeId), hl: mushafHl };
   useEffect(() => {
     if (!digitalView || tajweedMap) return;
     let alive = true;
@@ -4804,12 +4805,24 @@ export default function QuranMushafPage({
                   </div>
                   <div className="grid grid-cols-5 gap-2">
                     {MUSHAF_THEMES.map((t) => (
-                      <button key={t.id} onClick={() => { setMushafThemeId(t.id); saveThemeId(t.id); }}
+                      <button key={t.id} onClick={() => { setMushafThemeId(t.id); saveThemeId(t.id); setMushafHl(loadHl(t.id)); }}
                         className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${mushafThemeId === t.id ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
                         <span className="w-full h-9 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
                           <span style={{ background: `rgba(${t.hl}, 0.85)`, padding: '0 4px', borderRadius: 4 }}>أ</span>
                         </span>
                         <span className="text-[11px] text-accent-800 leading-tight text-center">{t.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2.5 mb-1 text-xs font-bold text-emerald-900">لون التظليل المناسب للون الصفحة</p>
+                  <div className="flex gap-2">
+                    {THEME_HIGHLIGHTS[mushafThemeId].map((h) => (
+                      <button key={h.id} onClick={() => { setMushafHl(h.rgb); saveHl(mushafThemeId, h.rgb); }}
+                        className={`flex-1 flex flex-col items-center gap-1 rounded-xl p-1.5 ${mushafHl === h.rgb ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
+                        <span className="w-full h-7 rounded-lg" style={{ background: mushafTheme.bg, boxShadow: `inset 0 0 0 1.5px ${mushafTheme.frame}` }}>
+                          <span className="block mx-1.5 mt-2 h-3 rounded" style={{ background: `rgba(${h.rgb}, 0.9)` }} />
+                        </span>
+                        <span className="text-[10px] text-accent-800 leading-tight text-center">{h.name}</span>
                       </button>
                     ))}
                   </div>
