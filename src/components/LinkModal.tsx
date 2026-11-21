@@ -209,7 +209,7 @@ export default function LinkModal({
         const transcriptText = deduplicateTranscript(rawTranscript);
 
         try {
-          const fileName = `rana-${Date.now()}.webm`;
+          const fileName = `rana-${Date.now()}.${(blob.type || '').includes('mp4') ? 'm4a' : 'webm'}`;
           await supabase.storage.from('rana-audio').upload(fileName, blob);
           const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
           setAudioPublicUrl(urlData.publicUrl);
@@ -263,16 +263,32 @@ export default function LinkModal({
 
       // The audio is stored for Rana's approval (see approveRecording); the
       // transcript itself is made on the device, so no paid edge call (2026-11-10).
+      let uploadedUrl: string | null = null;
       if (!existingUrl) {
-        const fileName = `rana-${Date.now()}.webm`;
+        const fileName = `rana-${Date.now()}.${(audioBlob.type || '').includes('mp4') ? 'm4a' : 'webm'}`;
         const { error: upErr } = await supabase.storage.from('rana-audio').upload(fileName, audioBlob);
         if (upErr) throw new Error('فشل رفع الملف الصوتي');
 
         const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
         setAudioPublicUrl(urlData.publicUrl);
+        uploadedUrl = urlData.publicUrl;
       }
 
-      const transcript = (await transcribeBlob(audioBlob)) ?? '';
+      // Spoken explanations (not recitation) are transcribed best by the speech service; the on-device
+      // Quran model only reads recitation and garbles ordinary speech. It is the fallback.
+      let transcript = '';
+      const clipUrl = existingUrl ?? uploadedUrl;
+      if (clipUrl) {
+        try {
+          const er = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ audioUrl: clipUrl }),
+          });
+          if (er.ok) transcript = String((await er.json())?.transcript ?? '');
+        } catch { /* fall back below */ }
+      }
+      if (!transcript.trim()) transcript = (await transcribeBlob(audioBlob)) ?? '';
       if (!transcript.trim()) {
         setError('تعذر التحويل التلقائي. اكتبي النص يدوياً بالأسفل.');
         setPhase('input');
@@ -355,7 +371,11 @@ export default function LinkModal({
       }
       const result = data.rephrased || text;
       // Filter out placeholder text
-      const finalResult = (result.includes('لم يتم تكوين') || result.includes('نص تجريبي')) ? text : result;
+      // The model sometimes answers a garbled transcript with an apology / question instead of a rewrite.
+      // That must never become the ayah's text (or get turned into a voice): keep the original and warn.
+      const looksLikeRefusal = /^\s*(عذر[اً]|عذرًا|آسف|أعتذر|لا أستطيع|يبدو أن النص|هل يمكنك)/.test(result);
+      const finalResult = (result.includes('لم يتم تكوين') || result.includes('نص تجريبي') || looksLikeRefusal) ? text : result;
+      if (looksLikeRefusal) setError('النص المنطوق مش واضح فالذكاء الاصطناعي ما قدرش يصيغه. راجعي النص أو عدّليه بإيدك، أو سجّلي المقطع تاني.');
       setRephrasedText(finalResult);
       // Voice source follows the edit rule: keep_original = original
       // side (not an edit); a rephrase with her own command = her edit.
