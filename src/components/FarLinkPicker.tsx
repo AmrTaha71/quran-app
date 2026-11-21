@@ -1,6 +1,7 @@
 // Admin: pick the OTHER ayah for a far link (anywhere in the Mushaf). Asks first whether it is on the same
 // Mushaf page; then shows that page's ayat as number chips; the chosen ayah appears in a small window beside
 // the page list so the admin can check it before linking.
+import { blankMarks } from '../lib/arabicNormalize';
 import { useEffect, useState } from 'react';
 import { X, Link2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -56,7 +57,7 @@ export default function FarLinkPicker({ from, onPick, onClose }: { from: QuranVe
         <div className="p-4 space-y-3">
           <div className="text-xs bg-emerald-50 rounded-xl p-2.5">
             <b className="text-emerald-800">{from.surah_name} — آية {from.ayah_no}</b> (صفحة {fromPage})
-            <p className="font-arabic text-sm text-accent-700 line-clamp-2 mt-0.5">{from.ayah_text}</p>
+            <p className="font-arabic text-sm text-accent-700 line-clamp-2 mt-0.5">{blankMarks(from.ayah_text)}</p>
           </div>
 
           <p className="font-semibold text-accent-800 text-sm">الآية التانية في نفس صفحة المصحف؟</p>
@@ -96,7 +97,7 @@ export default function FarLinkPicker({ from, onPick, onClose }: { from: QuranVe
           {chosen && (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3">
               <p className="text-xs font-bold text-amber-800 mb-1">{chosen.surah_name} — آية {chosen.ayah_no} (صفحة {madinahPageOfAyah(chosen.surah_no, chosen.ayah_no)})</p>
-              <p className="font-arabic text-base text-accent-800 leading-loose">{chosen.ayah_text}</p>
+              <p className="font-arabic text-base text-accent-800 leading-loose">{blankMarks(chosen.ayah_text)}</p>
             </div>
           )}
 

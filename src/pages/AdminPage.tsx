@@ -1,3 +1,4 @@
+import { blankMarks } from '../lib/arabicNormalize';
 import DrumSelect from '../components/DrumSelect';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
@@ -980,7 +981,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                             {verse.has_links ? 'لها تربيط' : 'بدون تربيط'}
                           </span>
                         </div>
-                        <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{verse.ayah_text}</p>
+                        <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{blankMarks(verse.ayah_text)}</p>
 
                         {showLinksFor === verse.id && verseLinks.length > 0 && (
                           <div className="mt-3 space-y-1.5 animate-slide-up">
@@ -1121,7 +1122,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       )}
                       {verse && (
                         <div className="mb-2 text-xs text-accent-600">
-                          {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{verse.ayah_text?.slice(0, 80)}...</span>
+                          {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{blankMarks(verse.ayah_text ?? '').slice(0, 80)}...</span>
                         </div>
                       )}
                       <div className="flex items-center gap-2 mb-2 flex-wrap">

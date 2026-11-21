@@ -177,7 +177,11 @@ export default function LinkModal({
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Clean take: ask the device to cancel echo / noise and level the voice (a bare `audio: true`
+      // left room echo and speaker bleed in the saved clip, which the generated voices then copied).
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      });
       // Safari does not support audio/webm; fall back to audio/mp4 there.
       const mimeType = MediaRecorder.isTypeSupported('audio/webm')
         ? 'audio/webm'
