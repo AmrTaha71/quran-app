@@ -162,7 +162,11 @@ export default function LinkModal({
       setLiveTranscript('');
 
       // Start browser SpeechRecognition for live transcription
-      if (recognitionRef.current) {
+      // On Apple browsers the live speech recogniser and the recorder fight over the same mic and the saved
+      // clip comes out doubled / echoing even though the voice itself was clear. There the clip is recorded
+      // alone and transcribed afterwards (same path as a recording without live text).
+      const isApple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+      if (recognitionRef.current && !isApple) {
         try { recognitionRef.current.start(); } catch {}
       }
 
