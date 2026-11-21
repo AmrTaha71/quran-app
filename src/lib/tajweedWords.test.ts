@@ -68,3 +68,15 @@ describe('tajweed words vs page boxes', () => {
     assert.ok(words[1].segs.some((s) => s.rule === 'lam_shamsiyyah') || words[2].segs.some((s) => s.rule === 'lam_shamsiyyah'));
   });
 });
+
+describe('digital pages', () => {
+  it('all 604 pages have digital words (only the 4 mismatched ayat keep the scan)', () => {
+    const have = new Set(rows.map((r) => `${r.surah}:${r.ayah}`));
+    let pages = 0;
+    for (let p = 1; p <= 604; p++) {
+      const j = JSON.parse(fs.readFileSync(path.join(root, 'public/mushaf-boxes', `${String(p).padStart(3, '0')}.json`), 'utf8')) as { w: number[][] };
+      if (j.w.some(([s, a]) => have.has(`${s}:${a}`) && !TAJWEED_MISMATCH.has(`${s}:${a}`))) pages++;
+    }
+    assert.equal(pages, 604);
+  });
+});

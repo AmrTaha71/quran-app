@@ -14,19 +14,25 @@ const FONT = "'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 
 function Word({ word, wPx, hPx, box }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox }) {
   const inner = useRef<HTMLSpanElement | null>(null);
-  const [k, setK] = useState(1);
-  const size = Math.max(8, hPx * 0.78);
-  // Stretch / squeeze the word to its box width (the scan's widths differ from the font's).
+  const [fit, setFit] = useState({ size: Math.max(8, hPx * 0.95), k: 1 });
+  // Largest font that keeps the line's shape: start from almost the box height, shrink only if the word is
+  // wider than its box (so a long word is never squeezed to a sliver), then stretch / squeeze a little (0.8-1.25)
+  // to land exactly on the scan's box width.
   useLayoutEffect(() => {
     const el = inner.current;
-    if (!el || wPx <= 0) return;
+    if (!el || wPx <= 0 || hPx <= 0) return;
+    const base = Math.max(8, hPx * 0.95);
+    el.style.fontSize = `${base}px`;
     const natural = el.offsetWidth; // not affected by transforms
-    if (natural > 0) setK(Math.min(1.35, Math.max(0.55, wPx / natural)));
-  }, [wPx, size, word]);
+    if (natural <= 0) return;
+    const size = Math.max(8, natural > wPx * 1.25 ? base * (wPx * 1.25) / natural : base);
+    const at = natural * (size / base);
+    setFit({ size, k: Math.min(1.25, Math.max(0.8, wPx / at)) });
+  }, [wPx, hPx, word]);
   return (
     <div className="absolute flex items-center justify-center overflow-visible"
       style={{ left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%`, background: PAPER, boxShadow: `0 0 0 1.5px ${PAPER}` }}>
-      <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: size, lineHeight: 1, whiteSpace: 'nowrap', color: TAJWEED_INK, transform: `scaleX(${k})`, transformOrigin: 'center' }}>
+      <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: fit.size, lineHeight: 1, whiteSpace: 'nowrap', color: TAJWEED_INK, transform: `scaleX(${fit.k})`, transformOrigin: 'center' }}>
         {word.segs.map((s, i) => <span key={i} style={s.rule ? { color: ruleColor(s.rule) } : undefined}>{s.text}</span>)}
       </span>
     </div>
