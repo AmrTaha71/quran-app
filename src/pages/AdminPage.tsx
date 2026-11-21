@@ -12,10 +12,12 @@ import { SURAHS } from '../lib/surahs';
 import {
   BookOpen, LogOut, Search, Bookmark, Settings, Trash2,
   ChevronRight, ChevronLeft, Download, Filter, X,
-  Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic,
+  Check, Link2, Layers, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic,
 } from 'lucide-react';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
+import FarLinkPicker from '../components/FarLinkPicker';
+import { madinahPageOfAyah } from '../lib/madinahPageStarts';
 import type { Route } from '../lib/routes';
 
 
@@ -48,10 +50,22 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [balanceDraft, setBalanceDraft] = useState('5');
   const [editingBalance, setEditingBalance] = useState(false);
   // Dashboard sub-doors (2026-11-08): one panel open at a time, all closed by default.
-  const [openPanel, setOpenPanel] = useState<'progress' | 'users' | 'openai' | null>(null);
-  const toggleFor = (p: 'progress' | 'users' | 'openai') => setOpenPanel((cur) => (cur === p ? null : p));
+  const [openPanel, setOpenPanel] = useState<'progress' | 'users' | 'openai' | 'records' | null>(null);
+  const toggleFor = (p: 'progress' | 'users' | 'openai' | 'records') => setOpenPanel((cur) => (cur === p ? null : p));
   const [usageError, setUsageError] = useState('');
   const [linkModalVerse, setLinkModalVerse] = useState<QuranVerse | null>(null);
+  // Merge (any number of consecutive ayat of one surah -> ONE link) and far link (ayah <-> any other ayah).
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSel, setMergeSel] = useState<QuranVerse[]>([]);
+  const [linkModalGroup, setLinkModalGroup] = useState<QuranVerse[] | undefined>(undefined);
+  const [linkModalRelated, setLinkModalRelated] = useState<QuranVerse | null>(null);
+  const [farFrom, setFarFrom] = useState<QuranVerse | null>(null);
+  // usernames of suggested-link authors (admin-only RPC) + queue filter
+  const [authors, setAuthors] = useState<Record<string, string>>({});
+  const [pendingFilter, setPendingFilter] = useState<'all' | 'users' | 'admin'>('all');
+  // records panel (loaded lazily when opened)
+  const [rec, setRec] = useState<null | { links: number; merged: number; far: number; versesLinked: number; pages: number; today: number; bestDay: { day: string; n: number } | null; longestMerge: number; byUsers: number; byAdmins: number }>(null);
+  const [recLoading, setRecLoading] = useState(false);
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [showLinksFor, setShowLinksFor] = useState<number | null>(null);
 
@@ -287,6 +301,66 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     setUserStatsError('');
   }, []);
   useEffect(() => { fetchUserStats(); }, [fetchUserStats]);
+
+  // Admin-only numbers: links, ayat linked, Mushaf pages covered, records. Loaded when the panel opens.
+  const loadRecords = useCallback(async () => {
+    setRecLoading(true);
+    try {
+      const links: { verse_id: number; group_verse_ids: number[] | null; related_verse_id: number | null; created_at: string; created_by: string | null; is_ai_draft: boolean | null; audio_url: string | null }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('ayah_links')
+          .select('verse_id,group_verse_ids,related_verse_id,created_at,created_by,is_ai_draft,audio_url')
+          .eq('status', 'approved').order('id', { ascending: true }).range(from, from + 999);
+        if (error || !data) throw error;
+        links.push(...(data as typeof links));
+        if (data.length < 1000) break;
+      }
+      const idToAyah = new Map<number, [number, number]>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('quran_verses').select('id,surah_no,ayah_no').order('id', { ascending: true }).range(from, from + 999);
+        if (error || !data) throw error;
+        data.forEach((r) => idToAyah.set(r.id as number, [r.surah_no as number, r.ayah_no as number]));
+        if (data.length < 1000) break;
+      }
+      const linked = new Set<number>();
+      let merged = 0, far = 0, longest = 1;
+      const perDay: Record<string, number> = {};
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const adminSet = adminIds;
+      let byUsers = 0;
+      links.forEach((l) => {
+        linked.add(l.verse_id);
+        if (l.group_verse_ids && l.group_verse_ids.length > 1) { merged++; l.group_verse_ids.forEach((v) => linked.add(v)); longest = Math.max(longest, l.group_verse_ids.length); }
+        if (l.related_verse_id) { far++; linked.add(l.related_verse_id); }
+        const day = (l.created_at || '').slice(0, 10);
+        if (day) perDay[day] = (perDay[day] || 0) + 1;
+        if (adminSet && l.created_by && !adminSet.has(l.created_by) && !l.audio_url && !l.is_ai_draft) byUsers++;
+      });
+      const pages = new Set<number>();
+      linked.forEach((id) => { const a = idToAyah.get(id); if (a) pages.add(madinahPageOfAyah(a[0], a[1])); });
+      const best = Object.entries(perDay).sort((a, b) => b[1] - a[1])[0];
+      setRec({
+        links: links.length, merged, far, versesLinked: linked.size, pages: pages.size,
+        today: perDay[todayKey] || 0, bestDay: best ? { day: best[0], n: best[1] } : null,
+        longestMerge: longest, byUsers, byAdmins: links.length - byUsers,
+      });
+    } catch {
+      setAdminError('تعذّر تحميل الأرقام — حاول تاني.');
+    }
+    setRecLoading(false);
+  }, [adminIds]);
+  useEffect(() => { if (openPanel === 'records' && !rec && !recLoading) loadRecords(); }, [openPanel, rec, recLoading, loadRecords]);
+
+  // Usernames for the review queue (only the authors of non-admin rows).
+  useEffect(() => {
+    if (!showPending || !adminIds) return;
+    const ids = Array.from(new Set(pendingLinks.map((l) => l.created_by).filter((x): x is string => !!x && !adminIds.has(x) && !(x in authors))));
+    if (ids.length === 0) return;
+    supabase.rpc('admin_link_authors', { ids }).then(({ data, error }) => {
+      if (error || !data) return;
+      setAuthors((cur) => { const n = { ...cur }; (data as { user_id: string; username: string | null; display_name: string | null }[]).forEach((r) => { n[r.user_id] = r.username || r.display_name || 'مستخدم'; }); ids.forEach((i) => { if (!(i in n)) n[i] = 'مستخدم'; }); return n; });
+    });
+  }, [showPending, pendingLinks, adminIds, authors]);
   useEffect(() => { fetchStats(); }, [fetchStats, verses]);
 
   useEffect(() => {
@@ -561,6 +635,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     );
   }
 
+  // A pending row is a user suggestion only when its creator is positively a non-admin AND it carries no recording
+  // (same rule as the old badge); everything else is admin work.
+  const isUserSuggestion = (l: AyahLink) => !l.is_ai_draft && !!l.created_by && adminIds !== null && !adminIds.has(l.created_by) && !l.audio_url;
+  const pendingList = pendingFilter === 'all' ? pendingLinks : pendingLinks.filter((l) => (pendingFilter === 'users') === isUserSuggestion(l));
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const linkedPercentage = Math.round((stats.withLinks / TOTAL_VERSES) * 100);
   const remaining = TOTAL_VERSES - stats.withLinks;
@@ -603,6 +682,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 <Clock className="w-4 h-4" /> مراجعة ({pendingLinks.length})
               </button>
             )}
+            <button onClick={() => { setMergeMode((m) => !m); setMergeSel([]); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-smooth font-semibold border ${mergeMode ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-hairline-emerald hover:bg-emerald-100'}`}>
+              <Layers className="w-4 h-4" /> دمج آيات
+            </button>
             <button onClick={() => onNavigate('mushaf')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link hover:bg-amber-50 rounded-lg transition-smooth font-semibold">
               <BookOpen className="w-4 h-4" /> المصحف
@@ -633,6 +716,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           {([
             ['progress', 'تقدم التربيطات'],
             ['users', 'المستخدمين'],
+            ['records', 'الأرقام والسجلات'],
             ['openai', 'رصيد OpenAI'],
           ] as const).map(([key, label]) => (
             <button
@@ -692,6 +776,42 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* OpenAI balance monitor — estimated from app-side usage logging */}
+        {/* Numbers + records — admin only (this whole page is admin-only) */}
+        <div className={`bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm ${openPanel === 'records' ? '' : 'hidden'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-accent-800">الأرقام والسجلات</h3>
+            <button onClick={() => { setRec(null); }} disabled={recLoading} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-lg disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${recLoading ? 'animate-spin' : ''}`} /> تحديث
+            </button>
+          </div>
+          {!rec ? (
+            <div className="py-6 text-center"><Loader2 className="w-6 h-6 mx-auto animate-spin text-emerald-500" /></div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {([
+                ['عدد التربيطات', rec.links],
+                ['آيات مربوطة', rec.versesLinked],
+                ['صفحات مصحف مغطّاة', `${rec.pages} / 604`],
+                ['تربيطات اليوم', rec.today],
+                ['تربيطات مدموجة', rec.merged],
+                ['تربيطات بعيدة', rec.far],
+                ['أطول دمج (آيات)', rec.longestMerge],
+                ['اقتراحات المستخدمين المعتمدة', rec.byUsers],
+              ] as [string, number | string][]).map(([k, v]) => (
+                <div key={k} className="bg-emerald-50/60 border border-hairline-emerald rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-800">{typeof v === 'number' ? v.toLocaleString('ar-EG') : v}</p>
+                  <p className="text-[11px] text-accent-600 mt-0.5">{k}</p>
+                </div>
+              ))}
+              {rec.bestDay && (
+                <div className="col-span-2 sm:col-span-4 bg-amber-50 border border-hairline-amber rounded-xl p-3 text-center">
+                  <p className="text-xs text-amber-800 font-semibold">رقم قياسي: أكتر يوم فيه تربيطات — {rec.bestDay.day} — <b>{rec.bestDay.n.toLocaleString('ar-EG')}</b> تربيط</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className={`bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm ${openPanel === 'openai' ? '' : 'hidden'}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -836,7 +956,15 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                     <div className="flex items-start gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg">{verse.surah_no}:{verse.ayah_no}</span>
+                          {mergeMode && (
+                            <input type="checkbox" aria-label={`اختيار الآية ${verse.ayah_no} للدمج`} checked={mergeSel.some((x) => x.id === verse.id)}
+                              onChange={() => setMergeSel((cur) => cur.some((x) => x.id === verse.id) ? cur.filter((x) => x.id !== verse.id) : [...cur, verse])}
+                              className="w-6 h-6 accent-emerald-600" />
+                          )}
+                          <span className="flex flex-col items-center justify-center min-w-[3.25rem] px-2 py-1 bg-emerald-600 text-white rounded-xl leading-none shadow-sm">
+                            <span className="text-[10px] opacity-80">آية</span>
+                            <span className="text-2xl font-extrabold">{verse.ayah_no.toLocaleString('ar-EG')}</span>
+                          </span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
                           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-ink-3 bg-gray-50'}`}>
                             <Bookmark className="w-3 h-3" /> {verse.links_count || 0} تربيط
@@ -886,6 +1014,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                             showLinksFor === verse.id ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-50 text-accent-600 hover:bg-gray-100 border border-hairline'
                           }`}>
                           <Settings className="w-3.5 h-3.5" /> التربيطات
+                        </button>
+                        <button onClick={() => setFarFrom(verse)} title="ربط بآية بعيدة"
+                          className="flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-hairline-amber">
+                          <Link2 className="w-3.5 h-3.5" /> ربط ببعيدة
                         </button>
                       </div>
                     </div>
@@ -944,6 +1076,14 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
                 </div>
               )}
+              {pendingLinks.length > 0 && adminIds && (
+                <div className="flex flex-wrap gap-1.5">
+                  {([['all', 'الكل'], ['users', 'تربيطات من المستخدمين'], ['admin', 'تربيطات الإدارة']] as const).map(([k, label]) => (
+                    <button key={k} onClick={() => { setPendingFilter(k); setPendingVisible(50); }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border ${pendingFilter === k ? (k === 'users' ? 'bg-teal-600 text-white border-teal-600' : 'bg-emerald-700 text-white border-emerald-700') : 'bg-white text-accent-700 border-hairline'}`}>{label}</button>
+                  ))}
+                </div>
+              )}
               {pendingLinks.length === 0 ? (
                 pendingLoading || !pendingLoaded ? (
                   <div className="text-center py-12 text-accent-400">
@@ -958,10 +1098,20 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 )
               ) : (
                 <>
-                  {pendingLinks.slice(0, pendingVisible).map((link) => {
+                  {pendingList.slice(0, pendingVisible).map((link) => {
                   const verse = pendingVerses[link.verse_id];
+                  const fromUser = isUserSuggestion(link);
                   return (
-                    <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-hairline">
+                    <div key={link.id} className={`rounded-xl p-4 border-2 ${fromUser ? 'bg-teal-50/70 border-teal-300' : 'bg-gray-50 border-hairline'}`}>
+                      {fromUser && link.created_by && (
+                        <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-teal-800"><User className="w-3.5 h-3.5" /> من المستخدم: {authors[link.created_by] || '…'}</div>
+                      )}
+                      {link.group_verse_ids && link.group_verse_ids.length > 1 && (
+                        <div className="mb-2 text-xs font-bold text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1">تربيط مدموج: {link.group_verse_ids.length} آيات متتالية</div>
+                      )}
+                      {link.related_verse_id && (
+                        <div className="mb-2 text-xs font-bold text-amber-800 bg-amber-50 rounded-lg px-2 py-1">تربيط ببعيدة (آية رقم داخلي {link.related_verse_id})</div>
+                      )}
                       {verse && (
                         <div className="mb-2 text-xs text-accent-600">
                           {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{verse.ayah_text?.slice(0, 80)}...</span>
@@ -1100,10 +1250,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                     </div>
                   );
                   })}
-                  {pendingVisible < pendingLinks.length && (
+                  {pendingVisible < pendingList.length && (
                   <button onClick={() => setPendingVisible((v) => v + 50)}
                     className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-link text-sm font-semibold rounded-xl border border-hairline-amber">
-                    عرض المزيد ({pendingLinks.length - pendingVisible} متبقية)
+                    عرض المزيد ({pendingList.length - pendingVisible} متبقية)
                   </button>
                 )}
                 </>
@@ -1114,8 +1264,36 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       )}
 
       {linkModalVerse && (
-        <LinkModal verse={linkModalVerse} onClose={() => setLinkModalVerse(null)} onSaved={() => { setLinkModalVerse(null); fetchVerses(); fetchStats(); fetchPendingLinks(); }} />
+        <LinkModal verse={linkModalVerse} groupVerses={linkModalGroup} relatedVerse={linkModalRelated}
+          onClose={() => { setLinkModalVerse(null); setLinkModalGroup(undefined); setLinkModalRelated(null); }}
+          onSaved={() => { setLinkModalVerse(null); setLinkModalGroup(undefined); setLinkModalRelated(null); setMergeSel([]); setMergeMode(false); setRec(null); fetchVerses(); fetchStats(); fetchPendingLinks(); }} />
       )}
+      {farFrom && (
+        <FarLinkPicker from={farFrom} onClose={() => setFarFrom(null)}
+          onPick={(other) => { setLinkModalRelated(other); setLinkModalGroup(undefined); setLinkModalVerse(farFrom); setFarFrom(null); }} />
+      )}
+      {mergeMode && (() => {
+        const sel = [...mergeSel].sort((a, b) => a.id - b.id);
+        const sameSurah = sel.every((v) => v.surah_no === sel[0]?.surah_no);
+        const consecutive = sel.every((v, i) => i === 0 || v.id === sel[i - 1].id + 1);
+        const ok = sel.length >= 2 && sameSurah && consecutive;
+        return (
+          <div dir="rtl" className="fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-500 shadow-2xl p-3 flex flex-wrap items-center gap-2 justify-between">
+            <div className="text-xs min-w-0">
+              <b className="text-emerald-800">دمج آيات في تربيط واحد</b>
+              <p className="text-accent-600">
+                {sel.length === 0 ? 'علّم على الآيات المتتالية (أي عدد) من نفس السورة' :
+                  `المختار: ${sel.map((v) => v.ayah_no).join('، ')}${!sameSurah ? ' — لازم من نفس السورة' : !consecutive ? ' — لازم متتالية بدون فراغ' : sel.length < 2 ? ' — اختار آيتين على الأقل' : ''}`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setMergeMode(false); setMergeSel([]); }} className="px-3 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-accent-700">إلغاء</button>
+              <button disabled={!ok} onClick={() => { setLinkModalGroup(sel); setLinkModalRelated(null); setLinkModalVerse(sel[0]); }}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white disabled:opacity-40">سجّل التربيط ({sel.length})</button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
