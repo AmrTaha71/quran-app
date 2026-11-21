@@ -4941,6 +4941,12 @@ export default function QuranMushafPage({
                         : normForPaperBox(MADINAH_PAPER_BOXES[n - 1]))
                       : null;
                     const off = dragDir === 1 ? -100 : 100;
+                    // Digital page: reveal a plain page in the chosen colour, not the yellow scan
+                    // (it flashed yellow, then flipped to the digital colour on landing).
+                    if (standalonePage) {
+                      return <div key={`peek-digital-${n}`} className="absolute inset-0 pointer-events-none"
+                        style={{ left: `${off}%`, background: mushafTheme.bg }} />;
+                    }
                     return (
                       <img key={`peek-${edition.id}-${n}`} src={edition.imageUrl(n)} alt="" draggable={false}
                         className="absolute max-w-none pointer-events-none [-webkit-touch-callout:none] object-contain"
