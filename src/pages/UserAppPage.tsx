@@ -1,4 +1,5 @@
 import DrumSelect from '../components/DrumSelect';
+import LinkScopeNote from '../components/LinkScopeNote';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -409,7 +410,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   }, [fetchVerses]);
 
   const fetchVerseLinks = async (verseId: number) => {
-    const { data } = await supabase.from('ayah_links').select('*').eq('verse_id', verseId).eq('status', 'approved');
+    const { data } = await supabase.from('ayah_links').select('*').or(`verse_id.eq.${verseId},related_verse_id.eq.${verseId},group_verse_ids.cs.{${verseId}}`).eq('status', 'approved');
     setVerseLinks((prev) => ({ ...prev, [verseId]: data || [] }));
   };
 
@@ -873,6 +874,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                 <p className="font-semibold text-ink-2 mb-1 text-base">{link.link_title}</p>
                               )}
                               <p className="text-ink-2 leading-relaxed text-base">{link.link_content}</p>
+                              <LinkScopeNote link={link} verseId={verse.id} />
                               {(() => {
                                 const audio = resolveLinkAudio(link, linkGender);
                                 return (

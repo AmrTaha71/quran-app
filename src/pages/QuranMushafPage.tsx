@@ -1,4 +1,5 @@
 import DrumSelect from '../components/DrumSelect';
+import LinkScopeNote from '../components/LinkScopeNote';
 import { openBlackScreen } from '../lib/blackScreenStore';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
@@ -823,7 +824,7 @@ export default function QuranMushafPage({
     const { data } = await supabase
       .from('ayah_links')
       .select('*')
-      .eq('verse_id', verseId)
+      .or(`verse_id.eq.${verseId},related_verse_id.eq.${verseId},group_verse_ids.cs.{${verseId}}`)
       .eq('status', 'approved');
     setVerseLinks(data || []);
     setLoadingLinks(false);
@@ -4210,6 +4211,7 @@ export default function QuranMushafPage({
                                     </span>
                                     {link.link_title && <p className="text-sm font-bold text-accent-700 mb-1">{link.link_title}</p>}
                                     <p className="text-base text-accent-600 leading-relaxed">{link.link_content}</p>
+                                    <LinkScopeNote link={link} verseId={verse.id} />
                                     {/* One voice button, resolved by the
                                         2026-10-28 policy: male users always
                                         hear the generated male voice,
@@ -5235,6 +5237,7 @@ export default function QuranMushafPage({
                               </span>
                               {link.link_title && <p className="text-base font-bold text-accent-700 mb-1">{link.link_title}</p>}
                               <p className="text-base text-accent-600 leading-relaxed">{link.link_content}</p>
+                              <LinkScopeNote link={link} verseId={selectedVerse?.id ?? 0} />
                               {/* One voice button, resolved by the
                                   2026-10-28 policy (see the normal-view
                                   block above). */}
