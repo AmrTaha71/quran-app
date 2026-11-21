@@ -39,7 +39,8 @@ import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
 import MushafHighlightLayer from '../components/mushaf/MushafHighlightLayer';
 import { insetHighlightBox } from '../components/mushaf/highlightGeometry';
-import DigitalPageLayer from '../components/mushaf/DigitalPageLayer';
+import DigitalPageLayer, { pageIsFullyDigital } from '../components/mushaf/DigitalPageLayer';
+import { MUSHAF_THEMES, themeById, loadThemeId, saveThemeId, type MushafThemeId } from '../lib/mushafThemes';
 import { loadTajweed, type TajweedMap } from '../lib/tajweedWords';
 import { TAJWEED_RULES } from '../lib/tajweedColors';
 import { BackButton } from '../components/BackButton';
@@ -407,6 +408,10 @@ export default function QuranMushafPage({
   const [digitalView, setDigitalView] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
   const [tajweedMap, setTajweedMap] = useState<TajweedMap | null>(null);
   const [showDigitalLegend, setShowDigitalLegend] = useState(false);
+  // Page colour of the standalone digital page (calm backgrounds, own ink + highlight each).
+  const [mushafThemeId, setMushafThemeId] = useState<MushafThemeId>(loadThemeId);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const mushafTheme = themeById(mushafThemeId);
   useEffect(() => {
     if (!digitalView || tajweedMap) return;
     let alive = true;
@@ -3769,6 +3774,10 @@ export default function QuranMushafPage({
     return [(fx - madinahNorm.imgL) * 100 / madinahNorm.imgW, (fy - madinahNorm.imgT) * 100 / madinahNorm.imgH];
   };
   // Full-image % word box -> container % rect (for the tap flash).
+  // Standalone digital page: text on a plain coloured page, no scan under it. Only when every word of
+  // the page has trusted digital text; the few other pages keep the scan with the text over it.
+  const standalonePage = digitalView && !!tajweedMap && edition.id === 'madinah' && !!pageWordBoxes && displayedPage === currentPage
+    && pageIsFullyDigital(pageWordBoxes.map((b) => ({ surah: b.surah, ayah: b.ayah, wordNo: Number(b.key.split(':')[2]) || 0 })), tajweedMap);
   const imageBoxToContainer = (b: WordBox) => {
     if (!madinahNorm) return b;
     return {
@@ -4337,6 +4346,7 @@ export default function QuranMushafPage({
       {/* Fullscreen viewer with intro */}
       {showFullscreen && (
         <div className={`fixed inset-0 z-[100] ${useMadinahCover ? 'bg-white' : 'bg-[#f8f1de]'} flex ${useMadinahCover ? 'items-start' : 'items-center'} justify-center select-none overflow-hidden overscroll-contain`}
+          style={standalonePage ? { background: mushafTheme.bg } : undefined}
           onPointerDownCapture={pokeFsOverlays}
           onClick={() => {
             // In clean mode, taps on the black bands restore controls.
@@ -4707,6 +4717,33 @@ export default function QuranMushafPage({
                   دليل الألوان
                 </button>
               )}
+              {digitalView && (
+                <button onClick={(e) => { e.stopPropagation(); setShowThemePicker((v) => !v); }}
+                  className={`absolute top-[calc(9.65rem_+_env(safe-area-inset-top))] left-2 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  لون الصفحة
+                </button>
+              )}
+              {digitalView && showThemePicker && (
+                <div dir="rtl" onClick={(e) => e.stopPropagation()}
+                  className="absolute z-40 left-2 right-2 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <b className="text-sm text-emerald-900">لون الصفحة</b>
+                    <button onClick={() => setShowThemePicker(false)} className="px-2 py-0.5 text-sm rounded-lg bg-emerald-100 text-emerald-800 font-bold">إغلاق</button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {MUSHAF_THEMES.map((t) => (
+                      <button key={t.id} onClick={() => { setMushafThemeId(t.id); saveThemeId(t.id); }}
+                        className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${mushafThemeId === t.id ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
+                        <span className="w-full h-9 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
+                          <span style={{ background: `rgba(${t.hl}, 0.85)`, padding: '0 4px', borderRadius: 4 }}>أ</span>
+                        </span>
+                        <span className="text-[11px] text-accent-800 leading-tight text-center">{t.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11px] text-accent-600">الصفحة الرقمية بترتيب مصحف المدينة نفسه. لون التظليل بيتغير مع لون الصفحة.</p>
+                </div>
+              )}
               {digitalView && showDigitalLegend && (
                 <div dir="rtl" onClick={(e) => e.stopPropagation()}
                   className="absolute z-40 left-2 right-2 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] max-h-[42vh] overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 p-3">
@@ -4774,8 +4811,8 @@ export default function QuranMushafPage({
                       // 2026-11-21 (Dr. Amr): the page NEVER shrinks. It used to scale to
                       // 0.72 while the controls were visible, which fired on every swipe
                       // and edge tap and made page turns look like zoom-outs.
-                      ? { width: '100vw', height: '100dvh', background: '#f8f1de' }
-                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: '#f8f1de' })
+                      ? { width: '100vw', height: '100dvh', background: standalonePage ? mushafTheme.bg : '#f8f1de', ...(standalonePage ? { ['--mushaf-hl-rgb' as string]: mushafTheme.hl } : {}) }
+                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: standalonePage ? mushafTheme.bg : '#f8f1de', ...(standalonePage ? { ['--mushaf-hl-rgb' as string]: mushafTheme.hl } : {}) })
                     : { aspectRatio: String(imgAspect), background: '#f8f1de' }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -4825,7 +4862,7 @@ export default function QuranMushafPage({
                   {/* Digital page: the words redrawn with tajweed colours on their own boxes
                       (below the highlights, which come later in this wrapper). */}
                   {digitalView && tajweedMap && edition.id === 'madinah' && pageWordBoxes && displayedPage === currentPage && (
-                    <DigitalPageLayer tajweed={tajweedMap}
+                    <DigitalPageLayer tajweed={tajweedMap} theme={standalonePage ? mushafTheme : undefined}
                       boxes={pageWordBoxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, surah: b.surah, ayah: b.ayah, wordNo: Number(b.key.split(':')[2]) || 0 }))} />
                   )}
                   {goldFrame && (
