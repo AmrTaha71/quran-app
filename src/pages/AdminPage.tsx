@@ -114,6 +114,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     const trimmed = search.trim();
+    // A spoken / typed surah name ("الجاثية", "سورة البقرة") jumps straight to that surah.
+    const norm = (t: string) => t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/^سور[هة]\s+/, '').replace(/^ال/, '').trim();
+    if (trimmed && !/^\d/.test(trimmed)) {
+      const q = norm(trimmed);
+      const hit = SURAHS.find((x) => norm(x.name.replace(/^سورة\s+/, '')) === q);
+      if (hit) { setSurahFilter(String(hit.no)); setSearch(''); setPage(0); return; }
+    }
     const isNumber = /^\d+$/.test(trimmed);
     const isColonFormat = /^\d+\s*[:：]\s*\d+$/.test(trimmed);
 
