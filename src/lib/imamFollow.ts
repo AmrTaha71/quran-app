@@ -330,11 +330,24 @@ export class ImamFollower {
   }
 
   private search() {
+    let H = this.H.slice(this.searchFrom);
+    if (H.length > this.opt.maxSearchLetters) { H = H.slice(-this.opt.maxSearchLetters); }
+    if (this.trySearch(H)) return;
+    // After a LOSS (prior >= 0) the buffer starts with the letters that went wrong (a cough, a stumble,
+    // a word the ear missed), and alignment must explain ALL of H, so that junk blocked every re-lock
+    // until it scrolled out — which never happens near the end of an ayah (2026-11-21, 2:256 stalled for
+    // good). Retry on shorter tails of the heard letters: the junk-free recent part locks at once.
+    if (this.prior >= 0) {
+      for (const n of [36, 26, 18, 12]) {
+        if (n < H.length && n >= this.opt.minLockLetters && this.trySearch(H.slice(-n))) return;
+      }
+    }
+  }
+
+  private trySearch(H: string): boolean {
     const o = this.opt;
     const Q = this.idx.letters;
-    let H = this.H.slice(this.searchFrom);
-    if (H.length > o.maxSearchLetters) { H = H.slice(-o.maxSearchLetters); }
-    if (H.length < o.minLockLetters) return;
+    if (H.length < o.minLockLetters) return false;
     // Votes per diagonal bucket.
     const votes = new Map<number, number>();
     for (let i = 0; i + GRAM <= H.length; i++) {
@@ -356,7 +369,7 @@ export class ImamFollower {
         if (r.cost < res[k].cost) res[k] = r;
       }
     }
-    if (!res.length) return;
+    if (!res.length) return false;
     // A place just ahead of the prior (where it was lost) wins near-ties.
     const adj = (r: AlignResult) => r.cost - (this.prior >= 0 && r.end > this.prior - 20 && r.end < this.prior + 400 ? 1.5 : 0);
     res.sort((a, b) => adj(a) - adj(b));
@@ -365,26 +378,27 @@ export class ImamFollower {
     const rate = best.cost / H.length;
     this.rate = rate;
     const margin = Math.max(o.lockMarginAbs, o.lockMarginRel * H.length);
-    if (rate > o.maxLockRate) return;
+    if (rate > o.maxLockRate) return false;
     this.cands = [];
     if (second && adj(second) - adj(best) < margin) {
       // Ambiguous (a repeated phrase): wait for more letters.
       const at = (r: AlignResult) => { const w = this.idx.words[this.idx.owner[Math.max(0, r.end - 1)]]; return { surah: w.surah, ayah: w.ayah }; };
       const a = at(best), b = at(second);
       if (a.surah > 0 && b.surah > 0 && !(a.surah === 1 && a.ayah === 1)) this.cands = [a, b];
-      return;
+      return false;
     }
     const bw = this.idx.words[this.idx.owner[Math.max(0, best.end - 1)]];
     if (bw.surah === 0 || (bw.surah === 1 && bw.ayah === 1)) {
       // The isti'adha (not Quran text) or a basmala alone (said before
       // every surah, so it names no place): drop it and keep listening.
       this.searchFrom = this.H.length;
-      return;
+      return true;
     }
     this.status = 'following';
     this.posL = best.end - 1;
     this.locks++;
     this.badRun = 0;
     this.prior = -1;
+    return true;
   }
 }
