@@ -818,6 +818,20 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </>
         )}
       />
+      {openDoor === null && (adminGateError || showAdminUi) && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-4">
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setOpenDoor('admin')}
+            className="polish-press w-full flex items-center gap-4 rounded-2xl p-4 sm:p-5 text-right bg-gradient-to-l from-amber-300 via-amber-400 to-amber-500 border-2 border-amber-600 shadow-lg">
+            <span className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-900 border-2 border-amber-200 flex items-center justify-center flex-shrink-0">
+              <Shield className="w-9 h-9 sm:w-11 sm:h-11 text-amber-300" />
+            </span>
+            <span className="block min-w-0">
+              <span className="block text-lg sm:text-2xl font-bold text-emerald-950">لوحة الإدارة</span>
+              <span className="block text-xs sm:text-base text-emerald-900 mt-1">للأدمن فقط</span>
+            </span>
+          </button>
+        </div>
+      )}
       {tourNote && (
         <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-3">
           <p className="text-sm font-semibold text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2" role="status">{tourNote}</p>
@@ -828,19 +842,15 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {openDoor === null && <TodayDatesCard />}
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => (d.id !== 'admin' || adminGateError || showAdminUi) && (d.id !== 'diag' || showAdminUi)).map((d, i) => (
+            {doors.filter((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi)).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
                 style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
-                className={d.id === 'admin'
-                  ? 'text-right p-4 sm:p-5 md:p-6 lg:p-7 rounded-2xl door-enter polish-press col-span-2 sm:col-span-3 flex items-center gap-4 bg-gradient-to-l from-emerald-800 to-emerald-950 border-2 border-amber-400 shadow-lg'
-                  : 'text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press'}>
+                className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
                 <span className="w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3 md:mb-4">
                   <d.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 text-emerald-800" />
                 </span>
-                <span className="block">
-                  <span className={`block text-sm sm:text-base md:text-lg lg:text-xl font-semibold ${d.id === 'admin' ? 'text-amber-200' : 'text-ink'}`}>{d.title}</span>
-                  {d.sub && <span className={`block text-xs sm:text-sm lg:text-base mt-1 md:mt-2 ${d.id === 'admin' ? 'text-emerald-100' : 'text-ink-2'}`}>{d.sub}</span>}
-                </span>
+                <span className="block text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-ink">{d.title}</span>
+                {d.sub && <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>}
               </button>
             ))}
           </div>
