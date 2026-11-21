@@ -21,6 +21,7 @@ import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
 import { dailyDua } from '../lib/personalTouch';
+import { warmPage, isPageReady } from '../lib/pagePreload';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
@@ -1214,15 +1215,19 @@ export default function QuranMushafPage({
       followLockPreloadSkipRef.current = false;
       return;
     }
-    const timer = setTimeout(() => {
-      for (const p of [currentPage - 1, currentPage + 1, currentPage - 2, currentPage + 2, currentPage - 3, currentPage + 3]) {
-        if (p >= 1 && p <= TOTAL_PAGES) {
-          const img = new Image();
-          img.src = edition.imageUrl(p);
-        }
+    // ±1 at once (the next flip is almost always one of them); the rest
+    // after a short settle, one at a time, so fast flips never flood the line.
+    let cancelled = false;
+    for (const p of [currentPage + 1, currentPage - 1]) {
+      if (p >= 1 && p <= TOTAL_PAGES) void warmPage(edition.imageUrl(p));
+    }
+    const timer = setTimeout(async () => {
+      for (const p of [currentPage + 2, currentPage - 2, currentPage + 3, currentPage - 3, currentPage + 4, currentPage + 5]) {
+        if (cancelled) return;
+        if (p >= 1 && p <= TOTAL_PAGES) await warmPage(edition.imageUrl(p));
       }
-    }, 400);
-    return () => clearTimeout(timer);
+    }, 250);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [currentPage, edition]);
 
   // Displayed-page gate (SHAKE FIX 2026-10-28, hardened 2026-10-28,
@@ -1259,8 +1264,7 @@ export default function QuranMushafPage({
     const clearTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
     const probe = () => {
       if (displayedPageGenRef.current !== g) return;
-      const img = new Image();
-      img.src = edition.imageUrl(p);
+      const url = edition.imageUrl(p);
       const done = () => {
         clearTimer();
         if (displayedPageGenRef.current !== g) return;
@@ -1284,10 +1288,9 @@ export default function QuranMushafPage({
         if (Date.now() >= deadlineAt) { done(); return; }
         timer = setTimeout(probe, 300);
       };
-      if (img.complete && img.naturalWidth > 0) { done(); return; }
-      if (img.complete && img.naturalWidth === 0) { onFail(); return; }
-      img.onload = done;
-      img.onerror = onFail;
+      if (isPageReady(url)) { done(); return; }
+      // Load AND decode before showing, so the page paints ready.
+      void warmPage(url).then((ok) => { if (ok) done(); else onFail(); });
       // Watchdog for THIS attempt: only the time left to the deadline.
       timer = setTimeout(onFail, Math.max(0, deadlineAt - Date.now()));
     };
@@ -1508,7 +1511,7 @@ export default function QuranMushafPage({
   useEffect(() => {
     if (!showFullscreen) return;
     [currentPage - 1, currentPage + 1].forEach((n) => {
-      if (n >= 1 && n <= TOTAL_PAGES) { const im = new Image(); im.src = edition.imageUrl(n); }
+      if (n >= 1 && n <= TOTAL_PAGES) void warmPage(edition.imageUrl(n));
     });
   }, [currentPage, showFullscreen, edition]);
 
