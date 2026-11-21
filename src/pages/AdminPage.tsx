@@ -11,9 +11,9 @@ import { TOTAL_VERSES, LINK_TYPES } from '../lib/types';
 import { formatAr } from '../lib/numerals';
 import { SURAHS } from '../lib/surahs';
 import {
-  BookOpen, LogOut, Search, Bookmark, Settings, Trash2,
+  BookOpen, LogOut, Search, Bookmark, Trash2,
   ChevronRight, ChevronLeft, Download, Filter, X,
-  Check, Link2, Layers, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic,
+  Check, Layers, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic, Menu, BarChart3,
 } from 'lucide-react';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
@@ -52,7 +52,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [editingBalance, setEditingBalance] = useState(false);
   // Dashboard sub-doors (2026-11-08): one panel open at a time, all closed by default.
   const [openPanel, setOpenPanel] = useState<'progress' | 'users' | 'openai' | 'records' | null>(null);
-  const toggleFor = (p: 'progress' | 'users' | 'openai' | 'records') => setOpenPanel((cur) => (cur === p ? null : p));
+  const [menuOpen, setMenuOpen] = useState(false);
   const [usageError, setUsageError] = useState('');
   const [linkModalVerse, setLinkModalVerse] = useState<QuranVerse | null>(null);
   // Merge (any number of consecutive ayat of one surah -> ONE link) and far link (ayah <-> any other ayah).
@@ -694,14 +694,22 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-smooth font-semibold border ${mergeMode ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-hairline-emerald hover:bg-emerald-100'}`}>
               <Layers className="w-4 h-4" /> دمج آيات
             </button>
-            <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link hover:bg-amber-50 rounded-lg transition-smooth font-semibold">
-              <BookOpen className="w-4 h-4" /> المصحف
-            </button>
-            <button onClick={() => onNavigate('app')} className="px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">تطبيق المستخدم</button>
-            <button onClick={async () => { await signOut(); onNavigate('home'); }} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth font-semibold">
-              <LogOut className="w-4 h-4" /> خروج
-            </button>
+            <div className="relative">
+              <button onClick={() => setMenuOpen((o) => !o)} aria-label="القائمة" aria-expanded={menuOpen}
+                className="flex items-center justify-center w-10 h-10 text-accent-700 bg-white hover:bg-gray-50 border border-hairline rounded-xl">
+                <Menu className="w-5 h-5" />
+              </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute left-0 top-12 z-50 w-48 bg-white border border-hairline rounded-2xl shadow-xl p-1.5 text-sm font-semibold">
+                    <button onClick={() => { setMenuOpen(false); onNavigate('mushaf'); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-right text-accent-700 hover:bg-gray-50 rounded-xl"><BookOpen className="w-4 h-4" /> المصحف</button>
+                    <button onClick={() => { setMenuOpen(false); onNavigate('app'); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-right text-accent-700 hover:bg-gray-50 rounded-xl"><Users className="w-4 h-4" /> تطبيق المستخدم</button>
+                    <button onClick={async () => { setMenuOpen(false); await signOut(); onNavigate('home'); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-right text-red-600 hover:bg-red-50 rounded-xl"><LogOut className="w-4 h-4" /> خروج</button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -719,22 +727,27 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
           </div>
         )}
-        {/* Dashboard sub-doors: small buttons, each opens its own panel */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {([
-            ['progress', 'تقدم التربيطات'],
-            ['users', 'المستخدمين'],
-            ['records', 'الأرقام والسجلات'],
-            ['openai', 'رصيد OpenAI'],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => toggleFor(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-smooth ${openPanel === key ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-800 border-hairline hover:bg-gray-50'}`}
-            >
-              {label} {openPanel === key ? '▴' : '▾'}
-            </button>
-          ))}
+        {/* Stats: ONE button; its four panels are tabs inside */}
+        <div className="mb-4">
+          <button onClick={() => setOpenPanel((cur) => (cur ? null : 'progress'))}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${openPanel ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-700 border-hairline hover:bg-gray-50'}`}>
+            <BarChart3 className="w-4 h-4" /> الإحصائيات {openPanel ? '▴' : '▾'}
+          </button>
+          {openPanel && (
+            <div className="flex flex-wrap gap-1.5 mt-3 bg-white border border-hairline rounded-xl p-1 w-fit">
+              {([
+                ['progress', 'التقدم'],
+                ['users', 'المستخدمين'],
+                ['records', 'الأرقام'],
+                ['openai', 'OpenAI'],
+              ] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setOpenPanel(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${openPanel === key ? 'bg-emerald-700 text-white' : 'text-accent-600 hover:bg-gray-100'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Dashboard — beautified */}
@@ -907,31 +920,9 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 </button>
               ))}
             </div>
-            <button onClick={exportExcel} className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-smooth shadow-sm">
-              <Download className="w-4 h-4" /> تصدير
+            <button onClick={exportExcel} aria-label="تصدير إلى إكسل" title="تصدير إلى إكسل" className="flex items-center justify-center w-11 h-11 text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-smooth">
+              <Download className="w-4 h-4" />
             </button>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded border-r-4 border-emerald-400 bg-emerald-50"></div>
-              <span className="text-xs text-accent-600">آية لها تربيط</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded border-r-4 border-red-400 bg-red-50"></div>
-              <span className="text-xs text-accent-600">آية بدون تربيطات</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Bookmark className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-xs text-accent-600">سجلي المقطع يا رنا — تسجيل تربيط</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Settings className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-xs text-accent-600">عرض التربيطات</span>
-            </div>
           </div>
         </div>
 
@@ -975,10 +966,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           </span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
                           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-ink-3 bg-gray-50'}`}>
-                            <Bookmark className="w-3 h-3" /> {verse.links_count || 0} تربيط
-                          </span>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
-                            {verse.has_links ? 'لها تربيط' : 'بدون تربيط'}
+                            <Bookmark className="w-3 h-3" /> {verse.links_count > 0 ? `${verse.links_count} تربيط` : 'بدون تربيط'}
                           </span>
                         </div>
                         <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{blankMarks(verse.ayah_text)}</p>
@@ -1008,24 +996,20 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         )}
                       </div>
 
-                      {/* Large save button + show links */}
-                      <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                      {/* One clear action + two quiet text links */}
+                      <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0 w-32">
                         <button onClick={() => setLinkModalVerse(verse)}
-                          title="سجلي المقطع يا رنا"
-                          className="flex flex-col items-center justify-center gap-1 w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-2xl shadow-lg hover:shadow-xl transition-smooth">
-                          <Mic className="w-6 h-6" />
-                          <span className="text-xs font-semibold text-center">سجلي المقطع<br />يا رنا</span>
+                          className="flex items-center justify-center gap-2 px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow font-semibold text-sm">
+                          <Mic className="w-5 h-5" /> سجّلي تربيط
                         </button>
-                        <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
-                          title="عرض التربيطات"
-                          className={`flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-smooth ${
-                            showLinksFor === verse.id ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-50 text-accent-600 hover:bg-gray-100 border border-hairline'
-                          }`}>
-                          <Settings className="w-3.5 h-3.5" /> التربيطات
-                        </button>
-                        <button onClick={() => setFarFrom(verse)} title="ربط بآية بعيدة"
-                          className="flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 border border-hairline-amber">
-                          <Link2 className="w-3.5 h-3.5" /> ربط ببعيدة
+                        {verse.links_count > 0 && (
+                          <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
+                            className={`px-2 py-1.5 text-xs font-semibold rounded-lg ${showLinksFor === verse.id ? 'bg-emerald-600 text-white' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+                            التربيطات ({verse.links_count})
+                          </button>
+                        )}
+                        <button onClick={() => setFarFrom(verse)} className="px-2 py-1.5 text-xs font-semibold rounded-lg text-amber-800 hover:bg-amber-50">
+                          ربط ببعيدة
                         </button>
                       </div>
                     </div>
