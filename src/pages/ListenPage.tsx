@@ -400,6 +400,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     if (hubView === 'single') return journeyReciterId;
     return journeyReciterId === JUHANI_RECITER_ID ? reciterId : journeyReciterId;
   };
+  // Speed class of the current journey reciter ('hadr' = Juhani); drives the speed wheel.
+  const journeySpeedClass: string = (() => {
+    const id = journeyReciterForMode();
+    if (id === JUHANI_RECITER_ID) return 'hadr';
+    const r = RECITERS.find((x) => x.id === id);
+    return r ? speedOf(r) : 'medium';
+  })();
   const journeyReciterName = (id: string): string =>
     id === JUHANI_RECITER_ID
       ? JUHANI_RECITER_NAME
@@ -2784,7 +2791,30 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 options={SURAHS.map((x) => ({ value: x.no, label: `${x.no} — ${x.name}` }))}
               />
             </div>
+            {/* Speed wheel FIRST (Dr. Amr 2026-11-21): سريعة / متوسطة / بطيئة / حدر.
+                The reciter wheel below then lists only that speed's reciters.
+                حدر = الجهني (single khatma only). */}
             <div>
+              <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-speed">
+                سرعة القراءة
+              </label>
+              <DrumSelect
+                id="journey-speed"
+                label="سرعة القراءة"
+                value={journeySpeedClass}
+                disabled={locked}
+                onChange={(sp) => {
+                  if (sp === 'hadr') { changeJourneyReciter(JUHANI_RECITER_ID); return; }
+                  const first = RECITERS.find((r) => speedOf(r) === sp);
+                  if (first) changeJourneyReciter(first.id);
+                }}
+                options={[
+                  ...SPEED_ORDER.filter((sp) => RECITERS.some((r) => speedOf(r) === sp)).map((sp) => ({ value: sp as string, label: SPEED_LABEL[sp] })),
+                  ...(hubView === 'single' ? [{ value: 'hadr', label: 'حدر' }] : []),
+                ]}
+              />
+            </div>
+            <div className="col-span-2">
               <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-reciter">
                 قارئ البداية
               </label>
@@ -2794,10 +2824,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 value={journeyReciterForMode()}
                 disabled={locked}
                 onChange={changeJourneyReciter}
-                options={[
-                  ...RECITERS.map((r) => ({ value: r.id as string, label: `${r.name} · ${SPEED_LABEL[speedOf(r)]} · ${r.quality}k${r.unverified ? ' · تجريبي' : ''}` })),
-                  ...(hubView === 'single' ? [{ value: JUHANI_RECITER_ID as string, label: JUHANI_RECITER_NAME }] : []),
-                ]}
+                options={journeySpeedClass === 'hadr'
+                  ? [{ value: JUHANI_RECITER_ID as string, label: JUHANI_RECITER_NAME }]
+                  : RECITERS.filter((r) => speedOf(r) === journeySpeedClass).map((r) => ({ value: r.id as string, label: `${r.name} · ${r.quality}k${r.unverified ? ' · تجريبي' : ''}` }))}
               />
               {hubView === 'single' && journeyReciterForMode() === JUHANI_RECITER_ID && (
                 <p className="text-xs text-accent-600 mt-2">
