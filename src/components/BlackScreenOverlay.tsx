@@ -25,8 +25,13 @@ export default function BlackScreenOverlay() {
 
   if (!open) return null;
 
+  // iOS can cancel a long touch (system gesture) or the page can be busy, so release is not required: the
+  // hold itself closes the overlay after 900 ms (a short pocket touch never reaches it).
+  const holdRef = backHoldRef;
   const pressStart = (x: number, y: number) => {
     pressRef.current = { t: Date.now(), x, y };
+    if (holdRef.current) clearTimeout(holdRef.current);
+    holdRef.current = setTimeout(() => { holdRef.current = null; if (pressRef.current) { pressRef.current = null; closeBlackScreen(); } }, 900);
   };
   const pressMove = (x: number, y: number) => {
     const p = pressRef.current;
@@ -39,7 +44,8 @@ export default function BlackScreenOverlay() {
   const pressEnd = () => {
     const p = pressRef.current;
     pressRef.current = null;
-    if (p && Date.now() - p.t >= 1000) closeBlackScreen();
+    if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null; }
+    if (p && Date.now() - p.t >= 900) closeBlackScreen();
   };
   const clearBackHold = () => {
     if (backHoldRef.current) { clearTimeout(backHoldRef.current); backHoldRef.current = null; }
@@ -59,7 +65,7 @@ export default function BlackScreenOverlay() {
         if (t) pressMove(t.clientX, t.clientY);
       }}
       onTouchEnd={pressEnd}
-      onTouchCancel={() => { pressRef.current = null; }}
+      onTouchCancel={pressEnd}
       onMouseDown={(e) => pressStart(e.clientX, e.clientY)}
       onMouseMove={(e) => { if (pressRef.current) pressMove(e.clientX, e.clientY); }}
       onMouseUp={pressEnd}
@@ -78,6 +84,7 @@ export default function BlackScreenOverlay() {
         onPointerCancel={clearBackHold}
         onTouchStart={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
+        style={{ touchAction: 'none' }}
         className="absolute bottom-[calc(1.25rem_+_env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 px-8 py-3 rounded-full bg-white/10 text-white/50 text-base font-semibold"
         aria-label="رجوع"
       >
