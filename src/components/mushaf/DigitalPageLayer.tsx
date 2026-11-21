@@ -136,8 +136,8 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
       furniture.push(compact ? (
         <div key={`hd-${first.surah}`} className="absolute flex items-center justify-center"
           style={{ left: minL, width: textW, top: hy - pitch * 0.46, height: pitch * 0.92, border: `2px solid ${theme.accent}`, borderRadius: 8, background: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(176,138,40,0.10)', boxShadow: `inset 0 0 0 3px ${theme.bg}, inset 0 0 0 4px ${theme.frame}`, overflow: 'hidden' }}>
-          <div className="absolute inset-y-0 left-0" style={{ width: '17%', backgroundImage: `repeating-linear-gradient(45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px), repeating-linear-gradient(-45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px)`, opacity: 0.8 }} />
-          <div className="absolute inset-y-0 right-0" style={{ width: '17%', backgroundImage: `repeating-linear-gradient(45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px), repeating-linear-gradient(-45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px)`, opacity: 0.8 }} />
+          <div className="absolute inset-y-0 left-0" style={{ width: '17%', backgroundImage: `repeating-linear-gradient(45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px), repeating-linear-gradient(-45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px)`, opacity: 0.45 }} />
+          <div className="absolute inset-y-0 right-0" style={{ width: '17%', backgroundImage: `repeating-linear-gradient(45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px), repeating-linear-gradient(-45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px)`, opacity: 0.45 }} />
           <span dir="rtl" className="relative px-5" style={{ background: theme.bg, borderRadius: 6, color: theme.accent, fontFamily: FONT, fontSize: pitch * 0.56, lineHeight: 1.25, WebkitTextStroke: '0.02em currentColor' }}>{label}</span>
         </div>
       ) : (
@@ -183,23 +183,33 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
   if (compact) {
     // Pages 1 and 2: an ornamental frame filling the page, like the Madinah Mushaf.
     const mx = size.w * 0.035, my = size.h * 0.03, band = Math.max(12, size.w * 0.028);
-    const diamond = (style: React.CSSProperties, k: string) => (
-      <div key={k} className="absolute" style={{ width: band * 1.1, height: band * 1.1, transform: 'rotate(45deg)', background: theme.bg, border: `2px solid ${theme.accent}`, ...style }} />
+    // 8-point star (two squares) with a centre ring: corner / mid-edge ornament, drawn only in theme colours.
+    const star = (style: React.CSSProperties, k: string, r: number) => (
+      <svg key={k} className="absolute" width={r * 2} height={r * 2} viewBox="-20 -20 40 40" style={style}>
+        <circle r="19" fill={theme.bg} stroke={theme.accent} strokeWidth="1.6" />
+        <rect x="-11" y="-11" width="22" height="22" fill="none" stroke={theme.accent} strokeWidth="1.6" />
+        <rect x="-11" y="-11" width="22" height="22" fill="none" stroke={theme.accent} strokeWidth="1.6" transform="rotate(45)" />
+        <circle r="4.2" fill={theme.accent} />
+        <circle r="7.6" fill="none" stroke={theme.frame} strokeWidth="1" />
+      </svg>
     );
-    const dots = `repeating-linear-gradient(45deg, ${theme.frame} 0 2px, transparent 2px 7px), repeating-linear-gradient(-45deg, ${theme.frame} 0 2px, transparent 2px 7px)`;
+    const beads = `radial-gradient(circle, ${theme.frame} 1.3px, transparent 1.7px)`;
+    const R = band * 0.95;
     return (
       <>
-        <div className="absolute rounded-xl" style={{ left: mx, top: my, right: mx, bottom: my, border: `3px solid ${theme.accent}`, backgroundImage: dots, opacity: 1 }} />
-        <div className="absolute rounded-lg" style={{ left: mx + band, top: my + band, right: mx + band, bottom: my + band, background: theme.bg, border: `2px solid ${theme.accent}`, boxShadow: `inset 0 0 0 5px ${theme.bg}, inset 0 0 0 6.5px ${theme.frame}` }} />
-        {diamond({ left: mx - band * 0.55, top: my - band * 0.55 }, 'c1')}
-        {diamond({ right: mx - band * 0.55, top: my - band * 0.55 }, 'c2')}
-        {diamond({ left: mx - band * 0.55, bottom: my - band * 0.55 }, 'c3')}
-        {diamond({ right: mx - band * 0.55, bottom: my - band * 0.55 }, 'c4')}
-        {diamond({ left: size.w / 2 - band * 0.55, top: my - band * 0.55 }, 'c5')}
-        {diamond({ left: size.w / 2 - band * 0.55, bottom: my - band * 0.55 }, 'c6')}
-        <div className="absolute flex items-center justify-center gap-2" style={{ left: size.w * 0.3, right: size.w * 0.3, top: Math.min(bottom + pitch * 0.9, size.h - my - band - pitch * 0.8), height: pitch * 0.4 }}>
+        <div className="absolute rounded-xl" style={{ left: mx, top: my, right: mx, bottom: my, border: `2px solid ${theme.accent}`, backgroundImage: beads, backgroundSize: '9px 9px', backgroundPosition: 'center' }} />
+        <div className="absolute rounded-lg" style={{ left: mx + band, top: my + band, right: mx + band, bottom: my + band, background: theme.bg, border: `1.5px solid ${theme.accent}`, boxShadow: `inset 0 0 0 4px ${theme.bg}, inset 0 0 0 5px ${theme.frame}, inset 0 0 0 9px ${theme.bg}, inset 0 0 0 9.6px ${theme.frame}` }} />
+        {star({ left: mx - R, top: my - R }, 'c1', R)}
+        {star({ left: size.w - mx - R, top: my - R }, 'c2', R)}
+        {star({ left: mx - R, top: size.h - my - R }, 'c3', R)}
+        {star({ left: size.w - mx - R, top: size.h - my - R }, 'c4', R)}
+        {star({ left: size.w / 2 - R * 1.25, top: my - R * 1.25 }, 'c5', R * 1.25)}
+        {star({ left: size.w / 2 - R * 1.25, top: size.h - my - R * 1.25 }, 'c6', R * 1.25)}
+        <div className="absolute flex items-center justify-center gap-2" style={{ left: size.w * 0.22, right: size.w * 0.22, top: Math.min(bottom + pitch * 0.9, size.h - my - band - pitch * 0.9), height: pitch * 0.5 }}>
           <div style={{ flex: 1, height: 1.5, background: `linear-gradient(to left, ${theme.accent}, transparent)` }} />
-          <div style={{ width: pitch * 0.26, height: pitch * 0.26, transform: 'rotate(45deg)', border: `1.5px solid ${theme.accent}`, background: theme.bg }} />
+          <div style={{ width: pitch * 0.16, height: pitch * 0.16, transform: 'rotate(45deg)', background: theme.accent }} />
+          <div style={{ width: pitch * 0.3, height: pitch * 0.3, transform: 'rotate(45deg)', border: `1.5px solid ${theme.accent}`, background: theme.bg }} />
+          <div style={{ width: pitch * 0.16, height: pitch * 0.16, transform: 'rotate(45deg)', background: theme.accent }} />
           <div style={{ flex: 1, height: 1.5, background: `linear-gradient(to right, ${theme.accent}, transparent)` }} />
         </div>
         {furniture}
