@@ -469,8 +469,8 @@ export default function QuranMushafPage({
   function pokeFsOverlays() {
     setFsOverlaysVisible(true);
     if (fsOverlayTimer.current) clearTimeout(fsOverlayTimer.current);
-    // 3s idle before the chrome fades (Dr. Amr 2026-11-21; was 5s since 2026-11-19).
-    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 3000);
+    // 1.5s idle before the chrome fades (Dr. Amr 2026-11-21: 1-2s max; was 3s, 5s before).
+    fsOverlayTimer.current = setTimeout(() => setFsOverlaysVisible(false), 1500);
   }
   useEffect(() => {
     if (!showFullscreen) return;
