@@ -13,7 +13,7 @@ import { SURAHS } from '../lib/surahs';
 import {
   BookOpen, LogOut, Search, Bookmark, Trash2,
   ChevronRight, ChevronLeft, Download, Filter, X,
-  Check, Layers, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic, Menu, BarChart3,
+  Check, Layers, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic, Menu, BarChart3, PenLine, Lightbulb, Library,
 } from 'lucide-react';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
@@ -63,7 +63,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [farFrom, setFarFrom] = useState<QuranVerse | null>(null);
   // usernames of suggested-link authors (admin-only RPC) + queue filter
   const [authors, setAuthors] = useState<Record<string, string>>({});
-  const [pendingFilter, setPendingFilter] = useState<'all' | 'users' | 'admin'>('all');
+  const [pendingFilter, setPendingFilter] = useState<'drafts' | 'users' | 'books'>('drafts');
   // records panel (loaded lazily when opened)
   const [rec, setRec] = useState<null | { links: number; merged: number; far: number; versesLinked: number; pages: number; today: number; bestDay: { day: string; n: number } | null; longestMerge: number; byUsers: number; byAdmins: number }>(null);
   const [recLoading, setRecLoading] = useState(false);
@@ -646,7 +646,17 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // A pending row is a user suggestion only when its creator is positively a non-admin AND it carries no recording
   // (same rule as the old badge); everything else is admin work.
   const isUserSuggestion = (l: AyahLink) => !l.is_ai_draft && !!l.created_by && adminIds !== null && !adminIds.has(l.created_by) && !l.audio_url;
-  const pendingList = pendingFilter === 'all' ? pendingLinks : pendingLinks.filter((l) => (pendingFilter === 'users') === isUserSuggestion(l));
+  // Three buckets, every pending row lands in exactly one: books > user suggestion > drafts (AI drafts + admin's own).
+  const bucketOf = (l: AyahLink): 'drafts' | 'users' | 'books' => (l.source === 'books' ? 'books' : isUserSuggestion(l) ? 'users' : 'drafts');
+  const bucketCount = { drafts: 0, users: 0, books: 0 };
+  pendingLinks.forEach((l) => { bucketCount[bucketOf(l)]++; });
+  const pendingList = pendingLinks.filter((l) => bucketOf(l) === pendingFilter);
+  const BUCKETS = [
+    { key: 'drafts' as const, title: 'مسودات للمراجعة', hint: 'مسودات الذكاء الاصطناعي وتسجيلاتك', Icon: PenLine, cls: 'from-violet-50 to-white border-violet-200 text-violet-800' },
+    { key: 'users' as const, title: 'تربيطات مقترحة', hint: 'اقتراحات المستخدمين', Icon: Lightbulb, cls: 'from-teal-50 to-white border-teal-200 text-teal-800' },
+    { key: 'books' as const, title: 'من كتب الأثر والتفسير', hint: 'تربيطات مأخوذة من الكتب', Icon: Library, cls: 'from-amber-50 to-white border-amber-300 text-amber-800' },
+  ];
+  const openBucket = (k: 'drafts' | 'users' | 'books') => { setPendingFilter(k); setPendingVisible(50); setShowPending(true); };
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const linkedPercentage = Math.round((stats.withLinks / TOTAL_VERSES) * 100);
@@ -684,12 +694,6 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {(pendingLinks.length > 0 || pendingError) && (
-              <button onClick={() => { setPendingVisible(50); setShowPending(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link bg-amber-50 hover:bg-amber-100 rounded-lg transition-smooth font-semibold border border-hairline-amber">
-                <Clock className="w-4 h-4" /> مراجعة ({pendingLinks.length})
-              </button>
-            )}
             <button onClick={() => { setMergeMode((m) => !m); setMergeSel([]); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-smooth font-semibold border ${mergeMode ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-hairline-emerald hover:bg-emerald-100'}`}>
               <Layers className="w-4 h-4" /> دمج آيات
@@ -727,6 +731,21 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
           </div>
         )}
+        {/* Review: three clear lists */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          {BUCKETS.map(({ key, title, hint, Icon, cls }) => (
+            <button key={key} onClick={() => openBucket(key)}
+              className={`flex items-center gap-3 text-right rounded-2xl border bg-gradient-to-br p-4 shadow-sm hover:shadow-md transition-smooth ${cls}`}>
+              <span className="w-12 h-12 rounded-xl bg-white/80 border border-white flex items-center justify-center flex-shrink-0"><Icon className="w-6 h-6" /></span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-bold text-sm">{title}</span>
+                <span className="block text-xs opacity-70">{hint}</span>
+              </span>
+              <span className="text-2xl font-extrabold tabular-nums">{formatAr(bucketCount[key])}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Stats: ONE button; its four panels are tabs inside */}
         <div className="mb-4">
           <button onClick={() => setOpenPanel((cur) => (cur ? null : 'progress'))}
@@ -1045,7 +1064,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-3xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />
-                <h3 className="font-semibold text-accent-800">تربيطات بانتظار المراجعة ({pendingLinks.length})</h3>
+                <h3 className="font-semibold text-accent-800">{BUCKETS.find((b) => b.key === pendingFilter)?.title} ({pendingList.length})</h3>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => fetchPendingLinks()} disabled={pendingLoading}
@@ -1068,15 +1087,15 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
                 </div>
               )}
-              {pendingLinks.length > 0 && adminIds && (
+              {(
                 <div className="flex flex-wrap gap-1.5">
-                  {([['all', 'الكل'], ['users', 'تربيطات من المستخدمين'], ['admin', 'تربيطات الإدارة']] as const).map(([k, label]) => (
+                  {(BUCKETS.map((b) => [b.key, `${b.title} (${bucketCount[b.key]})`] as const)).map(([k, label]) => (
                     <button key={k} onClick={() => { setPendingFilter(k); setPendingVisible(50); }}
                       className={`px-3 py-1.5 rounded-full text-xs font-bold border ${pendingFilter === k ? (k === 'users' ? 'bg-teal-600 text-white border-teal-600' : 'bg-emerald-700 text-white border-emerald-700') : 'bg-white text-accent-700 border-hairline'}`}>{label}</button>
                   ))}
                 </div>
               )}
-              {pendingLinks.length === 0 ? (
+              {pendingList.length === 0 ? (
                 pendingLoading || !pendingLoaded ? (
                   <div className="text-center py-12 text-accent-400">
                     <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-emerald-500" />
@@ -1085,7 +1104,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 ) : (
                 <div className="text-center py-12 text-accent-400">
                   <Check className="w-10 h-10 mx-auto mb-2 text-emerald-400" />
-                  <p>لا توجد تربيطات بانتظار المراجعة</p>
+                  <p>{pendingFilter === 'books' ? 'لسه مفيش تربيطات من كتب الأثر والتفسير' : 'لا توجد تربيطات بانتظار المراجعة هنا'}</p>
                 </div>
                 )
               ) : (
@@ -1111,6 +1130,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       )}
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{formatTypes(link.link_types)}</span>
+                        {link.source === 'books' && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">من الكتب</span>}
                         {link.is_ai_draft && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">مسودة ذكاء اصطناعي</span>}
                         {/* S5 (V10): "اقتراح مستخدم" ONLY when the creator is
                             positively known to be a non-admin AND the row

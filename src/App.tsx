@@ -66,7 +66,7 @@ const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow
 // goes back to الرئيسية unless the page registered an internal target
 // (open Settings door, Listen detail view, SelfTest sub-view). Home,
 // landing, auth, admin and splash never show it.
-const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room', 'home2'];
+const BACK_BUTTON_ROUTES: Route[] = ['admin', 'settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room', 'home2'];
 // Screen stays awake ONLY on these (W2-5): the Mushaf (mushaf/follow),
 // tasmee (test) and Listen. Mounted in the shell by route so the lock is
 // released the moment the user leaves; no other page is listed.

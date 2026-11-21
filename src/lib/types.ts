@@ -35,6 +35,8 @@ export interface AyahLink {
   created_by: string | null;
   created_at: string;
   is_ai_draft?: boolean;
+  /** NULL = normal; 'books' = taken from athar/tafsir books. */
+  source?: string | null;
   /** Merged link: ids of ALL ayat this one link covers (verse_id is the first). */
   group_verse_ids?: number[] | null;
   /** Far link: the other ayah (anywhere in the Mushaf) this link ties verse_id to. */
