@@ -4499,7 +4499,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // flow pass them (they stay missed in the grade) so he is never stuck.
     // Counted PER WORD (not per index set): the owed set changes as words
     // get credited, which used to reset the count and loop forever.
-    if (fixIdx && fixIdx.length > 0) {
+    // A pure stall prompt is not a confirmed miss (he may just be pausing), so it must not count toward giving
+    // the words up — that is how correctly recited ayat ended up graded wrong in the owner's test logs.
+    if (fixIdx && fixIdx.length > 0 && trigger !== 'stall') {
       fixIdx.forEach((i) => {
         const k = String(i);
         const n = (contPromptCountRef.current.get(k) || 0) + 1;
@@ -4605,7 +4607,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       cancelCorrectionSpeech();
       contPromptingRef.current = false;
       setContPrompting(false);
-      startContinuousMic();
+      // Wait for the tail of the correction to die out of the speakers before listening again: restarting at
+      // once made the recogniser transcribe the reciter's own clip ("عيني الرحيم", "جنا كبد") as his speech.
+      window.setTimeout(() => {
+        if (speakGenRef.current !== gen) return;
+        if (contPromptingRef.current) return;
+        startContinuousMic();
+      }, 700);
     };
     // Batch 3 (Claude holes 1+2+5): watchdogMs lets the
     // pre-emption re-arm use a short 1.5s onstart watchdog
