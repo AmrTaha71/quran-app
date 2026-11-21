@@ -7,6 +7,7 @@ import ShareSheet from '../components/ShareSheet';
 import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
+import { MUSHAF_THEMES, loadThemeId, saveThemeId, type MushafThemeId } from '../lib/mushafThemes';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
@@ -121,6 +122,15 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setBackTarget({ label: 'عودة إلى الإعدادات', onBack: () => setOpenDoor(null) });
     return () => setBackTarget(null);
   }, [openDoor]);
+  useEffect(() => { try { window.scrollTo(0, 0); } catch { /* ignore */ } }, [openDoor]);
+  // "Digital Mushaf" (colour-changeable text page) is a choice here, not only a button inside the Mushaf.
+  const [digitalOn, setDigitalOn] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
+  const [themeId, setThemeIdState] = useState<MushafThemeId>(loadThemeId);
+  const pickDigital = () => {
+    setDigitalOn(true); setEditionIdx(0); setPreviewFailed(false);
+    try { localStorage.setItem('quran-mushaf-digital', '1'); localStorage.setItem('quran-mushaf-edition', '0'); } catch { /* ignore */ }
+    saved();
+  };
   const [editionIdx, setEditionIdx] = useState(() =>
     readStored('quran-mushaf-edition', 0, (raw) => {
       const n = Number(raw);
@@ -501,8 +511,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   const pickEdition = (i: number) => {
     setEditionIdx(i);
+    setDigitalOn(false);
     setPreviewFailed(false);
-    try { localStorage.setItem('quran-mushaf-edition', String(i)); } catch {}
+    try { localStorage.setItem('quran-mushaf-edition', String(i)); localStorage.setItem('quran-mushaf-digital', '0'); } catch {}
     saved();
   };
   const toggleGold = () => {
@@ -579,7 +590,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const resetDefaults = async () => {
     if (!window.confirm(
       'استعادة الإعدادات الافتراضية؟\n\n' +
-      'سيُعاد: شكل الصفحة، القارئ الافتراضي، الجنس، لغة التطبيق، وأجزاء الورد اليومي.\n' +
+      'سيُعاد: المصحف المختار، القارئ الافتراضي، الجنس، لغة التطبيق، وأجزاء الورد اليومي.\n' +
       'سجل إنجاز الورد (الأيام والاستمرارية) محفوظ ولن يتغير.\n' +
       'لن يتغير: موضعك في المصحف ولا إعدادات التسميع.'
     )) return;
@@ -635,7 +646,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'srs', icon: BookOpen, title: 'مراجعة الآيات الضعيفة', sub: 'كل قد إيه ترجعلك الكلمة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'look', icon: Sparkles, title: 'اختر مصحفك', sub: 'مصحف رقمي بألوانك أو مصحف مصوّر', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'battery', icon: BatteryCharging, title: 'توفير البطارية', sub: 'خيارات تقلل الاستهلاك', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'device', icon: Smartphone, title: 'جهازك', sub: 'نوعه وحجمه وطريقة مسكه', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -880,16 +891,37 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {/* Page look — the section the user asked for by name */}
         <section id="sec-look" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Sparkles className="w-5 h-5 text-amber-link" /> اختر شكل الصفحة بنفسك
+            <Sparkles className="w-5 h-5 text-amber-link" /> اختر مصحفك
           </h2>
           <Hint id="set-edition"><p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p></Hint>
           <div className="grid gap-3 sm:grid-cols-2">
+            <button onClick={pickDigital}
+              className={`text-right p-4 rounded-xl border-2 transition-smooth sm:col-span-2 ${digitalOn ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/50'}`}>
+              <p className="font-semibold text-accent-800 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-link" /> المصحف الرقمي بألوانك
+                {digitalOn && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
+              </p>
+              <p className="text-sm text-accent-600 mt-1">صفحة مصحف المدينة بنص رقمي هادي — بتختار لون الصفحة والتظليل اللي يريّح عينك، وأحكام التجويد ملوّنة</p>
+            </button>
+            {digitalOn && (
+              <div className="sm:col-span-2 grid grid-cols-5 gap-2">
+                {MUSHAF_THEMES.map((t) => (
+                  <button key={t.id} onClick={() => { setThemeIdState(t.id); saveThemeId(t.id); saved(); }}
+                    className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${themeId === t.id ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
+                    <span className="w-full h-10 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
+                      <span style={{ background: `rgba(${t.hl}, 0.85)`, padding: '0 4px', borderRadius: 4 }}>أ</span>
+                    </span>
+                    <span className="text-[11px] text-accent-800 leading-tight text-center">{t.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {EDITIONS.map((ed, i) => (
               <button key={ed.id} onClick={() => pickEdition(i)}
-                className={`text-right p-4 rounded-xl border-2 transition-smooth ${editionIdx === i ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/30'}`}>
+                className={`text-right p-4 rounded-xl border-2 transition-smooth ${editionIdx === i && !digitalOn ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/30'}`}>
                 <p className="font-semibold text-accent-800 flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-emerald-600" /> {ed.name}
-                  {editionIdx === i && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
+                  {editionIdx === i && !digitalOn && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
                 </p>
                 <p className="text-sm text-accent-600 mt-1">{EDITION_NOTES[ed.id] || ''}</p>
               </button>
@@ -900,7 +932,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               updates on every choice (edition card or gold toggle),
               so the user sees exactly what the Mushaf will open with. */}
           <div className="mt-4">
-            <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {EDITIONS[editionIdx].name}</p>
+            <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {digitalOn ? 'المصحف الرقمي' : EDITIONS[editionIdx].name}</p>
             <div className="relative mx-auto w-full max-w-[300px] rounded-2xl overflow-hidden shadow-lg bg-amber-50">
               {previewFailed ? (
                 <p className="text-sm text-accent-600 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
@@ -1404,7 +1436,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
         </button>
         <p className="text-xs text-accent-400 leading-relaxed -mt-2">
-          يعيد: شكل الصفحة، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
+          يعيد: المصحف المختار، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
         </p>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
             </>)}
