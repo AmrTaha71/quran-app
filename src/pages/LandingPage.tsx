@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Headphones, Globe, BookMarked, Link, Brain, Moon, BookOpen, HeartHandshake } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useLang } from '../lib/LanguageContext';
@@ -79,6 +79,15 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
   const { t, lang, setLang } = useLang();
   const [showLangMenu, setShowLangMenu] = useState(false);
   const c = COPY[lang] ?? COPY.en;
+
+  // Warm the first two Mushaf pages while the visitor reads this screen, so
+  // «افتح المصحف» opens instantly (first impression). Same-origin WebP, cached by the SW.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      [1, 2].forEach((n) => { const im = new Image(); im.decoding = 'async'; im.src = `/mushaf-pages/madinah/${n}.webp`; });
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, []);
 
   return (
     <div className="h-[100dvh] flex flex-col overflow-hidden page-bg relative">

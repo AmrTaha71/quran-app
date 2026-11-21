@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { madinahPageOfAyah } from '../../lib/madinahPageStarts';
 import { loadBoxes, type Box } from '../../lib/mushafBoxes';
+import { MUSHAF_EDITIONS } from '../../lib/mushafEditions';
 
 // Paper colour of the sufone scans (cream). Slightly warm so the patch
 // disappears into the page; measured on page 3: the scans are RGB(255,255,230).
@@ -61,7 +62,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
       <div className="relative w-full overflow-hidden rounded-xl border border-hairline shadow-sm bg-[#ffffe6]"
         style={{ aspectRatio: '1240 / 1754' }}>
         {imgOk && (
-          <img src={`https://cdn.jsdelivr.net/gh/sufone/medina-mushaf@master/png-d150/${page}.png`} alt={`صفحة ${page} من مصحف المدينة`}
+          <img src={MUSHAF_EDITIONS[0].imageUrl(page)} alt={`صفحة ${page} من مصحف المدينة`}
             className="absolute inset-0 w-full h-full select-none" draggable={false}
             onError={() => setImgOk(false)} />
         )}
