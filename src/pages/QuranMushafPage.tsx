@@ -4709,7 +4709,7 @@ export default function QuranMushafPage({
               )}
               {digitalView && showDigitalLegend && (
                 <div dir="rtl" onClick={(e) => e.stopPropagation()}
-                  className="absolute z-40 left-2 right-2 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] max-h-[55vh] overflow-y-auto rounded-2xl bg-white/95 shadow-2xl ring-1 ring-black/10 p-3">
+                  className="absolute z-40 left-2 right-2 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] max-h-[42vh] overflow-y-auto rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <b className="text-sm text-emerald-900">ألوان أحكام التجويد</b>
                     <button onClick={() => setShowDigitalLegend(false)} className="px-2 py-0.5 text-sm rounded-lg bg-emerald-100 text-emerald-800 font-bold">إغلاق</button>
@@ -4717,7 +4717,7 @@ export default function QuranMushafPage({
                   <ul className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                     {Object.entries(TAJWEED_RULES).map(([k, v]) => (
                       <li key={k} className="flex items-center gap-2 text-[13px] text-accent-800">
-                        <span className="inline-block w-3.5 h-3.5 rounded-full shrink-0" style={{ background: v.color }} />{v.label}
+                        <span className="inline-block w-3.5 h-3.5 rounded-full shrink-0 ring-1 ring-black/25" style={{ background: v.color }} />{v.label}
                       </li>
                     ))}
                   </ul>
