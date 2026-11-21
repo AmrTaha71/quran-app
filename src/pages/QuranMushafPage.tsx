@@ -3,6 +3,8 @@ import { openBlackScreen } from '../lib/blackScreenStore';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
+import { roundDebugOn } from '../lib/roundDebug';
 import { transcribeBlob } from '../lib/quranEar';
 import { AyahSimilar, AyahAsbab } from '../components/AyahSimilarAsbab';
 import AyahMeanings from '../components/AyahMeanings';
@@ -642,6 +644,24 @@ export default function QuranMushafPage({
   const [saveLaterMsg, setSaveLaterMsg] = useState<string | null>(null);
   useEffect(() => { setSaveLaterMsg(null); }, [selectedVerse]);
   const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'asbab' | 'tafsir'>('links');
+  // ?debug=1 only: while the ayah popup is open, show where each touch / click really lands
+  // (the event type and the element under the finger), so a dead button can be diagnosed on a phone.
+  const [tapDbg, setTapDbg] = useState<string[]>([]);
+  const popupOpen = selectedVerse !== null;
+  useEffect(() => {
+    if (!popupOpen || !roundDebugOn()) { setTapDbg([]); return; }
+    const name = (el: Element | null) => (el ? `${el.tagName.toLowerCase()}.${String((el as HTMLElement).className || '').toString().split(' ').slice(0, 3).join('.')}` : 'null');
+    const log = (e: Event) => {
+      const pt = (e as TouchEvent).changedTouches?.[0] ?? (e as PointerEvent);
+      const x = Math.round((pt as { clientX: number }).clientX ?? 0), y = Math.round((pt as { clientY: number }).clientY ?? 0);
+      const top = document.elementFromPoint(x, y);
+      const line = `${e.type}${e.defaultPrevented ? '(prevented)' : ''} @${x},${y} target=${name(e.target as Element)} top=${name(top)}`;
+      setTapDbg((prev) => [...prev.slice(-5), line]);
+    };
+    const types = ['pointerdown', 'touchstart', 'touchend', 'click'];
+    types.forEach((t) => document.addEventListener(t, log, true));
+    return () => types.forEach((t) => document.removeEventListener(t, log, true));
+  }, [popupOpen]);
   const [tafsirEdition, setTafsirEdition] = useState('ar.muyassar');
   const [tafsirText, setTafsirText] = useState<string | null>(null);
   const [tafsirLoading, setTafsirLoading] = useState(false);
@@ -5049,8 +5069,11 @@ export default function QuranMushafPage({
               </>)}
 
               {/* Ayah popup: links, then irab, then tafsir — in that order */}
-              {selectedVerse && (
-                <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/40 polish-scrim-enter"
+              {/* Rendered through a portal on document.body (2026-11-21): the popup used to live inside the
+                  fullscreen container (select-none, overflow-hidden, pointer capture, tap handlers), and its buttons
+                  were dead on iPhone Safari. Outside that container it is a plain top-level dialog. */}
+              {selectedVerse && createPortal(
+                <div className="fixed inset-0 z-[105] flex items-center justify-center p-4 bg-black/40 polish-scrim-enter"
                   onClick={(e) => { e.stopPropagation(); setSelectedVerse(null); }}>
                   <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col polish-modal-enter"
                     onClick={(e) => e.stopPropagation()}>
@@ -5330,7 +5353,10 @@ export default function QuranMushafPage({
                     </div>
                   </div>
                 </div>
-              )}
+              , document.body)}
+              {selectedVerse && tapDbg.length > 0 && createPortal(
+                <pre dir="ltr" className="fixed top-0 inset-x-0 z-[200] pointer-events-none m-0 p-1 text-[10px] leading-tight bg-black/80 text-lime-300 whitespace-pre-wrap">{tapDbg.join('\n')}</pre>,
+                document.body)}
 
               {/* Page number in clean mode only (STREAM S2): outside
                   clean mode the number is part of the merged top bar
