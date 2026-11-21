@@ -156,6 +156,10 @@ function switchRoute(prev: Route, next: Route, apply: () => void): void {
 
 function AppContent() {
   const [route, setRoute] = useState<Route>(getRouteFromHash());
+  // Every page opens at its top, not wherever the previous page was scrolled to.
+  useEffect(() => {
+    try { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch { /* ignore */ }
+  }, [route]);
   const [session, setSession] = useState<Session | null>(null);
   // Bumped after the device picker is answered, so it unmounts.
   const [, setDeviceTick] = useState(0);
