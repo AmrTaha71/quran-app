@@ -36,7 +36,7 @@
    A new deploy ships a new file (new cache names on version bump), and
    skipWaiting + clients.claim make the update take effect promptly. */
 
-const SHELL_CACHE = 'quran-shell-v11';
+const SHELL_CACHE = 'quran-shell-v12';
 const IMG_CACHE = 'quran-pages-v2';
 // Full-download cache (Settings "صفحات المصحف على جهازك"): written
 // ONLY by the page's download UI, never by the fetch handler below
@@ -325,7 +325,7 @@ self.addEventListener('fetch', (event) => {
   // and bundled .json (mutashabihat data) so similar-ayah lookup
   // works offline too. A miss with no cache and no network resolves
   // to a 504 response instead of null (respondWith(null) throws).
-  if (url.origin === self.location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png') || url.pathname.endsWith('.json') || url.pathname.endsWith('.svg') || url.pathname.endsWith('.wasm') || url.pathname.endsWith('.mjs'))) {
+  if (url.origin === self.location.origin && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png') || url.pathname.endsWith('.webp') || url.pathname.endsWith('.json') || url.pathname.endsWith('.svg') || url.pathname.endsWith('.wasm') || url.pathname.endsWith('.mjs'))) {
     event.respondWith(
       caches.match(req).then((cached) => {
         const network = fetch(req).then((res) => {
