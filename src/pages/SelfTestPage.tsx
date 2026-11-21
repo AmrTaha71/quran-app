@@ -21,7 +21,7 @@ import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../l
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
 import { RangePoint, unitStartGlobal, unitEndGlobal, unitStartPoint, unitEndPoint, rangeSummary, SURAH_START_GLOBAL, globalToPoint } from '../lib/testRanges';
 import { resolvePageRange, TOTAL_MUSHAF_PAGES } from '../lib/mushafPageRange';
-import { normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
+import { transcriptDigitToWord, normalizeArabic, normalizeWords, digitTokenToOpaque, muqattaatLetters, MUQATTAAT_NAME_TO_LETTER, MUQATTAAT_ALIF_LAM_MEEM_SECONDS, correctionSpeechText, muqattaatWindowMatches, muqattaatIsLetterPiece, muqattaatAlifLamMeemBlocked } from '../lib/arabicNormalize';
 import { overshootOwed, isOpaqueToken, normLevSim } from '../lib/overshoot';
 import { withTimeout, withPrecedingContextWord } from '../lib/corrPrompt';
 import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type PlanEntry, type ActualAyah, type ActualEntry, type VoiceTags, type RecorderEvent, type FixedTaxonomy } from '../lib/recorder';
@@ -5834,7 +5834,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // unbounded "سمعت:" renders are replaced by this capped line so
   // a full-Surah transcript cannot flood the UI.
   const heardRawText = transcript && interim ? `${transcript} ${interim}`.trim() : (transcript || interim);
-  const heardCapped = capHeardLine(heardRawText);
+  // Display only: Safari renders the spoken «ألف» as "1000" (grading already maps it back, see transcriptDigitToWord);
+  // show the word, not the digits.
+  const heardShown = heardRawText.split(/(\s+)/).map((t) => (transcriptDigitToWord(t) ? 'ألف' : t)).join('');
+  const heardCapped = capHeardLine(heardShown);
   // E1 diagnostic pieces, shared by both done-screen branches below
   // (only one branch renders at a time). The token list is rendered
   // dir=ltr with an explicit number per token, so the logical order
