@@ -30,6 +30,7 @@ import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnit
 import { cleanToken, expectedWordList } from '../lib/expectedWords';
 import MushafRevealStage from '../components/mushaf/MushafRevealStage';
 import { useMedinaPaperStatus } from '../components/mushaf/useMedinaPaperStatus';
+import ContinuousReveal from '../components/mushaf/ContinuousReveal';
 import { recordAyahWords, listWeakWords, weakWordAyahs, clearWeakWords, type WeakWord } from '../lib/wordMistakes';
 import { flushPending, SRS_REVIEW_SESSION_KEY, type SrsPending, type SlipNotice } from '../lib/srsTasmee';
 import SrsSlipNotice from '../components/SrsSlipNotice';
@@ -1713,6 +1714,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Continuous-mode display state (matched words / current ayah).
   const [contListening, setContListening] = useState(false);
   const [contProgress, setContProgress] = useState({ matched: 0, total: 0, ayahIdx: 0 });
+  // Continuous reveal on the digital page: which expected words were recited (only ever grows within a test).
+  const [contMask, setContMask] = useState<boolean[]>([]);
+  const mergeContMask = (m: boolean[]) => setContMask((prev) => {
+    let same = prev.length === m.length;
+    const out = m.map((v, i) => { const x = v || !!prev[i]; if (x !== !!prev[i]) same = false; return x; });
+    return same ? prev : out;
+  });
 
   // ---- Spoken correction machinery (2026-10-28) -------------------
   // Gender for the correction voice: profile first, localStorage
@@ -2725,6 +2733,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         setExtraByAyah({});
         setContExtras([]);
         setContProgress({ matched: 0, total: expected.length, ayahIdx: 0 });
+        setContMask([]);
         setContListening(false);
         // Teacher state is per-test: a new range starts with a clean
         // slate (no carried-over credits, prompts, or expectations).
@@ -4130,7 +4139,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // though the recognizer heard everything. Interim revises, so
   // live matches NEVER enter contCreditedRef and NEVER touch
   // grading or correction triggers — those stay finals-based.
-  const contLiveProgress = (): { count: number; ayahIdx: number; tokens: number } => {
+  const contLiveProgress = (): { count: number; ayahIdx: number; tokens: number; matched: boolean[] } => {
     const expected = liveRef.current.contExpected;
     const finals = liveRef.current.contFinals;
     const interim = lastInterimRef.current.trim();
@@ -4148,7 +4157,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     let lastIdx = -1;
     result.matched.forEach((m, i) => { if (m) { count++; lastIdx = i; } });
     const ayahIdx = lastIdx >= 0 ? expected[lastIdx].ayahIdx : 0;
-    return { count, ayahIdx, tokens: spoken.length };
+    return { count, ayahIdx, tokens: spoken.length, matched: result.matched };
   };
   const updateContProgress = () => {
     const expected = liveRef.current.contExpected;
@@ -4157,6 +4166,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     matched.forEach((m) => { if (m) matchedCount++; });
     const ayahIdx = lastMatchedIdx >= 0 ? expected[lastMatchedIdx].ayahIdx : 0;
     setContProgress({ matched: matchedCount, total: expected.length, ayahIdx });
+    mergeContMask(matched);
     return { matched, allMatched: matched.every(Boolean) };
   };
 
@@ -5649,6 +5659,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             contLastMatchAtRef.current = Date.now();
             contTokensAtLastMatchRef.current = live.tokens;
             setContProgress({ matched: live.count, total: liveRef.current.contExpected.length, ayahIdx: live.ayahIdx });
+            mergeContMask(live.matched);
             armContNoMatchTimer();
           } else if (live.tokens - contTokensAtLastMatchRef.current >= CONT_NO_MATCH_TOKENS) {
             enterContNoMatch();
@@ -6647,6 +6658,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
               <div className="h-full bg-emerald-500 transition-all" style={{ width: `${contProgress.total > 0 ? (contProgress.matched / contProgress.total) * 100 : 0}%` }} />
             </div>
+
+            <ContinuousReveal ayahs={ayahs} ayahIdx={contProgress.ayahIdx} mask={contMask} />
 
             <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-6 text-center">
               {!contListening ? (

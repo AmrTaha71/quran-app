@@ -16,7 +16,7 @@ const PAPER = '#f8f1de';
 const DIGIT_FONT = "'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 const FONT = "'KFGQPC Uthmanic Hafs', 'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 
-function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox; theme?: MushafTheme; uniform?: number | null }) {
+function Word({ word, wPx, hPx, box, theme, uniform, tint }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox; theme?: MushafTheme; uniform?: number | null; tint?: string }) {
   const inner = useRef<HTMLSpanElement | null>(null);
   const [fit, setFit] = useState({ size: Math.max(8, hPx * 0.95), k: 1 });
   // Largest font that keeps the line's shape: start from almost the box height, shrink only if the word is
@@ -41,7 +41,7 @@ function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx:
         ? { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` }
         : { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%`, background: PAPER, boxShadow: `0 0 0 1.5px ${PAPER}` }}>
       <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: fit.size, lineHeight: 1, whiteSpace: 'nowrap', color: theme ? theme.ink : TAJWEED_INK, ...(theme ? { WebkitTextStroke: '0.014em currentColor', textRendering: 'geometricPrecision' as const, WebkitFontSmoothing: 'antialiased' as const } : {}), transform: `scaleX(${fit.k})`, transformOrigin: 'center' }}>
-        {word.segs.map((s, i) => <span key={i} style={s.rule ? { color: adaptRuleColor(ruleColor(s.rule), !!theme?.dark) } : undefined}>{s.text}</span>)}
+        {word.segs.map((s, i) => <span key={i} style={tint ? { color: tint } : s.rule ? { color: adaptRuleColor(ruleColor(s.rule), !!theme?.dark) } : undefined}>{s.text}</span>)}
       </span>
     </div>
   );
@@ -201,7 +201,9 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
   );
 }
 
-export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme; page?: number }) {
+export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page, wordMark }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme; page?: number;
+  /** Tasmee' reveal: 'hidden' = word not drawn (its box and the ayah medallion stay), 'wrong' = drawn in red. */
+  wordMark?: (b: DigitalBox) => 'hidden' | 'wrong' | undefined }) {
   const root = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -248,7 +250,9 @@ export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page
       {size.w > 0 && boxes.map((b) => {
         const word = digitalWordsOf(tajweed, b.surah, b.ayah)?.[b.wordNo - 1];
         if (!word || b.width <= 0 || b.height <= 0) return null;
-        return <Word key={b.key} word={word} box={b} theme={theme} uniform={theme ? uni : null} wPx={(b.width / 100) * size.w} hPx={(b.height / 100) * size.h} />;
+        const mark = wordMark?.(b);
+        if (mark === 'hidden') return null;
+        return <Word key={b.key} word={word} box={b} theme={theme} uniform={theme ? uni : null} tint={mark === 'wrong' ? '#dc2626' : undefined} wPx={(b.width / 100) * size.w} hPx={(b.height / 100) * size.h} />;
       })}
     </div>
   );
