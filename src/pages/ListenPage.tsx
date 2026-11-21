@@ -29,7 +29,7 @@ import {
 } from '../lib/listenRecovery';
 import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS } from '../lib/quranBoundaries';
-import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
+import { RECITERS, DEFAULT_RECITER_ID, SPEED_ORDER, SPEED_LABEL, speedOf } from '../lib/reciters';
 import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
 import type { RiwayaPosition } from '../lib/riwayat';
 import {
@@ -2575,32 +2575,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             </span>
           </button>
 
-          {riwayaId === null && !hadrOn && (
-            <>
-          <p className="font-semibold text-accent-800 mt-5 mb-2">القراء للاختيار بينهم</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {RECITERS.map((r) => (
-              <button
-                key={r.id}
-                disabled={locked}
-                onClick={() => changeReciter(r.id)}
-                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
-                  reciterId === r.id
-                    ? 'grad-emerald-door text-white polish-press'
-                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
-                }`}
-              >
-                {r.name}
-              </button>
-            ))}
-          </div>
-            </>
-          )}
-
           {/* Group 2 — الروايات, as clear rows (not wrapping
               chips): each row shows riwaya + narrator, and the
               selected row is unmistakable (emerald + check). */}
-          <p className="font-semibold text-accent-800 mt-5 mb-2">الروايات</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">الرواية (حفص أو غيرها)</p>
           <div className="grid gap-2">
             {RIWAYAT.map((r) => (
               <button
@@ -2621,6 +2599,39 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           <p className="text-sm text-accent-600 mt-3">
             وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة (أما صوت الحدر — الجهني — فملف سورته قابل للتحميل من قسم «الاستماع دون اتصال» تحت).
           </p>
+
+          {riwayaId === null && !hadrOn && (
+            <>
+          {/* Speed -> reciter (hafs): groups by measured pace, each reciter shows its audio quality. */}
+          <p className="font-semibold text-accent-800 mt-5 mb-2">السرعة ثم القارئ</p>
+          {SPEED_ORDER.map((sp) => {
+            const group = RECITERS.filter((r) => speedOf(r) === sp);
+            if (group.length === 0) return null;
+            return (
+              <div key={sp} className="mb-3">
+                <p className="text-sm font-semibold text-accent-600 mb-1.5">{SPEED_LABEL[sp]}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {group.map((r) => (
+                    <button
+                      key={r.id}
+                      disabled={locked}
+                      onClick={() => changeReciter(r.id)}
+                      className={`w-full px-3 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
+                        reciterId === r.id
+                          ? 'grad-emerald-door text-white polish-press'
+                          : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
+                      }`}
+                    >
+                      {r.name}
+                      <span className={`block text-xs font-normal mt-0.5 ${reciterId === r.id ? 'text-emerald-100' : 'text-accent-600'}`}>{r.quality}k</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+            </>
+          )}
 
           {/* Pace area: electronic speed chips (persisted) +
               the hadr card. The chips apply to the Hafs, riwaya,
