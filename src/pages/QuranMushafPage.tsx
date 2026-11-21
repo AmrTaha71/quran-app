@@ -1411,12 +1411,70 @@ export default function QuranMushafPage({
     touchStartX.current = t.clientX;
     touchStartY.current = t.clientY;
   };
+  // Finger-follow page turn (fullscreen): the page slides with the finger and the NEXT/PREVIOUS page
+  // slides in beside it. Pure translateX on the wrapper (never a scale), so the page can't shrink.
+  // dir 1 = next page revealed on the left (RTL book), -1 = previous page revealed on the right.
+  const [dragDir, setDragDir] = useState<1 | -1 | null>(null);
+  const dragRef = useRef<{ dx: number; active: boolean; hold: boolean; target: number }>({ dx: 0, active: false, hold: false, target: 0 });
+  const setWrapMove = (x: number, animate: boolean) => {
+    const w = pageWrapRef.current;
+    if (!w) return;
+    w.style.transition = animate ? 'transform 190ms ease-out' : 'none';
+    w.style.transform = x === 0 && !animate ? '' : `translate3d(${x}px,0,0)`;
+  };
+  const clearWrapMove = () => {
+    const w = pageWrapRef.current;
+    if (w) { w.style.transition = ''; w.style.transform = ''; w.style.overflow = ''; w.style.clipPath = ''; }
+    dragRef.current = { dx: 0, active: false, hold: false, target: 0 };
+    setDragDir(null);
+  };
+  const handlePageTouchMove = (e: React.TouchEvent) => {
+    if (!showFullscreen || touchStartX.current === null || touchStartY.current === null) return;
+    if (showRatelIntro || showEditionPickerInFullscreen || selectedVerse || dragRef.current.hold) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX.current;
+    const dy = t.clientY - touchStartY.current;
+    if (!dragRef.current.active) {
+      if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy)) return;
+      dragRef.current.active = true;
+      const w = pageWrapRef.current;
+      if (w) { w.style.overflow = 'visible'; w.style.clipPath = 'inset(0 -100vw 0 -100vw)'; }
+    }
+    const dir: 1 | -1 = dx > 0 ? 1 : -1;
+    const target = currentPage + dir;
+    const valid = target >= 1 && target <= TOTAL_PAGES;
+    const eff = valid ? dx : dx * 0.25; // rubber-band at the first / last page
+    dragRef.current.dx = eff;
+    setDragDir((cur) => (cur === dir ? cur : dir));
+    setWrapMove(eff, false);
+  };
   const handlePageTouchEnd = (e: React.TouchEvent) => {
     if (touchStartX.current === null || touchStartY.current === null) return;
     const startX = touchStartX.current;
     const startY = touchStartY.current;
     touchStartX.current = null;
     touchStartY.current = null;
+    if (dragRef.current.active) {
+      lastSwipeAt.current = Date.now();
+      const w = pageWrapRef.current;
+      const width = w ? w.offsetWidth : window.innerWidth;
+      const dx = dragRef.current.dx;
+      const dir: 1 | -1 = dx > 0 ? 1 : -1;
+      const target = currentPage + dir;
+      const valid = target >= 1 && target <= TOTAL_PAGES;
+      if (valid && Math.abs(dx) > width * 0.2) {
+        dragRef.current.hold = true;
+        dragRef.current.target = target;
+        setWrapMove(dir * width, true);
+        goToPage(target);
+        // released by the effect below once the new page is displayed (failsafe 1.8s)
+        setTimeout(() => { if (dragRef.current.hold) clearWrapMove(); }, 1800);
+      } else {
+        setWrapMove(0, true);
+        setTimeout(clearWrapMove, 210);
+      }
+      return;
+    }
     if (showRatelIntro || showEditionPickerInFullscreen || selectedVerse) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - startX;
@@ -1440,6 +1498,18 @@ export default function QuranMushafPage({
     // instantly, so word taps looked dead while strip buttons (click-only)
     // worked fine.
   };
+
+  useEffect(() => {
+    if (dragRef.current.hold && displayedPage === dragRef.current.target) clearWrapMove();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedPage]);
+  // Warm the cache for the pages a swipe reveals, so they are there the moment the finger moves.
+  useEffect(() => {
+    if (!showFullscreen) return;
+    [currentPage - 1, currentPage + 1].forEach((n) => {
+      if (n >= 1 && n <= TOTAL_PAGES) { const im = new Image(); im.src = edition.imageUrl(n); }
+    });
+  }, [currentPage, showFullscreen, edition]);
 
   const goToSurah = (surahNo: number) => {
     goToPage(getSurahStartPage(surahNo));
@@ -4807,7 +4877,7 @@ export default function QuranMushafPage({
                 // on tall portrait screens 100vw still binds, so the
                 // page stays maximal there.
                 <div ref={pageWrapRef}
-                  className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] transition-transform duration-300 ${madinahNorm ? 'overflow-hidden' : ''}`}
+                  className={`relative touch-none will-change-transform ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
                       // 2026-11-21 (Dr. Amr): the page NEVER shrinks. It used to scale to
@@ -4842,7 +4912,27 @@ export default function QuranMushafPage({
                     void handleWordTap(e.clientX, e.clientY);
                   }}
                   onTouchStart={handlePageTouchStart}
-                  onTouchEnd={handlePageTouchEnd}>
+                  onTouchMove={handlePageTouchMove}
+                  onTouchEnd={handlePageTouchEnd}
+                  onTouchCancel={() => { touchStartX.current = null; touchStartY.current = null; if (dragRef.current.active) { setWrapMove(0, true); setTimeout(clearWrapMove, 210); } }}>
+                  {/* The page revealed while swiping: previous / next, sliding in beside the current one. */}
+                  {dragDir !== null && (() => {
+                    const n = currentPage + dragDir;
+                    if (n < 1 || n > TOTAL_PAGES) return null;
+                    const nn = edition.id === 'madinah'
+                      ? (useMadinahCover
+                        ? coverNormForPaperBox(MADINAH_PAPER_BOXES[n - 1], viewportAspect, madinahFrameBand(n))
+                        : normForPaperBox(MADINAH_PAPER_BOXES[n - 1]))
+                      : null;
+                    const off = dragDir === 1 ? -100 : 100;
+                    return (
+                      <img key={`peek-${edition.id}-${n}`} src={edition.imageUrl(n)} alt="" draggable={false}
+                        className="absolute max-w-none pointer-events-none [-webkit-touch-callout:none] object-contain"
+                        style={nn
+                          ? { left: `calc(${off}% + ${nn.imgL}%)`, top: `${nn.imgT}%`, width: `${nn.imgW}%`, height: `${nn.imgH}%` }
+                          : { left: `${off}%`, top: 0, width: '100%', height: '100%' }} />
+                    );
+                  })()}
                   {/* Displayed-page image (SHAKE FIX 2026-10-28): the key
                       follows displayedPage, so the previous page stays
                       mounted — at its own norm — until the new image
@@ -4993,17 +5083,16 @@ export default function QuranMushafPage({
                   a boundary page's dead zone vanishes entirely. */}
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage - 1); }} disabled={currentPage <= 1}
                 aria-label="الصفحة السابقة"
-                className="absolute top-0 bottom-0 right-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-l from-black/10 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
-                <div className={`relative z-10 flex flex-col items-center gap-1 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
-                  <div className="p-2 sm:p-3 bg-black/25 backdrop-blur-sm group-hover:bg-black/45 text-white rounded-full ring-1 ring-white/25 transition-smooth group-disabled:opacity-20">
+                className="absolute top-0 bottom-0 right-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-transparent disabled:opacity-20 disabled:pointer-events-none group">
+                <div className={`relative z-10 flex flex-col items-center gap-1 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-35' : 'opacity-0'}`}>
+                  <div className="p-1.5 sm:p-2 bg-black/10 text-white rounded-full transition-smooth group-disabled:opacity-20">
                     <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                  <span className="text-[10px] font-bold text-white/90 bg-black/25 px-2 py-0.5 rounded-full ring-1 ring-white/20">السابق</span>
                 </div>
               </button>
               <button onClick={(e) => { e.stopPropagation(); goToPage(currentPage + 1); }} disabled={currentPage >= TOTAL_PAGES}
                 aria-label="الصفحة التالية"
-                className="absolute top-0 bottom-0 left-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-gradient-to-r from-black/10 to-transparent disabled:opacity-20 disabled:pointer-events-none group">
+                className="absolute top-0 bottom-0 left-0 w-12 sm:w-16 lg:w-24 z-20 flex flex-col items-center justify-center gap-1 bg-transparent disabled:opacity-20 disabled:pointer-events-none group">
                 {/* FACING STRIP REMOVED 2026-10-27 per user ("الغي الهوامش"):
                     no side sliver in fullscreen — the main page only, so
                     no second page's text ever overlaps its left edge. */}
@@ -5048,11 +5137,10 @@ export default function QuranMushafPage({
                     <div className="absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-black/30 to-transparent pointer-events-none" />
                   </div>
                 )}
-                <div className={`relative z-10 flex flex-col items-center gap-1 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
-                  <div className="p-2 sm:p-3 bg-black/25 backdrop-blur-sm group-hover:bg-black/45 text-white rounded-full ring-1 ring-white/25 transition-smooth group-disabled:opacity-20">
+                <div className={`relative z-10 flex flex-col items-center gap-1 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-35' : 'opacity-0'}`}>
+                  <div className="p-1.5 sm:p-2 bg-black/10 text-white rounded-full transition-smooth group-disabled:opacity-20">
                     <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
                   </div>
-                  <span className="text-[10px] font-bold text-white/90 bg-black/25 px-2 py-0.5 rounded-full ring-1 ring-white/20">التالي</span>
                 </div>
               </button>
 
