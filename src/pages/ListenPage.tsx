@@ -2633,40 +2633,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             </>
           )}
 
-          {/* Pace area: electronic speed chips (persisted) +
-              the hadr card. The chips apply to the Hafs, riwaya,
-              and journey engines; hadr disables them (its pace is
-              natural, never electronic) and always plays at 1x.
-              Read-along highlight stays on at every speed: it
-              follows ayah files via 'ended' events, not a clock,
-              so speed cannot desync it (no timers in the ayah
-              advance path — verified by grep, see EVIDENCE.md). */}
-          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
-          <div className="grid grid-cols-3 gap-2">
-            {PLAYBACK_RATES.map((rate) => (
-              <button
-                key={rate}
-                disabled={locked || hadrOn}
-                onClick={() => changeRate(rate)}
-                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
-                  playbackRate === rate
-                    ? 'grad-emerald-door text-white polish-press'
-                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
-                }`}
-              >
-                {PLAYBACK_RATE_LABELS[rate]}
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-accent-600 mt-2">
-            سرعة إلكترونية — اختيارك يُحفظ لمراتك القادمة.
-          </p>
-          {hadrOn && (
-            <p className="text-sm text-accent-600 mt-1">
-              السرعة الإلكترونية لا تنطبق على وضع الحدر — سرعته طبيعية من التسجيل نفسه.
-            </p>
-          )}
-
           {/* Hadr: natural fast pace, surah-file playback (no
               read-along, resume supported). DISTINCT from the
               electronic chips above — never label a playbackRate
@@ -2728,6 +2694,40 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 : riwayaId !== null
                   ? 'السورة والرواية مقفلتان أثناء التشغيل — أوقف التشغيل أولا لتغييرهما.'
                   : 'السورة والقارئ والسرعة ونوع الاستماع مقفلة أثناء التشغيل — أوقف التشغيل أولا لتغييرها.'}
+            </p>
+          )}
+
+          {/* Pace area (LAST picker, right above ابدأ الاستماع, Dr. Amr 2026-11-21): electronic speed chips (persisted) +
+              the hadr card. The chips apply to the Hafs, riwaya,
+              and journey engines; hadr disables them (its pace is
+              natural, never electronic) and always plays at 1x.
+              Read-along highlight stays on at every speed: it
+              follows ayah files via 'ended' events, not a clock,
+              so speed cannot desync it (no timers in the ayah
+              advance path — verified by grep, see EVIDENCE.md). */}
+          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
+          <div className="grid grid-cols-3 gap-2">
+            {PLAYBACK_RATES.map((rate) => (
+              <button
+                key={rate}
+                disabled={locked || hadrOn}
+                onClick={() => changeRate(rate)}
+                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
+                  playbackRate === rate
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
+                }`}
+              >
+                {PLAYBACK_RATE_LABELS[rate]}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-accent-600 mt-2">
+            سرعة إلكترونية — اختيارك يُحفظ لمراتك القادمة.
+          </p>
+          {hadrOn && (
+            <p className="text-sm text-accent-600 mt-1">
+              السرعة الإلكترونية لا تنطبق على وضع الحدر — سرعته طبيعية من التسجيل نفسه.
             </p>
           )}
 
@@ -2795,7 +2795,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 disabled={locked}
                 onChange={changeJourneyReciter}
                 options={[
-                  ...RECITERS.map((r) => ({ value: r.id as string, label: r.name })),
+                  ...RECITERS.map((r) => ({ value: r.id as string, label: `${r.name} · ${SPEED_LABEL[speedOf(r)]} · ${r.quality}k${r.unverified ? ' · تجريبي' : ''}` })),
                   ...(hubView === 'single' ? [{ value: JUHANI_RECITER_ID as string, label: JUHANI_RECITER_NAME }] : []),
                 ]}
               />
@@ -2849,6 +2849,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
             </div>
           )}
+          {/* Explicit start control: the mode card below also starts
+              playback on tap, but it reads as an info card (same
+              name as the hub card just tapped), so first-time
+              journey users see no play button. This button is
+              unmissable and calls the same startJourney. */}
+          {hubView === 'varied' && (
+            <VariedPlanPanel />
+          )}
           {/* B-14: electronic speed chips for the khatma journeys too
               (same persisted 'quran-playback-rate' + changeRate as
               سماع حر). Picked before start; locked while playing. */}
@@ -2869,14 +2877,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
             ))}
           </div>
-          {/* Explicit start control: the mode card below also starts
-              playback on tap, but it reads as an info card (same
-              name as the hub card just tapped), so first-time
-              journey users see no play button. This button is
-              unmissable and calls the same startJourney. */}
-          {hubView === 'varied' && (
-            <VariedPlanPanel />
-          )}
           {THREE_MODES.filter((m) => m.id === hubView).map((m) => {
             const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
             return (
