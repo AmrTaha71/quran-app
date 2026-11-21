@@ -36,6 +36,11 @@ export const RECITERS: Reciter[] = [
   { id: 'jaber', name: 'علي جابر', quality: '64', audioUrl: everyayah('Ali_Jaber_64kbps') },
   // Hani Ar-Rifai: added as a trial (2026-11-08). Folder name and licence not verified from the sandbox; check playback on device.
   { id: 'rifai', wps: 0.89, name: 'هاني الرفاعي', quality: '192', audioUrl: everyayah('Hani_Rifai_192kbps') },
+  // Added 2026-11-21 (Dr. Amr): all three have word timings for the whole Quran (public/corr-timings), so they
+  // also work as correction reciters. EveryAyah folders as in CORR_RECITERS; playback not verified from the sandbox.
+  { id: 'shuraym', wps: 1.24, name: 'سعود الشريم', quality: '128', audioUrl: everyayah('Saood_ash-Shuraym_128kbps') },
+  { id: 'shaatree', wps: 0.88, name: 'أبو بكر الشاطري', quality: '128', audioUrl: everyayah('Abu_Bakr_Ash-Shaatree_128kbps') },
+  { id: 'tablaway', wps: 0.78, name: 'محمد الطبلاوي', quality: '128', audioUrl: everyayah('Mohammad_al_Tablaway_128kbps') },
 ];
 
 /** Speed groups of the Hafs reciters (reciter picker: riwaya -> speed -> reciter). The class comes from the measured
