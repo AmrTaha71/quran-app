@@ -231,7 +231,9 @@ export class ImamFollower {
   private sinceStep = 0;
   private cands: { surah: number; ayah: number }[] = [];
   readonly opt: FollowOptions;
-  constructor(private idx: FollowIndex, opt: Partial<FollowOptions> = {}) {
+  private idx: FollowIndex;
+  constructor(idx: FollowIndex, opt: Partial<FollowOptions> = {}) {
+    this.idx = idx;
     this.opt = { ...DEFAULT_FOLLOW_OPTIONS, ...opt };
   }
 

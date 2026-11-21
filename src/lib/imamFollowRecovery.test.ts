@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildFollowIndex, ImamFollower, istiadhaVerse } from './imamFollow';
+import { buildFollowIndex, ImamFollower, istiadhaVerse } from './imamFollow.ts';
 
 const d = JSON.parse(readFileSync(new URL('../../public/models/quranlab/follow-skel.json', import.meta.url), 'utf8'));
 const verses = d.verses.map((v: [number, number, string]) => ({ surah: v[0], ayah: v[1], words: v[2].split(' ').map((s) => ({ norm: s, skel: s })) }));

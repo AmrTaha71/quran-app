@@ -1311,6 +1311,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'}`;
   // Debug stamp lines are admin-only (flag set by Settings' admin check).
   // Shown by default while recitation correction is being tuned (2026-11-08); set 'quran-show-diag' = '0' to hide.
+  // Standing note about correction clips: stays until the user taps «فهمت».
+  const CORR_NOTE_KEY = 'quran-corr-note-ack-v1';
+  const [corrNoteAck, setCorrNoteAck] = useState<boolean>(() => { try { return localStorage.getItem(CORR_NOTE_KEY) === '1'; } catch { return false; } });
+  const corrNote = corrNoteAck ? null : (
+    <div className="bg-amber-50 border border-hairline-amber rounded-2xl shadow-sm p-4">
+      <p className="font-bold text-amber-800 mb-1">لما المصحح يصحّح لك</p>
+      <p className="text-sm text-accent-700 leading-relaxed">اسكت وسمع المصحح لحد ما يخلص، وبعدين <b>عيد الكلمتين اللي صلّحهم لك</b> وراه، وكمّل بعدها.</p>
+      <button onClick={() => { setCorrNoteAck(true); try { localStorage.setItem(CORR_NOTE_KEY, '1'); } catch { /* ignore */ } }}
+        className="mt-3 px-4 py-2 rounded-xl bg-emerald-700 text-white text-sm font-bold">فهمت</button>
+    </div>
+  );
   const showDiag = (() => { try { return localStorage.getItem('quran-show-diag') !== '0'; } catch { return true; } })();
   // D1 shell-aware mic-absent wording (R7): when SR is absent AND
   // the shell is known, name the shell and the actionable move
@@ -6029,6 +6040,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       <div className="max-w-5xl mx-auto px-4 py-6">
         {phase === 'setup' && (
           <div className="space-y-5">
+            {corrNote}
             {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine}</p>)}
             {/* Batch 1: the old unsupported note was a small line
                 buried in the settings card. A user on a voiceless
@@ -6617,6 +6629,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         {phase === 'testing' && textOfflineNotice && (
           <p className="text-sm font-medium text-amber-link bg-amber-50 border border-hairline-amber rounded-2xl px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
         )}
+
+        {phase === 'testing' && corrNote}
 
         {phase === 'testing' && testMode === 'continuous' && (
           <div className="space-y-4">
