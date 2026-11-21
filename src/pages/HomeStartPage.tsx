@@ -294,7 +294,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             onClick={() => openTest(onNavigate)} />
           <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             onClick={() => onNavigate('quiz')} />
-          <HomeTile icon={<AudioLines />} glaze="emerald" title="تَتَبُّعُ الإِمَامِ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
+          <HomeTile icon={<AudioLines />} glaze="emerald" title="تَتَبُّعُ القِرَاءَةِ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
         </div>
 
