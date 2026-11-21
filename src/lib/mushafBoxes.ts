@@ -4,6 +4,9 @@ export type Box = { s: number; a: number; w: number; x0: number; y0: number; x1:
 
 const boxCache: Record<number, Box[]> = {};
 
+/** Boxes of a page if already loaded (sync), else null. */
+export function peekBoxes(page: number): Box[] | null { return boxCache[page] ?? null; }
+
 export async function loadBoxes(page: number): Promise<Box[] | null> {
   if (boxCache[page]) return boxCache[page];
   try {

@@ -831,12 +831,16 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             {doors.filter((d) => (d.id !== 'admin' || adminGateError || showAdminUi) && (d.id !== 'diag' || showAdminUi)).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
                 style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
-                className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
+                className={d.id === 'admin'
+                  ? 'text-right p-4 sm:p-5 md:p-6 lg:p-7 rounded-2xl door-enter polish-press col-span-2 sm:col-span-3 flex items-center gap-4 bg-gradient-to-l from-emerald-800 to-emerald-950 border-2 border-amber-400 shadow-lg'
+                  : 'text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press'}>
                 <span className="w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3 md:mb-4">
                   <d.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 text-emerald-800" />
                 </span>
-                <span className="block text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-ink">{d.title}</span>
-                {d.sub && <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>}
+                <span className="block">
+                  <span className={`block text-sm sm:text-base md:text-lg lg:text-xl font-semibold ${d.id === 'admin' ? 'text-amber-200' : 'text-ink'}`}>{d.title}</span>
+                  {d.sub && <span className={`block text-xs sm:text-sm lg:text-base mt-1 md:mt-2 ${d.id === 'admin' ? 'text-emerald-100' : 'text-ink-2'}`}>{d.sub}</span>}
+                </span>
               </button>
             ))}
           </div>

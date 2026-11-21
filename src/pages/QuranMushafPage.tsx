@@ -3,7 +3,7 @@ import LinkScopeNote from '../components/LinkScopeNote';
 import { openBlackScreen } from '../lib/blackScreenStore';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
-import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { roundDebugOn } from '../lib/roundDebug';
 import { transcribeBlob } from '../lib/quranEar';
@@ -21,7 +21,7 @@ import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
 import { dailyDua } from '../lib/personalTouch';
-import { loadBoxes } from '../lib/mushafBoxes';
+import { loadBoxes, peekBoxes } from '../lib/mushafBoxes';
 import { warmPage, isPageReady } from '../lib/pagePreload';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
@@ -302,6 +302,8 @@ export default function QuranMushafPage({
   const turnDirRef = useRef<1 | -1>(1);
   const slideStartRef = useRef<{ at: number; dir: 1 | -1 } | null>(null);
   const displayedPageRef = useRef(displayedPage);
+  const digitalViewRef = useRef(false);
+  const tajweedMapRef = useRef<TajweedMap | null>(null);
   const [selectedEdition, setSelectedEdition] = useState(readStoredEdition);
   const [ayahFilter, setAyahFilter] = useState('');
   const [versesListOpen, setVersesListOpen] = useState(false);
@@ -416,6 +418,8 @@ export default function QuranMushafPage({
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [mushafHl, setMushafHl] = useState<string>(() => loadHl(loadThemeId()));
   const mushafTheme = { ...themeById(mushafThemeId), hl: mushafHl };
+  digitalViewRef.current = digitalView;
+  tajweedMapRef.current = tajweedMap;
   useEffect(() => {
     if (!digitalView || tajweedMap) return;
     let alive = true;
@@ -1290,6 +1294,12 @@ export default function QuranMushafPage({
         if (Date.now() >= deadlineAt) { done(); return; }
         timer = setTimeout(probe, 300);
       };
+      // Digital page needs no scan: when its boxes are already loaded and every word has digital text,
+      // turn at once (waiting for the yellow scan is what showed yellow on slow connections).
+      const gb = peekBoxes(p);
+      const tm = tajweedMapRef.current;
+      if (digitalViewRef.current && tm && edition.id === 'madinah' && gb
+        && pageIsFullyDigital(gb.map((b) => ({ surah: b.s, ayah: b.a, wordNo: b.w })), tm)) { done(); return; }
       if (isPageReady(url)) { done(); return; }
       // Load AND decode before showing, so the page paints ready.
       void warmPage(url).then((ok) => { if (ok) done(); else onFail(); });
@@ -3613,8 +3623,8 @@ export default function QuranMushafPage({
   // border boxes (no word under them) and are dropped, so taps on the
   // border open nothing.
   type WordBox = { key: string; surah: number; ayah: number; left: number; top: number; width: number; height: number };
-  const [pageWordBoxes, setPageWordBoxes] = useState<WordBox[] | null>(null);
-  pageWordBoxesRef.current = pageWordBoxes;
+  const [rawPageWordBoxes, setPageWordBoxes] = useState<WordBox[] | null>(null);
+  pageWordBoxesRef.current = rawPageWordBoxes;
   // Digital page: while the new page's boxes are still loading, cover the scan with the chosen page colour
   // (otherwise the yellow scan shows for a moment, then flips to the digital page). Gives up after 2.5s.
   const [coverGiveUp, setCoverGiveUp] = useState(false);
@@ -3630,6 +3640,17 @@ export default function QuranMushafPage({
     if (edition.id !== 'madinah') { setPageWordBoxes(null); return; }
     const cached = wordBoxCache.current[currentPage];
     if (cached) { setPageWordBoxes(cached); return; }
+    const pre = peekBoxes(currentPage);
+    if (pre) {
+      const wb = pre.map((b) => ({
+        key: `${b.s}:${b.a}:${b.w}`, surah: b.s, ayah: b.a,
+        left: (b.x0 / 1240) * 100, top: (b.y0 / 1754) * 100,
+        width: ((b.x1 - b.x0) / 1240) * 100, height: ((b.y1 - b.y0) / 1754) * 100,
+      }));
+      wordBoxCache.current[currentPage] = wb;
+      setPageWordBoxes(wb);
+      return;
+    }
     let cancelled = false;
     const file = String(currentPage).padStart(3, '0');
     // 2026-11-19 (exact highlight): FIRST the boxes measured on our own page
@@ -3752,7 +3773,7 @@ export default function QuranMushafPage({
     goToPage(page);
     // goToPage is a plain function of this component (stable behaviour).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [followTracking, followOn, followPos, currentPage, pageWordBoxes]);
+  }, [followTracking, followOn, followPos, currentPage, rawPageWordBoxes]);
 
   // Madinah paper-box normalization — the page-turn dance fix. The
   // sufone scans frame the paper differently per page (two widths,
@@ -3861,6 +3882,27 @@ export default function QuranMushafPage({
   // Full-image % word box -> container % rect (for the tap flash).
   // Standalone digital page: text on a plain coloured page, no scan under it. Only when every word of
   // the page has trusted digital text; the few other pages keep the scan with the text over it.
+  const digitalBg = digitalView && !!tajweedMap && edition.id === 'madinah';
+  // Pages 1 and 2 (Al-Fatiha, start of Al-Baqara) are short: in the digital page the text block is enlarged
+  // to fill the ornamental frame. Done on the boxes themselves, so taps and the recitation highlight follow.
+  const pageWordBoxes = useMemo<WordBox[] | null>(() => {
+    const raw = rawPageWordBoxes;
+    if (!raw || !madinahNorm || !digitalBg || currentPage > 2 || raw.length === 0) return raw;
+    const { imgL, imgT, imgW, imgH } = madinahNorm;
+    const cs = raw.map((b) => ({ l: imgL + (b.left * imgW) / 100, t: imgT + (b.top * imgH) / 100, w: (b.width * imgW) / 100, h: (b.height * imgH) / 100 }));
+    const minL = Math.min(...cs.map((c) => c.l)), maxR = Math.max(...cs.map((c) => c.l + c.w));
+    const minT = Math.min(...cs.map((c) => c.t)), maxB = Math.max(...cs.map((c) => c.t + c.h));
+    const bw = maxR - minL, bh = maxB - minT;
+    if (bw <= 0 || bh <= 0) return raw;
+    const sc = Math.min(80 / bw, 62 / bh);
+    const cx = (minL + maxR) / 2, cy = (minT + maxB) / 2;
+    return raw.map((b, i) => {
+      const c = cs[i];
+      const nl = 50 + (c.l - cx) * sc, nt = 50 + (c.t - cy) * sc, nw = c.w * sc, nh = c.h * sc;
+      return { ...b, left: ((nl - imgL) * 100) / imgW, top: ((nt - imgT) * 100) / imgH, width: (nw * 100) / imgW, height: (nh * 100) / imgH };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawPageWordBoxes, digitalBg, currentPage, madinahNorm?.imgL, madinahNorm?.imgT, madinahNorm?.imgW, madinahNorm?.imgH]);
   const standalonePage = digitalView && !!tajweedMap && edition.id === 'madinah' && !!pageWordBoxes && displayedPage === currentPage
     && pageIsFullyDigital(pageWordBoxes.map((b) => ({ surah: b.surah, ayah: b.ayah, wordNo: Number(b.key.split(':')[2]) || 0 })), tajweedMap);
   const imageBoxToContainer = (b: WordBox) => {
@@ -4042,7 +4084,7 @@ export default function QuranMushafPage({
             </button>
             <button onClick={() => setShowEditionPicker(true)}
               className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-[11px] font-semibold transition-smooth border border-amber-200">
-              <Layers className="w-3.5 h-3.5" /> {edition.name}
+              <Layers className="w-3.5 h-3.5" /> {digitalBg ? 'المصحف الرقمي' : edition.name}
             </button>
             <button onClick={() => { setShowIndex(true); setIndexTab('surah'); }}
               className="flex items-center gap-1 px-1.5 py-0.5 bg-stone-50 hover:bg-stone-100 text-accent-700 rounded-lg text-[11px] font-semibold transition-smooth border border-gray-200">
@@ -4775,7 +4817,7 @@ export default function QuranMushafPage({
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
               className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-              <Layers className="w-4 h-4" /> {edition.name}
+              <Layers className="w-4 h-4" /> {digitalBg ? 'المصحف الرقمي' : edition.name}
             </button>
           )}
 
@@ -4909,8 +4951,8 @@ export default function QuranMushafPage({
                       // 2026-11-21 (Dr. Amr): the page NEVER shrinks. It used to scale to
                       // 0.72 while the controls were visible, which fired on every swipe
                       // and edge tap and made page turns look like zoom-outs.
-                      ? { width: '100vw', height: '100dvh', background: standalonePage ? mushafTheme.bg : '#f8f1de', ...(standalonePage ? { ['--mushaf-hl-rgb' as string]: mushafTheme.hl } : {}) }
-                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: standalonePage ? mushafTheme.bg : '#f8f1de', ...(standalonePage ? { ['--mushaf-hl-rgb' as string]: mushafTheme.hl } : {}) })
+                      ? { width: '100vw', height: '100dvh', background: (standalonePage || digitalBg) ? mushafTheme.bg : '#f8f1de', ...(standalonePage ? { ['--mushaf-hl-rgb' as string]: mushafTheme.hl } : {}) }
+                      : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: (standalonePage || digitalBg) ? mushafTheme.bg : '#f8f1de', ...(standalonePage ? { ['--mushaf-hl-rgb' as string]: mushafTheme.hl } : {}) })
                     : { aspectRatio: String(imgAspect), background: '#f8f1de' }}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -4953,7 +4995,7 @@ export default function QuranMushafPage({
                     const off = dragDir === 1 ? -100 : 100;
                     // Digital page: reveal a plain page in the chosen colour, not the yellow scan
                     // (it flashed yellow, then flipped to the digital colour on landing).
-                    if (standalonePage) {
+                    if (digitalBg) {
                       return <div key={`peek-digital-${n}`} className="absolute inset-0 pointer-events-none"
                         style={{ left: `${off}%`, background: mushafTheme.bg }} />;
                     }
@@ -4977,7 +5019,7 @@ export default function QuranMushafPage({
                       attempts reset on every turn. */}
                   <RetryPageImg key={edition.id} src={edition.imageUrl(displayedPage)} alt={`صفحة ${displayedPage}`}
                     className={`${fullscreenNorm ? 'absolute touch-none max-w-none' : 'h-full w-full'} object-contain [-webkit-touch-callout:none]`}
-                    style={fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%`, animation: slideAnim } : { animation: slideAnim }}
+                    style={{ ...(fullscreenNorm ? { left: `${fullscreenNorm.imgL}%`, top: `${fullscreenNorm.imgT}%`, width: `${fullscreenNorm.imgW}%`, height: `${fullscreenNorm.imgH}%`, animation: slideAnim } : { animation: slideAnim }), ...(digitalBg && displayedPage !== currentPage ? { visibility: 'hidden' as const } : {}) }}
                     onLoad={(e) => {
                       const im = e.currentTarget;
                       if (im.naturalWidth > 0 && im.naturalHeight > 0) setImgAspect(im.naturalWidth / im.naturalHeight);
@@ -4986,11 +5028,11 @@ export default function QuranMushafPage({
                   {/* Digital page: the words redrawn with tajweed colours on their own boxes
                       (below the highlights, which come later in this wrapper). */}
                   {digitalView && tajweedMap && edition.id === 'madinah' && displayedPage === currentPage && !coverGiveUp
-                    && !(pageWordBoxes && wordBoxCache.current[displayedPage] === pageWordBoxes) && (
+                    && !(rawPageWordBoxes && wordBoxCache.current[displayedPage] === rawPageWordBoxes) && (
                     <div className="absolute inset-0 pointer-events-none" style={{ background: mushafTheme.bg }} />
                   )}
                   {digitalView && tajweedMap && edition.id === 'madinah' && pageWordBoxes && displayedPage === currentPage && (
-                    <DigitalPageLayer tajweed={tajweedMap} theme={standalonePage ? mushafTheme : undefined}
+                    <DigitalPageLayer tajweed={tajweedMap} page={displayedPage} theme={standalonePage ? mushafTheme : undefined}
                       boxes={pageWordBoxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, surah: b.surah, ayah: b.ayah, wordNo: Number(b.key.split(':')[2]) || 0 }))} />
                   )}
                   {goldFrame && (

@@ -3,7 +3,7 @@
 // highlight stay identical, and the highlight sits on top of this layer). A word without trusted
 // text (see tajweedWords.ts) is simply not covered: the scan's own word shows through.
 // Ayah-end medallions and ornaments are not in the boxes, so they stay from the scan.
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { digitalWordsOf, type TajweedMap, type DigitalWord } from '../../lib/tajweedWords';
 import { ruleColor, TAJWEED_INK } from '../../lib/tajweedColors';
 import { adaptRuleColor, type MushafTheme } from '../../lib/mushafThemes';
@@ -33,7 +33,7 @@ function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx:
     if (natural <= 0) return;
     const size = uniform ? uniform : Math.max(8, natural > wPx * 1.25 ? base * (wPx * 1.25) / natural : base);
     const at = natural * (size / base);
-    setFit({ size, k: uniform ? Math.min(1.35, Math.max(0.78, wPx / at)) : Math.min(1.25, Math.max(0.8, wPx / at)) });
+    setFit({ size, k: uniform ? Math.min(1.5, Math.max(0.78, wPx / at)) : Math.min(1.25, Math.max(0.8, wPx / at)) });
   }, [wPx, hPx, word, uniform]);
   return (
     <div className="absolute flex items-center justify-center overflow-visible"
@@ -52,6 +52,48 @@ const toArDigits = (n: number) => String(n).replace(/\d/g, (d) => AR_DIGITS[Numb
 const BASMALA = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ';
 const median = (a: number[]) => { const b = [...a].sort((x, y) => x - y); return b.length ? b[Math.floor(b.length / 2)] : 0; };
 
+
+/** Standalone page: make every full line start and end on the same edges (like the printed Mushaf). Each full
+ *  line's boxes are remapped linearly so the line (plus its ayah-end medallion when the line ends an ayah)
+ *  spans exactly the page's text edges; short lines (surah ends, headers) are left alone. */
+function justifyBoxes(boxes: DigitalBox[], tajweed: TajweedMap, size: { w: number; h: number }): DigitalBox[] {
+  const ok = boxes.filter((b) => b.width > 0 && b.height > 0);
+  if (ok.length < 8 || size.w <= 0) return boxes;
+  const px = ok.map((b) => ({ b, l: (b.left / 100) * size.w, r: ((b.left + b.width) / 100) * size.w, cy: ((b.top + b.height / 2) / 100) * size.h, h: (b.height / 100) * size.h }));
+  const hMed = median(px.map((p) => p.h));
+  const d = hMed * 0.85;
+  const rows: typeof px[] = [];
+  for (const p of [...px].sort((a, c) => a.cy - c.cy)) {
+    const r = rows[rows.length - 1];
+    if (r && Math.abs(r[0].cy - p.cy) < hMed * 0.6) r.push(p); else rows.push([p]);
+  }
+  const info = rows.map((r) => {
+    const byR = [...r].sort((a, c) => c.r - a.r);
+    const last = byR[byR.length - 1];
+    const words = digitalWordsOf(tajweed, last.b.surah, last.b.ayah);
+    const endsAyah = !!words && last.b.wordNo === words.length;
+    const extL = last.l - (endsAyah ? d + 1 : 0);
+    const extR = byR[0].r;
+    return { r, extL, extR, w: extR - extL };
+  });
+  const maxW = Math.max(...info.map((i) => i.w));
+  const full = info.filter((i) => i.w >= maxW * 0.9);
+  if (full.length < 3) return boxes;
+  const pageR = median(full.map((i) => i.extR));
+  const pageL = median(full.map((i) => i.extL));
+  const map = new Map<string, DigitalBox>();
+  for (const i of info) {
+    if (i.w < (pageR - pageL) * 0.85 || i.w <= 0) continue;
+    const k = (pageR - pageL) / i.w;
+    if (k > 1.12 || k < 0.9) continue;
+    for (const p of i.r) {
+      const nl = pageR - (i.extR - p.l) * k, nr = pageR - (i.extR - p.r) * k;
+      map.set(p.b.key, { ...p.b, left: (nl / size.w) * 100, width: ((nr - nl) / size.w) * 100 });
+    }
+  }
+  return boxes.map((b) => map.get(b.key) ?? b);
+}
+
 type Px = { l: number; t: number; w: number; h: number; cy: number; box: DigitalBox };
 
 /** True when every word box of the page has trusted digital text, so the scan can be left out entirely. */
@@ -60,7 +102,7 @@ export function pageIsFullyDigital(boxes: { surah: number; ayah: number; wordNo:
 }
 
 /** Standalone page furniture computed from the word boxes alone (same 15-line grid as the printed Mushaf). */
-function Furniture({ boxes, tajweed, theme, size }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme: MushafTheme; size: { w: number; h: number } }) {
+function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme: MushafTheme; size: { w: number; h: number }; compact?: boolean }) {
   const px: Px[] = boxes.filter((b) => b.width > 0 && b.height > 0).map((b) => {
     const l = (b.left / 100) * size.w, t = (b.top / 100) * size.h, w = (b.width / 100) * size.w, h = (b.height / 100) * size.h;
     return { l, t, w, h, cy: t + h / 2, box: b };
@@ -120,7 +162,7 @@ function Furniture({ boxes, tajweed, theme, size }: { boxes: DigitalBox[]; tajwe
       furniture.push(
         <div key={`mk-${p.box.key}`} className="absolute flex items-center justify-center rounded-full"
           style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `1.5px solid ${theme.accent}`, color: theme.accent, fontFamily: DIGIT_FONT, fontSize: d * 0.5, lineHeight: 1 }}>
-          <span>{toArDigits(p.box.ayah)}</span>
+          <span style={{ display: 'block', lineHeight: `${d}px`, height: d, transform: `translateY(${-d * 0.02}px)`, textAlign: 'center' }}>{toArDigits(p.box.ayah)}</span>
         </div>
       );
     });
@@ -130,6 +172,27 @@ function Furniture({ boxes, tajweed, theme, size }: { boxes: DigitalBox[]; tajwe
   const top = Math.min(rowY[0], ...headerYs) - pitch * 0.6;
   const bottom = rowY[rowY.length - 1] + pitch * 0.6;
   const padX = Math.min(pitch * 0.8, size.w * 0.06);
+  if (compact) {
+    // Pages 1 and 2: an ornamental frame filling the page, like the Madinah Mushaf.
+    const mx = size.w * 0.035, my = size.h * 0.03, band = Math.max(12, size.w * 0.028);
+    const diamond = (style: React.CSSProperties, k: string) => (
+      <div key={k} className="absolute" style={{ width: band * 1.1, height: band * 1.1, transform: 'rotate(45deg)', background: theme.bg, border: `2px solid ${theme.accent}`, ...style }} />
+    );
+    const dots = `repeating-linear-gradient(45deg, ${theme.frame} 0 2px, transparent 2px 7px), repeating-linear-gradient(-45deg, ${theme.frame} 0 2px, transparent 2px 7px)`;
+    return (
+      <>
+        <div className="absolute rounded-xl" style={{ left: mx, top: my, right: mx, bottom: my, border: `3px solid ${theme.accent}`, backgroundImage: dots, opacity: 1 }} />
+        <div className="absolute rounded-lg" style={{ left: mx + band, top: my + band, right: mx + band, bottom: my + band, background: theme.bg, border: `2px solid ${theme.accent}`, boxShadow: `inset 0 0 0 5px ${theme.bg}, inset 0 0 0 6.5px ${theme.frame}` }} />
+        {diamond({ left: mx - band * 0.55, top: my - band * 0.55 }, 'c1')}
+        {diamond({ right: mx - band * 0.55, top: my - band * 0.55 }, 'c2')}
+        {diamond({ left: mx - band * 0.55, bottom: my - band * 0.55 }, 'c3')}
+        {diamond({ right: mx - band * 0.55, bottom: my - band * 0.55 }, 'c4')}
+        {diamond({ left: size.w / 2 - band * 0.55, top: my - band * 0.55 }, 'c5')}
+        {diamond({ left: size.w / 2 - band * 0.55, bottom: my - band * 0.55 }, 'c6')}
+        {furniture}
+      </>
+    );
+  }
   return (
     <>
       <div className="absolute rounded-lg" style={{ left: minL - padX, width: textW + 2 * padX, top, height: bottom - top, border: `2px solid ${theme.frame}`, boxShadow: `inset 0 0 0 4px ${theme.bg}, inset 0 0 0 5px ${theme.frame}` }} />
@@ -138,7 +201,7 @@ function Furniture({ boxes, tajweed, theme, size }: { boxes: DigitalBox[]; tajwe
   );
 }
 
-export default function DigitalPageLayer({ boxes, tajweed, theme }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme }) {
+export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme; page?: number }) {
   const root = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -150,6 +213,7 @@ export default function DigitalPageLayer({ boxes, tajweed, theme }: { boxes: Dig
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  const boxes = useMemo(() => (theme ? justifyBoxes(rawBoxes, tajweed, size) : rawBoxes), [rawBoxes, tajweed, theme, size]);
   // Standalone page: one font size for the whole page = what fits the tighter words (20th percentile), capped by line height.
   const [uni, setUni] = useState<number | null>(null);
   useLayoutEffect(() => {
@@ -169,7 +233,7 @@ export default function DigitalPageLayer({ boxes, tajweed, theme }: { boxes: Dig
       }
       if (!fits.length) return;
       fits.sort((x, y) => x - y);
-      setUni(Math.max(8, Math.min(fits[Math.floor(fits.length * 0.2)], median(hs) * 0.9)));
+      setUni(Math.max(8, Math.min(fits[Math.floor(fits.length * 0.3)], median(hs) * 0.9)));
     };
     calc();
     let alive = true;
@@ -180,7 +244,7 @@ export default function DigitalPageLayer({ boxes, tajweed, theme }: { boxes: Dig
   // paper patches over the scan (used for the few pages that still have an ayah without trusted text).
   return (
     <div ref={root} className="absolute inset-0 pointer-events-none" aria-hidden="true" style={theme ? { background: theme.bg } : undefined}>
-      {size.w > 0 && theme && <Furniture boxes={boxes} tajweed={tajweed} theme={theme} size={size} />}
+      {size.w > 0 && theme && <Furniture boxes={boxes} tajweed={tajweed} theme={theme} size={size} compact={!!page && page <= 2} />}
       {size.w > 0 && boxes.map((b) => {
         const word = digitalWordsOf(tajweed, b.surah, b.ayah)?.[b.wordNo - 1];
         if (!word || b.width <= 0 || b.height <= 0) return null;
