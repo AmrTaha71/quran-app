@@ -1520,7 +1520,7 @@ export default function QuranMushafPage({
   // during render, so a deps entry referencing a const declared below
   // throws a TDZ ReferenceError on first render and blanks the page
   // (no error boundary) — that is exactly what broke #/mushaf in c9587b5.
-  // Follow-the-imam mode ("تتبع الإمام", formerly الحق الإمام): listen to the imam, lock onto
+  // Follow-the-imam mode ("تتبع القراءة", formerly الحق الإمام): listen to the imam, lock onto
   // the ayah being recited, open its Mushaf page fullscreen, and move a
   // clear amber highlight along with the recitation. Listening runs on
   // the browser's live speech recognition where available (free, instant)
@@ -2340,7 +2340,7 @@ export default function QuranMushafPage({
   useEffect(() => { followInterimRef.current = onFollowInterim; });
 
   // ---- W5-N3: continuous follow-the-imam on the Quran-Lab ear ----------
-  // «تتبع الإمام» → «ابدأ»: when the device ear is on and loaded (or
+  // «تتبع القراءة» → «ابدأ»: when the device ear is on and loaded (or
   // cached), the start tap opens THIS path instead of the lock-once one.
   // Same mic path as the tasmee' ear (QuranLabPhonemeTap: stream asked
   // inside the tap, iOS rebuild logic); each decoded chunk's phonemes go
@@ -4017,7 +4017,7 @@ export default function QuranMushafPage({
           <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-1.5 mb-2">
             <span className="flex items-center gap-2 text-sm font-bold text-emerald-800">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              تتبع الإمام شغال
+              تتبع القراءة شغال
             </span>
             <button onClick={() => { setShowFullscreen(true); requestNativeFullscreen(); }}
               className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg polish-press">
@@ -4378,7 +4378,7 @@ export default function QuranMushafPage({
           {(followOn || startInFollow) && !followPos && !showRatelIntro && (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
-                <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تتبع الإمام</p>
+                <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تتبع القراءة</p>
                 {followHelpShow && (<>
                 {followHelpOpen && (<>
                 <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس.</p>
@@ -4768,12 +4768,13 @@ export default function QuranMushafPage({
                 // on tall portrait screens 100vw still binds, so the
                 // page stays maximal there.
                 <div ref={pageWrapRef}
-                  className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] transition-transform duration-300 ${madinahNorm && !(useMadinahCover && fsOverlaysVisible) ? 'overflow-hidden' : ''}`}
+                  className={`relative ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] transition-transform duration-300 ${madinahNorm ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
-                      // 2026-11-19: on a tap the page shrinks for 5 s so the
-                      // edge juz/hizb medallion shows, then returns to full-bleed.
-                      ? { width: '100vw', height: '100dvh', background: '#f8f1de', transform: fsOverlaysVisible ? 'scale(0.72)' : 'none' }
+                      // 2026-11-21 (Dr. Amr): the page NEVER shrinks. It used to scale to
+                      // 0.72 while the controls were visible, which fired on every swipe
+                      // and edge tap and made page turns look like zoom-outs.
+                      ? { width: '100vw', height: '100dvh', background: '#f8f1de' }
                       : { aspectRatio: String(MADINAH_NORMALIZED_ASPECT), width: `min(100vw, ${100 * MADINAH_NORMALIZED_ASPECT}dvh)`, background: '#f8f1de' })
                     : { aspectRatio: String(imgAspect), background: '#f8f1de' }}
                   onClick={(e) => {
@@ -5038,7 +5039,7 @@ export default function QuranMushafPage({
                       {followTracking
                         ? (followTrack === 'following' ? 'تابعت' : followTrack === 'searching' ? 'بدوّر على الموضع…' : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'بسمع…')
                         : followStatus === 'locked' && followPos
-                        ? 'تتبع الإمام شغال'
+                        ? 'تتبع القراءة شغال'
                         : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
                     <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
