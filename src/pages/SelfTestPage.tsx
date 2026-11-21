@@ -7025,7 +7025,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
               )}
             </div>)}
-            {!contZeroMatch && tajweedReview && (
+            {isAdminView && !contZeroMatch && tajweedReview && (
               <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3" dir="rtl">
                 <p className="text-sm font-semibold text-amber-800">متقن — ملاحظات التجويد (تجريبي للأدمن)</p>
                 {tajweedReview.status === 'ok' ? (
