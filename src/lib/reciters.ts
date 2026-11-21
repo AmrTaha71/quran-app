@@ -29,28 +29,28 @@ const everyayah = (folder: string) => (surahNo: number, ayahNo: number) =>
 
 export const RECITERS: Reciter[] = [
   { id: 'minshawi', wps: 0.81, name: 'المنشاوي', quality: '128', audioUrl: islamicNetwork('ar.minshawi') },
-  { id: 'ayyoub', name: 'محمد أيوب', quality: '128', audioUrl: islamicNetwork('ar.muhammadayyoub') },
-  { id: 'sudais', name: 'السديس', quality: '192', audioUrl: everyayah('Abdurrahmaan_As-Sudais_192kbps') },
+  { id: 'ayyoub', wps: 0.73, name: 'محمد أيوب', quality: '128', audioUrl: islamicNetwork('ar.muhammadayyoub') },
+  { id: 'sudais', wps: 1.06, name: 'السديس', quality: '192', audioUrl: everyayah('Abdurrahmaan_As-Sudais_192kbps') },
   { id: 'husary', wps: 0.57, name: 'الحصري', quality: '128', audioUrl: islamicNetwork('ar.husary') },
   { id: 'alafasy', wps: 0.76, name: 'العفاسي', quality: '128', audioUrl: islamicNetwork('ar.alafasy') },
-  { id: 'muaiqly', name: 'المعيقلي', quality: '128', audioUrl: islamicNetwork('ar.mahermuaiqly') },
+  { id: 'muaiqly', wps: 1.1, name: 'المعيقلي', quality: '128', audioUrl: islamicNetwork('ar.mahermuaiqly') },
   { id: 'abdulbasit', wps: 0.76, name: 'عبد الباسط', quality: '192', audioUrl: everyayah('Abdul_Basit_Murattal_192kbps') },
   // Jaber: only 64kbps exists on any open source found (everyayah);
   // his islamic.network edition is blocked, and no 128 folder exists.
-  { id: 'jaber', name: 'علي جابر', quality: '64', audioUrl: everyayah('Ali_Jaber_64kbps') },
+  { id: 'jaber', wps: 0.94, name: 'علي جابر', quality: '64', audioUrl: everyayah('Ali_Jaber_64kbps') },
   // Hani Ar-Rifai: added as a trial (2026-11-08). Folder name and licence not verified from the sandbox; check playback on device.
   { id: 'rifai', wps: 0.89, name: 'هاني الرفاعي', quality: '192', audioUrl: everyayah('Hani_Rifai_192kbps') },
   // Added 2026-11-21 (Dr. Amr): all three have word timings for the whole Quran (public/corr-timings), so they
-  // also work as correction reciters. EveryAyah folders as in CORR_RECITERS; playback not verified from the sandbox.
+  // also work as correction reciters. EveryAyah folders as in CORR_RECITERS.
   { id: 'shuraym', wps: 1.24, name: 'سعود الشريم', quality: '128', audioUrl: everyayah('Saood_ash-Shuraym_128kbps') },
   { id: 'shaatree', wps: 0.88, name: 'أبو بكر الشاطري', quality: '128', audioUrl: everyayah('Abu_Bakr_Ash-Shaatree_128kbps') },
   { id: 'tablaway', wps: 0.78, name: 'محمد الطبلاوي', quality: '128', audioUrl: everyayah('Mohammad_al_Tablaway_128kbps') },
   // Fast (hadr) reciters for khatmas, added 2026-11-21 on Dr. Amr's request. No word timings, so they are listen-only
-  // (no correction). EveryAyah folder names and playback NOT verified from the sandbox: check on a device.
-  { id: 'tunaiji', speed: 'fast', unverified: true, name: 'خليفة الطنيجي', quality: '64', audioUrl: everyayah('khalefa_al_tunaiji_64kbps') },
-  { id: 'bukhatir', speed: 'fast', unverified: true, name: 'صلاح بو خاطر', quality: '128', audioUrl: everyayah('Salaah_AbdulRahman_Bukhatir_128kbps') },
-  { id: 'neana', speed: 'fast', unverified: true, name: 'أحمد نعينع', quality: '128', audioUrl: everyayah('Ahmed_Neana_128kbps') },
-  { id: 'matroud', speed: 'fast', unverified: true, name: 'عبد الله المطرود', quality: '128', audioUrl: everyayah('Abdullah_Matroud_128kbps') },
+  // (no correction). EveryAyah folders verified to exist (2026-11-21). wps of these four and of ayyoub/sudais/muaiqly/jaber is MEASURED from the audio files (file words/sec, calibrated on the 8 timed reciters, divided by 0.93), not from word timings.
+  { id: 'tunaiji', wps: 0.86, name: 'خليفة الطنيجي', quality: '64', audioUrl: everyayah('khalefa_al_tunaiji_64kbps') },
+  { id: 'bukhatir', wps: 1.01, name: 'صلاح بو خاطر', quality: '128', audioUrl: everyayah('Salaah_AbdulRahman_Bukhatir_128kbps') },
+  { id: 'neana', wps: 0.78, name: 'أحمد نعينع', quality: '128', audioUrl: everyayah('Ahmed_Neana_128kbps') },
+  { id: 'matroud', wps: 0.84, name: 'عبد الله المطرود', quality: '128', audioUrl: everyayah('Abdullah_Matroud_128kbps') },
 ];
 
 /** Speed groups of the Hafs reciters (reciter picker: riwaya -> speed -> reciter). The class comes from the measured
