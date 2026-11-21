@@ -6,6 +6,10 @@ export interface Reciter {
   quality: string; // kbps actually served — verified live per reciter
   /** Words per second measured from the reciter's word-timing data (public/corr-timings); absent = no timing data yet. */
   wps?: number;
+  /** Manual speed class (Dr. Amr's judgement): used when there is no timing data, and it wins over the measured value. */
+  speed?: 'fast' | 'medium' | 'slow';
+  /** True until playback of this reciter's audio has been checked on a device. */
+  unverified?: boolean;
   audioUrl: (surahNo: number, ayahNo: number) => string;
 }
 
@@ -41,6 +45,12 @@ export const RECITERS: Reciter[] = [
   { id: 'shuraym', wps: 1.24, name: 'سعود الشريم', quality: '128', audioUrl: everyayah('Saood_ash-Shuraym_128kbps') },
   { id: 'shaatree', wps: 0.88, name: 'أبو بكر الشاطري', quality: '128', audioUrl: everyayah('Abu_Bakr_Ash-Shaatree_128kbps') },
   { id: 'tablaway', wps: 0.78, name: 'محمد الطبلاوي', quality: '128', audioUrl: everyayah('Mohammad_al_Tablaway_128kbps') },
+  // Fast (hadr) reciters for khatmas, added 2026-11-21 on Dr. Amr's request. No word timings, so they are listen-only
+  // (no correction). EveryAyah folder names and playback NOT verified from the sandbox: check on a device.
+  { id: 'tunaiji', speed: 'fast', unverified: true, name: 'خليفة الطنيجي', quality: '64', audioUrl: everyayah('khalefa_al_tunaiji_64kbps') },
+  { id: 'bukhatir', speed: 'fast', unverified: true, name: 'صلاح بو خاطر', quality: '128', audioUrl: everyayah('Salaah_AbdulRahman_Bukhatir_128kbps') },
+  { id: 'neana', speed: 'fast', unverified: true, name: 'أحمد نعينع', quality: '128', audioUrl: everyayah('Ahmed_Neana_128kbps') },
+  { id: 'matroud', speed: 'fast', unverified: true, name: 'عبد الله المطرود', quality: '128', audioUrl: everyayah('Abdullah_Matroud_128kbps') },
 ];
 
 /** Speed groups of the Hafs reciters (reciter picker: riwaya -> speed -> reciter). The class comes from the measured
@@ -49,6 +59,7 @@ export type SpeedClass = 'fast' | 'medium' | 'slow' | 'unrated';
 export const SPEED_ORDER: SpeedClass[] = ['fast', 'medium', 'slow', 'unrated'];
 export const SPEED_LABEL: Record<SpeedClass, string> = { fast: 'سريعة', medium: 'متوسطة', slow: 'بطيئة', unrated: 'غير مصنّفة بعد' };
 export function speedOf(r: Reciter): SpeedClass {
+  if (r.speed) return r.speed;
   if (r.wps === undefined) return 'unrated';
   return r.wps >= 1.0 ? 'fast' : r.wps < 0.7 ? 'slow' : 'medium';
 }

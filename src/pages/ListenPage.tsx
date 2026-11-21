@@ -2623,7 +2623,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                       }`}
                     >
                       {r.name}
-                      <span className={`block text-xs font-normal mt-0.5 ${reciterId === r.id ? 'text-emerald-100' : 'text-accent-600'}`}>{r.quality}k</span>
+                      <span className={`block text-xs font-normal mt-0.5 ${reciterId === r.id ? 'text-emerald-100' : 'text-accent-600'}`}>{r.quality}k{r.unverified ? ' · تجريبي' : ''}</span>
                     </button>
                   ))}
                 </div>
