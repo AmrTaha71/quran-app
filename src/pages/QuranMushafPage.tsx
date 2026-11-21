@@ -21,6 +21,7 @@ import { LINK_TYPES } from '../lib/types';
 import type { QuranVerse, AyahLink } from '../lib/types';
 import { JUZ_START_PAGES, HIZB_START_PAGES, getJuzFromPage, getHizbFromPage } from '../lib/quranIndex';
 import { dailyDua } from '../lib/personalTouch';
+import { loadBoxes } from '../lib/mushafBoxes';
 import { warmPage, isPageReady } from '../lib/pagePreload';
 import { MUSHAF_EDITIONS as EDITIONS, SURAH_START_PAGES, getSurahStartPage, TOTAL_MUSHAF_PAGES } from '../lib/mushafEditions';
 import { loadVerseIndex } from '../lib/searchIndex';
@@ -1221,6 +1222,7 @@ export default function QuranMushafPage({
     for (const p of [currentPage + 1, currentPage - 1]) {
       if (p >= 1 && p <= TOTAL_PAGES) void warmPage(edition.imageUrl(p));
     }
+    if (edition.id === 'madinah') for (const p of [currentPage + 1, currentPage - 1, currentPage + 2]) { if (p >= 1 && p <= TOTAL_PAGES) void loadBoxes(p); }
     const timer = setTimeout(async () => {
       for (const p of [currentPage + 2, currentPage - 2, currentPage + 3, currentPage - 3, currentPage + 4, currentPage + 5]) {
         if (cancelled) return;
@@ -3613,6 +3615,14 @@ export default function QuranMushafPage({
   type WordBox = { key: string; surah: number; ayah: number; left: number; top: number; width: number; height: number };
   const [pageWordBoxes, setPageWordBoxes] = useState<WordBox[] | null>(null);
   pageWordBoxesRef.current = pageWordBoxes;
+  // Digital page: while the new page's boxes are still loading, cover the scan with the chosen page colour
+  // (otherwise the yellow scan shows for a moment, then flips to the digital page). Gives up after 2.5s.
+  const [coverGiveUp, setCoverGiveUp] = useState(false);
+  useEffect(() => {
+    setCoverGiveUp(false);
+    const t = setTimeout(() => setCoverGiveUp(true), 2500);
+    return () => clearTimeout(t);
+  }, [currentPage, edition.id]);
   const wordBoxCache = useRef<Record<number, WordBox[]>>({});
   const pageWrapRef = useRef<HTMLDivElement | null>(null);
 
@@ -4975,6 +4985,10 @@ export default function QuranMushafPage({
                     onFinalError={() => setImageError(true)} />
                   {/* Digital page: the words redrawn with tajweed colours on their own boxes
                       (below the highlights, which come later in this wrapper). */}
+                  {digitalView && tajweedMap && edition.id === 'madinah' && displayedPage === currentPage && !coverGiveUp
+                    && !(pageWordBoxes && wordBoxCache.current[displayedPage] === pageWordBoxes) && (
+                    <div className="absolute inset-0 pointer-events-none" style={{ background: mushafTheme.bg }} />
+                  )}
                   {digitalView && tajweedMap && edition.id === 'madinah' && pageWordBoxes && displayedPage === currentPage && (
                     <DigitalPageLayer tajweed={tajweedMap} theme={standalonePage ? mushafTheme : undefined}
                       boxes={pageWordBoxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, surah: b.surah, ayah: b.ayah, wordNo: Number(b.key.split(':')[2]) || 0 }))} />
