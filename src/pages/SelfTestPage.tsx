@@ -5044,7 +5044,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       contStallTimerRef.current = null;
       if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
       if (liveRef.current.corrDelayMode === 'ayah-end' && !corrStyleRef.current.forget) return;
-      const now = contOwedWords();
+      // Safari sends no finals mid-run: count the pending interim text too, or a fully recited ayah still
+      // "owes" its first word and the correction interrupts him (seen in the owner's two test logs).
+      const savedFinals = liveRef.current.contFinals;
+      let now: ReturnType<typeof contOwedWords>;
+      try {
+        liveRef.current.contFinals = `${savedFinals} ${lastInterimRef.current}`.trim();
+        now = contOwedWords();
+      } finally {
+        liveRef.current.contFinals = savedFinals;
+      }
       if (now.words.length === 0) return;
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
@@ -5053,7 +5062,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // 1 s stall timer fired while he was still reciting (false "missed"
     // marks, then the correction audio muted the mic and the rest of the
     // ayah was lost). Add the ear latency when the lab ear is on.
-    }, ((corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) + (labEarInUseRef.current ? 1.3 : 0)) * 1000);
+    }, ((corrStyleRef.current.forget || Math.max(liveRef.current.mode === 'continuous' ? 3 : 1, liveRef.current.corrDelay)) + (labEarInUseRef.current ? 1.3 : 0)) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
