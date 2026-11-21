@@ -12,7 +12,9 @@ import { SURAHS } from '../../lib/surahs';
 export type DigitalBox = { key: string; surah: number; ayah: number; wordNo: number; left: number; top: number; width: number; height: number };
 
 const PAPER = '#f8f1de';
-const FONT = "'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
+// Digits (ayah numbers) are not in the Uthmanic font, so they use a font that has them.
+const DIGIT_FONT = "'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
+const FONT = "'KFGQPC Uthmanic Hafs', 'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 
 function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox; theme?: MushafTheme; uniform?: number | null }) {
   const inner = useRef<HTMLSpanElement | null>(null);
@@ -38,7 +40,7 @@ function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx:
       style={theme
         ? { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` }
         : { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%`, background: PAPER, boxShadow: `0 0 0 1.5px ${PAPER}` }}>
-      <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: fit.size, lineHeight: 1, whiteSpace: 'nowrap', color: theme ? theme.ink : TAJWEED_INK, ...(theme ? { WebkitTextStroke: '0.024em currentColor', textRendering: 'geometricPrecision' as const, WebkitFontSmoothing: 'antialiased' as const } : {}), transform: `scaleX(${fit.k})`, transformOrigin: 'center' }}>
+      <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: fit.size, lineHeight: 1, whiteSpace: 'nowrap', color: theme ? theme.ink : TAJWEED_INK, ...(theme ? { WebkitTextStroke: '0.014em currentColor', textRendering: 'geometricPrecision' as const, WebkitFontSmoothing: 'antialiased' as const } : {}), transform: `scaleX(${fit.k})`, transformOrigin: 'center' }}>
         {word.segs.map((s, i) => <span key={i} style={s.rule ? { color: adaptRuleColor(ruleColor(s.rule), !!theme?.dark) } : undefined}>{s.text}</span>)}
       </span>
     </div>
@@ -117,7 +119,7 @@ function Furniture({ boxes, tajweed, theme, size }: { boxes: DigitalBox[]; tajwe
       const cx = next && gap > d * 0.6 ? p.l - gap / 2 : p.l - d / 2 - 1;
       furniture.push(
         <div key={`mk-${p.box.key}`} className="absolute flex items-center justify-center rounded-full"
-          style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `1.5px solid ${theme.accent}`, color: theme.accent, fontFamily: FONT, fontSize: d * 0.5, lineHeight: 1 }}>
+          style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `1.5px solid ${theme.accent}`, color: theme.accent, fontFamily: DIGIT_FONT, fontSize: d * 0.5, lineHeight: 1 }}>
           <span>{toArDigits(p.box.ayah)}</span>
         </div>
       );

@@ -63,6 +63,15 @@ body {
    so it showed as an empty box. This 572-byte inline font maps ONLY that
    codepoint to a blank zero-width glyph (display only: the stored text,
    word indexes, highlight ranges and matching are untouched). */
+/* KFGQPC Uthmanic Script Hafs v2.2 (King Fahd Complex) — the digital Mushaf's text font. */
+@font-face {
+  font-family: 'KFGQPC Uthmanic Hafs';
+  src: url('/fonts/uthmanic-hafs-v22.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @font-face {
   font-family: 'QuranBlankMarks';
   src: url(data:font/woff;base64,d09GRgABAAAAAAI8AAoAAAAAAngAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAABPUy8yAAABWAAAACQAAABgSdhIJmNtYXAAAAGEAAAALQAAADQADAk1Z2x5ZgAAAbwAAAABAAAAAQAAAABoZWFkAAAA9AAAADYAAAA2LV5sgmhoZWEAAAEsAAAAFwAAACQDIf86aG10eAAAAXwAAAAGAAAABgAAAABsb2NhAAABtAAAAAYAAAAGAAAAAG1heHAAAAFEAAAAEwAAACAAAwACbmFtZQAAAcAAAABeAAAAeBnydA1wb3N0AAACIAAAABkAAAAutKE3rQABAAAAAQAAE6HLRF8PPPUAAwPoAAAAAOckFdEAAAAA5yQV0QAAAAAAAAAAAAAAAwACAAAAAAAAeJxjYGRgYFb4b8GAAIwMqIARACjTAV4AeJxjYGRgYGBigAEECwoAAJcABgB4nGNgZmBgnMDAysDCQCKwt7e3Z2DgeMTxCKcSBQYGAJNYA44AAAAAAAAAAHicJcmxEQAQFMDQh18YQM/+Y1lCyaFJLhdkFDRFeg4DIW7Xuffn6u87YHwHRgAAAAAAAAAAAAAAAAAAAHicLYkxDoAgEAQHNTE20ln6CuMD6CngB1cQCgjFGf5vJE6xs8kACzeGD4Md+zGxYpkxy4bh5Pj/xM4VukpzVVrxouWJKfcqSqCjCA1HHS54BKXwEElk+ij6Avl1En4AAHicY2BiwA+YGBgYmdhL8zINLFyNAAruAjoAAAA=) format('woff');
