@@ -518,10 +518,15 @@ function FajrAlarmSetting() {
     try { setRecording(await startRecording()); } catch { setRecErr('لازم تسمح للميكروفون'); }
   };
   const previewStop = useRef<(() => void) | null>(null);
+  const previewTimer = useRef<number | null>(null);
   const preview = (id: string) => {
     previewStop.current?.();
+    if (previewTimer.current) window.clearTimeout(previewTimer.current);
     previewStop.current = startAlarmTone(id);
-    window.setTimeout(() => { previewStop.current?.(); previewStop.current = null; }, 3500);
+    // Voice clips (the Fajr «الصلاة خير من النوم») preview in full; the short generated tones keep the 3.5 s preview.
+    const clip = ALARM_CLIPS.find((c) => c.id === id);
+    const ms = clip ? Math.round((clip.end - clip.start) * 1000) + 300 : 3500;
+    previewTimer.current = window.setTimeout(() => { previewStop.current?.(); previewStop.current = null; }, ms);
   };
   const opts: [FajrAlarmMode, string, string][] = [
     ['off', 'بدون منبه', 'أذان الفجر العادي'],
