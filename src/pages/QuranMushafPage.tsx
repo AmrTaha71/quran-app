@@ -661,6 +661,28 @@ export default function QuranMushafPage({
   // (the event type and the element under the finger), so a dead button can be diagnosed on a phone.
   const [tapDbg, setTapDbg] = useState<string[]>([]);
   const popupOpen = selectedVerse !== null;
+  // Small anchored popover (2026-11-21): remember where the reader last touched so the verse menu can point at it.
+  const lastPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [popAnchor, setPopAnchor] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    const on = (e: PointerEvent) => { lastPointRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener('pointerdown', on, true);
+    return () => window.removeEventListener('pointerdown', on, true);
+  }, []);
+  useEffect(() => { setPopAnchor(selectedVerse ? { ...lastPointRef.current } : null); }, [selectedVerse?.id]);
+  // Compact only while on the light first tab; going deeper (tafsir, irab, ...) opens the big window.
+  const popCompact = !!selectedVerse && !!popAnchor && popAnchor.y > 0 && popupTab === 'links' && !hifzMode;
+  const popPos = (() => {
+    if (!popCompact || !popAnchor || typeof window === 'undefined') return null;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const w = Math.min(vw - 24, 360);
+    const left = Math.min(Math.max(popAnchor.x - w / 2, 12), vw - w - 12);
+    const arrowX = Math.min(Math.max(popAnchor.x - left, 22), w - 22);
+    const above = popAnchor.y > vh * 0.5;
+    const edge = above ? vh - popAnchor.y + 26 : popAnchor.y + 26;
+    const maxH = Math.max(160, Math.min(vh * 0.55, (above ? popAnchor.y - 26 : vh - popAnchor.y - 26) - 12));
+    return { w, left, arrowX, above, edge, maxH };
+  })();
   useEffect(() => {
     if (!popupOpen || !roundDebugOn()) { setTapDbg([]); return; }
     const name = (el: Element | null) => (el ? `${el.tagName.toLowerCase()}.${String((el as HTMLElement).className || '').toString().split(' ').slice(0, 3).join('.')}` : 'null');
@@ -5289,9 +5311,13 @@ export default function QuranMushafPage({
                   fullscreen container (select-none, overflow-hidden, pointer capture, tap handlers), and its buttons
                   were dead on iPhone Safari. Outside that container it is a plain top-level dialog. */}
               {selectedVerse && createPortal(
-                <div className="fixed inset-0 z-[105] flex items-center justify-center p-4 bg-black/40 polish-scrim-enter"
+                <div className={popCompact ? 'fixed inset-0 z-[105]' : 'fixed inset-0 z-[105] flex items-center justify-center p-4 bg-black/40 polish-scrim-enter'}
                   onClick={(e) => { e.stopPropagation(); setSelectedVerse(null); }}>
-                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col polish-modal-enter"
+                  {popCompact && popPos && (
+                    <div className="absolute z-[1]" style={{ left: popPos.left + popPos.arrowX - 8, ...(popPos.above ? { bottom: popPos.edge - 8 } : { top: popPos.edge - 8 }), width: 16, height: 16, transform: 'rotate(45deg)', background: '#fff', borderRadius: 3, boxShadow: '0 0 0 1.5px #b08a28', pointerEvents: 'none' }} />
+                  )}
+                  <div className={popCompact && popPos ? 'bg-white rounded-2xl shadow-2xl flex flex-col' : 'bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col polish-modal-enter'}
+                    style={popCompact && popPos ? { position: 'absolute', left: popPos.left, width: popPos.w, maxHeight: popPos.maxH, border: '1.5px solid #b08a28', zIndex: 2, ...(popPos.above ? { bottom: popPos.edge } : { top: popPos.edge }) } : undefined}
                     onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
                       <div className="flex items-center gap-2">
@@ -5317,7 +5343,7 @@ export default function QuranMushafPage({
                             أظهر الآية
                           </button>
                         </div>
-                      ) : (
+                      ) : popCompact ? null : (
                         <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{blankMarks(selectedVerse.ayah_text)}</p>
                       )}
                       {/* W5-D (2026-11-19): six tiles on top — تربيطات الحفظ، المتشابهات، الإعراب، أسباب النزول، معاني الكلمات، التفسير. «استمع» moved to the bottom row (middle). */}

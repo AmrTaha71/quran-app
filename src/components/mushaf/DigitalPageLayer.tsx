@@ -206,9 +206,21 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
       </>
     );
   }
+  // Regular pages: a thin, quiet double-line frame in the reader's theme colour (hairline outside, finer line inside,
+  // small corner diamonds). Colours come only from `theme`, so it follows whatever palette the reader picked.
+  const fl = minL - padX, fw = textW + 2 * padX, g = 4;
+  const dm = Math.max(5, pitch * 0.2);
+  const corner = (style: React.CSSProperties, k: string) => (
+    <div key={k} className="absolute" style={{ width: dm, height: dm, transform: 'rotate(45deg)', background: theme.bg, border: `1px solid ${theme.frame}`, ...style }} />
+  );
   return (
     <>
-      <div className="absolute rounded-lg" style={{ left: minL - padX, width: textW + 2 * padX, top, height: bottom - top, border: `2px solid ${theme.frame}`, boxShadow: `inset 0 0 0 4px ${theme.bg}, inset 0 0 0 5px ${theme.frame}` }} />
+      <div className="absolute rounded-md" style={{ left: fl, width: fw, top, height: bottom - top, border: `1.25px solid ${theme.frame}` }} />
+      <div className="absolute rounded-sm" style={{ left: fl + g, width: fw - 2 * g, top: top + g, height: bottom - top - 2 * g, border: `0.5px solid ${theme.frame}`, opacity: 0.55 }} />
+      {corner({ left: fl - dm / 2, top: top - dm / 2 }, 'k1')}
+      {corner({ left: fl + fw - dm / 2, top: top - dm / 2 }, 'k2')}
+      {corner({ left: fl - dm / 2, top: top + (bottom - top) - dm / 2 }, 'k3')}
+      {corner({ left: fl + fw - dm / 2, top: top + (bottom - top) - dm / 2 }, 'k4')}
       {furniture}
     </>
   );
