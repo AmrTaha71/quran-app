@@ -14,10 +14,9 @@ export function saveFajrAlarm(m: FajrAlarmMode): void { try { localStorage.setIt
 // Fill with the muezzin file + seconds of «الصلاة خير من النوم» once measured.
 export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number; credit?: string }[] = [
   {
-    id: 'hamed-khayr', name: '🕌 الصلاة خير من النوم — الشيخ حامد',
-    url: '/audio/hamed-fajr-mahmoudeya.mp3',
-    start: 145, end: 155, // «الصلاة خير من النوم»: owner chose 10s-20s of the 2:15 slice = 2:25-2:35 of the file; file itself is not edited (CC BY-NC-ND)
-    credit: 'أذان الفجر — الشيخ حامد، مسجد المحمودية، القاهرة. تسجيل: Anna Kipervaser / On Look Films — World Oral Literature Project، جامعة كامبريدج (CC BY-NC-ND 3.0)',
+    id: 'salat-khayr-birds', name: '🐦 الصلاة خير من النوم',
+    url: '/audio/fajr-salat-khayr-birds.mp3',
+    start: 0, end: 20, // own recording over a birdsong bed; whole file plays
   },
 ];
 export const FAJR_TONE_KEY = 'quran-fajr-tone';
