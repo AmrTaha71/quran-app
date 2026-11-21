@@ -17,8 +17,8 @@ const index = new Map<string, number>();
 const boxesOf = (s: number, a: number) => pages[madinahPageOfAyah(s, a)].filter(([bs, ba]) => bs === s && ba === a).length;
 const statusOf = (s: number, a: number): PaperStatus => paperStatusOf(boxesOf(s, a), counts[index.get(`${s}:${a}`)!]);
 
-const NO_BOXES = ('3:195 3:196 3:197 3:198 5:89 5:90 5:91 5:92 5:93 5:94 5:95 6:125 6:126 6:127 6:128 6:129 21:102 23:105 26:207 26:208 ' +
-  '32:21 32:22 32:23 36:71 37:154 44:40 46:29 46:30 52:32 59:17 59:18 63:5 63:6 63:7 63:8 63:9 63:10 63:11 64:10 64:11 64:12 79:17 83:34').split(' ');
+// 2026-11-21: page-break repair gave every ayah boxes (was 43 without).
+const NO_BOXES: string[] = [];
 const MISMATCH = ('2:31 2:33 2:61 2:91 2:181 2:261 3:37 3:44 3:112 3:165 3:181 4:36 4:78 4:83 4:91 4:155 5:20 6:5 6:111 7:101 7:160 8:6 8:41 8:58 9:46 ' +
   '10:12 10:32 10:53 11:6 11:49 11:100 11:120 12:29 12:43 12:46 12:47 12:102 13:37 15:7 15:19 16:11 17:90 19:92 20:99 22:5 23:20 23:44 25:18 ' +
   '26:6 26:7 26:14 26:92 26:211 27:60 28:66 29:40 31:10 33:20 36:36 36:40 36:69 37:17 37:130 37:146 38:35 39:56 40:3 40:55 41:47 41:51 47:19 ' +
@@ -39,14 +39,15 @@ describe('paperStatusOf (rules)', () => {
 describe('real data: the 6236 ayat', () => {
   it('fixture and box files are complete', () => { assert.equal(counts.length, 6236); assert.equal(pages.length, 605); });
 
-  it('totals: 6103 ok, 43 no-boxes, 90 count-mismatch', () => {
+  it('totals: 6146 ok, 0 no-boxes, 90 count-mismatch', () => {
     const t: Record<PaperStatus, number> = { ok: 0, 'no-boxes': 0, 'count-mismatch': 0 };
     for (const k of index.keys()) { const [s, a] = at(k); t[statusOf(s, a)]++; }
-    assert.deepEqual(t, { ok: 6103, 'no-boxes': 43, 'count-mismatch': 90 });
+    assert.deepEqual(t, { ok: 6146, 'no-boxes': 0, 'count-mismatch': 90 });
   });
 
-  it('each of the 43 ayat with text and no boxes -> no-boxes', () => {
-    assert.equal(NO_BOXES.length, 43);
+  it('no ayah is left without boxes', () => {
+    assert.equal(NO_BOXES.length, 0);
+    for (let s = 1; s <= 114; s++) for (let a = 1; counts[index.get(`${s}:${a}`) ?? -1] > 0; a++) assert.ok(boxesOf(s, a) > 0, `${s}:${a} has boxes`);
     for (const k of NO_BOXES) { const [s, a] = at(k); assert.ok(counts[index.get(k)!] > 0, `${k} has text`); assert.equal(boxesOf(s, a), 0, k); assert.equal(statusOf(s, a), 'no-boxes', k); }
   });
 

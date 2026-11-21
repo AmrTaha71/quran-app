@@ -237,9 +237,12 @@ def build_page(p):
     best = None; errs = []
     # the layout's own page break first; search around it only if the scan
     # disagrees (different medallion / header count)
-    pairs = [(st0, en0)] + [(a, b) for a in ayah_starts_near(st0) for b in ayah_starts_near(en0) if (a, b) != (st0, en0)]
+    pairs = [(st0, en0)] + ([] if os.environ.get('FORCE_LAYOUT_BREAK') else [(a, b) for a in ayah_starts_near(st0) for b in ayah_starts_near(en0) if (a, b) != (st0, en0)])
+    if os.environ.get('CHAIN_ST'):  # start fixed (= word after the previous page's last box), end searched
+        cs = int(os.environ['CHAIN_ST'])
+        pairs = [(cs, e) for e in range(max(cs + 1, en0 - 70), min(len(seq), en0 + 70))]
     for pi, (st, en) in enumerate(pairs):
-        if pi > 0 and best is not None and best[2] == st0 and best[3] == en0: break
+        if pi > 0 and best is not None and best[2] == st0 and best[3] == en0 and not os.environ.get('CHAIN_ST'): break
         if True:
             if en <= st: continue
             words = seq[st:en]
