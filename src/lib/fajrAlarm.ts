@@ -14,7 +14,7 @@ export function saveFajrAlarm(m: FajrAlarmMode): void { try { localStorage.setIt
 // Fill with the muezzin file + seconds of «الصلاة خير من النوم» once measured.
 export const ALARM_CLIPS: { id: string; name: string; url: string; start: number; end: number; credit?: string }[] = [
   {
-    id: 'salat-khayr-birds', name: '🐦 الصلاة خير من النوم — بصوت د. عمرو مع العصافير',
+    id: 'salat-khayr-birds', name: '🐦 الصلاة خير من النوم',
     url: '/audio/fajr-salat-khayr-birds.mp3',
     start: 0, end: 20, // own recording over a birdsong bed; whole file plays
   },

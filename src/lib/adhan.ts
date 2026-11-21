@@ -354,9 +354,6 @@ export const ADHAN_VOICES: { id: string; name: string; url: string; credit: stri
   { id: 'c-beautiful', name: 'أذان هادئ', url: COMMONS + 'Beautiful_adhan.ogg', credit: 'Adam-synagda — Wikimedia Commons, ملكية عامة' },
   { id: 'c-azan', name: 'أذان طويل', url: COMMONS + 'Azan.ogg', credit: 'Andrewler — Wikimedia Commons, CC BY-SA 4.0' },
   { id: 'c-aaqib', name: 'أذان عاقب عزيز (قصير ١:٢٧)', url: COMMONS + 'The_Adhan_-_Muslim_Call_to_Prayer_-_Aaqib_Azeez.mp3', credit: 'Atcovi — Wikimedia Commons (own work)' },
-  { id: 'cairo-hamed', name: 'الشيخ حامد — مسجد المحمودية، القاهرة', url: ADHAN_BUCKET + 'cairo-hamed-mahmoudeya.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
-  { id: 'cairo-ahmed', name: 'الشيخ أحمد — مسجد عمر مكرم، القاهرة', url: ADHAN_BUCKET + 'cairo-ahmed-omarmakram.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
-  { id: 'cairo-mohamed', name: 'الشيخ محمد — مسجد الشيخ عبد الله، الجمالية', url: ADHAN_BUCKET + 'cairo-mohamed-gamaliya.mp3', credit: 'Anna Kipervaser / On Look Films — World Oral Literature Project, Cambridge (CC BY-NC-ND 3.0)' },
 ];
 export const ADHAN_VOICE_KEY = 'quran-adhan-voice';
 export function getAdhanVoice() {
