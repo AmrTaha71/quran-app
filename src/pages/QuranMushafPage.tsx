@@ -3895,10 +3895,14 @@ export default function QuranMushafPage({
     const bw = maxR - minL, bh = maxB - minT;
     if (bw <= 0 || bh <= 0) return raw;
     const sc = Math.min(80 / bw, 62 / bh);
+    // Lines are also spread a little further apart (like the printed pages 1-2); glyph size is unchanged.
+    // Page 2 also carries the basmala + a taller header above its first line, so it spreads less and sits lower.
+    const spread = Math.min(currentPage === 2 ? 1.22 : 1.45, 72 / (bh * sc));
+    const down = currentPage === 2 ? 3 : 0;
     const cx = (minL + maxR) / 2, cy = (minT + maxB) / 2;
     return raw.map((b, i) => {
       const c = cs[i];
-      const nl = 50 + (c.l - cx) * sc, nt = 50 + (c.t - cy) * sc, nw = c.w * sc, nh = c.h * sc;
+      const nl = 50 + (c.l - cx) * sc, nt = 50 + down + ((c.t + c.h / 2 - cy) * sc * spread) - (c.h * sc) / 2, nw = c.w * sc, nh = c.h * sc;
       return { ...b, left: ((nl - imgL) * 100) / imgW, top: ((nt - imgT) * 100) / imgH, width: (nw * 100) / imgW, height: (nh * 100) / imgH };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
