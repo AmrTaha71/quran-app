@@ -12,7 +12,7 @@ import { SURAHS } from '../../lib/surahs';
 export type DigitalBox = { key: string; surah: number; ayah: number; wordNo: number; left: number; top: number; width: number; height: number };
 
 const PAPER = '#f8f1de';
-const FONT = "'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
+const FONT = "'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 
 function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox; theme?: MushafTheme; uniform?: number | null }) {
   const inner = useRef<HTMLSpanElement | null>(null);
