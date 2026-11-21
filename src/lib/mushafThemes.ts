@@ -15,10 +15,10 @@ export type MushafTheme = {
 };
 
 export const MUSHAF_THEMES: MushafTheme[] = [
-  { id: 'ivory', name: 'عاجي', bg: '#fbf6e9', ink: '#14130f', frame: '#c9b27a', accent: '#8a6d1f', hl: '176, 200, 168', dark: false },
-  { id: 'white', name: 'أبيض', bg: '#ffffff', ink: '#0b0b0b', frame: '#b9c9bd', accent: '#2f6f4f', hl: '190, 214, 238', dark: false },
-  { id: 'sepia', name: 'بني هادئ', bg: '#eadcc0', ink: '#241a0f', frame: '#a8895a', accent: '#6b4a1c', hl: '214, 178, 124', dark: false },
-  { id: 'mint', name: 'أخضر هادئ', bg: '#e6f0e4', ink: '#0f2a1d', frame: '#8fb39a', accent: '#2f6f4f', hl: '244, 226, 150', dark: false },
+  { id: 'ivory', name: 'عاجي', bg: '#f6f0e0', ink: '#0a0907', frame: '#c9b27a', accent: '#8a6d1f', hl: '176, 200, 168', dark: false },
+  { id: 'white', name: 'أبيض', bg: '#ffffff', ink: '#000000', frame: '#b9c9bd', accent: '#2f6f4f', hl: '190, 214, 238', dark: false },
+  { id: 'sepia', name: 'بني هادئ', bg: '#eadcc0', ink: '#140e07', frame: '#a8895a', accent: '#6b4a1c', hl: '214, 178, 124', dark: false },
+  { id: 'mint', name: 'أخضر هادئ', bg: '#e6f0e4', ink: '#07170f', frame: '#8fb39a', accent: '#2f6f4f', hl: '244, 226, 150', dark: false },
   { id: 'night', name: 'ليلي', bg: '#16201c', ink: '#e9e4d3', frame: '#5f7a69', accent: '#d9bf6a', hl: '92, 128, 104', dark: true },
 ];
 
