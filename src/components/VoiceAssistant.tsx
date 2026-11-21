@@ -6,11 +6,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parseVoiceCommand, findSurah, surahGlobalRange, surahName, norm, type VoiceAction } from '../lib/voiceCommand';
 import { RECITERS } from '../lib/reciters';
-import { CORR_RECITERS } from '../lib/juhaniCorr';
+import { CORR_RECITERS, setCorrReciter } from '../lib/juhaniCorr';
 import { recitersForRange } from '../lib/corrDownload';
 import { speechErrorMessage } from '../lib/speechErrors';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 type Step = { k: 'root' } | { k: 'surah'; surah: number } | { k: 'reciter'; surah: number } | { k: 'recite'; surah: number };
 
 const STOP_WORDS = ['خلاص', 'كفايه', 'انهاء', 'انتهينا', 'اقفل', 'قفل المايك', 'وقف المايك', 'شكرا', 'تمام كده'];
@@ -49,10 +49,11 @@ function findReciter(text: string): string | null {
 }
 const hasAny = (t: string, ws: string[]) => ws.some((w) => t.includes(norm(w)));
 
-type Choice = 'read' | 'play' | 'recite';
+type Choice = 'read' | 'play' | 'recite' | 'memorize';
 /** Wave-1 words. Order matters: «اسمعلي/سمّعلي» (recite to me) before «اسمع» (play). */
 function matchChoice(raw: string): Choice | null {
   const t = norm(raw);
+  if (hasAny(t, ['تحفظها', 'احفظها', 'احفظ', 'حفظ'])) return 'memorize';
   if (/(على ?الشيخ|اسمعها|سمعها|اسمعنيها|سمع ?لي|اسمع ?لي|تسميع|امتحن|راجع)/.test(t)) return 'recite';
   if (hasAny(t, ['شغل', 'تشغيل', 'استمع', 'اسمع', 'سماع'])) return 'play';
   if (hasAny(t, ['اقرا', 'مصحف', 'قراءه', 'قرايه', 'افتح'])) return 'read';
@@ -101,15 +102,15 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
         const rn = RECITERS.find((r) => r.id === reciter)?.name;
         msg = a.surah ? `شغّلت سورة ${surahName(a.surah)}${rn ? ' — ' + rn : ''}` : 'فتحت الاستماع';
       } else if (a.kind === 'test') {
-        if (a.surah) {
-          const r = surahGlobalRange(a.surah);
-          sessionStorage.setItem('quran-test-range-preset', JSON.stringify({ startGlobal: r.start, endGlobal: r.end, label: `سورة ${surahName(a.surah)}`, ...(reciter ? { reciter } : {}) }));
-        }
+        // Opens the tasmee SETTINGS (surah list), never starts by itself.
+        // 'quran-test-voice-prefill' is for SelfTestPage to preselect the
+        // surah (needs a hook there); the reciter is saved as the default.
+        sessionStorage.setItem('quran-test-range-choice', 'surah');
+        if (a.surah) sessionStorage.setItem('quran-test-voice-prefill', JSON.stringify({ surah: a.surah, ...(reciter ? { reciter } : {}) }));
+        if (reciter) setCorrReciter(reciter);
         onNavigate('test');
-        {
-          const cn = CORR_RECITERS.find((c) => c.folder === reciter)?.name;
-          msg = a.surah ? `جاهز تسمّع سورة ${surahName(a.surah)}${cn ? ' على ' + cn : ''}` : 'فتحت التسميع';
-        }
+        const cn = CORR_RECITERS.find((c) => c.folder === reciter)?.name;
+        msg = a.surah ? `فتحت إعدادات التسميع — سورة ${surahName(a.surah)}${cn ? ' على ' + cn : ''}` : 'فتحت إعدادات التسميع';
       } else if (a.kind === 'mutashabihat' || a.kind === 'elderly') {
         onNavigate('home');
         setTimeout(() => window.dispatchEvent(new CustomEvent('voice-home-action', { detail: a.kind })), 450);
@@ -156,7 +157,12 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
       for (const t of alts) {
         const c = matchChoice(t);
         if (c === 'read') { go({ kind: 'mushaf', surah: st.surah }); return; }
-        if (c === 'recite') { toRecite(st.surah); return; }
+        if (c === 'recite') {
+          const f = findCorrReciter(t, reciteOptions(st.surah));
+          if (f) go({ kind: 'test', surah: st.surah }, f); else toRecite(st.surah);
+          return;
+        }
+        if (c === 'memorize') { go({ kind: 'test', surah: st.surah }); return; }
         if (c === 'play') {
           const rid = findReciter(t);
           if (rid) go({ kind: 'listen', surah: st.surah }, rid);
@@ -184,11 +190,17 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
         } else go(a);
         return;
       }
-      if (a.kind === 'mushaf' || a.kind === 'test') { go({ ...a, surah: a.surah ?? pending }); return; }
+      if (a.kind === 'test') {
+        const surah = a.surah ?? pending;
+        const f = surah ? findCorrReciter(t, reciteOptions(surah)) : null;
+        go({ ...a, surah }, f ?? undefined);
+        return;
+      }
+      if (a.kind === 'mushaf') { go({ ...a, surah: a.surah ?? pending }); return; }
       go(a);
       return;
     }
-    setNote(st.k === 'reciter' ? 'ما فهمتش القارئ، قول اسمه تاني' : st.k === 'surah' ? 'قول: اقرأ، شغّل، أو اسمعها على الشيخ' : 'ما فهمتش، قول تاني');
+    setNote(st.k === 'reciter' ? 'ما فهمتش القارئ، قول اسمه تاني' : st.k === 'surah' ? 'قول: اقرأ، شغّل، اسمّعها، أو احفظ' : 'ما فهمتش، قول تاني');
   };
 
   const begin = useCallback(() => {
@@ -249,45 +261,67 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
     return () => { window.removeEventListener('voice-assistant-toggle', on); activeRef.current = false; try { recRef.current?.abort?.(); } catch { /* ignore */ } };
   }, [begin, stop]);
 
-  if (!active && !note) return null;
+  // Small toast after the mic closed (what just happened / why it failed).
+  if (!active) {
+    if (!note) return null;
+    return (
+      <div dir="rtl" className="fixed inset-x-0 bottom-0 z-[3000] p-3 pointer-events-none">
+        <div className="pointer-events-auto max-w-md mx-auto rounded-2xl bg-[#0b3f37] text-white shadow-2xl px-4 py-3 text-base font-bold" role="status">{note}</div>
+      </div>
+    );
+  }
   const q = step.k === 'surah'
     ? `سورة ${surahName(step.surah)} — اختار واحدة`
-    : step.k === 'reciter' ? `سورة ${surahName(step.surah)} — مع مين؟` : step.k === 'recite' ? `على مين؟ (اللي توقيتاته جاهزة)` : 'قول اسم السورة، مثلاً: «الملك»';
+    : step.k === 'reciter' ? `سورة ${surahName(step.surah)} — مع مين؟` : step.k === 'recite' ? `على مين؟ (اللي توقيتاته جاهزة)` : 'قول اسم السورة وعايز تعمل إيه وأنا أساعدك';
+  // Example tiles run the real parser, so what they show is what works.
+  const EXAMPLES: { text: string; cls: string; icon: string }[] = [
+    { text: 'افتح سورة الكهف', cls: 'bg-emerald-600', icon: '📖' },
+    { text: 'سمّع لي سورة الكهف على المنشاوي', cls: 'bg-amber-500', icon: '🎙️' },
+    { text: 'شغّل الكهف بصوت الحصري', cls: 'bg-sky-600', icon: '🎧' },
+  ];
+  const tile = 'min-h-[76px] rounded-2xl font-bold flex flex-col items-center justify-center text-white px-2 text-center active:scale-95 transition-transform';
   return (
-    <div dir="rtl" className="fixed inset-x-0 bottom-0 z-[3000] p-3 pointer-events-none">
-      <div className="pointer-events-auto max-w-md mx-auto rounded-3xl bg-rose-800 text-white shadow-2xl p-3 space-y-2">
-        <div className="flex items-center gap-3">
-          <span className={`text-3xl ${active ? 'animate-pulse' : ''}`} aria-hidden="true">🎙️</span>
-          <div className="flex-1 min-w-0">
-            <p className="font-bold text-lg truncate">{active ? (heard ? `«${heard}»` : 'بسمعك…') : note}</p>
-            {active && <p className="text-sm text-rose-100">{note || q}</p>}
-          </div>
-          {active && (
-            <button type="button" onClick={() => stop('قفلت المايك')} className="min-h-[44px] px-4 rounded-xl bg-white text-rose-800 font-bold">خلاص</button>
+    <div dir="rtl" role="dialog" aria-modal="true" aria-label="اؤمرني" className="fixed inset-0 z-[3000] bg-gradient-to-b from-[#0b3f37] via-[#0f5c4d] to-[#082a25] text-white overflow-y-auto" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div className="min-h-full max-w-md mx-auto flex flex-col items-center gap-4 px-4 py-6">
+        <span className="text-7xl mt-4 animate-pulse" aria-hidden="true">🎙️</span>
+        <p className="text-xl font-bold text-center leading-snug">{heard ? `«${heard}»` : 'المايك مفتوح، بسمعك…'}</p>
+        <p className="text-base text-[#f3ead7] text-center leading-relaxed" aria-live="polite">{note || q}</p>
+        <div className="w-full flex-1 flex flex-col justify-center gap-3">
+          {step.k === 'root' && (
+            <div key="w0" className="va-wave flex flex-col gap-3">
+              {EXAMPLES.map((e) => (
+                <button key={e.text} type="button" onClick={() => handle([e.text])} className={`${tile} ${e.cls}`}>
+                  <span className="text-2xl">{e.icon}</span>
+                  <span className="text-lg">«{e.text}»</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {step.k === 'surah' && (
+            <div key="w1" className="va-wave grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => go({ kind: 'mushaf', surah: step.surah })} className={`${tile} bg-emerald-600`}><span className="text-2xl">📖</span><span className="text-lg">تقراها</span><span className="text-[11px] opacity-80">المصحف</span></button>
+              <button type="button" onClick={() => setStepBoth({ k: 'reciter', surah: step.surah })} className={`${tile} bg-sky-600`}><span className="text-2xl">🎧</span><span className="text-lg">تسمعها</span><span className="text-[11px] opacity-80">بصوت قارئ</span></button>
+              <button type="button" onClick={() => toRecite(step.surah)} className={`${tile} bg-amber-500`}><span className="text-2xl">🎙️</span><span className="text-lg">تسمّعها</span><span className="text-[11px] opacity-80">على الشيخ</span></button>
+              <button type="button" onClick={() => go({ kind: 'test', surah: step.surah })} className={`${tile} bg-violet-600`}><span className="text-2xl">🧠</span><span className="text-lg">تحفظها</span><span className="text-[11px] opacity-80">إعدادات التسميع</span></button>
+            </div>
+          )}
+          {step.k === 'recite' && (
+            <div key="w3" className="va-wave grid grid-cols-2 gap-2">
+              {reciteOptions(step.surah).map((r) => (
+                <button key={r.folder} type="button" onClick={() => go({ kind: 'test', surah: step.surah }, r.folder)} className="min-h-[52px] px-2 rounded-xl bg-amber-500 font-bold">{r.name}</button>
+              ))}
+            </div>
+          )}
+          {step.k === 'reciter' && (
+            <div key="w2" className="va-wave grid grid-cols-2 gap-2">
+              {RECITERS.map((r) => (
+                <button key={r.id} type="button" onClick={() => go({ kind: 'listen', surah: step.surah }, r.id)} className="min-h-[52px] px-2 rounded-xl bg-white/20 font-bold">{r.name}</button>
+              ))}
+              <button type="button" onClick={() => go({ kind: 'listen', surah: step.surah })} className="min-h-[52px] px-2 rounded-xl bg-white/10 font-bold">أي قارئ</button>
+            </div>
           )}
         </div>
-        {active && step.k === 'surah' && (
-          <div key="w1" className="va-wave grid grid-cols-3 gap-2">
-            <button type="button" onClick={() => go({ kind: 'mushaf', surah: step.surah })} className="min-h-[76px] rounded-2xl bg-emerald-600 font-bold flex flex-col items-center justify-center"><span className="text-2xl">📖</span><span className="text-lg">اقرأ</span><span className="text-[11px] opacity-80">المصحف</span></button>
-            <button type="button" onClick={() => setStepBoth({ k: 'reciter', surah: step.surah })} className="min-h-[76px] rounded-2xl bg-sky-600 font-bold flex flex-col items-center justify-center"><span className="text-2xl">🎧</span><span className="text-lg">شغّل</span><span className="text-[11px] opacity-80">بصوت قارئ</span></button>
-            <button type="button" onClick={() => toRecite(step.surah)} className="min-h-[76px] rounded-2xl bg-amber-500 font-bold flex flex-col items-center justify-center"><span className="text-2xl">🎙️</span><span className="text-lg">اسمعها</span><span className="text-[11px] opacity-80">على الشيخ</span></button>
-          </div>
-        )}
-        {active && step.k === 'recite' && (
-          <div key="w3" className="va-wave grid grid-cols-3 gap-2">
-            {reciteOptions(step.surah).map((r) => (
-              <button key={r.folder} type="button" onClick={() => go({ kind: 'test', surah: step.surah }, r.folder)} className="min-h-[48px] px-2 rounded-xl bg-amber-500/90 font-bold">{r.name}</button>
-            ))}
-          </div>
-        )}
-        {active && step.k === 'reciter' && (
-          <div key="w2" className="va-wave grid grid-cols-3 gap-2">
-            {RECITERS.map((r) => (
-              <button key={r.id} type="button" onClick={() => go({ kind: 'listen', surah: step.surah }, r.id)} className="min-h-[48px] px-2 rounded-xl bg-white/20 font-bold">{r.name}</button>
-            ))}
-            <button type="button" onClick={() => go({ kind: 'listen', surah: step.surah })} className="min-h-[48px] px-2 rounded-xl bg-white/10 font-bold">أي قارئ</button>
-          </div>
-        )}
+        <button type="button" onClick={() => stop('قفلت المايك')} className="min-h-[52px] w-full max-w-xs rounded-2xl bg-white text-[#0b3f37] text-lg font-bold">خلاص</button>
       </div>
     </div>
   );

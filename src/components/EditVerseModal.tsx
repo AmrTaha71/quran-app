@@ -75,7 +75,7 @@ export default function EditVerseModal({
             </div>
             <h3 className="font-semibold text-accent-800">تعديل الآية</h3>
           </div>
-          <button onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg transition-smooth">
+          <button type="button" onClick={onClose} aria-label="إغلاق" className="icon-action p-1.5 text-ink-3 hover:bg-gray-100 rounded-lg transition-smooth">
             <X className="w-5 h-5" />
           </button>
         </div>

@@ -10,8 +10,40 @@ import { buildPhonWords, PhonemeStream, type PhonWord } from './phonemeEar';
 import { expectedWordList } from './expectedWords';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
-export function earLabOn(): boolean { try { return localStorage.getItem(EAR_LAB_KEY) === '1'; } catch { return false; } }
-export function setEarLab(on: boolean): void { try { if (on) localStorage.setItem(EAR_LAB_KEY, '1'); else localStorage.removeItem(EAR_LAB_KEY); } catch { /* ignore */ } }
+// W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
+// key stays readable: '1' = on, absent = on (new default), '0' = turned off
+// on purpose (ear-lab page). It is only USED once the model is ready, see
+// earLabUsable(); until then the test falls back to the browser ear.
+export function earLabOn(): boolean { try { return localStorage.getItem(EAR_LAB_KEY) !== '0'; } catch { return false; } }
+export function setEarLab(on: boolean): void { try { localStorage.setItem(EAR_LAB_KEY, on ? '1' : '0'); } catch { /* ignore */ } }
+
+// One-time consent for the ~100 MB first download (asked once, then automatic).
+export const EAR_DL_CONSENT_KEY = 'quran-ear-dl-consent-v1';
+export function earDownloadConsented(): boolean { try { return localStorage.getItem(EAR_DL_CONSENT_KEY) === '1'; } catch { return false; } }
+export function setEarDownloadConsent(): void { try { localStorage.setItem(EAR_DL_CONSENT_KEY, '1'); } catch { /* ignore */ } }
+
+/** Load state of the model in this tab (for the download card + ear choice). */
+export type EarLabState = { status: 'idle' | 'loading' | 'ready' | 'error'; loaded: number; total: number };
+let earState: EarLabState = { status: 'idle', loaded: 0, total: 0 };
+const earSubs = new Set<() => void>();
+function setEarState(next: Partial<EarLabState>): void {
+  earState = { ...earState, ...next };
+  for (const cb of [...earSubs]) { try { cb(); } catch { /* ignore */ } }
+}
+export function getEarLabState(): EarLabState { return earState; }
+export function subscribeEarLab(cb: () => void): () => void { earSubs.add(cb); return () => { earSubs.delete(cb); }; }
+/** A live session failed to load the model: use the browser ear for the
+ *  rest of this tab (no error loops); the card offers a retry. */
+export function markEarLabFailed(): void { setEarState({ status: 'error' }); }
+/** Use the device ear for a test now? Only when it is on AND loaded. */
+export function earLabUsable(): boolean { return earLabOn() && earState.status === 'ready'; }
+/** Is the model file already in the Cache API (downloaded before)? */
+export async function earModelCached(): Promise<boolean> {
+  try {
+    const cache = await caches.open('quranlab-model-v1');
+    return !!(await cache.match('/models/quranlab/zipformer_p_arabic_v3.int8.onnx'));
+  } catch { return false; }
+}
 
 const TARGET = 16000;
 const softSkeleton = (w: string) => w.replace(/ة/g, 'ه').replace(/(?<=.)ا(?=.)/g, '').replace(/يي+/g, 'ي').replace(/لل+/g, 'ل');
@@ -64,11 +96,20 @@ function getWorker(): Promise<Worker> {
     const w0 = worker;
     ready = new Promise<void>((res, rej) => {
       const prev = listener;
-      const timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; rej(new Error('model-load-timeout')); }, LOAD_TIMEOUT_MS);
-      w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); rej(new Error('worker-error')); };
+      setEarState({ status: 'loading' });
+      // W4-B: a slow first download (~100 MB) must not hit the 40 s load
+      // timeout while bytes still arrive: each progress message re-arms it.
+      let timer = setTimeout(() => {}, 0);
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; setEarState({ status: 'error' }); rej(new Error('model-load-timeout')); }, LOAD_TIMEOUT_MS);
+      };
+      arm();
+      w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error('worker-error')); };
       listener = (m) => {
-        if (m.type === 'ready') { clearTimeout(timer); listener = prev; res(); }
-        else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); rej(new Error(m.message)); }
+        if (m.type === 'progress') { arm(); setEarState({ loaded: Number(m.loaded) || 0, total: Number(m.total) || 0 }); }
+        else if (m.type === 'ready') { clearTimeout(timer); listener = prev; setEarState({ status: 'ready' }); res(); }
+        else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error(m.message)); }
       };
       w0.postMessage({ type: 'load' });
     });
@@ -76,8 +117,25 @@ function getWorker(): Promise<Worker> {
   }
   return ready!.then(() => worker!);
 }
-/** Start downloading / loading the model ahead of time. */
-export function preloadEarLab(): void { void getWorker().catch(() => {}); }
+/** W4-P: Wi-Fi only when the browser says so. Cellular, saveData or an unknown
+ *  connection (no navigator.connection, e.g. Safari; or no `type`) count as
+ *  mobile data: the ~100 MB download then needs an explicit tap every time. */
+export function earOnMobileData(): boolean {
+  const c = (typeof navigator === 'undefined' ? undefined : (navigator as unknown as { connection?: { type?: string; saveData?: boolean } }).connection);
+  if (!c) return true;
+  if (c.saveData === true || c.type === 'cellular') return true;
+  return !(c.type === 'wifi' || c.type === 'ethernet');
+}
+/** Start loading the model ahead of time. A cached model always loads (no
+ *  download). A real download starts only after an explicit confirm
+ *  (`confirmed`), or on Wi-Fi after the one-time consent. Anything else is a
+ *  silent no-op, so no caller can pull 100 MB over mobile data unasked. */
+export function preloadEarLab(confirmed = false): void {
+  void earModelCached().then((cached) => {
+    if (!cached && !confirmed && !(earDownloadConsented() && !earOnMobileData())) return;
+    return getWorker().then(() => undefined);
+  }).catch(() => {});
+}
 
 function downsample(input: Float32Array, fromRate: number): Float32Array {
   if (fromRate === TARGET) return new Float32Array(input);
@@ -109,6 +167,8 @@ export class QuranLabRecognition {
   maxAlternatives = 1;
   onstart: (() => void) | null = null;
   onaudiostart: (() => void) | null = null;
+  /** Fires when the microphone permission is granted (the model may still be loading). */
+  onmicgranted: (() => void) | null = null;
   onspeechstart: (() => void) | null = null;
   onspeechend: (() => void) | null = null;
   onaudioend: (() => void) | null = null;
@@ -118,6 +178,8 @@ export class QuranLabRecognition {
   onnomatch: (() => void) | null = null;
   onsoundstart: (() => void) | null = null;
   onsoundend: (() => void) | null = null;
+  /** W5-N2: every decoded chunk's timed phoneme parts ({s, t: audio s}). */
+  onparts: ((parts: { s: string; t: number }[]) => void) | null = null;
 
   private stream: MediaStream | null = null;
   private streamP: Promise<MediaStream> | null = null;
@@ -165,25 +227,33 @@ export class QuranLabRecognition {
     // gesture is gone and iOS may never show the prompt / return a stream.
     try {
       this.streamP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
-      this.streamP.catch(() => {});
+      this.streamP.then(() => { if (!this.stopped) this.onmicgranted?.(); }).catch(() => {});
     } catch { this.streamP = null; }
     void this.begin();
   }
 
   private async begin() {
     try {
-      const wk = wordsKey(this.expected);
-      let words = wordCache.get(wk);
-      if (!words) {
-        words = buildPhonWords(this.expected, refKeySkel);
-        if (wordCache.size > 12) wordCache.clear();
-        wordCache.set(wk, words);
-        words.catch(() => { if (wordCache.get(wk) === words) wordCache.delete(wk); });
+      // W5-N2: no expected words = phoneme tap (follow-the-imam): no
+      // PhonemeStream, the raw timed parts go to onparts instead.
+      let words: Promise<PhonWord[]> | null = null;
+      if (this.expected.length) {
+        const wk = wordsKey(this.expected);
+        words = wordCache.get(wk) ?? null;
+        if (!words) {
+          const built = buildPhonWords(this.expected, refKeySkel);
+          words = built;
+          if (wordCache.size > 12) wordCache.clear();
+          wordCache.set(wk, built);
+          built.catch(() => { if (wordCache.get(wk) === built) wordCache.delete(wk); });
+        }
       }
       const [w, pw] = await Promise.all([getWorker(), words]);
       if (this.stopped) { this.finishEnd(); return; }
-      this.ps = new PhonemeStream(pw);
-      this.ps.pointer = this.startWord;
+      if (pw) {
+        this.ps = new PhonemeStream(pw);
+        this.ps.pointer = this.startWord;
+      }
       listener = (m) => this.onWorker(m);
       w.postMessage({ type: 'reset' });
       this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }));
@@ -294,6 +364,9 @@ export class QuranLabRecognition {
   private onWorker(m: any) {
     if (m.type === 'tokens') {
       if (m.text && !this.heardAny) { this.heardAny = true; this.onspeechstart?.(); }
+      if (this.onparts && !this.stopped && Array.isArray(m.parts) && m.parts.length) {
+        try { this.onparts(m.parts); } catch { /* the page's handler must not kill the ear */ }
+      }
       if (this.ps && m.text) {
         this.emit(Array.isArray(m.parts) ? this.ps.pushTimed(m.parts) : this.ps.push(m.text));
         // The last aligned word stays pending until more speech arrives, so
@@ -363,3 +436,15 @@ export class QuranLabRecognition {
     setTimeout(() => { this.onaudioend?.(); this.onend?.(); }, 0);
   }
 }
+
+/** W5-N2 (2026-11-19): the ear with no expected text, for follow-the-imam.
+ *  Same worker, same mic path (stream asked inside the tap, iOS keep/
+ *  rebuild logic, error names) as the tasmee' ear; it only hands each
+ *  chunk's timed phoneme parts to `onparts` (→ ImamFollower.pushPhonemes). */
+export class QuranLabPhonemeTap extends QuranLabRecognition {
+  constructor() { super([]); }
+}
+
+/** W5-N2: drop the parked mic (kept 60 s for the next tasmee' start) so a
+ *  stopped follow session does not leave the mic light on. */
+export function releaseEarMic(): void { closeKeep(); }

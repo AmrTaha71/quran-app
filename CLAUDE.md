@@ -15,6 +15,16 @@ How to route:
 - Never use a stronger model for a task a cheaper one can do: not Sonnet 5.5 where Haiku can, not Opus 5.5 where Sonnet 5.5 can, not Fable 5.2 where Opus 5.5 can.
 - Keep all replies short. Do not repeat the user's request back. No extra explanation unless asked.
 
+## Working rules (set 2026-11-19)
+
+- One file = one agent at a time. Heavy files (`QuranMushafPage.tsx`, `SelfTestPage.tsx`, `ListenPage.tsx`, `App.tsx`, `SettingsPage.tsx`) are never edited by two agents in parallel.
+- Never push to `main` directly and never force-push. Work on `wave/*` branches; one commit per item, item id in the commit message.
+- Gates before merge: `npm run typecheck` = 0 errors, `npm run build` passes, no new eslint errors in touched files.
+- Back/Home buttons go at the bottom-left of every page (not the top: iPhone Dynamic Island blocks the top).
+- Any localStorage key change must keep the old key readable until the next wave is stable. Bump the service-worker cache version on every deploy.
+- Back up (`/home/claude/backups/backup.sh <label>`) before the first change and after each major change. Never delete an old backup without asking the owner first.
+- TV work is deferred until the owner tests TV himself.
+
 ## Library docs (Context7)
 
 Before using a library API (React, Tailwind, Supabase, Vite, Motion, etc.), fetch its current docs with the Context7 MCP tools (`resolve-library-id`, then the docs tool). Do not guess an API from memory.

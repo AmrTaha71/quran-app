@@ -3,7 +3,7 @@
 // bars under a word of encouragement. Shown only while the app is open.
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
-import { getDay, loadReportSettings, saveReportSettings, todayKey } from '../lib/dailyStats';
+import { DAY_RECAP_EVENT, RECAP_AFTER_MS, getDay, loadReportSettings, markActive, msSinceActive, saveReportSettings, todayKey } from '../lib/dailyStats';
 import { loadWird, wirdTotal } from '../lib/wird';
 import DrumSelect from './DrumSelect';
 
@@ -25,8 +25,41 @@ function cheer(score: number): string {
   return 'لسه فيه وقت — دقايق مع كتاب الله تغيّر يومك';
 }
 
+// Full words, never the bare abbreviation «د» / «ص» (the user could not
+// tell what "١ د" meant): ١ دقيقة، ٢ دقيقتان، ٣ دقائق، ١٢ دقيقة.
+function minWord(n: number): string {
+  const unit = n === 1 ? 'دقيقة' : n === 2 ? 'دقيقتان' : n >= 3 && n <= 10 ? 'دقائق' : 'دقيقة';
+  return n === 2 ? unit : `${ar(n)} ${unit}`;
+}
+function pageWord(n: number): string {
+  if (n === 1) return 'صفحة';
+  if (n === 2) return 'صفحتان';
+  return `${ar(n)} ${n >= 3 && n <= 10 ? 'صفحات' : 'صفحة'}`;
+}
+
+function openLabel(sec: number): string {
+  const m = Math.floor(sec / 60), h = Math.floor(m / 60);
+  if (m < 1) return 'أقل من دقيقة';
+  return h > 0 ? `${ar(h)} ${h === 1 ? 'ساعة' : h === 2 ? 'ساعتين' : 'ساعات'}${m % 60 ? ` و${ar(m % 60)} دقيقة` : ''}` : `${ar(m)} دقيقة`;
+}
+
 export function DailyReportWatcher() {
   const [open, setOpen] = useState(false);
+  const [recap, setRecap] = useState(false);
+  // W4-H: «تقبّل الله منك» when he taps «خلصت» (the app asks through requestDayRecap)
+  // and when he comes BACK after 30+ minutes away. The web cannot show a window
+  // at the moment the tab/app is closed, so the return is the reliable moment.
+  useEffect(() => {
+    const show = () => { setRecap(true); setOpen(true); };
+    const onVis = () => {
+      if (document.hidden) { markActive(); return; }
+      if (msSinceActive() > RECAP_AFTER_MS && getDay().open >= 60) show();
+      markActive();
+    };
+    window.addEventListener(DAY_RECAP_EVENT, show);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.removeEventListener(DAY_RECAP_EVENT, show); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
   useEffect(() => {
     const check = () => {
       const s = loadReportSettings();
@@ -38,18 +71,18 @@ export function DailyReportWatcher() {
     const iv = window.setInterval(check, 30000);
     return () => window.clearInterval(iv);
   }, []);
-  return open ? <DailyReportCard onClose={() => setOpen(false)} /> : null;
+  return open ? <DailyReportCard recap={recap} onClose={() => { setOpen(false); setRecap(false); }} /> : null;
 }
 
-export function DailyReportCard({ onClose }: { onClose: () => void }) {
+export function DailyReportCard({ onClose, recap = false }: { onClose: () => void; recap?: boolean }) {
   const d = getDay(); const tests = todaysTests();
   const w = loadWird(); const wirdDone = w.doneDays.includes(todayKey()); const pages = wirdDone ? wirdTotal(w.parts) : 0;
   const tc = tests.reduce((a, r) => a + r.correct, 0), tt = tests.reduce((a, r) => a + r.total, 0);
   const pct = tt ? Math.round((tc / tt) * 100) : 0;
   const bars = [
-    { label: 'سمعت', val: `${ar(mins(d.listen))} د`, f: Math.min(1, d.listen / 1800), c: 'bg-sky-500' },
-    { label: 'قرأت', val: `${ar(mins(d.read))} د`, f: Math.min(1, d.read / 900), c: 'bg-amber-500' },
-    { label: 'حفظت', val: wirdDone ? `${ar(pages)} ص` : '—', f: wirdDone ? 1 : 0, c: 'bg-emerald-600' },
+    { label: 'سمعت', val: minWord(mins(d.listen)), f: Math.min(1, d.listen / 1800), c: 'bg-sky-500' },
+    { label: 'قرأت', val: minWord(mins(d.read)), f: Math.min(1, d.read / 900), c: 'bg-amber-500' },
+    { label: 'حفظت', val: wirdDone ? pageWord(pages) : '—', f: wirdDone ? 1 : 0, c: 'bg-emerald-600' },
     { label: 'اختباراتك', val: tests.length ? `${ar(pct)}٪` : '—', f: pct / 100, c: 'bg-rose-500' },
   ];
   const score = (d.listen >= 600 ? 1 : 0) + (d.read >= 300 ? 1 : 0) + (wirdDone ? 1 : 0) + (tests.length ? 1 : 0);
@@ -60,6 +93,12 @@ export function DailyReportCard({ onClose }: { onClose: () => void }) {
           <h2 className="text-xl font-bold font-display-ar text-ink">إنجاز اليوم</h2>
           <button onClick={onClose} aria-label="إغلاق" className="p-1"><X className="w-5 h-5" /></button>
         </div>
+        {recap && (
+          <p className="text-lg font-bold text-emerald-800 mt-2 leading-relaxed">
+            {d.open >= 60 ? `تقبّل الله منك. قضيت ${openLabel(d.open)} مع كتاب الله. بارك الله لك.` : 'تقبّل الله منك، وبارك الله لك في وقتك مع كتاب الله.'}
+          </p>
+        )}
+        {!recap && d.open >= 60 && <p className="text-sm text-ink-2 mt-1">فتحت التطبيق النهارده {openLabel(d.open)}</p>}
         <p className="text-base font-semibold text-emerald-800 mt-2 leading-relaxed">{cheer(score)}</p>
         <div className="mt-4 flex items-end justify-between gap-3 h-44">
           {bars.map((b) => (

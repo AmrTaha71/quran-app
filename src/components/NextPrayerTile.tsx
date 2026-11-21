@@ -55,9 +55,9 @@ export default function NextPrayerTile({ icon, onNoLocation, onPress }: { icon: 
   void tick;
   const info = day ? nextInfo(day) : null;
   return (
-    <button type="button" onClick={() => (hasLoc ? onPress?.() : onNoLocation())} aria-label="موعد الصلاة القادمة" className="home-tile polish-focus !min-h-0">
-      <span className="tile-medal tile-medal-night" aria-hidden="true">{icon}</span>
-      <span className="home-tile-title !text-[0.8rem] !leading-tight">{info ? info.label : 'موعد الصلاة'}</span>
+    <button type="button" onClick={() => (hasLoc ? onPress?.() : onNoLocation())} aria-label="موعد الصلاة القادمة" className="small-tile polish-focus">
+      <span className="small-tile-icon text-emerald-800" aria-hidden="true">{icon}</span>
+      <span className="small-tile-label">{info ? info.label : 'موعد الصلاة'}</span>
       {info && <span className="text-[0.68rem] text-ink-2 leading-none">بعد</span>}
       <span className="font-bold tabular-nums leading-none text-emerald-800" dir="ltr"
         style={{ fontFamily: "ui-monospace, 'SF Mono', Menlo, Consolas, monospace", fontSize: '0.8rem', letterSpacing: '0.02em' }}>

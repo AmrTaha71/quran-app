@@ -68,6 +68,8 @@
 //
 // Hook-free, React-free, Supabase-free, same as the other engines.
 
+import { TafsirClipRun } from './tafsirJoin';
+import type { RunClip } from './tafsirJoin';
 import { RECITERS, DEFAULT_RECITER_ID } from './reciters';
 import { SURAHS } from './surahs';
 import { quarterContaining } from './quarters';
@@ -88,6 +90,11 @@ import type {
 } from './threeModeListen';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
 import { registerSleepStopHandler, unregisterSleepStopHandler } from './sleepTimer';
+
+// Tafsir gather bounds (W5-I): how long the engine waits for clip 1
+// before streaming it directly, and for a not-yet-gathered next clip.
+const FIRST_CLIP_WAIT_MS = 6000;
+const TAFSIR_CLIP_WAIT_MS = 20000;
 
 const ERROR_MESSAGE = 'تعذرت التلاوة — تحقق من الاتصال وحاول تاني';
 
@@ -121,49 +128,6 @@ export interface JourneyEngineOptions {
   // not part of the position — resuming applies the current pick).
   playbackRate?: number;
   resolveAyahUrl?: (reciterId: string, surah: number, ayah: number) => Promise<string>;
-  /**
-   * Tadabbur only: resolve a tafsir clip's playable URL. Default is
-   * the natural King Fahd recording (tafsirClipUrl). A generated-voice
-   * resolver (see tafsirVoice.ts) returns the generated clip's URL
-   * and falls back to the natural URL on any failure — so a tafsir
-   * item never plays silence. The engine itself falls back to the
-   * natural clip when the resolver returns null or throws.
-   * NOTE: interstitial SIZING still uses the natural clips'
-   * durations (probeTafsirDuration, unchanged): the generated clip
-   * says the same fixed text at a similar pace, and probing a
-   * generated clip would mean generating it just to measure it.
-   */
-  resolveTafsirUrl?: (surah: number, ayah: number) => Promise<string | null>;
-  /**
-   * Tadabbur only: warm (prefetch) a tafsir clip's generated audio
-   * while its quarter plays, so the quarter boundary rarely waits
-   * on a fetch. Fire-and-forget; the warmer swallows its failures.
-   */
-  warmTafsirAudio?: (surah: number, ayah: number) => void;
-  /**
-   * Tadabbur only, dialogue mode: resolve a tafsir clip's two
-   * generated host clips ({host1Url, host2Url}). Null on ANY
-   * failure — the engine then plays the natural clip alone.
-   * Injected in tests; the page wires resolveDialogueAudio.
-   */
-  resolveDialogueAudio?: (
-    surah: number,
-    ayah: number,
-  ) => Promise<{ host1Url: string; host2Url: string } | null>;
-  /**
-   * Tadabbur only, dialogue mode: warm (prefetch) a tafsir
-   * clip's dialogue audio while its quarter plays. Fire-and-
-   * forget; the warmer swallows its failures.
-   */
-  warmDialogueAudio?: (surah: number, ayah: number) => void;
-  /**
-   * Tadabbur only: live predicate — is the dialogue voice
-   * setting active right now? Read on every tafsir item, so a
-   * setting change mid-journey takes effect at the next tafsir
-   * clip. The page wires () => readTafsirVoice() === 'dialogue'.
-   * Absent (tests, non-dialogue callers) means "not dialogue".
-   */
-  isDialogueTafsir?: () => boolean;
   /** Injected in tests; default probes clip metadata in the browser. */
   probeTafsirDuration?: (surah: number, ayah: number) => Promise<number | null>;
   /**
@@ -285,17 +249,6 @@ export class JourneyEngine {
     surah: number,
     ayah: number,
   ) => Promise<number | null>;
-  private readonly resolveTafsirUrlOpt?: (
-    surah: number,
-    ayah: number,
-  ) => Promise<string | null>;
-  private readonly warmTafsirAudioOpt?: (surah: number, ayah: number) => void;
-  private readonly resolveDialogueAudioOpt?: (
-    surah: number,
-    ayah: number,
-  ) => Promise<{ host1Url: string; host2Url: string } | null>;
-  private readonly warmDialogueAudioOpt?: (surah: number, ayah: number) => void;
-  private readonly isDialogueTafsirOpt?: () => boolean;
   private readonly tafsirOrder: TadabburTafsirOrder;
   private readonly onItemChange?: (item: JourneyPlayable) => void;
   private readonly onEnded?: () => void;
@@ -318,15 +271,18 @@ export class JourneyEngine {
   // current item plays (the synchronous 'ended' hot path).
   private nextItem: JourneyPlayable | null = null;
   private nextUrl: string | null = null;
-  // Full URL sequence for the pre-resolved next tafsir item:
-  // dialogue mode [host1, natural, host2], otherwise the single
-  // resolved URL. Null for ayah items (single URL only).
-  private nextSequence: string[] | null = null;
-  // URL sequence of the CURRENT tafsir item, and the index of the
-  // part now playing. Ayah items (and single-URL tafsir items)
-  // run with a 1-entry sequence, so 'ended' advances uniformly.
-  private currentSequence: string[] = [];
-  private currentSeqIndex = 0;
+  // Gapless tafsir (W5-I): the clip run of the pre-resolved next
+  // tafsir item (null for ayah items), and the run now playing with
+  // its current joined segment (clips segFrom..segTo-1 behind ONE
+  // blob URL; segOffsets = clip start seconds + total as last entry).
+  private nextRun: TafsirClipRun | null = null;
+  private run: TafsirClipRun | null = null;
+  private segFrom = 0;
+  private segTo = 0;
+  private segOffsets: number[] = [0];
+  private segBlobUrl: string | null = null;
+  private curClipIdx = 0;
+  private runNoMerge = false;
   private preparingNext = false;
   private preparePromise: Promise<void> | null = null;
   // Interstitial queue for the marker being played through.
@@ -384,38 +340,11 @@ export class JourneyEngine {
 
   private readonly handleEnded = (): void => {
     if (this.destroyed || !this.holdsAudio) return;
-    // DIALOGUE SEQUENCE: a tafsir item in dialogue mode plays
-    // [host1, natural, host2] as ONE item. 'ended' on part 1 or 2
-    // advances WITHIN the sequence (same item, next URL) — the
-    // item is done only when the last part ends, so the pre-
-    // resolved next item stays queued untouched until then.
-    if (
-      this.current !== null &&
-      this.current.kind === 'tafsir' &&
-      this.currentSequence.length > 1 &&
-      this.currentSeqIndex + 1 < this.currentSequence.length
-    ) {
-      this.currentSeqIndex += 1;
-      const url = this.currentSequence[this.currentSeqIndex] as string;
-      this.currentSrc = url;
-      try {
-        this.audio.src = url;
-      } catch {
-        // Swallow: a later 'error' event surfaces real failures.
-      }
-      this.applyRate();
-      try {
-        const p = this.audio.play() as unknown as Promise<void> | undefined;
-        this.playingFlag = true;
-        if (p && typeof p.catch === 'function') {
-          p.catch(() => {
-            this.playingFlag = false;
-          });
-        }
-      } catch {
-        this.playingFlag = false;
-      }
-      this.updatePositionState();
+    // Gapless tafsir: the run's next joined segment (same item,
+    // same element, next blob) — the interstitial is done only
+    // when its last clip's segment ends.
+    if (this.run !== null && this.current !== null && this.current.kind === 'tafsir' && this.segTo < this.run.clips.length) {
+      this.advanceSegment();
       return;
     }
     this.recordPlayedAyah();
@@ -423,11 +352,11 @@ export class JourneyEngine {
       // HOT PATH — synchronous, no await.
       const item = this.nextItem;
       const url = this.nextUrl;
-      const urls = this.nextSequence;
+      const run = this.nextRun;
       this.nextItem = null;
       this.nextUrl = null;
-      this.nextSequence = null;
-      this.playItem(item, url, urls ?? undefined);
+      this.nextRun = null;
+      this.playItem(item, url, run ?? undefined);
       void this.prepareNext();
       return;
     }
@@ -442,6 +371,13 @@ export class JourneyEngine {
 
   private readonly handleAudioError = (): void => {
     if (this.destroyed || !this.holdsAudio) return;
+    // A joined blob that fails to decode degrades to per-clip
+    // streaming of the same clip (the old behaviour), once.
+    if (this.run !== null && this.segBlobUrl !== null && !this.runNoMerge) {
+      this.runNoMerge = true;
+      this.fallbackToDirectClip();
+      return;
+    }
     this.playingFlag = false;
     this.callError(ERROR_MESSAGE);
   };
@@ -462,9 +398,9 @@ export class JourneyEngine {
     this.currentSrc = '';
     this.nextItem = null;
     this.nextUrl = null;
-    this.nextSequence = null;
-    this.currentSequence = [];
-    this.currentSeqIndex = 0;
+    this.nextRun?.cancel();
+    this.nextRun = null;
+    this.releaseRun();
     this.persistPosition();
     this.callInterrupted();
   };
@@ -489,6 +425,7 @@ export class JourneyEngine {
 
   private readonly handleTimeUpdate = (): void => {
     if (this.destroyed || !this.holdsAudio) return;
+    this.trackClipInSegment();
     const now = Date.now();
     if (now - this.lastPositionStateAt < 1000) return;
     this.lastPositionStateAt = now;
@@ -542,11 +479,6 @@ export class JourneyEngine {
     this.resolveAyahUrl = opts.resolveAyahUrl ?? defaultResolveAyahUrl;
     this.probeTafsirDuration = opts.probeTafsirDuration ?? defaultProbeTafsirDuration;
     this.probeAyahDurationOpt = opts.probeAyahDuration;
-    this.resolveTafsirUrlOpt = opts.resolveTafsirUrl;
-    this.warmTafsirAudioOpt = opts.warmTafsirAudio;
-    this.resolveDialogueAudioOpt = opts.resolveDialogueAudio;
-    this.warmDialogueAudioOpt = opts.warmDialogueAudio;
-    this.isDialogueTafsirOpt = opts.isDialogueTafsir;
     this.onItemChange = opts.onItemChange;
     this.onEnded = opts.onEnded;
     this.onError = opts.onError;
@@ -609,6 +541,10 @@ export class JourneyEngine {
       if (Number.isFinite(t) && t >= 0) time = t;
     } catch {
       time = 0;
+    }
+    if (this.run !== null && this.segOffsets.length > 1) {
+      const off = this.segOffsets[this.curClipIdx - this.segFrom];
+      if (typeof off === 'number') time = Math.max(0, time - off);
     }
     const cur = this.current ?? { kind: 'ayah' as const, surah: this.startSurah, ayah: this.startAyah };
     return {
@@ -679,9 +615,9 @@ export class JourneyEngine {
     this.currentSrc = '';
     this.nextItem = null;
     this.nextUrl = null;
-    this.nextSequence = null;
-    this.currentSequence = [];
-    this.currentSeqIndex = 0;
+    this.nextRun?.cancel();
+    this.nextRun = null;
+    this.releaseRun();
     this.pendingTafsir = [];
     this.currentInterstitial = null;
     this.pendingMarker = null;
@@ -747,9 +683,9 @@ export class JourneyEngine {
     this.currentSrc = '';
     this.nextItem = null;
     this.nextUrl = null;
-    this.nextSequence = null;
-    this.currentSequence = [];
-    this.currentSeqIndex = 0;
+    this.nextRun?.cancel();
+    this.nextRun = null;
+    this.releaseRun();
     this.pendingTafsir = [];
     this.currentInterstitial = null;
     this.pendingMarker = null;
@@ -816,54 +752,6 @@ export class JourneyEngine {
     this.trackedAyahs.push({ surah: cur.surah, ayah: cur.ayah });
     this.trackedSeconds += played ?? 0;
     this.currentAyahDuration = null;
-  }
-
-  // Tafsir clip URL: the injected resolver (generated voice) wins;
-  // a null return or a throw falls back to the natural King Fahd
-  // clip, so a tafsir item never plays silence. Null only when the
-  // natural base is unconfigured too (the page disables tadabbur
-  // then, so in-app this is only a defensive path).
-  private async resolveTafsirItemUrl(surah: number, ayah: number): Promise<string | null> {
-    try {
-      if (this.resolveTafsirUrlOpt) {
-        const url = await this.resolveTafsirUrlOpt(surah, ayah);
-        if (url) return url;
-      }
-    } catch {
-      // Fall through to the natural clip.
-    }
-    return tafsirClipUrl(surah, ayah);
-  }
-
-  // Resolve a tafsir item to its URL SEQUENCE — the list of clips
-  // the engine plays in order for this ONE item.
-  // - Dialogue mode (live setting, both host clips resolve):
-  //   [host1Url, naturalUrl, host2Url] — host 1 opens, the King
-  //   Fahd recording plays as the guest, host 2 closes.
-  // - Otherwise: the single resolved URL ([resolveTafsirItemUrl]).
-  // A null dialogue result, a missing natural clip, or any throw
-  // falls back to the single-URL path — a tafsir item never plays
-  // silence. Empty only when even the natural base is unconfigured.
-  private async resolveTafsirItemUrls(surah: number, ayah: number): Promise<string[]> {
-    let isDialogue = false;
-    try {
-      isDialogue = this.isDialogueTafsirOpt?.() === true;
-    } catch {
-      isDialogue = false;
-    }
-    if (isDialogue && this.resolveDialogueAudioOpt) {
-      try {
-        const dlg = await this.resolveDialogueAudioOpt(surah, ayah);
-        const natural = tafsirClipUrl(surah, ayah);
-        if (dlg && dlg.host1Url && dlg.host2Url && natural) {
-          return [dlg.host1Url, natural, dlg.host2Url];
-        }
-      } catch {
-        // Fall through to the single-URL path.
-      }
-    }
-    const single = await this.resolveTafsirItemUrl(surah, ayah);
-    return single ? [single] : [];
   }
 
   private kickProbe(surah: number, ayah: number): void {
@@ -1105,6 +993,24 @@ export class JourneyEngine {
     return picked;
   }
 
+  // pullNext + the gapless clip run for a tafsir head item: the
+  // rest of the queued interstitial is absorbed into the run, so a
+  // whole interstitial is ONE engine item (position/resume still
+  // report the clip currently heard; see trackClipInSegment).
+  private async pullNextWithRun(
+    resolveMarkers: boolean,
+  ): Promise<{ item: JourneyPlayable | null; run: TafsirClipRun | null }> {
+    const item = await this.pullNext(resolveMarkers);
+    if (item === null || item.kind !== 'tafsir') return { item, run: null };
+    const rest = this.pendingTafsir.splice(0);
+    const clips: RunClip[] = [];
+    for (const t of [{ surah: item.surah, ayah: item.ayah }, ...rest]) {
+      const url = tafsirClipUrl(t.surah, t.ayah);
+      if (url) clips.push({ surah: t.surah, ayah: t.ayah, url });
+    }
+    return { item, run: clips.length > 0 ? new TafsirClipRun(clips) : null };
+  }
+
   private async pullNext(resolveMarkers: boolean): Promise<JourneyPlayable | null> {
     // Drain a queued interstitial first.
     if (this.pendingTafsir.length > 0) {
@@ -1339,31 +1245,34 @@ export class JourneyEngine {
         // is skipped, never fatal, and the loop always consumes
         // generator items or the interstitial queue, so it ends.
         for (;;) {
-          const item = await this.pullNext(resolveMarkers);
+          const { item, run } = await this.pullNextWithRun(resolveMarkers);
           if (item === null) {
             this.nextItem = null;
             this.nextUrl = null;
-            this.nextSequence = null;
+            this.nextRun = null;
             return;
           }
           if (item.kind === 'ayah') {
             const url = await this.resolveAyahUrl(item.reciterId, item.surah, item.ayah);
             this.nextItem = item;
             this.nextUrl = url;
-            this.nextSequence = null;
+            this.nextRun = null;
             return;
           }
-          const urls = await this.resolveTafsirItemUrls(item.surah, item.ayah);
-          if (urls.length === 0) continue;
+          if (run === null) continue; // unplayable tafsir (base unconfigured)
+          run.start();
+          // Start-fast: only clip 1 is awaited (bounded); the rest
+          // keep gathering in the background.
+          await run.whenSettled(0, FIRST_CLIP_WAIT_MS);
           this.nextItem = item;
-          this.nextUrl = urls[0] as string;
-          this.nextSequence = urls;
+          this.nextUrl = run.clips[0].url;
+          this.nextRun = run;
           return;
         }
       } catch {
         this.nextItem = null;
         this.nextUrl = null;
-        this.nextSequence = null;
+        this.nextRun = null;
       } finally {
         this.preparingNext = false;
         this.preparePromise = null;
@@ -1376,12 +1285,12 @@ export class JourneyEngine {
     // Resume seek that never matches must not hang: if pullNext
     // exhausts the journey while seeking, restart from the top
     // without a seek target (documented fallback).
-    let item = await this.pullNext(true);
+    let { item, run } = await this.pullNextWithRun(true);
     if (item === null && this.seekTarget !== null) {
       this.seekTarget = null;
       this.seekInterstitial = null;
       this.generator = planJourney(this.mode, this.startSurah, this.startReciterId, this.startAyah);
-      item = await this.pullNext(true);
+      ({ item, run } = await this.pullNextWithRun(true));
     }
     if (item === null) {
       this.playingFlag = false;
@@ -1394,17 +1303,14 @@ export class JourneyEngine {
       void this.prepareNext();
       return;
     }
-    const urls = await this.resolveTafsirItemUrls(item.surah, item.ayah);
-    if (urls.length === 0) {
+    if (run === null) {
       this.playingFlag = false;
       this.callError(ERROR_MESSAGE);
       return;
     }
-    // RESUME INTO A DIALOGUE ITEM: playItem starts the full
-    // 3-part sequence from part 1 and ignores the saved time —
-    // the saved time sits inside a multi-part item, so resuming
-    // mid-sequence would land in the wrong part.
-    this.playItem(item, urls[0] as string, urls);
+    run.start();
+    await run.whenSettled(0, FIRST_CLIP_WAIT_MS);
+    this.playItem(item, run.clips[0].url, run);
     void this.prepareNext();
   }
 
@@ -1416,11 +1322,11 @@ export class JourneyEngine {
     if (this.nextItem !== null && this.nextUrl !== null) {
       const item = this.nextItem;
       const url = this.nextUrl;
-      const urls = this.nextSequence;
+      const run = this.nextRun;
       this.nextItem = null;
       this.nextUrl = null;
-      this.nextSequence = null;
-      this.playItem(item, url, urls ?? undefined);
+      this.nextRun = null;
+      this.playItem(item, url, run ?? undefined);
       void this.prepareNext();
       return;
     }
@@ -1429,20 +1335,17 @@ export class JourneyEngine {
     this.callEnded();
   }
 
-  private playItem(item: JourneyPlayable, url: string, urls?: string[]): void {
+  private playItem(item: JourneyPlayable, url: string, run?: TafsirClipRun): void {
+    this.releaseRun();
     this.current = item;
     this.currentSrc = url;
     this.currentAyahDuration = null;
-    // The URL sequence for this item: the caller's list for a
-    // tafsir item (dialogue: 3 parts, otherwise 1), a 1-entry
-    // sequence for an ayah. 'ended' advances currentSeqIndex
-    // within it; the item is done only at the last part.
-    if (item.kind === 'tafsir' && urls && urls.length > 0) {
-      this.currentSequence = urls.slice();
-      this.currentSeqIndex = 0;
-    } else {
-      this.currentSequence = [url];
-      this.currentSeqIndex = 0;
+    let src = url;
+    if (item.kind === 'tafsir' && run) {
+      this.run = run;
+      this.runNoMerge = false;
+      this.curClipIdx = 0;
+      src = this.installSegment(0);
     }
     if (item.kind === 'ayah') {
       // An ayah position never carries an interstitial list: the
@@ -1452,30 +1355,14 @@ export class JourneyEngine {
       // the quarter boundary usually finds durations already known.
       if (this.mode === 'tadabbur') {
         this.kickProbe(item.surah, item.ayah);
-        // Warm the generated tafsir audio (if the live voice
-        // setting needs it) while the quarter plays, so the
-        // boundary rarely waits on a generation fetch.
-        // Fire-and-forget; the warmer swallows its failures.
-        this.warmTafsirAudioOpt?.(item.surah, item.ayah);
-        // Same for the dialogue hosts (no-op unless the live
-        // setting is 'dialogue').
-        this.warmDialogueAudioOpt?.(item.surah, item.ayah);
       }
     }
     try {
-      this.audio.src = url;
+      this.audio.src = src;
     } catch {
       // Swallow: a later 'error' event surfaces real media failures.
     }
-    // A multi-part (dialogue) sequence ALWAYS starts from part 1
-    // at time 0: a saved time belongs to one part of a multi-part
-    // item, so seeking into it would land in the wrong part.
-    // Single-URL items keep the existing resume-seek behaviour.
-    if (this.currentSequence.length > 1) {
-      this.pendingStartTime = null;
-    } else {
-      this.applyPendingStartTime();
-    }
+    this.applyPendingStartTime();
     this.applyRate();
     try {
       const p = this.audio.play() as unknown as Promise<void> | undefined;
@@ -1491,6 +1378,149 @@ export class JourneyEngine {
     this.updateMediaSession();
     this.updatePositionState();
     this.callItemChange(item);
+  }
+
+  // ----------------------------------------------------------------
+  // Gapless tafsir segments (W5-I)
+  // ----------------------------------------------------------------
+
+  private releaseRun(): void {
+    try {
+      this.run?.cancel();
+    } catch {
+      // Swallow.
+    }
+    this.run = null;
+    this.segFrom = 0;
+    this.segTo = 0;
+    this.segOffsets = [0];
+    this.curClipIdx = 0;
+    this.runNoMerge = false;
+    // The blob is revoked by the caller once the element has moved
+    // on (see revokeLater); a release with no successor revokes now.
+    const old = this.segBlobUrl;
+    this.segBlobUrl = null;
+    if (old) this.revokeLater(old);
+  }
+
+  private revokeLater(url: string): void {
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // Swallow.
+      }
+    }, 3000);
+  }
+
+  // Choose + record the segment starting at clip `from`; returns the
+  // src to load: a joined blob URL when the clips are ready, else the
+  // clip's direct streaming URL (a single-clip segment).
+  private installSegment(from: number): string {
+    const run = this.run as TafsirClipRun;
+    const seg = this.runNoMerge ? null : run.buildSegment(from);
+    const old = this.segBlobUrl;
+    this.segFrom = from;
+    if (seg) {
+      this.segTo = seg.to;
+      this.segOffsets = seg.offsets;
+      this.segBlobUrl = seg.url;
+    } else {
+      this.segTo = from + 1;
+      this.segOffsets = [0];
+      this.segBlobUrl = null;
+    }
+    if (old) this.revokeLater(old);
+    return seg ? seg.url : run.clips[from].url;
+  }
+
+  private setCurrentClip(idx: number): void {
+    const run = this.run;
+    if (run === null) return;
+    const clip = run.clips[idx];
+    if (!clip) return;
+    this.curClipIdx = idx;
+    const item: JourneyPlayable = { kind: 'tafsir', surah: clip.surah, ayah: clip.ayah };
+    this.current = item;
+    this.currentSrc = clip.url;
+    this.updateMediaSession();
+    this.callItemChange(item);
+  }
+
+  // timeupdate: which clip of the joined segment is audible now.
+  private trackClipInSegment(): void {
+    if (this.run === null || this.current === null || this.current.kind !== 'tafsir') return;
+    if (this.segOffsets.length < 3) return; // single-clip segment
+    let t = 0;
+    try {
+      t = this.audio.currentTime;
+    } catch {
+      return;
+    }
+    let idx = 0;
+    for (let i = 0; i < this.segOffsets.length - 1; i += 1) {
+      if (t >= (this.segOffsets[i] as number) - 0.05) idx = i;
+    }
+    const abs = this.segFrom + idx;
+    if (abs !== this.curClipIdx) this.setCurrentClip(abs);
+  }
+
+  private startPlayback(): void {
+    this.applyRate();
+    try {
+      const p = this.audio.play() as unknown as Promise<void> | undefined;
+      this.playingFlag = true;
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          this.playingFlag = false;
+        });
+      }
+    } catch {
+      this.playingFlag = false;
+    }
+    this.updatePositionState();
+  }
+
+  // The current segment ended with clips left: load the next joined
+  // segment on the same element. Clip ready -> synchronous; not yet
+  // -> wait for it (bounded), then play whatever is available (a
+  // failed/slow clip streams directly) — never invented silence.
+  private advanceSegment(): void {
+    const run = this.run;
+    if (run === null) return;
+    const from = this.segTo;
+    const go = (): void => {
+      if (this.destroyed || !this.holdsAudio || this.run !== run) return;
+      const src = this.installSegment(from);
+      this.setCurrentClip(from);
+      try {
+        this.audio.src = src;
+      } catch {
+        // Swallow.
+      }
+      this.startPlayback();
+    };
+    if (run.isSettled(from)) {
+      go();
+    } else {
+      this.playingFlag = true;
+      void run.whenSettled(from, TAFSIR_CLIP_WAIT_MS).then(go);
+    }
+  }
+
+  // Joined blob failed to play: stream the clip being heard directly.
+  private fallbackToDirectClip(): void {
+    const run = this.run;
+    if (run === null) return;
+    const idx = Math.min(Math.max(this.curClipIdx, 0), run.clips.length - 1);
+    const src = this.installSegment(idx);
+    this.setCurrentClip(idx);
+    try {
+      this.audio.src = src;
+    } catch {
+      // Swallow.
+    }
+    this.startPlayback();
   }
 
   // ----------------------------------------------------------------
@@ -1618,7 +1648,7 @@ export class JourneyEngine {
     try {
       const ms = getMediaSession();
       if (!ms || typeof ms.setPositionState !== 'function') return;
-      const d = this.audio.duration;
+      let d = this.audio.duration;
       if (!Number.isFinite(d) || d <= 0) return;
       let pos = 0;
       try {
@@ -1627,6 +1657,15 @@ export class JourneyEngine {
         pos = 0;
       }
       if (!Number.isFinite(pos)) pos = 0;
+      if (this.run !== null && this.segOffsets.length > 2) {
+        const k = this.curClipIdx - this.segFrom;
+        const a = this.segOffsets[k];
+        const b = this.segOffsets[k + 1];
+        if (typeof a === 'number' && typeof b === 'number' && b > a) {
+          pos -= a;
+          d = b - a;
+        }
+      }
       pos = Math.min(Math.max(0, pos), d);
       ms.setPositionState({ duration: d, playbackRate: this.playbackRate, position: pos });
     } catch {

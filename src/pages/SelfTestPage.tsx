@@ -4,9 +4,13 @@ import Sama3 from '../components/Sama3';
 import { IMLA_ALT, IMLA_PAIR_ALT } from '../lib/imlaAlt';
 import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
-import QuranAsrLab from '../components/QuranAsrLab';
+import EarDownloadCard from '../components/EarDownloadCard';
+import TestHistoryPanel from '../components/TestHistoryPanel';
+import { requestDayRecap } from '../lib/dailyStats';
+import { registerAligner } from '../lib/alignBridge';
+import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
-import { QuranLabRecognition, earLabOn, preloadEarLab } from '../lib/quranLabEar';
+import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
 import TajwidSkillPicker from '../components/TajwidSkillPicker';
@@ -24,6 +28,11 @@ import { buildCase, parseIosVersion, TAXONOMY_LABELS, TAXONOMY_VALUES, type Plan
 import { corrAudioCacheKey, AudioUrlCache, CORR_AUDIO_CACHE_VERSION, MemoryCorrAudioBackend, createIndexedDBBackend } from '../lib/corrAudioStore';
 import { wbwWordUrl, refUnitForWord, isRefUnitEnabled } from '../lib/refWordUnits';
 import { cleanToken, expectedWordList } from '../lib/expectedWords';
+import MushafRevealStage from '../components/mushaf/MushafRevealStage';
+import { useMedinaPaperStatus } from '../components/mushaf/useMedinaPaperStatus';
+import { recordAyahWords, listWeakWords, weakWordAyahs, clearWeakWords, type WeakWord } from '../lib/wordMistakes';
+import { flushPending, SRS_REVIEW_SESSION_KEY, type SrsPending, type SlipNotice } from '../lib/srsTasmee';
+import SrsSlipNotice from '../components/SrsSlipNotice';
 import {
   CORR_DELAY_MODES, CORR_DELAY_MODE_LABEL, CORR_DELAY_MODE_DEFAULT,
   migrateCorrDelayMode, corrDelaySeconds, correctionWindowSeconds,
@@ -31,7 +40,7 @@ import {
   type CorrDelayMode, type JuhaniPlayer,
 } from '../lib/juhaniCorr';
 import { playErrorBuzz, warmErrorBuzz, setCorrWindowPlaying } from '../lib/pressFeedback';
-import { checkMic } from '../lib/micCheck';
+import { checkMic, micCheckReasonText } from '../lib/micCheck';
 import type { MicCheckResult } from '../lib/micCheck';
 import type { CorrAudioBackend } from '../lib/corrAudioStore';
 import { getStoredLinkGender } from '../lib/linkAudio';
@@ -41,10 +50,13 @@ import { addReRecite, totalReRecites, type ReRecites } from '../lib/practiceHist
 import BottomNav from '../components/BottomNav';
 import {
   BookOpen, Eye, Check, X, ChevronLeft, ChevronRight, RotateCcw,
-  Mic, Square, Award, Home, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
+  Mic, Square, Award, Search, SlidersHorizontal, ListOrdered, AlertTriangle,
+  TrendingUp,
 } from 'lucide-react';
+import type { Route } from '../lib/routes';
+import { useIsAdminView } from '../lib/adminPreview';
+import { muaalemStatus, requestTajweedReview, type TajweedReview } from '../lib/muaalemHook';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
 interface TestAyah {
   id: number;
@@ -131,9 +143,38 @@ const QUIET_GAP_MS = 1500;
 // delaying it would defeat it). The rate applies to both engines:
 // the generated voice (OpenAI speed) and the browser TTS fallback
 // (utterance rate), so the choice never silently changes meaning.
-type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
+// W4-A (2026-11-19, Dr. Amr's decisions 4+5): three tasmee' levels.
+//  - beginner «مبتدئ»: words only (missing / different word). A wrong
+//    letter is NEVER forgiven at any level, close letters included
+//    (ث/س، ذ/ز، ص/س، ض/د ...): the ears compare letters exactly (see
+//    softWordEq: spelling folds only; phonemeEar: substitutions never
+//    tolerated). The only leniency is clarity / letter strength / a
+//    breath cut inside a word, which is the same for every level.
+//  - advanced «متقدم»: words + extra / repeated words (the Quran-Lab ear's
+//    extra-word check). The old 'intermediate' and 'advanced' merge here.
+//  - master «متقن»: admin-only, experimental. On the device it grades
+//    exactly like «متقدم»; harakat + tajweed come from the Muaalem server
+//    through lib/muaalemHook.ts, which is NOT connected yet (no fake notes).
+// Stored ids stay English ('beginner' | 'advanced' | 'master') so the old
+// key stays readable; migrateVerifyLevel maps old / Arabic values quietly.
+type VerifyLevel = 'beginner' | 'advanced' | 'master';
+const VERIFY_LEVEL_LABEL: Record<VerifyLevel, string> = { beginner: 'مبتدئ', advanced: 'متقدم', master: 'متقن' };
+function migrateVerifyLevel(v: unknown): VerifyLevel {
+  if (v === 'master' || v === 'متقن') return 'master';
+  if (v === 'advanced' || v === 'intermediate' || v === 'متقدم' || v === 'متوسط') return 'advanced';
+  return 'beginner';
+}
+/** Strict word grading (extras count) for every level above beginner. */
+function levelIsStrict(level: VerifyLevel): boolean { return level !== 'beginner'; }
+/** The level a test actually runs at: «متقن» outside the admin view
+ *  (non-admin, or admin previewing as a user) runs as «متقدم». */
+function runLevelFor(level: VerifyLevel, isAdmin: boolean): VerifyLevel {
+  return level === 'master' && !isAdmin ? 'advanced' : level;
+}
 type CorrRate = 'slow' | 'normal' | 'fast' | 'veryFast';
-const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.25, veryFast: 1.5 };
+const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.15, veryFast: 1.25 };
+// C-3: veryFast tops out at 1.25 so it stays distinct from fast even where the
+// reader's hadr is capped at 1.25 (continuous mode); 1.5x was hard to hear.
 const CORR_RATE_LABEL: Record<CorrRate, string> = { slow: 'بطيء', normal: 'عادي', fast: 'سريع', veryFast: 'سريع جدًا' };
 // Iteration 2 continuous-prompt audio cache: PERSISTENT (IndexedDB
 // blobs) with a synchronous in-memory mirror for the prompt path.
@@ -192,7 +233,11 @@ function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: 
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const p = JSON.parse(raw);
-      const level: VerifyLevel = p.level === 'intermediate' || p.level === 'advanced' ? p.level : 'beginner';
+      const level: VerifyLevel = migrateVerifyLevel(p.level);
+      // Quiet one-way migration of the old ids (intermediate -> advanced).
+      if (p.level !== undefined && p.level !== level) {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...p, level })); } catch { /* storage blocked */ }
+      }
       const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
       // A stored corrDelayMode wins; otherwise migrate the legacy numeric
       // corrDelay (1-2 -> 1s, 3 -> 3s, 4+ -> 5s; missing/invalid -> 3s).
@@ -993,6 +1038,8 @@ async function limitedVoiceFetch(run: () => Promise<Response>): Promise<Response
   }
 }
 
+registerAligner(alignWords, spokenTokens);
+
 export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [phase, setPhase] = useState<'setup' | 'testing' | 'done'>('setup');
   // Correction reciter (ready-made word timings, whole Quran): load the
@@ -1006,13 +1053,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [mixedPlan, setMixedPlan] = useState<RangeReciterPart[] | null>(null);
   const [reciterNote, setReciterNote] = useState('');
   // Warm the on-device ear as soon as the page opens when it is chosen.
-  useEffect(() => { if (earLabOn()) preloadEarLab(); else if (getEar() === 'model') void loadEar().catch(() => {}); }, []);
+  // W4-B: the device ear (Quran-Lab) is the default; EarDownloadCard asks
+  // once and then preloads it. The old whisper ear warms only when the
+  // device ear is turned off on purpose.
+  useEffect(() => { if (!earLabOn() && getEar() === 'model') void loadEar().catch(() => {}); }, []);
+  // Which ear the current/last mic session really uses (stall timing).
+  const labEarInUseRef = useRef(false);
+  // W4-D: the ear of the last mic session, for the score log.
+  const earKindRef = useRef<TestHistoryEntry['ear']>('manual');
+  const [scoreLog, setScoreLog] = useState<TestHistoryEntry[]>(loadTestHistoryV1);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
   // the open door. All setup state lives here; doors only hide/show
   // the existing cards, they never change a setting.
-  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results' | 'weak';
+  type LobbyDoor = 'range' | 'settings' | 'mic' | 'results' | 'weak' | 'scores';
   const [lobbyDoor, setLobbyDoor] = useState<LobbyDoor | null>(null);
   const [surah, setSurah] = useState(2);
   const [from, setFrom] = useState(1);
@@ -1130,11 +1185,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // precedence over the choice flag below.
     try {
       const raw = sessionStorage.getItem('quran-test-range-preset');
+      // SRS step 5: the weak-words card marks its session with a one-shot flag.
+      // Read it once and clear it now, so a later normal test is never a review.
+      let srsFromCard = false;
+      try {
+        srsFromCard = !!sessionStorage.getItem(SRS_REVIEW_SESSION_KEY);
+        sessionStorage.removeItem(SRS_REVIEW_SESSION_KEY);
+      } catch { /* ignore */ }
       if (raw) {
         const preset = JSON.parse(raw) as { startGlobal: number; endGlobal: number; label?: string; reciter?: string };
         if (typeof preset.startGlobal === 'number' && typeof preset.endGlobal === 'number' && preset.startGlobal >= 1 && preset.endGlobal >= preset.startGlobal) {
           sessionStorage.removeItem('quran-test-range-preset');
           sessionStorage.removeItem('quran-test-range-choice');
+          if (srsFromCard) srsSessionRef.current = { startGlobal: preset.startGlobal, endGlobal: preset.endGlobal };
           // Voice assistant: «سمّع على مين؟» already chose the reciter, so don't ask again.
           const pickedReciter = preset.reciter && CORR_RECITERS.some((r) => r.folder === preset.reciter) ? preset.reciter : null;
           if (pickedReciter) { setCorrReciter(pickedReciter); setCorrReciterState(pickedReciter); }
@@ -1144,6 +1207,27 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         sessionStorage.removeItem('quran-test-range-preset');
       }
     } catch { /* ignore — fall through to the choice flag */ }
+    // W4-C «أمرني» (voice assistant): 'quran-test-voice-prefill' =
+    // {surah, reciter?}. Preselect the surah in the range (the assistant
+    // also sets the choice flag to 'surah', handled below), take the
+    // reciter if it is a known correction reciter, then clear the key.
+    // Never starts the test by itself (decision 23).
+    try {
+      const raw = sessionStorage.getItem('quran-test-voice-prefill');
+      if (raw) {
+        sessionStorage.removeItem('quran-test-voice-prefill');
+        const pre = JSON.parse(raw) as { surah?: unknown; reciter?: unknown };
+        const n = Number(pre.surah);
+        if (Number.isInteger(n) && n >= 1 && n <= 114) {
+          setSurah(n);
+          setFrom(1);
+          setTo(Math.min(5, SURAH_AYAH_COUNTS[n - 1] || 1));
+          if (!sessionStorage.getItem('quran-test-range-choice')) sessionStorage.setItem('quran-test-range-choice', 'surah');
+        }
+        const rc = typeof pre.reciter === 'string' && CORR_RECITERS.some((r) => r.folder === pre.reciter) ? pre.reciter : null;
+        if (rc) { setCorrReciter(rc); setCorrReciterState(rc); }
+      }
+    } catch { /* ignore a malformed prefill */ }
     try {
       const flag = sessionStorage.getItem('quran-test-range-choice');
       if (flag === 'surah' || flag === 'juz' || flag === 'page' || flag === 'passage') {
@@ -1227,6 +1311,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'}`;
   // Debug stamp lines are admin-only (flag set by Settings' admin check).
   // Shown by default while recitation correction is being tuned (2026-11-08); set 'quran-show-diag' = '0' to hide.
+  // Standing note about correction clips: stays until the user taps «فهمت».
+  const CORR_NOTE_KEY = 'quran-corr-note-ack-v1';
+  const [corrNoteAck, setCorrNoteAck] = useState<boolean>(() => { try { return localStorage.getItem(CORR_NOTE_KEY) === '1'; } catch { return false; } });
+  const corrNote = corrNoteAck ? null : (
+    <div className="bg-amber-50 border border-hairline-amber rounded-2xl shadow-sm p-4">
+      <p className="font-bold text-amber-800 mb-1">لما المصحح يصحّح لك</p>
+      <p className="text-sm text-accent-700 leading-relaxed">اسكت وسمع المصحح لحد ما يخلص، وبعدين <b>عيد الكلمتين اللي صلّحهم لك</b> وراه، وكمّل بعدها.</p>
+      <button onClick={() => { setCorrNoteAck(true); try { localStorage.setItem(CORR_NOTE_KEY, '1'); } catch { /* ignore */ } }}
+        className="mt-3 px-4 py-2 rounded-xl bg-emerald-700 text-white text-sm font-bold">فهمت</button>
+    </div>
+  );
   const showDiag = (() => { try { return localStorage.getItem('quran-show-diag') !== '0'; } catch { return true; } })();
   // D1 shell-aware mic-absent wording (R7): when SR is absent AND
   // the shell is known, name the shell and the actionable move
@@ -1266,6 +1361,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // "تسميع جديد", like contZeroMatch.
   const [showFullHeard, setShowFullHeard] = useState(false);
   const [contMatchedWords, setContMatchedWords] = useState(0);
+  // 2026-11-20: show the tested ayah on the real Madinah page (words covered,
+  // uncovered as they are recited right and in place). Default on; the owner
+  // can switch it off from the idle mic screen. Key is new (nothing reads an old one).
+  const [paperView, setPaperViewState] = useState<boolean>(() => {
+    try { return localStorage.getItem('quran-tasmee-paper') !== '0'; } catch { return true; }
+  });
+  const setPaperView = (v: boolean) => { setPaperViewState(v); try { localStorage.setItem('quran-tasmee-paper', v ? '1' : '0'); } catch { /* storage unavailable */ } };
+  // Per-ayah trust in the paper (lib/paperStatus.ts). count-mismatch: plain text view, no paper.
+  // no-boxes: the stage covers the page while listening and says it is unavailable; the done
+  // screens show the plain text (the paper cannot draw red words without boxes).
+  const paperStatus = useMedinaPaperStatus(ayahs[index]?.surah_no, ayahs[index]?.ayah_no, ayahs[index]?.ayah_text);
+  const paperOn = paperView && paperStatus !== 'count-mismatch';
+  const paperDrawn = paperOn && paperStatus !== 'no-boxes';
   const [contHeardWords, setContHeardWords] = useState(0);
   // DIAG (Claude P0-5): on-screen event log + Copy JSON export.
   // Recording only: every push below is a log call, never a branch
@@ -1555,6 +1663,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // tells the user the words he said during the correction were not
   // heard, so he says the rest of the ayah again.
   const [postCorrHint, setPostCorrHint] = useState(false);
+  // SRS step 5 (2026-11-20): third+ slip of one letter pair, shown by SrsSlipNotice.
+  const [srsNotices, setSrsNotices] = useState<SlipNotice[]>([]);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
   const [skipped, setSkipped] = useState<boolean[]>([]);
   // Batch 4 part 2 (2026-11-10): practice history. Score never changes on a re-recite.
@@ -1572,6 +1682,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [savedProgress, setSavedProgress] = useState<TestProgress | null>(loadProgress);
   // Verification level + recitation mode (setup choices, persisted).
   const [verifyLevel, setVerifyLevel] = useState<VerifyLevel>(() => loadTestSettings().level);
+  // W4-A: «متقن» is admin-only (hidden in the admin's user preview too).
+  // The stored choice is kept; outside the admin view it runs as «متقدم».
+  const isAdminView = useIsAdminView();
+  // W4-A: «متقن» tajweed notes (Muaalem hook; not connected yet → honest note).
+  const [tajweedReview, setTajweedReview] = useState<TajweedReview | null>(null);
+  const isAdminViewRef = useRef(isAdminView);
+  isAdminViewRef.current = isAdminView;
+  const runLevel = runLevelFor(verifyLevel, isAdminView);
   const [reciteMode, setReciteMode] = useState<ReciteMode>(() => loadTestSettings().mode);
   const [corrDelay, setCorrDelay] = useState<number>(() => loadTestSettings().corrDelay);
   const [corrDelayMode, setCorrDelayMode] = useState<CorrDelayMode>(() => loadTestSettings().corrDelayMode);
@@ -2145,7 +2263,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setCorrDelayMode(delayMode);
     setCorrDelay(d);
     setCorrRate(rate);
-    liveRef.current.level = level;
+    liveRef.current.level = runLevelFor(level, isAdminViewRef.current);
     liveRef.current.mode = mode;
     liveRef.current.corrDelayMode = delayMode;
     liveRef.current.corrDelay = d;
@@ -2208,6 +2326,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // recites continuously. The provisional false grade is replaced
   // by a pass only if he then says every remaining word correctly.
   const postCorrRef = useRef<{ ayahId: number; index: number; resumeStartLen: number; remaining: string[]; remainingIdx: number[] } | null>(null);
+  // SRS step 5 (2026-11-20): the last verdict of the ayah being tested. A later
+  // grade of the same ayah REPLACES it, so a word fixed before the verdict is
+  // final never reaches the review table; flushSrs() records it once.
+  const srsPendingRef = useRef<SrsPending | null>(null);
+  // Set once from the home card's one-shot flag; null = a normal test.
+  const srsSessionRef = useRef<{ startGlobal: number; endGlobal: number } | null>(null);
   // Batch 3 (reviewer verdicts): which path opened the current
   // correction window — 'finals' (evaluateNow mismatch) or
   // 'interim' (early window). The heal diag records it, because
@@ -2241,6 +2365,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     contExpected: [] as { norm: string; orig: string; ayahIdx: number }[],
     contStrict: false,
   });
+  // W4-A: keep the running level in step with the admin view (App sets the
+  // admin flag after an async lookup). Never changes a test already running:
+  // the level is locked at the test start.
+  useEffect(() => {
+    if (phase === 'testing') return;
+    liveRef.current.level = runLevel;
+  }, [runLevel, phase]);
 
   const surahCount = SURAH_AYAH_COUNTS[surah - 1] || 1;
   const surahName = SURAHS.find((s) => s.no === surah) ? surahLabel(surah) : '';
@@ -2289,7 +2420,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   // Reset every per-ayah mic/manual state (called on ayah change, on
   // test start, and when the user stops listening mid-ayah).
+  // Record the pending ayah verdict (SRS step 5). Touches refs only (it also
+  // runs from the unmount cleanup). Returns the slip notices, or null when
+  // nothing was pending. A manual override (the user marked the ayah the other
+  // way) or a skip drops the pending verdict instead of recording it.
+  const flushSrs = (): SlipNotice[] | null => {
+    const p = srsPendingRef.current;
+    srsPendingRef.current = null;
+    if (!p) return null;
+    const live = liveRef.current;
+    if (live.skipped[p.index] || live.grades[p.index] !== p.ok) return [];
+    return flushPending(p, srsSessionRef.current);
+  };
+
   const resetMicState = () => {
+    // Leaving the ayah (not a retry of the same one) finishes its verdict.
+    const pend = srsPendingRef.current;
+    if (pend && (liveRef.current.ayah?.surah_no !== pend.surah || liveRef.current.ayah?.ayah_no !== pend.ayah)) {
+      const notices = flushSrs();
+      if (notices) setSrsNotices(notices);
+    }
     stopRec();
     clearTimers();
     liveRef.current.finals = '';
@@ -2319,6 +2469,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   useEffect(() => () => {
     stopRec();
     clearTimers();
+    flushSrs(); // SRS step 5: leaving the page finishes the pending verdict
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2395,6 +2546,19 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const list = weakAyahs && weakAyahs.length > 0 ? weakAyahs : await loadWeakAyahs();
     if (!list || list.length === 0) return;
     await startTestGlobal(list[0].id, list[list.length - 1].id, null, undefined, null, { explicitAyahs: list, recentLabel: weakTestLabel(list.length) });
+  };
+
+  // 2026-11-20: word-level weak log (lib/wordMistakes). Refreshed whenever the
+  // weak door opens or a test ends; practice starts the ayahs that hold weak words.
+  const [wordLogTick, setWordLogTick] = useState(0);
+  const weakWordList: WeakWord[] = useMemo(() => listWeakWords(), [wordLogTick, lobbyDoor, phase]);
+  const startWeakWordsTest = async () => {
+    const pairs = weakWordAyahs();
+    if (pairs.length === 0) return;
+    const ids = pairs.map(([sNo, aNo]) => getGlobalAyahNumber(sNo, aNo));
+    const rows = await fetchAyahsByIds(ids);
+    if (!rows.length) return;
+    await startTestGlobal(rows[0].id, rows[rows.length - 1].id, null, undefined, null, { explicitAyahs: rows, recentLabel: `كلماتي الغلط (${rows.length.toLocaleString('ar-EG')} آية)` });
   };
 
   // Global-range test (unit mode + resume): verse ids are sequential
@@ -2710,6 +2874,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // onto the done screen.
     postCorrRef.current = null;
     setPostCorrHint(false);
+    // SRS step 5: the test is over, so the last ayah's verdict is final.
+    const srsDone = flushSrs();
+    if (srsDone) setSrsNotices(srsDone);
+    srsSessionRef.current = null;
     const correct = finalGrades.filter(Boolean).length;
     const skippedCount = liveRef.current.skipped.filter(Boolean).length;
     const attempted = Math.max(0, ayahs.length - skippedCount);
@@ -2727,6 +2895,30 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       endSurahName: rangeEnd ? (SURAHS.find((s) => s.no === rangeEnd.surah)?.name || '') : undefined,
       endAyah: rangeEnd?.ayah,
     };
+    // W4-A: «متقن» asks the Muaalem hook for tajweed notes. Today it answers
+    // 'unavailable' (server not connected); the done screen says so.
+    setTajweedReview(null);
+    if (liveRef.current.level === 'master') {
+      const lo = rangeStart ?? { surah, ayah: from };
+      void requestTajweedReview({ surah: lo.surah, fromAyah: lo.ayah, toAyah: rangeEnd?.ayah ?? to }, isAdminViewRef.current)
+        .then(setTajweedReview)
+        .catch(() => setTajweedReview({ status: 'error', message: 'request failed' }));
+    }
+    // W4-D: score log v1 (last 100, with the level locked at the start).
+    const lbl = rec.endSurahName && rec.endSurah !== rec.surah
+      ? `من ${rec.surahName} ${formatAr(rec.from)} إلى ${rec.endSurahName} ${formatAr(rec.endAyah ?? 0)}`
+      : `سورة ${rec.surahName} ${formatAr(rec.from)}–${formatAr(rec.to)}`;
+    setScoreLog(addTestHistoryV1({
+      ts: new Date().toISOString(),
+      level: liveRef.current.level,
+      score: attempted > 0 ? Math.round((correct / attempted) * 100) : 0,
+      correct,
+      attempted,
+      completed: skippedCount === 0 && attempted === ayahs.length && ayahs.length > 0,
+      mode: liveRef.current.mode,
+      ear: manualMode ? 'manual' : earKindRef.current,
+      label: explicitAyahIdsRef.current ? 'آياتي الضعيفة' : lbl,
+    }));
     const nextHistory = [rec, ...history].slice(0, 20);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory)); } catch {}
     setHistory(nextHistory);
@@ -2761,6 +2953,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setAyahAudioFailed(false);
       ayahCorrFailedForRef.current = -1;
       playCorrectChime();
+      // Word log: a spoken, fully correct ayah counts toward mastering its logged weak words.
+      try {
+        const okWords = expectedWordList(ayah.ayah_text);
+        if (spokenTokens(liveRef.current.finals).length > 0) recordAyahWords(ayah.surah_no, ayah.ayah_no, okWords, okWords.map(() => true));
+        // SRS step 5: this all-correct verdict replaces any earlier wrong one.
+        const nSpoken = spokenTokens(liveRef.current.finals).length;
+        srsPendingRef.current = nSpoken > 0
+          ? { surah: ayah.surah_no, ayah: ayah.ayah_no, index, ok: true, ts: Date.now(), words: okWords, matched: okWords.map(() => true), spokenCount: nSpoken }
+          : null;
+      } catch { /* tracking is best-effort */ }
       liveRef.current.micState = 'done-correct';
       setMicState('done-correct');
     } else {
@@ -2775,6 +2977,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         : { ...alignWords(expected.map((w) => w.norm), spoken), extras: [] as string[] };
       setWrongIndices(expected.map((_, i) => i).filter((i) => !result.matched[i]));
       const wrongWords = expected.filter((_, i) => !result.matched[i]).map((w) => w.orig);
+      try { recordAyahWords(ayah.surah_no, ayah.ayah_no, expected, result.matched); } catch { /* best-effort */ }
+      // SRS step 5: keep this verdict as pending (positions index into `spoken`,
+      // the same array the aligner just read); it is recorded when the ayah ends.
+      srsPendingRef.current = spoken.length > 0
+        ? { surah: ayah.surah_no, ayah: ayah.ayah_no, index, ok: false, ts: Date.now(), words: expected, matched: result.matched, positions: result.positions, consumed: result.consumed, tokens: spoken, spokenCount: spoken.length }
+        : null;
       setWrongByAyah((prev) => ({ ...prev, [index]: wrongWords }));
       setWrongExtras(result.extras);
       if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
@@ -3515,8 +3723,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Ayah-by-ayah uses the on-device Quran ear too when chosen (2026-11-09).
     // Batch 4 fallback (2026-11-10): no browser speech API (e.g. iOS Chrome) -> the on-device ear,
     // automatically. Nothing is uploaded, so no consent prompt is needed for this path.
-    const useLabEarAyah = earLabOn();
+    // W4-B: device ear by default, but only once it is loaded; until then
+    // (or after a failure) the browser ear, with no error. No browser ear
+    // at all (iOS home-screen app) and download already agreed: wait for it.
+    const useLabEarAyah = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+    labEarInUseRef.current = useLabEarAyah;
     const useModelEarAyah = useLabEarAyah || getEar() === 'model' || !SR;
+    earKindRef.current = useLabEarAyah ? 'lab' : useModelEarAyah ? 'model' : 'browser';
     if (!SR && !useModelEarAyah) {
       setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
       return;
@@ -3543,8 +3756,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     userStopRef.current = false;
     lastInterimRef.current = '';
     const labStartAyah = 0;
-    // Advanced level: also catch an extra/repeated word right after a settled one (off elsewhere).
-    setExtraWordMin(useLabEarAyah && liveRef.current.level === 'advanced' ? 2 : Infinity);
+    // «متقدم»/«متقن»: also catch an extra/repeated word right after a settled one (off for «مبتدئ»).
+    setExtraWordMin(useLabEarAyah && levelIsStrict(liveRef.current.level) ? 2 : Infinity);
     const rec: any = useLabEarAyah
       ? new QuranLabRecognition(expectedWordList(ayah.ayah_text).map((w) => ({ norm: w.norm, ayahIdx: 0 })), labStartAyah)
       : useModelEarAyah ? new QuranModelRecognition() : new SR();
@@ -3666,6 +3879,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         armTransientSafety(rec, () => tripAyahStalled(stallMessage));
         return;
       }
+      if (code === 'network' && rec instanceof QuranLabRecognition) {
+        // W4-B: the device ear could not load (not a network problem for
+        // the user). Use the browser ear from now on; «كمّل» resumes with it.
+        markEarLabFailed();
+        tripAyahStalled('اللي سمعته محفوظ — اضغط «كمّل» وكمّل عادي');
+        return;
+      }
       if (code === 'network') {
         setMicError('الاستماع المباشر محتاج إنترنت — بيحاول تاني لوحده');
         armTransientSafety(rec, () => tripAyahStalled(stallMessage));
@@ -3680,7 +3900,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       } else if (code === 'audio-capture') {
         setMicError('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط الميكروفون تاني');
       } else if (code === 'service-not-allowed') {
-        setMicError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب متصفح تاني أو قيّم يدوي بدل كده');
+        setMicError('خدمة الاستماع المباشر مقفولة على الجهاز — على iPhone فعّل «الإملاء» من الإعدادات ← عام ← لوحة المفاتيح ← تفعيل الإملاء، أو جرّب متصفح تاني، أو قيّم يدوي بدل كده');
       } else if (code === 'language-not-supported') {
         setMicError('الاستماع المباشر مش بيدعم العربية على الجهاز ده — قيّم يدوي بدل كده');
       } else {
@@ -4290,7 +4510,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // flow pass them (they stay missed in the grade) so he is never stuck.
     // Counted PER WORD (not per index set): the owed set changes as words
     // get credited, which used to reset the count and loop forever.
-    if (fixIdx && fixIdx.length > 0) {
+    // A pure stall prompt is not a confirmed miss (he may just be pausing), so it must not count toward giving
+    // the words up — that is how correctly recited ayat ended up graded wrong in the owner's test logs.
+    if (fixIdx && fixIdx.length > 0 && trigger !== 'stall') {
       fixIdx.forEach((i) => {
         const k = String(i);
         const n = (contPromptCountRef.current.get(k) || 0) + 1;
@@ -4396,7 +4618,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       cancelCorrectionSpeech();
       contPromptingRef.current = false;
       setContPrompting(false);
-      startContinuousMic();
+      // Wait for the tail of the correction to die out of the speakers before listening again: restarting at
+      // once made the recogniser transcribe the reciter's own clip ("عيني الرحيم", "جنا كبد") as his speech.
+      window.setTimeout(() => {
+        if (speakGenRef.current !== gen) return;
+        if (contPromptingRef.current) return;
+        startContinuousMic();
+      }, 700);
     };
     // Batch 3 (Claude holes 1+2+5): watchdogMs lets the
     // pre-emption re-arm use a short 1.5s onstart watchdog
@@ -4835,7 +5063,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       contStallTimerRef.current = null;
       if (!liveRef.current.contListening || contPromptingRef.current || contNoMatchRef.current) return;
       if (liveRef.current.corrDelayMode === 'ayah-end' && !corrStyleRef.current.forget) return;
-      const now = contOwedWords();
+      // Safari sends no finals mid-run: count the pending interim text too, or a fully recited ayah still
+      // "owes" its first word and the correction interrupts him (seen in the owner's two test logs).
+      const savedFinals = liveRef.current.contFinals;
+      let now: ReturnType<typeof contOwedWords>;
+      try {
+        liveRef.current.contFinals = `${savedFinals} ${lastInterimRef.current}`.trim();
+        now = contOwedWords();
+      } finally {
+        liveRef.current.contFinals = savedFinals;
+      }
       if (now.words.length === 0) return;
       // N1: indices-based dedupe key (see speakContPrompt).
       if (now.indices.join('|') === contPromptedKeyRef.current) return;
@@ -4844,7 +5081,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // 1 s stall timer fired while he was still reciting (false "missed"
     // marks, then the correction audio muted the mic and the rest of the
     // ayah was lost). Add the ear latency when the lab ear is on.
-    }, ((corrStyleRef.current.forget || Math.max(1, liveRef.current.corrDelay)) + (earLabOn() ? 1.3 : 0)) * 1000);
+    }, ((corrStyleRef.current.forget || Math.max(liveRef.current.mode === 'continuous' ? 3 : 1, liveRef.current.corrDelay)) + (labEarInUseRef.current ? 1.3 : 0)) * 1000);
   };
   // Did he say back the prompted words after the resume? The fresh
   // tokens since the prompt must contain them in order. A bounded
@@ -5110,6 +5347,32 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         (missedByAyah[w.ayahIdx] ||= []).push(w.orig);
       }
     });
+    // Word log (continuous): per ayah, only ayahs where something was matched are recorded.
+    try {
+      const perAyah: Record<number, { orig: string; ok: boolean }[]> = {};
+      expected.forEach((w, i) => { (perAyah[w.ayahIdx] ||= []).push({ orig: w.orig, ok: !!matched[i] }); });
+      Object.entries(perAyah).forEach(([k, ws]) => {
+        const row = ayahs[Number(k)];
+        if (row) recordAyahWords(row.surah_no, row.ayah_no, ws, ws.map((x) => x.ok));
+      });
+    } catch { /* best-effort */ }
+    // SRS step 5 (continuous): this is the final verdict of the whole range, and
+    // there is no heard text per word here, so every wrong word is an ordinary
+    // mistake. Same rules as the ayah mode (flushPending never throws).
+    {
+      const nSpoken = spokenTokens(liveRef.current.contFinals).length;
+      expected.forEach((_, i) => {
+        if (i > 0 && expected[i - 1].ayahIdx === expected[i].ayahIdx) return;
+        const idx = expected[i].ayahIdx;
+        const row = ayahs[idx];
+        if (!row) return;
+        const own = expected.map((w, j) => ({ w, j })).filter((x) => x.w.ayahIdx === idx);
+        flushPending({
+          surah: row.surah_no, ayah: row.ayah_no, index: idx, ok: gradesArr[idx], ts: Date.now(),
+          words: own.map((x) => ({ orig: x.w.orig })), matched: own.map((x) => !!matched[x.j]), spokenCount: nSpoken,
+        }, srsSessionRef.current);
+      });
+    }
     liveRef.current.grades = gradesArr;
     setGrades(gradesArr);
     const noSkips = new Array(ayahCount).fill(false);
@@ -5204,8 +5467,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
     // Batch 4 fallback (2026-11-10): no browser speech API -> the on-device ear, automatically.
     // 2026-11-13: the new phoneme ear (Quran-Lab), per-device flag.
-    const useLabEar = earLabOn();
+    const useLabEar = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+    labEarInUseRef.current = useLabEar;
     const useModelEar = useLabEar || getEar() === 'model' || !SR;
+    earKindRef.current = useLabEar ? 'lab' : useModelEar ? 'model' : 'browser';
     if (!SR && !useModelEar) {
       setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
       return;
@@ -5245,7 +5510,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       const em0 = contEffectiveMatched(false, false);
       labStart = Math.max(0, em0.matched.findIndex((m) => !m));
     }
-    setExtraWordMin(useLabEar && liveRef.current.level === 'advanced' ? 2 : Infinity);
+    setExtraWordMin(useLabEar && levelIsStrict(liveRef.current.level) ? 2 : Infinity);
     const rec: any = useLabEar ? new QuranLabRecognition(liveRef.current.contExpected, labStart) : useModelEar ? new QuranModelRecognition() : new SR();
     diagPush('ear', { label: useLabEar ? `quranlab@${labStart}` : useModelEar ? 'quran-model' : 'browser' });
     if (useLabEar) rec.diag = (label: string, ms: number) => diagPush('mic-timing', { label, ms });
@@ -5410,6 +5675,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
         return;
       }
+      if (code === 'network' && rec instanceof QuranLabRecognition) {
+        // W4-B: device ear failed to load -> browser ear on «كمّل».
+        markEarLabFailed();
+        tripContStalled('اللي سمعته محفوظ — اضغط «كمّل التسميع المتصل» وكمّل عادي');
+        return;
+      }
       if (code === 'network') {
         setMicError('الاستماع المباشر محتاج إنترنت — بيحاول تاني لوحده');
         armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
@@ -5424,7 +5695,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       } else if (code === 'audio-capture') {
         setMicError('الميكروفون مشغول بتطبيق تاني أو مش موجود — اقفله ثم اضغط الميكروفون تاني');
       } else if (code === 'service-not-allowed') {
-        setMicError('المتصفح منع خدمة الاستماع المباشر على الجهاز ده — جرّب متصفح تاني');
+        setMicError('خدمة الاستماع المباشر مقفولة على الجهاز — على iPhone فعّل «الإملاء» من الإعدادات ← عام ← لوحة المفاتيح، أو جرّب متصفح تاني');
       } else if (code === 'language-not-supported') {
         setMicError('الاستماع المباشر مش بيدعم العربية على الجهاز ده');
       } else {
@@ -5763,16 +6034,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800"><Sama3 /> لي</h1>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
           </div>
-          <button onClick={() => onNavigate('app')} aria-label="العودة إلى لوحتي"
-            className="mr-auto icon-action flex items-center gap-1.5 px-3 py-2 text-sm text-accent-600 hover:bg-gray-100 rounded-lg polish-press">
-            <Home className="w-5 h-5" /> لوحتي
-          </button>
         </div>
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
         {phase === 'setup' && (
           <div className="space-y-5">
+            {corrNote}
             {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine}</p>)}
             {/* Batch 1: the old unsupported note was a small line
                 buried in the settings card. A user on a voiceless
@@ -5839,8 +6107,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </div>
             )}
-            {/* Pilot (2026-11-08): on-device recitation recognizer, on every lobby screen. */}
-            <QuranAsrLab />
+            {/* W4-B: device ear download / status (default ear). */}
+            <EarDownloadCard />
             {lobbyDoor === null && (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -5858,7 +6126,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <SlidersHorizontal className="w-6 h-6 text-emerald-800" />
                     </span>
                     <span className="block text-base font-semibold text-ink">إعدادات التسميع</span>
-                    <span className="block text-xs text-ink-2 mt-1">{verifyLevel === 'beginner' ? 'مبتدئ' : verifyLevel === 'intermediate' ? 'متوسط' : 'متقدم'} • {reciteMode === 'ayah' ? 'آية آية' : 'متصل'} • تصحيح {CORR_DELAY_MODE_LABEL[corrDelayMode]} • {CORR_RATE_LABEL[corrRate]}</span>
+                    <span className="block text-xs text-ink-2 mt-1">{VERIFY_LEVEL_LABEL[runLevel]} • {reciteMode === 'ayah' ? 'آية آية' : 'متصل'} • تصحيح {CORR_DELAY_MODE_LABEL[corrDelayMode]} • {CORR_RATE_LABEL[corrRate]}</span>
                   </button>
                   <button onClick={() => setLobbyDoor('mic')}
                     className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
@@ -5879,6 +6147,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </span>
                     <span className="block text-base font-semibold text-ink">سمّعني آياتي الضعيفة</span>
                     <span className="block text-xs text-ink-2 mt-1">الآيات اللي علّمتها «صعبة» أو «ارجع لها بعدين»</span>
+                  </button>
+                  <button onClick={() => setLobbyDoor('scores')}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <TrendingUp className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">سجل الدرجات</span>
+                    <span className="block text-xs text-ink-2 mt-1">{scoreLog.length > 0 ? `آخر ${formatAr(scoreLog.length)} اختبار ومنحنى تطورك` : 'درجاتك ومنحنى تطورك هيظهروا هنا'}</span>
                   </button>
                   {history.length > 0 && (
                     <button onClick={() => setLobbyDoor('results')}
@@ -5915,19 +6191,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs font-medium text-accent-700 mb-1">مستوى التدقيق</p>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button onClick={() => applySettings('beginner', reciteMode)}
-                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${verifyLevel === 'beginner' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
-                      مبتدئ
-                    </button>
-                    <button onClick={() => applySettings('intermediate', reciteMode)}
-                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${verifyLevel === 'intermediate' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
-                      متوسط
-                    </button>
-                    <button onClick={() => applySettings('advanced', reciteMode)}
-                      className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${verifyLevel === 'advanced' ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
-                      متقدم
-                    </button>
+                  <div className={`grid ${isAdminView ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
+                    {(isAdminView ? (['beginner', 'advanced', 'master'] as VerifyLevel[]) : (['beginner', 'advanced'] as VerifyLevel[])).map((lv) => (
+                      <button key={lv} onClick={() => applySettings(lv, reciteMode)}
+                        className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${runLevel === lv ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
+                        {VERIFY_LEVEL_LABEL[lv]}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <div>
@@ -5944,18 +6214,21 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                 </div>
                 <Hint id="st-level"><p className="col-span-2 text-xs text-accent-600 leading-snug">
-                  {verifyLevel === 'beginner'
-                    ? 'يوقف عند الخطأ في الكلمات فقط: الكلمة الناقصة أو المختلفة (اللحن الجلي). الكلمة الزائدة لا توقفه.'
-                    : verifyLevel === 'intermediate'
-                    ? 'يوقف عند أي خطأ في الكلمات: ناقصة أو مختلفة أو زائدة.'
-                    : 'نفس تدقيق المتوسط — والسرعة دلوقتي بتتظبط من فترة التريث وسرعة النطق تحت.'}
+                  {runLevel === 'beginner'
+                    ? 'يوقف عند الكلمة الناقصة أو المختلفة. الحرف الغلط ما بيعدّيش في أي مستوى؛ التسامح بس في وضوح النطق. الكلمة الزائدة لا توقفه.'
+                    : runLevel === 'advanced'
+                    ? 'زي المبتدئ، وكمان يوقف عند الكلمة الزائدة أو المكررة.'
+                    : 'متقن (تجريبي للأدمن): الكلمات والزيادة زي المتقدم. الحركات والتجويد هتيجي من سيرفر Muaalem — لسه مش مربوط، فمفيش تقييم للحركات دلوقتي.'}
                 </p></Hint>
+                {runLevel === 'master' && (
+                  <p className="col-span-2 text-xs text-amber-link leading-snug">تجريبي للأدمن — المستخدمين ما بيشوفوش «متقن».</p>
+                )}
                 <Hint id="st-mode"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
                     : 'سمّع النطاق كله على بعضه من غير توقف عند كل آية — من أول آية لآخر آية في النطاق، أو حتى نهاية السورة لو ده اختيارك. ولو غلطت في كلمة وانت ماشي، البرنامج يوقفك على طول وينطقها لك بصوت رجالي أو نسائي حسب حسابك، وتقولها وراه وتكمل؛ ولو وقفت ' + corrDelay.toLocaleString('ar-EG') + ' ثواني وعندك كلمة ناقصة، ينطقها لك برضه. التقرير يطلع في الآخر بالكلمات الناقصة في كل آية.'}
                 </p></Hint>
-                <TajwidSkillPicker />
+                {isAdminView && <TajwidSkillPicker />}
                 {!micSupported && (
                   <p className="col-span-2 text-xs text-amber-link leading-snug">{micAbsentSetupNote}</p>
                 )}
@@ -5994,7 +6267,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                 </div>
                 <div className="col-span-2">
-                  <p className="text-xs font-medium text-accent-700 mb-1">سرعة نطق الكلمة الصحيحة</p>
+                  <p className="text-xs font-medium text-accent-700 mb-1">سرعة التصحيح</p>
                   <div className="grid grid-cols-4 gap-1.5">
                     {(['slow', 'normal', 'fast', 'veryFast'] as CorrRate[]).map((r) => (
                       <button key={r} onClick={() => applySettings(verifyLevel, reciteMode, corrDelayMode, r)}
@@ -6239,25 +6512,26 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <div>
                   <p className="text-sm text-accent-600 mb-2">اتكلم بصوت عادي…</p>
                   <div className="h-3 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round(micCheckLevel * 400))}%` }} />
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(100, Math.round(micCheckLevel * 1500))}%` }} />
                   </div>
                 </div>
               )}
               {micCheckState === 'done' && micCheckResult && (
                 micCheckResult.permission === 'granted' && micCheckResult.heardSomething ? (
                   <p className="text-sm font-semibold text-emerald-700">تمام — الميكروفون شغال وسمعك (ده فحص الميكروفون بس، مش اختبار التعرف على الكلام). ابدأ التسميع وانت مطمن.</p>
-                ) : micCheckResult.permission === 'granted' ? (
-                  <p className="text-sm font-semibold text-amber-link">الميكروفون مفتوح بس ما سمعش صوت — قرب من الجهاز أكتر أو علّي صوتك، واضغط تاني.</p>
-                ) : micCheckResult.permission === 'denied' ? (
-                  <p className="text-sm font-medium text-red-600">الميكروفون مقفول — اسمح بيه من إعدادات المتصفح أو إعدادات الجهاز، وبعدها اضغط تاني.</p>
                 ) : (
-                  <p className="text-sm font-medium text-red-600">ما قدرتش أفتح الميكروفون — جرّب من Safari على iPhone/iPad، أو قيّم نفسك يدوي.</p>
+                  <p className={`text-sm font-medium ${micCheckResult.reason === 'quiet' ? 'text-amber-link' : 'text-red-600'}`}>
+                    {micCheckReasonText(micCheckResult)}
+                  </p>
                 )
               )}
             </div>
               </>
             )}
 
+            {lobbyDoor === 'scores' && (
+              <TestHistoryPanel entries={scoreLog} showMaster={isAdminView} initialLevel={runLevel} />
+            )}
             {lobbyDoor === 'results' && (
               <>
             {history.length > 0 && (
@@ -6316,14 +6590,47 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </>
                   )}
                 </div>
+                <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-3 alive-detail-card">
+                  <h2 className="font-semibold text-accent-800">كلماتي اللي بغلط فيها</h2>
+                  {weakWordList.length === 0 ? (
+                    <p className="text-sm text-accent-600 leading-relaxed">لسه مفيش كلمات متسجلة. كل ما تسمّع وتغلط في كلمة، التطبيق هيفتكرها هنا ويقول لك كام مرة غلطت فيها. والكلمة بتتشال لما تقولها صح ٣ مرات ورا بعض.</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-accent-700 leading-relaxed">
+                        {weakWordList.length.toLocaleString('ar-EG')} كلمة محتاجة تركيز في {weakWordAyahs().length.toLocaleString('ar-EG')} آية. الأكتر غلطًا:
+                      </p>
+                      <div className="flex flex-wrap gap-2" dir="rtl">
+                        {weakWordList.slice(0, 12).map((w) => (
+                          <span key={`${w.surah}:${w.ayah}:${w.wordNo}`} className="px-3 py-1.5 bg-amber-50 border border-hairline-amber rounded-xl text-sm font-semibold text-amber-800">
+                            <span className="text-base">{w.word}</span>
+                            <span className="text-xs text-accent-600"> · {SURAHS.find((x) => x.no === w.surah)?.name || ''} {w.ayah.toLocaleString('ar-EG')} · {w.misses.toLocaleString('ar-EG')}×</span>
+                          </span>
+                        ))}
+                      </div>
+                      {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
+                      <button onClick={() => void startWeakWordsTest()} disabled={loading}
+                        className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
+                        {loading ? 'جارٍ تحميل الآيات…' : `سمّع الآيات اللي فيها كلماتي الغلط (${weakWordAyahs().length.toLocaleString('ar-EG')})`}
+                      </button>
+                      <button onClick={() => { clearWeakWords(); setWordLogTick((n) => n + 1); }}
+                        className="block mx-auto text-xs font-semibold text-accent-500 underline">مسح السجل</button>
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>
         )}
 
+        {(phase === 'testing' || phase === 'done') && srsNotices.length > 0 && (
+          <SrsSlipNotice notices={srsNotices} onDismiss={() => setSrsNotices([])} />
+        )}
+
         {phase === 'testing' && textOfflineNotice && (
           <p className="text-sm font-medium text-amber-link bg-amber-50 border border-hairline-amber rounded-2xl px-3 py-2">تعمل دون اتصال — نص الآيات من الذاكرة المحفوظة على جهازك</p>
         )}
+
+        {phase === 'testing' && corrNote}
 
         {phase === 'testing' && testMode === 'continuous' && (
           <div className="space-y-4">
@@ -6384,7 +6691,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="w-3 h-3 bg-red-500 rounded-full" />
                     <p className="text-lg font-bold text-accent-700">بسمعك… كمّل من غير توقف</p>
                   </div>
-                  <p className="text-xs text-accent-500 mb-3">{getEar() === 'model' ? 'بيسمعك برنامج التلاوة على جهازك — من غير إنترنت' : 'الاستماع المباشر محتاج إنترنت'}</p>
+                  <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                   {ayahs[contProgress.ayahIdx] && (
                     <p className="text-sm font-semibold text-emerald-700 mb-4">
                       الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
@@ -6500,7 +6807,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               ) : micState === 'done-correct' ? (
                 <>
                   <p className="text-lg font-bold text-emerald-700 mb-3">ما شاء الله — صح!</p>
-                  <p className="text-2xl leading-[2.2] font-bold text-emerald-700" dir="rtl">{ayahs[index].ayah_text}</p>
+                  {paperDrawn
+                    ? <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} showAll />
+                    : <p className="text-2xl leading-[2.2] font-bold text-emerald-700" dir="rtl">{ayahs[index].ayah_text}</p>}
                   <button onClick={nextAfterMic}
                     className="mt-5 px-6 py-3 grad-emerald-door text-white text-lg font-bold rounded-xl polish-press polish-focus">
                     {index + 1 < ayahs.length ? 'الآية اللي بعدها' : 'إنهاء التسميع'}
@@ -6510,7 +6819,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <>
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
                   <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
-                  <p className="text-2xl leading-[2.2] font-bold" dir="rtl">
+                  {paperDrawn && (
+                    <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} showAll />
+                  )}
+                  <p className={paperDrawn ? 'sr-only' : 'text-2xl leading-[2.2] font-bold'} dir="rtl">
                     {expectedWordList(ayahs[index].ayah_text).map((w, i) => (
                       <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
                     ))}
@@ -6604,6 +6916,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         className="mt-3 text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
                         أو قيّم نفسك يدوي بدل الميكروفون
                       </button>
+                      <button onClick={() => setPaperView(!paperView)}
+                        className="mt-3 block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
+                        {paperView ? 'إخفاء ورق المصحف' : 'إظهار ورق المصحف'}
+                      </button>
                     </>
                   )}
                   {(micState === 'listening' || micState === 'correcting') && (
@@ -6621,7 +6937,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           only: no word is ever shown, so the hidden
                           text stays hidden. Indicative, not grading
                           (grading still uses finals at evaluation). */}
-                      {ayahs[index] && (() => {
+                      {paperOn && ayahs[index] && (() => {
+                        const exp = expectedWordList(ayahs[index].ayah_text);
+                        const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
+                        const st = alignWordsStrict(exp.map((w) => w.norm), spokenLive);
+                        return (
+                          <div className="mb-4">
+                            <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={st.matched} />
+                          </div>
+                        );
+                      })()}
+                      {!paperOn && ayahs[index] && (() => {
                         const exp = expectedWordList(ayahs[index].ayah_text);
                         const spokenLive = spokenTokens(`${transcript} ${interim}`.trim());
                         const al = alignWords(exp.map((w) => w.norm), spokenLive);
@@ -6634,7 +6960,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </div>
                         );
                       })()}
-                      <p className="text-xs text-accent-500 mb-3">{getEar() === 'model' ? 'بيسمعك برنامج التلاوة على جهازك — من غير إنترنت' : 'الاستماع المباشر محتاج إنترنت'}</p>
+                      <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                       {postCorrHint && (
                         <p className="text-sm font-semibold text-emerald-700 mb-3">التصحيح خلص — كمّل باقي الآية بصوتك؛ اللي قلته أثناء التصحيح ما اتسمعش، فقولوه تاني</p>
                       )}
@@ -6730,6 +7056,22 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
               )}
             </div>)}
+            {isAdminView && !contZeroMatch && tajweedReview && (
+              <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3" dir="rtl">
+                <p className="text-sm font-semibold text-amber-800">متقن — ملاحظات التجويد (تجريبي للأدمن)</p>
+                {tajweedReview.status === 'ok' ? (
+                  tajweedReview.notes.length === 0
+                    ? <p className="text-sm text-accent-700 mt-1">مفيش ملاحظات تجويد.</p>
+                    : <ul className="text-sm text-accent-700 mt-1 space-y-1">{tajweedReview.notes.map((n, i) => (<li key={i}>آية {n.ayah.toLocaleString('ar-EG')}: {n.rule} — {n.message}</li>))}</ul>
+                ) : (
+                  <p className="text-sm text-accent-700 mt-1 leading-relaxed">
+                    {muaalemStatus() === 'not-connected'
+                      ? 'سيرفر Muaalem لسه مش مربوط، فالحركات والتجويد ما اتقيّموش في الاختبار ده. الدرجة فوق للكلمات بس (زي المتقدم).'
+                      : 'ملاحظات التجويد ما وصلتش المرة دي. الدرجة فوق للكلمات بس.'}
+                  </p>
+                )}
+              </div>
+            )}
             {/* Always-visible diagnostics copy (2026-11-08): one tap, right under the score. */}
             <div className="flex flex-col items-center gap-1">
               <button type="button" onClick={() => void diagCopyJson()}
@@ -6989,7 +7331,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
                 <RotateCcw className="w-5 h-5" /> تسميع جديد
               </button>
-              <button onClick={() => onNavigate('app')}
+              <button onClick={() => { requestDayRecap(); onNavigate('app'); }}
                 className="flex-1 py-3 bg-white border border-hairline text-accent-700 font-semibold rounded-xl polish-press">
                 العودة إلى لوحتي
               </button>

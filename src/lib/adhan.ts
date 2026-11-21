@@ -13,6 +13,8 @@
 // shipped: silence analysis found candidate pauses (~17s, ~35s) but
 // no verified content boundary, and a guessed cut could truncate
 // mid-phrase — it waits for a verified cut point.
+import { toneUrl } from './fajrAlarm';
+
 
 export type AdhanAlertType = 'both' | 'audio';
 export type AdhanSound = 'full' | 'beep' | 'takbir';
@@ -44,6 +46,34 @@ export interface AdhanSettings {
 export const ADHAN_SETTINGS_KEY = 'quran-adhan-settings';
 export const ADHAN_DAY_KEY = 'quran-adhan-day';
 export const ADHAN_FIRED_KEY = 'quran-adhan-fired';
+// Calculation method (W3-S1). Own key so the settings JSON schema stays
+// untouched: absent / 'auto' = the old behaviour (Egypt 5, Saudi 4, others
+// = API default). A number = an AlAdhan method id chosen by the user.
+export const ADHAN_METHOD_KEY = 'quran-adhan-method';
+export const ADHAN_METHODS: { id: number; label: string }[] = [
+  { id: 4, label: 'أم القرى (مكة)' },
+  { id: 5, label: 'الهيئة المصرية العامة للمساحة' },
+  { id: 3, label: 'رابطة العالم الإسلامي' },
+  { id: 8, label: 'الخليج' },
+  { id: 9, label: 'الكويت' },
+  { id: 10, label: 'قطر' },
+  { id: 2, label: 'أمريكا الشمالية (ISNA)' },
+  { id: 1, label: 'كراتشي' },
+];
+export function getAdhanMethod(): number | null {
+  try {
+    const n = Number(localStorage.getItem(ADHAN_METHOD_KEY));
+    return ADHAN_METHODS.some((m) => m.id === n) ? n : null;
+  } catch { return null; }
+}
+export function setAdhanMethod(id: number | null): void {
+  try {
+    if (id === null) localStorage.removeItem(ADHAN_METHOD_KEY);
+    else localStorage.setItem(ADHAN_METHOD_KEY, String(id));
+    // The cached day was computed with the old method.
+    localStorage.removeItem(ADHAN_DAY_KEY);
+  } catch { /* storage off */ }
+}
 // Hosted in the public `adhan` Storage bucket (push-files carries
 // UTF-8 code only, so the MP3 cannot ride the repo push). The file
 // itself is the Commons CC BY audio, converted to MP3, unmodified.
@@ -172,7 +202,8 @@ export function adhanLocationLabel(loc: AdhanLocation): string {
 }
 
 function adhanLocationKey(loc: AdhanLocation): string {
-  return JSON.stringify(loc);
+  const m = getAdhanMethod();
+  return m === null ? JSON.stringify(loc) : `${JSON.stringify(loc)}|m${m}`;
 }
 
 function toApiDate(dateKey: string): string {
@@ -228,13 +259,15 @@ interface AlAdhanDay {
   date: { hijri: { day: string; month: { ar: string }; year: string } };
 }
 
-async function fetchDayFromApi(location: AdhanLocation, dateKey: string): Promise<AdhanDay> {
+export async function fetchDayFromApi(location: AdhanLocation, dateKey: string): Promise<AdhanDay> {
   let url: string;
   if (location.kind === 'gps') {
-    url = `https://api.aladhan.com/v1/timings/${toApiDate(dateKey)}?latitude=${location.lat}&longitude=${location.lng}`;
+    const gpsMethod = getAdhanMethod();
+    url = `https://api.aladhan.com/v1/timings/${toApiDate(dateKey)}?latitude=${location.lat}&longitude=${location.lng}${gpsMethod !== null ? `&method=${gpsMethod}` : ''}`;
   } else {
     const country = ADHAN_COUNTRIES.find((c) => c.code === location.country);
-    const method = country?.method ? `&method=${country.method}` : '';
+    const chosen = getAdhanMethod() ?? country?.method;
+    const method = chosen ? `&method=${chosen}` : '';
     url = `https://api.aladhan.com/v1/timingsByCity/${toApiDate(dateKey)}?city=${encodeURIComponent(location.city)}&country=${encodeURIComponent(country?.api ?? location.countryName)}${method}`;
   }
   const res = await fetch(url);
@@ -399,29 +432,44 @@ function applyWindow(audio: HTMLAudioElement, start: number, end: number | null)
   });
 }
 
+export const ADHAN_BEEP_TONE_KEY = 'quran-adhan-beep-tone';
+export function loadBeepTone(): string {
+  try { return localStorage.getItem(ADHAN_BEEP_TONE_KEY) || 'bell'; } catch { return 'bell'; }
+}
+export function saveBeepTone(id: string): void {
+  try { localStorage.setItem(ADHAN_BEEP_TONE_KEY, id); } catch { /* ignore */ }
+}
+
+// Adhan starts quiet and rises to full volume (no sudden blast). Uses
+// audio.volume, which iOS Safari ignores (full volume there); Android
+// and desktop get the ramp.
+function rampVolumeIn(audio: HTMLAudioElement): void {
+  try {
+    audio.volume = 0.2;
+    let v = 0.2;
+    const step = window.setInterval(() => {
+      v = Math.min(1, v + 0.8 / 50);
+      audio.volume = v;
+      if (v >= 1 || audio.paused) window.clearInterval(step);
+    }, 100);
+  } catch { /* ignore */ }
+}
+
 export function playAdhanSound(sound: AdhanSound, voiceId?: string): HTMLAudioElement | null {
   if (sound === 'beep') {
+    // 2026-11-19: user-chosen loud tone (18 synthesized tones, same loudness
+    // normalisation as the Fajr alarm) instead of one quiet 880 Hz beep.
     try {
-      const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Ctx) return null;
-      const ctx = new Ctx();
-      const now = ctx.currentTime;
-      [0, 0.6, 1.2].forEach((offset) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.0001, now + offset);
-        gain.gain.exponentialRampToValueAtTime(0.25, now + offset + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.4);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(now + offset);
-        osc.stop(now + offset + 0.45);
-      });
+      const audio = new Audio(toneUrl(loadBeepTone()));
+      audio.loop = true;
+      void audio.play().catch(() => { /* iOS needs a prior tap */ });
+      window.setTimeout(() => {
+        try { audio.pause(); audio.dispatchEvent(new Event('ended')); } catch { /* ignore */ }
+      }, 7000);
+      return audio;
     } catch {
-      // Beep is best-effort.
+      return null;
     }
-    return null;
   }
   try {
     const v = voiceId ? (ADHAN_VOICES.find((x) => x.id === voiceId) ?? getAdhanVoice()) : getAdhanVoice();
@@ -429,6 +477,7 @@ export function playAdhanSound(sound: AdhanSound, voiceId?: string): HTMLAudioEl
     audio.onerror = () => { if (v.id !== 'makkah') { audio.src = ADHAN_AUDIO_URL; void audio.play().catch(() => {}); } };
     if (sound === 'takbir') { const [st, en] = TAKBIR_RANGE[v.id] ?? TAKBIR_DEFAULT; applyWindow(audio, st, en); }
     else if (FULL_START[v.id]) applyWindow(audio, FULL_START[v.id], null);
+    rampVolumeIn(audio);
     void audio.play().catch(() => {
       // iOS blocks playback without a prior user gesture in this
       // session — the banner still shows, and the next alert after

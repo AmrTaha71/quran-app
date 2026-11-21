@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { blankMarks } from '../lib/arabicNormalize';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
 import { currentSpeechLocale } from '../lib/LanguageContext';
@@ -66,11 +67,15 @@ function deduplicateTranscript(text: string): string {
 }
 
 export default function LinkModal({
-  verse, onClose, onSaved,
+  verse, onClose, onSaved, groupVerses, relatedVerse,
 }: {
   verse: QuranVerse;
   onClose: () => void;
   onSaved: () => void;
+  /** Merged link: the consecutive ayat (first = `verse`) this ONE link covers. */
+  groupVerses?: QuranVerse[];
+  /** Far link: the other ayah this link ties `verse` to. */
+  relatedVerse?: QuranVerse | null;
 }) {
   useEscapeClose(true, onClose);
 
@@ -157,7 +162,11 @@ export default function LinkModal({
       setLiveTranscript('');
 
       // Start browser SpeechRecognition for live transcription
-      if (recognitionRef.current) {
+      // On Apple browsers the live speech recogniser and the recorder fight over the same mic and the saved
+      // clip comes out doubled / echoing even though the voice itself was clear. There the clip is recorded
+      // alone and transcribed afterwards (same path as a recording without live text).
+      const isApple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+      if (recognitionRef.current && !isApple) {
         try { recognitionRef.current.start(); } catch {}
       }
 
@@ -172,7 +181,11 @@ export default function LinkModal({
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Clean take: ask the device to cancel echo / noise and level the voice (a bare `audio: true`
+      // left room echo and speaker bleed in the saved clip, which the generated voices then copied).
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+      });
       // Safari does not support audio/webm; fall back to audio/mp4 there.
       const mimeType = MediaRecorder.isTypeSupported('audio/webm')
         ? 'audio/webm'
@@ -196,7 +209,7 @@ export default function LinkModal({
         const transcriptText = deduplicateTranscript(rawTranscript);
 
         try {
-          const fileName = `rana-${Date.now()}.webm`;
+          const fileName = `rana-${Date.now()}.${(blob.type || '').includes('mp4') ? 'm4a' : 'webm'}`;
           await supabase.storage.from('rana-audio').upload(fileName, blob);
           const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
           setAudioPublicUrl(urlData.publicUrl);
@@ -250,16 +263,32 @@ export default function LinkModal({
 
       // The audio is stored for Rana's approval (see approveRecording); the
       // transcript itself is made on the device, so no paid edge call (2026-11-10).
+      let uploadedUrl: string | null = null;
       if (!existingUrl) {
-        const fileName = `rana-${Date.now()}.webm`;
+        const fileName = `rana-${Date.now()}.${(audioBlob.type || '').includes('mp4') ? 'm4a' : 'webm'}`;
         const { error: upErr } = await supabase.storage.from('rana-audio').upload(fileName, audioBlob);
         if (upErr) throw new Error('فشل رفع الملف الصوتي');
 
         const { data: urlData } = supabase.storage.from('rana-audio').getPublicUrl(fileName);
         setAudioPublicUrl(urlData.publicUrl);
+        uploadedUrl = urlData.publicUrl;
       }
 
-      const transcript = (await transcribeBlob(audioBlob)) ?? '';
+      // Spoken explanations (not recitation) are transcribed best by the speech service; the on-device
+      // Quran model only reads recitation and garbles ordinary speech. It is the fallback.
+      let transcript = '';
+      const clipUrl = existingUrl ?? uploadedUrl;
+      if (clipUrl) {
+        try {
+          const er = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+            body: JSON.stringify({ audioUrl: clipUrl }),
+          });
+          if (er.ok) transcript = String((await er.json())?.transcript ?? '');
+        } catch { /* fall back below */ }
+      }
+      if (!transcript.trim()) transcript = (await transcribeBlob(audioBlob)) ?? '';
       if (!transcript.trim()) {
         setError('تعذر التحويل التلقائي. اكتبي النص يدوياً بالأسفل.');
         setPhase('input');
@@ -332,7 +361,7 @@ export default function LinkModal({
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-rephrase`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}` },
         body: JSON.stringify({ text, command, mode }),
       });
       const data = await res.json().catch(() => ({}));
@@ -342,7 +371,11 @@ export default function LinkModal({
       }
       const result = data.rephrased || text;
       // Filter out placeholder text
-      const finalResult = (result.includes('لم يتم تكوين') || result.includes('نص تجريبي')) ? text : result;
+      // The model sometimes answers a garbled transcript with an apology / question instead of a rewrite.
+      // That must never become the ayah's text (or get turned into a voice): keep the original and warn.
+      const looksLikeRefusal = /^\s*(عذر[اً]|عذرًا|آسف|أعتذر|لا أستطيع|يبدو أن النص|هل يمكنك)/.test(result);
+      const finalResult = (result.includes('لم يتم تكوين') || result.includes('نص تجريبي') || looksLikeRefusal) ? text : result;
+      if (looksLikeRefusal) setError('النص المنطوق مش واضح فالذكاء الاصطناعي ما قدرش يصيغه. راجعي النص أو عدّليه بإيدك، أو سجّلي المقطع تاني.');
       setRephrasedText(finalResult);
       // Voice source follows the edit rule: keep_original = original
       // side (not an edit); a rephrase with her own command = her edit.
@@ -448,6 +481,8 @@ export default function LinkModal({
       status: 'pending',
       rephrase_command: rephraseCommand || null,
       created_by: (await supabase.auth.getSession()).data.session?.user.id || null,
+      group_verse_ids: groupVerses && groupVerses.length > 1 ? groupVerses.map((v) => v.id) : null,
+      related_verse_id: relatedVerse ? relatedVerse.id : null,
     });
 
     if (saveError) {
@@ -497,7 +532,18 @@ export default function LinkModal({
           {/* Verse context */}
           <div className="bg-gray-50 rounded-2xl p-3">
             <p className="text-xs text-accent-600 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
-            <p className="font-arabic text-base text-accent-700 line-clamp-2">{verse.ayah_text}</p>
+            <p className="font-arabic text-base text-accent-700 line-clamp-2">{blankMarks(verse.ayah_text)}</p>
+            {groupVerses && groupVerses.length > 1 && (
+              <p className="mt-2 text-xs font-bold text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1">
+                تربيط واحد يجمع الآيات {groupVerses.map((v) => v.ayah_no).join(' و ')} من سورة {verse.surah_name}
+              </p>
+            )}
+            {relatedVerse && (
+              <div className="mt-2 text-xs bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                <p className="font-bold text-amber-800">بيربط الآية دي بـ {relatedVerse.surah_name} — آية {relatedVerse.ayah_no}</p>
+                <p className="font-arabic text-sm text-accent-700 line-clamp-2">{blankMarks(relatedVerse.ayah_text)}</p>
+              </div>
+            )}
           </div>
 
           {/* Multi-type selection */}

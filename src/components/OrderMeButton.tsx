@@ -5,8 +5,8 @@
 import { useEffect, useState } from 'react';
 import Hint from './Hint';
 import { pressFeedback } from '../lib/pressFeedback';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 interface Props {
   onNavigate: (r: Route) => void;
@@ -48,7 +48,7 @@ export default function OrderMeButton({ onMutashabihat, onElderly }: Props) {
         </span>
       </button>
       {!on && (
-        <Hint id="orderme-examples"><p className="text-center text-xs text-accent-600">قول: «اقرأ الكهف» • «اسمع الملك» • «سمّعلي الشمس» • «المتشابهات» — أو قول اسم السورة بس وأنا أسألك</p></Hint>
+        <Hint id="orderme-examples"><p className="text-center text-xs text-accent-600">قول: «افتح سورة الكهف» • «شغّل الملك» • «سمّع لي الشمس» • «تتبع القراءة» — أو قول اسم السورة بس وأنا أسألك</p></Hint>
       )}
     </div>
   );

@@ -144,7 +144,7 @@ export function DrumReel({
         ref={ref}
         onScroll={onScroll}
         className="absolute inset-0 overflow-y-auto snap-y snap-mandatory overscroll-contain opacity-0"
-        style={{ scrollbarWidth: 'none' }}
+        style={{ scrollbarWidth: 'none', touchAction: 'pan-y' }}
         role="listbox"
         aria-label={label}
       >

@@ -1,4 +1,6 @@
 import DrumSelect from '../components/DrumSelect';
+import LinkScopeNote from '../components/LinkScopeNote';
+import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Sama3 from '../components/Sama3';
@@ -22,13 +24,14 @@ import {
 import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
 import ReviewDueCard from '../components/ReviewDueCard';
+import SrsDueCard from '../components/SrsDueCard';
 import ShareProgressCard from '../components/ShareProgressCard';
 import { pressFeedback, installGlobalWater } from '../lib/pressFeedback';
 import VoiceSelector from '../components/VoiceSelector';
 import ShareButton from '../components/ShareButton';
 import { useUserLists, ListToggleButtons, LongPressMenu, LinkLongPressMenu, type ListType } from '../components/UserLists';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 const PAGE_SIZE = 15;
 
 export default function UserAppPage({ session, onNavigate }: { session: import('@supabase/supabase-js').Session | null; onNavigate: (r: Route) => void }) {
@@ -407,7 +410,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   }, [fetchVerses]);
 
   const fetchVerseLinks = async (verseId: number) => {
-    const { data } = await supabase.from('ayah_links').select('*').eq('verse_id', verseId).eq('status', 'approved');
+    const { data } = await supabase.from('ayah_links').select('*').or(`verse_id.eq.${verseId},related_verse_id.eq.${verseId},group_verse_ids.cs.{${verseId}}`).eq('status', 'approved');
     setVerseLinks((prev) => ({ ...prev, [verseId]: data || [] }));
   };
 
@@ -620,6 +623,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
           }}
         />
 
+        {/* مراجعة الكلمات الضعيفة (SRS step 4, 2026-11-20): next to the card above. */}
+        <SrsDueCard onNavigate={onNavigate} />
+
         {/* Daily wird + self-test entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
           <DailyWird onNavigate={onNavigate} />
@@ -801,7 +807,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                           <span className="text-base font-semibold text-ink-2">{verse.surah_name}</span>
                         </div>
                         <p className="font-arabic text-2xl text-ink leading-loose">
-                          {verse.ayah_text}
+                          {blankMarks(verse.ayah_text)}
                         </p>
                       </div>
                       {session && (
@@ -868,6 +874,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                                 <p className="font-semibold text-ink-2 mb-1 text-base">{link.link_title}</p>
                               )}
                               <p className="text-ink-2 leading-relaxed text-base">{link.link_content}</p>
+                              <LinkScopeNote link={link} verseId={verse.id} />
                               {(() => {
                                 const audio = resolveLinkAudio(link, linkGender);
                                 return (

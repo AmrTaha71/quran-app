@@ -27,9 +27,13 @@ import QuranMushafPage from './pages/QuranMushafPage';
 import SettingsPage from './pages/SettingsPage';
 import SelfTestPage from './pages/SelfTestPage';
 import ListenPage from './pages/ListenPage';
+import BlackScreenOverlay from './components/BlackScreenOverlay';
 import AdhkarPage from './pages/AdhkarPage';
 import RadioPage from './pages/RadioPage';
 import SharedRoomPage from './pages/SharedRoomPage';
+import HifzPage from './pages/HifzPage';
+import Home2Page from './pages/Home2Page';
+import QuizPage from './pages/QuizPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
@@ -43,23 +47,33 @@ import ReferralSurvey, { REFERRAL_DONE_KEY } from './components/ReferralSurvey';
 import { tickStats } from './lib/dailyStats';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
-import { BackButton, useBackTarget } from './components/BackButton';
+import BottomBackBar from './components/BottomBackBar';
+import AdminViewToggle from './components/AdminViewToggle';
+import { resetAdminView, setRealAdmin } from './lib/adminPreview';
+import { useKeepAwake } from './lib/useKeepAwake';
 import { setBackTarget } from './lib/backTarget';
 import { parseHash } from './lib/shareLinks';
+import type { Route } from './lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room' | 'radio';
 
 // Routes where a dead session must send the user to #/auth with a
 // "session expired" message. Logged-out routes (home/landing/auth) are
 // excluded: a SIGNED_OUT there is normal, not an expiry.
-const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room'];
+const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow', 'test', 'listen', 'adhkar', 'room', 'hifz', 'quiz', 'home2'];
 
-// Routes that show the shell back button (2026-11-06, back-button
-// part 1): every tab route goes back to الرئيسية unless the page
-// registered an internal target (open Settings door, Listen detail
-// view, SelfTest sub-view). Home, landing, auth, admin and splash
-// never show it.
-const BACK_BUTTON_ROUTES: Route[] = ['settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room'];
+// Routes that show the shell back control (2026-11-06, back-button
+// part 1; moved to the bottom-left in wave 2, W2-3): every tab route
+// goes back to الرئيسية unless the page registered an internal target
+// (open Settings door, Listen detail view, SelfTest sub-view). Home,
+// landing, auth, admin and splash never show it.
+const BACK_BUTTON_ROUTES: Route[] = ['admin', 'settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room', 'home2'];
+// Screen stays awake ONLY on these (W2-5): the Mushaf (mushaf/follow),
+// tasmee (test) and Listen. Mounted in the shell by route so the lock is
+// released the moment the user leaves; no other page is listed.
+const KEEP_AWAKE_ROUTES: Route[] = ['mushaf', 'follow', 'test', 'listen'];
+// Of those, the routes whose page renders the bottom nav (which already
+// carries الرئيسية): there the bar shows a single back button.
+const BOTTOM_NAV_ROUTES: Route[] = ['settings', 'test', 'app', 'mushaf', 'follow'];
 
 function getRouteFromHash(): Route {
   const rawHash = window.location.hash;
@@ -142,6 +156,10 @@ function switchRoute(prev: Route, next: Route, apply: () => void): void {
 
 function AppContent() {
   const [route, setRoute] = useState<Route>(getRouteFromHash());
+  // Every page opens at its top, not wherever the previous page was scrolled to.
+  useEffect(() => {
+    try { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch { /* ignore */ }
+  }, [route]);
   const [session, setSession] = useState<Session | null>(null);
   // Bumped after the device picker is answered, so it unmounts.
   const [, setDeviceTick] = useState(0);
@@ -190,10 +208,6 @@ function AppContent() {
   );
   const routeRef = useRef<Route>(route);
   const recoveryRef = useRef<boolean>(recoveryMode);
-  // Shared back button (2026-11-06): the page-registered internal
-  // target, if any — otherwise the shell button falls back to the
-  // route-level parent (home).
-  const backTarget = useBackTarget();
   // Fix 1 (2026-10-30): identity of the last SIGNED_IN/INITIAL_SESSION
   // user. A refocus SIGNED_IN with the SAME user must never route —
   // only a real transition (first sign-in, or a different user) may.
@@ -222,6 +236,27 @@ function AppContent() {
       // ignore
     }
   }, [session]);
+
+  // Screen Wake Lock for the reading/tasmee/listening pages (W2-5).
+  useKeepAwake(!!session && KEEP_AWAKE_ROUTES.includes(route));
+
+  // Admin preview (W2-4): learn whether this account is an admin so the
+  // «شوف كمستخدم» switch can show. Display-only: it never grants anything.
+  // A lookup ERROR leaves the state untouched (never flips it off/on).
+  const sessionUid = session?.user.id ?? null;
+  useEffect(() => {
+    if (!sessionUid) {
+      resetAdminView();
+      return;
+    }
+    let cancelled = false;
+    supabase.from('admin_users').select('user_id').eq('user_id', sessionUid).maybeSingle()
+      .then(({ data: row, error }) => {
+        if (cancelled || error) return;
+        setRealAdmin(!!row);
+      });
+    return () => { cancelled = true; };
+  }, [sessionUid]);
 
   // [LISTEN_RECOVERY] diagnostics: every route change, with the hash
   // that produced it (state/hash divergence is the bug's signature).
@@ -549,6 +584,12 @@ function AppContent() {
     // The wrapper above IS the page on these routes — nothing else
     // renders beside it.
     page = null;
+  } else if (route === 'home2') {
+    page = <Home2Page onNavigate={navigate} />;
+  } else if (route === 'hifz') {
+    page = <HifzPage onNavigate={navigate} />;
+  } else if (route === 'quiz') {
+    page = <QuizPage onNavigate={navigate} />;
   } else if (route === 'radio') {
     page = <RadioPage onNavigate={navigate} />;
   } else if (route === 'room') {
@@ -564,30 +605,6 @@ function AppContent() {
   }
   return (
     <>
-      {/* Shared back button (2026-11-06): in flow BEFORE the
-          always-mounted Listen/Adhkar wrappers — never fixed/absolute,
-          so it can never overlap the Mushaf image, the Mushaf header,
-          or the BottomNav. It used to render inside the route wrapper
-          below, which sits AFTER those wrappers in DOM order, so on
-          listen/adhkar routes it appeared at the BOTTOM of the page.
-          Up here it is visually at the top on ALL routes. The
-          registered internal target wins when present; otherwise
-          every tab route goes back to الرئيسية. */}
-      {BACK_BUTTON_ROUTES.includes(route) && (
-        <div className={`max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 ${route === 'mushaf' || route === 'follow' ? 'pt-1.5 pb-1' : 'pt-4 md:pt-5'}`}>
-          {/* 2026-11-12 (agreed UI rule): a sub-page shows TWO back
-              buttons on top — its parent (the internal target) and
-              الرئيسية. Without an internal target there is one button. */}
-          {backTarget ? (
-            <div className="flex flex-wrap gap-2">
-              <BackButton compact={route === 'mushaf' || route === 'follow'} label={backTarget.label} onBack={backTarget.onBack} />
-              <BackButton compact={route === 'mushaf' || route === 'follow'} label="الرئيسية" onBack={() => navigate('home')} />
-            </div>
-          ) : (
-            <BackButton compact={route === 'mushaf' || route === 'follow'} label="الرئيسية" onBack={() => navigate('home')} />
-          )}
-        </div>
-      )}
       {session ? (
         <>
           <div style={{ display: route === 'listen' ? undefined : 'none' }}>
@@ -596,11 +613,27 @@ function AppContent() {
           <div style={{ display: route === 'adhkar' ? undefined : 'none' }}>
             <AdhkarPage onNavigate={navigate} visible={route === 'adhkar'} />
           </div>
+          {/* Black screen lives above every route (Listen page or fullscreen Mushaf);
+              closing it just reveals the page underneath. */}
+          <BlackScreenOverlay />
         </>
       ) : null}
       <div key={routeKey} className={routeEnterClass}>
         {page}
       </div>
+      {/* Admin-only «شوف كأدمن / كمستخدم» switch (W2-4); renders nothing for
+          non-admins. Skipped where the UI is already crowded or admin. */}
+      {session && !isMushafRoute(route) && route !== 'room' && <AdminViewToggle />}
+      {/* Bottom-left back control (W2-3). Fixed, so it can never move the
+          Listen/Adhkar wrappers above; the spacer keeps the last bit of a
+          page from hiding under it (skipped on the Mushaf, whose reading
+          view is fixed-size). */}
+      {BACK_BUTTON_ROUTES.includes(route) && (
+        <>
+          {!isMushafRoute(route) && <div aria-hidden="true" style={{ height: '4.5rem' }} />}
+          <BottomBackBar hasBottomNav={BOTTOM_NAV_ROUTES.includes(route)} onHome={() => navigate('home')} />
+        </>
+      )}
       {/* Foreground adhan alerts on every route, logged in or not —
           settings live in localStorage, so this mounts unconditionally. */}
       <AdhanScheduler />
@@ -613,12 +646,12 @@ function AppContent() {
       <VoiceAssistant onNavigate={navigate} />
       {/* First-run onboarding overlay (home route only; the app works
           normally behind it once finished or skipped). */}
-      {showOnboarding && route === 'home' && (
+      {showOnboarding && (route === 'home' || route === 'settings') && !!loadDeviceChoice() && (
         (referralDone ? <Onboarding onDone={closeOnboarding} /> : <ReferralSurvey onDone={() => setReferralDone(true)} />)
       )}
       <DailyReportWatcher />
       {/* Device picker (drums): first run per browser, or reopened from Settings. */}
-      {(!loadDeviceChoice() || devicePickerOpen) && !showOnboarding && (
+      {(!loadDeviceChoice() || devicePickerOpen) && (
         <DevicePicker userId={session?.user.id} onDone={() => { setDevicePickerOpen(false); setDeviceTick((n) => n + 1); }}
           onClose={loadDeviceChoice() ? () => setDevicePickerOpen(false) : undefined} />
       )}

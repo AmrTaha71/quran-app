@@ -1,165 +1,283 @@
-// الاختبار الشامل (2026-11-07): step-by-step test with a range and a
-// level chosen by the user. Quiz parts (المتشابهات) are graded by the app.
-// Recitation and recall parts are graded by the user against a checklist
-// (the app cannot grade voice yet). Results are kept locally so the user
-// can see the score and its change over time.
+// الاختبار الشامل (W4-F, 2026-11-19). Every test starts with «أختبرك في أي
+// نطاق؟» (surah / juz / first 5 juz / juz 30). Then:
+//  - 5 positions x 8 points: 5 words from ONE random reader of the range, the
+//    user completes the ayah by voice; the reader corrects ONCE, the 2nd
+//    mistake closes the position; ✓/✗ + score after every position.
+//  - المتشابهات: oral (the user says the ayat).
+//  - التجويد: admin only (question bank, W4-G).  التلاوة: self-graded.
+//  «الربط والاستحضار» is out for now. Scores are computed automatically.
 import DrumPicker from './DrumReel';
 import { unitPickLabel } from '../lib/testRanges';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
-import { SURAHS, surahLabel } from '../lib/surahs';
+import { surahLabel } from '../lib/surahs';
 import BANK from '../data/mutashabihat-famous.json';
-import { getQuranTextCache, type CachedTextRow } from '../lib/quranTextCache';
+import { CORR_RECITERS } from '../lib/juhaniCorr';
+import { recitersForRange, planRangeReciters } from '../lib/corrDownload';
+import { useIsAdminView } from '../lib/adminPreview';
+import type { SkillTier } from '../lib/tajwidSkills';
+import { addTestHistoryV1 } from '../lib/testHistory';
 import {
-  LEVELS, PARTS, rangeOf, fromGlobal, randomInt, readResults, saveResult, totalOf,
-  type RangeScope, type TestLevel, type PartId, type SavedResult,
+  PARTS, MUT_QUESTIONS, activeParts, rangeOf, randomInt, readResults, saveResult, totalOf,
+  type PartId, type SavedResult,
 } from '../lib/comprehensiveTest';
+import DrumSelect from './DrumSelect';
+import {
+  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
+  type PickedAyah, type RoundResult,
+} from '../lib/roundTest';
+import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
+import { ROUND_CORRECTIONS } from '../lib/roundJudge';
+import RoundRecite, { RoundReveal } from './RoundRecite';
+import MutashabihatOral, { type OralResult } from './MutashabihatOral';
+import SurahTiles from './SurahTiles';
+import RangeVoiceButton from './RangeVoiceButton';
+import { bankInSpan } from '../lib/mutRange';
 
-type Step = 'setup' | 'tasmee' | 'mutashabihat' | 'rabt' | 'tajweed' | 'tilawa' | 'done';
-type Question = { clue: string; options: { s: number; a: number }[]; correct: number };
+type Step = 'scope' | 'positions' | 'mutashabihat' | 'tajweed' | 'tilawa' | 'done';
+type ScopeId = 'surah' | 'juz' | 'first5' | 'juz30';
+type Done = { ayah: PickedAyah; result: RoundResult; surahOk: boolean | null; frac: number; score: number };
+type MutQ = { clue: string; answers: string[] };
 
-const SCOPE_LABEL: Record<RangeScope, string> = { surah: 'سورة', juz: 'جزء', hizb: 'حزب', quarter: 'ربع' };
-const SCOPE_COUNT: Record<RangeScope, number> = { surah: 114, juz: 30, hizb: 60, quarter: 240 };
-const STEP_ORDER: Step[] = ['tasmee', 'mutashabihat', 'rabt', 'tajweed', 'tilawa'];
+const SCOPES: { id: ScopeId; label: string }[] = [
+  { id: 'surah', label: 'سورة' },
+  { id: 'juz', label: 'جزء' },
+  { id: 'first5', label: 'أول ٥ أجزاء' },
+  { id: 'juz30', label: 'جزء ٣٠' },
+];
 
-let textMap: Promise<Map<string, string> | null> | null = null;
-function loadText(): Promise<Map<string, string> | null> {
-  if (!textMap) {
-    textMap = getQuranTextCache().getAll(6000).then((rows: CachedTextRow[] | null) => {
-      if (!rows) return null;
-      const m = new Map<string, string>();
-      for (const r of rows) m.set(`${r.surah_no}:${r.ayah_no}`, r.ayah_text);
-      return m;
-    }).catch(() => null);
+/** W4-M: clues with an ayah inside the scope first; filled from the whole bank when the scope has few. */
+function buildMut(count: number, span: { start: number; end: number }): { list: MutQ[]; filled: boolean } {
+  const inScope = bankInSpan(BANK as MutQ[], span);
+  const pool = [...inScope];
+  const out: MutQ[] = [];
+  while (out.length < count && pool.length > 0) out.push(pool.splice(randomInt(0, pool.length - 1), 1)[0]);
+  let filled = false;
+  if (out.length < count) {
+    filled = true;
+    const rest = (BANK as MutQ[]).filter((b) => !out.includes(b));
+    while (out.length < count && rest.length > 0) out.push(rest.splice(randomInt(0, rest.length - 1), 1)[0]);
   }
-  return textMap;
+  return { list: out, filled };
 }
 
-function buildQuestions(count: number): Question[] {
-  const pool = [...(BANK as { clue: string; answers: string[] }[])];
-  const out: Question[] = [];
-  while (out.length < count && pool.length > 0) {
-    const item = pool.splice(randomInt(0, pool.length - 1), 1)[0];
-    const right = item.answers[randomInt(0, item.answers.length - 1)].split(':').map(Number);
-    const opts: { s: number; a: number }[] = [{ s: right[0], a: right[1] }];
-    while (opts.length < 4) {
-      const g = randomInt(1, 6236);
-      const p = fromGlobal(g);
-      if (item.answers.includes(`${p.s}:${p.a}`)) continue;
-      if (opts.some((o) => o.s === p.s && o.a === p.a)) continue;
-      opts.push(p);
-    }
-    // shuffle options and find the correct index
-    const shuffled = opts.map((o) => ({ o, k: Math.random() })).sort((x, y) => x.k - y.k).map((x) => x.o);
-    out.push({ clue: item.clue, options: shuffled, correct: shuffled.findIndex((o) => o.s === right[0] && o.a === right[1]) });
-  }
-  return out;
+/** Global ayah range [start, end] (inclusive) of the chosen scope. */
+function scopeSpan(id: ScopeId, n: number): { start: number; end: number; label: string } {
+  if (id === 'surah') { const r = rangeOf('surah', n); return { start: r.start, end: r.end - 1, label: surahLabel(n) }; }
+  if (id === 'juz') { const r = rangeOf('juz', n); return { start: r.start, end: r.end - 1, label: `الجزء ${arNum(n)}` }; }
+  if (id === 'first5') return { start: rangeOf('juz', 1).start, end: rangeOf('juz', 5).end - 1, label: 'أول ٥ أجزاء' };
+  const r = rangeOf('juz', 30);
+  return { start: r.start, end: r.end - 1, label: 'جزء ٣٠' };
 }
+
+const tajLevel = (): SkillTier => {
+  const l = currentHistoryLevel(true);
+  return l === 'master' ? 'hafiz' : l === 'advanced' ? 'veryGood' : 'good' // trial bank has no 'beginner' items yet;
+};
 
 export default function ComprehensiveTestModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<Step>('setup');
-  const [scope, setScope] = useState<RangeScope>('juz');
+  const isAdmin = useIsAdminView();
+  const [step, setStep] = useState<Step>('scope');
+  const [scopeId, setScopeId] = useState<ScopeId>('juz');
   const [num, setNum] = useState(1);
-  const [level, setLevel] = useState<TestLevel>('beginner');
-  const [starts, setStarts] = useState<{ s: number; a: number }[]>([]);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [qIndex, setQIndex] = useState(0);
-  const [qCorrect, setQCorrect] = useState(0);
-  const [scores, setScores] = useState<Partial<Record<PartId, number>>>({});
   const [text, setText] = useState<Map<string, string> | null>(null);
-  const [history, setHistory] = useState<SavedResult[]>(() => readResults());
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [reciter, setReciter] = useState('');
+  const [count, setCount] = useState(COMP_COUNT_DEFAULT);
+  const [positions, setPositions] = useState<Done[]>([]);
+  const [cur, setCur] = useState<PickedAyah | null>(null);
+  const [showRes, setShowRes] = useState<Done | null>(null);
+  const [note, setNote] = useState('');
+  const [askSurah, setAskSurah] = useState<RoundResult | null>(null);
+  const [mut, setMut] = useState<MutQ[]>([]);
+  const [mutIdx, setMutIdx] = useState(0);
+  const [mutFilled, setMutFilled] = useState(false);
+  const [mutFrac, setMutFrac] = useState<number[]>([]);
+  const [tajQ, setTajQ] = useState<TajweedQuestion[]>([]);
+  const [tajIdx, setTajIdx] = useState(0);
+  const [tajRight, setTajRight] = useState(0);
+  const [scores, setScores] = useState<Partial<Record<PartId, number>>>({});
   const [checks, setChecks] = useState<Record<string, boolean>>({});
-  const [rabtIdx, setRabtIdx] = useState(0);
+  const [history, setHistory] = useState<SavedResult[]>(() => readResults());
+  const [saved, setSaved] = useState<SavedResult | null>(null);
+  const ctx = useRef<{ span: { start: number; end: number; label: string }; folderAt: (g: number) => string; used: Set<number>; pool: number[] } | null>(null);
 
-  useEffect(() => { loadText().then(setText); }, []);
+  useEffect(() => { loadQuranText().then(setText); }, []);
   useEscapeClose(true, onClose);
 
-  const lv = LEVELS.find((l) => l.id === level)!;
-  const part = PARTS.find((p) => p.id === (step as PartId));
+  const parts = activeParts(isAdmin);
+  const maxTotal = parts.reduce((a, p) => a + p.max, 0);
+  const reciterName = (f: string) => CORR_RECITERS.find((r) => r.folder === f)?.name ?? f;
+  const chart = useMemo(() => history.slice(-12), [history]);
 
-  function start() {
-    const { start: a, end: b } = rangeOf(scope, num);
-    const picks: { s: number; a: number }[] = [];
-    for (let i = 0; i < lv.positions; i++) {
-      const g = randomInt(a, Math.max(a, b - 2));
-      picks.push(fromGlobal(g));
+  async function begin() {
+    if (!text) { setErr('نص القرآن لسه بيتحمّل — جرّب كمان لحظة'); return; }
+    const span = scopeSpan(scopeId, num);
+    const options = recitersForRange(span.start, span.end);
+    let folderAt: (g: number) => string;
+    let chosen = '';
+    if (options.length > 0) {
+      chosen = options[randomInt(0, options.length - 1)];
+      folderAt = () => chosen;
+    } else {
+      const plan = planRangeReciters(span.start, span.end);
+      if (!plan) { setErr('ما فيش قارئ عنده توقيت كلمات للنطاق ده. اختار نطاق تاني.'); return; }
+      folderAt = (g) => plan.find((p) => g >= p.start && g <= p.end)?.folder ?? plan[0].folder;
+      chosen = plan[0].folder;
     }
-    setStarts(picks);
-    setQuestions(buildQuestions(lv.mutQuestions));
+    // W4-K: only ayat whose opening words are unique in the Quran make positions, so a
+    // small range may hold fewer than the chosen count: the test shrinks to what exists.
+    const cand = roundCandidates(span, text);
+    if (cand.list.length === 0) { setErr('النطاق ده ما فيهوش آيات مناسبة للتسميع. اختار نطاق أكبر.'); return; }
+    const n = Math.min(count, cand.list.length);
+    if (n < count) setCount(n);
+    setNote([
+      n < count ? `النطاق ده فيه ${arNum(n)} موضع مناسب بس، فالاختبار ${arNum(n)} مواضع (والدرجة برضه من ٤٠).` : '',
+      cand.tier === 'relaxed' ? 'نطاق قصير: القارئ بيسمّعك أول نصف الآية تقريباً.' : '',
+    ].filter(Boolean).join(' '));
+    ctx.current = { span, folderAt, used: new Set(), pool: surahsOfRange(span) };
+    setReciter(chosen);
+    setErr('');
+    setPositions([]);
     setScores({});
-    setQIndex(0);
-    setQCorrect(0);
-    setRabtIdx(0);
     setChecks({});
-    setStep('tasmee');
+    const mq = buildMut(MUT_QUESTIONS, span);
+    setMut(mq.list);
+    setMutFilled(mq.filled);
+    setMutIdx(0);
+    setMutFrac([]);
+    setTajQ(pickTajweedQuestions(5, tajLevel()));
+    setTajIdx(0);
+    setTajRight(0);
+    setSaved(null);
+    await nextPosition(true);
   }
 
-  function goNext(current: PartId, value?: number) {
-    const nextScores = value === undefined ? scores : { ...scores, [current]: value };
-    setScores(nextScores);
-    const idx = STEP_ORDER.indexOf(step);
-    if (idx < STEP_ORDER.length - 1) {
-      setChecks({});
-      setStep(STEP_ORDER[idx + 1]);
-    } else {
-      const zero: Record<PartId, number> = { tasmee: 0, mutashabihat: 0, rabt: 0, tajweed: 0, tilawa: 0 };
-      const merged: Record<PartId, number> = { ...zero };
-      for (const p of PARTS) merged[p.id] = nextScores[p.id] ?? 0;
-      const total = totalOf(merged);
-      const r: SavedResult = { date: new Date().toISOString(), scope, num, level, scores: merged, total };
-      saveResult(r);
-      setHistory(readResults());
-      setStep('done');
+  async function nextPosition(first = false) {
+    const c = ctx.current;
+    if (!c || !text) return;
+    setBusy(true);
+    setShowRes(null);
+    setAskSurah(null);
+    const picked = await pickRoundAyah({ start: c.span.start, end: c.span.end }, c.folderAt, text, c.used);
+    setBusy(false);
+    if (!picked) {
+      if (first || positions.length === 0) {
+        setErr('النطاق ده ما فيهوش آيات مناسبة لموضع (محتاجة توقيت كلمات للقارئ). اختار نطاق أكبر.');
+        setStep('scope');
+        return;
+      }
+      // Ran out of usable ayat before the chosen count: close with what was played
+      // (the /40 is the mean of the played positions, so it stays out of 40).
+      setCount(positions.length);
+      setScores({ tasmee: positionsFinal(positions.map((p) => p.frac)) });
+      setStep('mutashabihat');
+      return;
     }
+    setCur(picked);
+    setStep('positions');
   }
 
-  function answerQuiz(choice: number) {
-    const correct = choice === questions[qIndex].correct;
-    const nextCorrect = qCorrect + (correct ? 1 : 0);
-    if (qIndex + 1 < questions.length) {
-      setQCorrect(nextCorrect);
-      setQIndex(qIndex + 1);
-    } else {
-      // Each quiz question is worth 25 / number of questions points.
-      const pts = Math.round((nextCorrect / questions.length) * 25);
-      setQCorrect(nextCorrect);
+  // W4-J: after the recitation the position asks «في أي سورة؟» (2 of its 10); inside a
+  // single surah that question is pointless and is skipped (the ayah carries the 10).
+  function onPositionDone(result: RoundResult) {
+    if (!cur) return;
+    if (ctx.current && ctx.current.pool.length === 1) settlePosition(result, null);
+    else setAskSurah(result);
+  }
+
+  function settlePosition(result: RoundResult, surahOk: boolean | null) {
+    if (!cur) return;
+    const frac = roundFrac(result, surahOk);
+    const d: Done = { ayah: cur, result, surahOk, frac, score: positionScore(frac, count) };
+    setPositions((p) => [...p, d]);
+    setAskSurah(null);
+    setShowRes(d);
+  }
+
+  function afterPositions() {
+    if (positions.length >= count) {
+      setScores({ tasmee: positionsFinal(positions.map((p) => p.frac)) });
+      setStep('mutashabihat');
+    } else void nextPosition();
+  }
+
+  function onMutDone(res: OralResult) {
+    const q = mut[mutIdx];
+    const frac = oralFraction(res.found, q.answers.length, res.surahRight, res.hints);
+    const next = [...mutFrac, frac];
+    setMutFrac(next);
+    if (mutIdx + 1 < mut.length) setMutIdx(mutIdx + 1);
+    else {
+      const pts = Math.round((next.reduce((a, b) => a + b, 0) / mut.length) * 25);
       goNext('mutashabihat', pts);
     }
   }
 
-  const surahName = (n: number) => surahLabel(n);
-  const textOf = (s: number, a: number) => text?.get(`${s}:${a}`) ?? '';
+  function answerTajweed(choice: number) {
+    const right = tajRight + (choice === tajQ[tajIdx].correct ? 1 : 0);
+    setTajRight(right);
+    if (tajIdx + 1 < tajQ.length) setTajIdx(tajIdx + 1);
+    else goNext('tajweed', Math.round((right / tajQ.length) * partMax('tajweed')));
+  }
 
-  // Self-graded parts: user taps a points value from 0 to max.
+  function goNext(current: PartId, value: number) {
+    const nextScores = { ...scores, [current]: value };
+    setScores(nextScores);
+    const order: PartId[] = parts.map((p) => p.id).filter((id) => id !== 'tasmee');
+    const idx = order.indexOf(current);
+    setChecks({});
+    if (idx >= 0 && idx < order.length - 1) setStep(order[idx + 1] as Step);
+    else finish(nextScores);
+  }
+
+  function finish(finalScores: Partial<Record<PartId, number>>) {
+    const merged: Record<PartId, number> = { tasmee: 0, mutashabihat: 0, rabt: 0, tajweed: 0, tilawa: 0 };
+    for (const p of parts) merged[p.id] = finalScores[p.id] ?? 0;
+    const total = Math.round(totalOf(merged) * 10) / 10;
+    const span = ctx.current!.span;
+    const r: SavedResult = { date: new Date().toISOString(), scope: scopeId === 'surah' ? 'surah' : 'juz', num: scopeId === 'surah' || scopeId === 'juz' ? num : scopeId === 'juz30' ? 30 : 1, level: 'beginner', scores: merged, total, max: maxTotal, label: span.label };
+    saveResult(r);
+    setHistory(readResults());
+    setSaved(r);
+    const ear = positions[positions.length - 1]?.result.ear ?? 'manual';
+    addTestHistoryV1({
+      ts: r.date,
+      level: currentHistoryLevel(isAdmin),
+      score: Math.round((total / maxTotal) * 100),
+      correct: total,
+      attempted: maxTotal,
+      completed: true,
+      mode: 'ayah',
+      ear,
+      label: `اختبار شامل — ${span.label}`,
+      kind: 'comprehensive',
+    });
+    setStep('done');
+  }
+
+  // Self-graded part: tick what was done; the score is computed automatically.
   function selfGradeBox(id: PartId, max: number, checklist: string[]) {
-    const checkedCount = checklist.filter((c) => checks[c]).length;
-    const suggested = Math.round((checkedCount / checklist.length) * max);
+    const score = Math.round((checklist.filter((c) => checks[c]).length / checklist.length) * max);
     return (
       <div className="space-y-3">
-        {checklist.length > 0 && (
-          <div className="space-y-2">
-            {checklist.map((c) => (
-              <button key={c} onClick={() => setChecks({ ...checks, [c]: !checks[c] })}
-                className={`w-full text-right py-3 px-4 rounded-xl border ${checks[c] ? 'bg-emerald-50 border-emerald-400 text-emerald-800' : 'bg-white border-hairline-emerald text-accent-700'}`}>
-                {checks[c] ? '✓ ' : '○ '}{c}
-              </button>
-            ))}
-            <p className="text-sm text-accent-600">الدرجة: {suggested} من {max}</p>
-          </div>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {Array.from({ length: max + 1 }, (_, i) => i).filter((v) => v % Math.max(1, Math.round(max / 10)) === 0 || v === max).map((v) => (
-            <button key={v} onClick={() => goNext(id, v)}
-              className="px-3 py-2 rounded-lg bg-gray-100 text-accent-800 font-bold">{v}</button>
+        <div className="space-y-2">
+          {checklist.map((c) => (
+            <button key={c} onClick={() => setChecks({ ...checks, [c]: !checks[c] })}
+              className={`w-full text-right py-3 px-4 rounded-xl border ${checks[c] ? 'bg-emerald-50 border-emerald-400 text-emerald-800' : 'bg-white border-hairline-emerald text-accent-700'}`}>
+              {checks[c] ? '✓ ' : '○ '}{c}
+            </button>
           ))}
+          <p className="text-sm text-accent-600">الدرجة: {arNum(score)} من {arNum(max)}</p>
         </div>
-        <button onClick={() => goNext(id, suggested)}
-          className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">احفظ الدرجة ({suggested})</button>
+        <button onClick={() => goNext(id, score)} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">احفظ</button>
       </div>
     );
   }
 
-  const chart = useMemo(() => history.slice(-12), [history]);
+  const partMax = (id: PartId) => PARTS.find((p) => p.id === id)!.max;
+  const partName = (id: PartId) => PARTS.find((p) => p.id === id)!.name;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
@@ -169,130 +287,128 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
           <button onClick={onClose} className="text-accent-600 font-bold px-2">إغلاق</button>
         </div>
 
-        {step === 'setup' && (
+        {step === 'scope' && (
           <>
-            <p className="text-sm text-accent-600 mb-2">النطاق</p>
-            <div className="grid grid-cols-4 gap-2 mb-3">
-              {(Object.keys(SCOPE_LABEL) as RangeScope[]).map((k) => (
-                <button key={k} onClick={() => { setScope(k); setNum(1); }}
-                  className={`py-2 rounded-lg text-sm font-bold ${scope === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600'}`}>{SCOPE_LABEL[k]}</button>
+            <p className="font-bold text-accent-800 mb-3">أختبرك في أي نطاق؟</p>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {SCOPES.map((k) => (
+                <button key={k.id} onClick={() => { setScopeId(k.id); setNum(k.id === 'juz30' ? 30 : 1); }}
+                  className={`py-3 rounded-xl text-sm font-bold ${scopeId === k.id ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600'}`}>{k.label}</button>
               ))}
             </div>
-            <div className="mb-4">
-              <DrumPicker
-                label="اختيار النطاق"
-                value={num}
-                onChange={(n) => setNum(n)}
-                options={Array.from({ length: SCOPE_COUNT[scope] }, (_, i) => i + 1).map((n) => ({
-                  value: n,
-                  label: scope === 'surah' ? `${n} - ${surahName(n)}` : unitPickLabel(scope, n),
-                }))}
-              />
+            {(scopeId === 'surah' || scopeId === 'juz') && (
+              <div className="mb-4">
+                <DrumPicker
+                  label={scopeId === 'surah' ? 'السورة' : 'الجزء'}
+                  value={num}
+                  onChange={(n) => setNum(n)}
+                  options={Array.from({ length: scopeId === 'surah' ? 114 : 30 }, (_, i) => i + 1).map((n) => ({
+                    value: n,
+                    label: scopeId === 'surah' ? `${n} - ${surahLabel(n)}` : unitPickLabel('juz', n),
+                  }))}
+                />
+              </div>
+            )}
+            <div className="mb-3">
+              <DrumSelect label="عدد المواضع" value={count} onChange={setCount}
+                options={COMP_COUNT_OPTIONS.map((n) => ({ value: n, label: `${arNum(n)} موضع (كل موضع ${arNum(positionMax(n))} درجة)` }))} />
             </div>
-            <p className="text-sm text-accent-600 mb-2">المستوى</p>
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              {LEVELS.map((l) => (
-                <button key={l.id} onClick={() => setLevel(l.id)}
-                  className={`py-3 rounded-xl text-sm font-bold ${level === l.id ? 'grad-amber-door text-white' : 'bg-gray-100 text-accent-600'}`}>{l.name}</button>
-              ))}
-            </div>
-            <button onClick={start} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">احفظ وابدأ</button>
+            <div className="mb-3"><RangeVoiceButton allowAll={false} onRange={(r) => { if (r.scope === 'surah') { setScopeId('surah'); setNum(r.n); } else if (r.scope === 'juz') { setScopeId(r.n === 30 ? 'juz30' : 'juz'); setNum(r.n); } }} /></div>
+            <p className="text-xs text-accent-600 mb-3">التسميع من ٤٠ درجة موزّعة على المواضع اللي تختارها: القارئ بيسمّعك كلمات وانت تكمّل الآية بصوتك. بعدها المتشابهات{isAdmin ? '، التجويد' : ''} والتلاوة.</p>
+            {err && <p className="text-sm text-amber-700 mb-3">{err}</p>}
+            <button onClick={() => void begin()} disabled={busy || !text} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
 
             {history.length > 0 && (
               <div className="mt-6">
                 <p className="font-bold text-accent-800 mb-2">تطورك</p>
                 <div className="flex items-end gap-1 h-28 bg-gray-50 rounded-lg p-2">
                   {chart.map((r, i) => (
-                    <div key={i} title={`${r.total}`} className="flex-1 bg-emerald-500 rounded-t" style={{ height: `${Math.max(4, r.total)}%` }} />
+                    <div key={i} title={`${r.total}`} className="flex-1 bg-emerald-500 rounded-t" style={{ height: `${Math.max(4, (r.total / (r.max ?? 100)) * 100)}%` }} />
                   ))}
                 </div>
-                <p className="text-xs text-accent-600 mt-1">آخر {chart.length} اختبار، آخر نتيجة: {history[history.length - 1].total} من 100</p>
+                <p className="text-xs text-accent-600 mt-1">آخر {arNum(chart.length)} اختبار، آخر نتيجة: {arNum(history[history.length - 1].total)} من {arNum(history[history.length - 1].max ?? 100)}</p>
               </div>
             )}
           </>
         )}
 
-        {step === 'tasmee' && (
+        {step === 'positions' && (
           <>
-            <p className="font-bold text-accent-800 mb-1">{PARTS[0].name} — {PARTS[0].max} درجة</p>
-            <p className="text-sm text-accent-600 mb-3">ابدأ من المواضع دي، وسمّع {lv.minAyat} لـ {lv.maxAyat} آيات من كل موضع:</p>
-            <div className="space-y-2 mb-4">
-              {starts.map((p, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3 border border-emerald-100">
-                  <p className="text-sm font-bold text-accent-700">موضع {i + 1}: {surahName(p.s)} — آية {p.a}</p>
-                </div>
-              ))}
-            </div>
-            {selfGradeBox('tasmee', PARTS[0].max, starts.map((p, i) => `الموضع ${i + 1} — سمّعته صح`))}
-          </>
-        )}
-
-        {step === 'mutashabihat' && (
-          <>
-            <p className="font-bold text-accent-800 mb-1">{PARTS[1].name} — {PARTS[1].max} درجة</p>
-            <p className="text-sm text-accent-600 mb-3">سؤال {qIndex + 1} من {questions.length}: حدّد السورة والآية اللي فيها النص ده</p>
-            {questions[qIndex] && (
+            <p className="font-bold text-accent-800 mb-1">التسميع — الموضع {arNum(Math.min(count, positions.length + (showRes ? 0 : 1)))} من {arNum(count)}</p>
+            <p className="text-xs text-accent-600 mb-3">القارئ: {reciterName(reciter)} · غلطة واحدة بيصحّحها، والتانية بتقفل الموضع</p>
+            {note && <p className="text-xs text-amber-700 mb-2">{note}</p>}
+            {busy && <p className="text-center text-accent-700 font-bold py-6">بنجهّز الموضع…</p>}
+            {!busy && cur && !showRes && !askSurah && <RoundRecite key={positions.length} ayah={cur} corrections={ROUND_CORRECTIONS} onFinish={onPositionDone} />}
+            {!busy && cur && askSurah && ctx.current && (
+              <SurahTiles key={positions.length} correct={cur.surah} pool={ctx.current.pool} onAnswer={(sn) => settlePosition(askSurah, sn === cur.surah)} />
+            )}
+            {showRes && (
               <>
-                <div className="bg-gray-50 rounded-lg p-4 border border-emerald-100 mb-3">
-                  <p className="font-arabic text-xl text-accent-800 leading-loose">{questions[qIndex].clue}</p>
-                </div>
-                <div className="space-y-2">
-                  {questions[qIndex].options.map((o, i) => (
-                    <button key={i} onClick={() => answerQuiz(i)}
-                      className="w-full text-right py-3 px-4 rounded-xl bg-white border border-hairline-emerald text-accent-800 font-semibold">
-                      {surahName(o.s)} — آية {o.a}
-                    </button>
-                  ))}
-                </div>
+                <p className={`text-2xl font-bold mb-2 ${positionPerfect(showRes.result) ? 'text-emerald-700' : 'text-rose-700'}`}>{positionPerfect(showRes.result) ? '✓ صح' : '✗ غلط'}</p>
+                <RoundReveal ayah={showRes.ayah} result={showRes.result} />
+                <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}{showRes.surahOk === null ? '' : showRes.surahOk ? ' · السورة ✓' : ' · السورة ✗'}</p>
+                <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل بغلطة تانية)' : ''}</p>
+                {showRes.result.extras > 0 && <p className="text-xs text-amber-700 mb-2">طلبت «كلمتين كمان» {arNum(showRes.result.extras)} مرة — خصم {arNum(showRes.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
+                {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
+                <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">
+                  {positions.length >= count ? 'كمّل للمتشابهات' : 'الموضع التالي'}
+                </button>
               </>
             )}
-            {questions.length === 0 && <p className="text-accent-600">مفيش أسئلة متاحة الآن.</p>}
           </>
         )}
 
-        {step === 'rabt' && (
+        {step === 'mutashabihat' && mut[mutIdx] && (
           <>
-            <p className="font-bold text-accent-800 mb-1">{PARTS[2].name} — {PARTS[2].max} درجة</p>
-            <p className="text-sm text-accent-600 mb-3">اكمل الآية اللي بعد الآية دي من الحفظ، ثم قيّم نفسك:</p>
-            {starts[rabtIdx] && (
-              <div className="bg-gray-50 rounded-lg p-4 border border-emerald-100 mb-3">
-                <p className="font-arabic text-lg text-accent-800 leading-loose">{textOf(starts[rabtIdx].s, starts[rabtIdx].a) || `${surahName(starts[rabtIdx].s)} — آية ${starts[rabtIdx].a}`}</p>
-                <p className="text-sm text-accent-600 mt-2">الآية اللي بعدها: {surahName(starts[rabtIdx].s)} — آية {starts[rabtIdx].a + 1}</p>
-              </div>
-            )}
-            <div className="flex gap-2 mb-3">
-              <button onClick={() => setRabtIdx((i) => (i + 1) % starts.length)} className="flex-1 py-2 bg-gray-100 rounded-lg text-accent-700 font-bold">مكان تاني</button>
-            </div>
-            {selfGradeBox('rabt', PARTS[2].max, ['ربطت الآية الجاية بصح', 'ربطت بداية الصفحة/المقطع التالي'])}
+            <p className="font-bold text-accent-800 mb-1">{partName('mutashabihat')} — {arNum(partMax('mutashabihat'))} درجة</p>
+            <p className="text-sm text-accent-600 mb-3">سؤال {arNum(mutIdx + 1)} من {arNum(mut.length)}</p>
+            {mutFilled && mutIdx === 0 && <p className="text-xs text-amber-700 mb-2">متشابهات النطاق قليلة، فكمّلنا من باقي القرآن.</p>}
+            <MutashabihatOral key={mutIdx} clue={mut[mutIdx].clue} answers={mut[mutIdx].answers} text={text} onDone={onMutDone} />
           </>
         )}
+        {step === 'mutashabihat' && mut.length === 0 && <p className="text-accent-600">مفيش أسئلة متاحة الآن.</p>}
 
         {step === 'tajweed' && (
           <>
-            <p className="font-bold text-accent-800 mb-1">{PARTS[3].name} — {PARTS[3].max} درجة</p>
-            <p className="text-sm text-accent-600 mb-3">بنك أسئلة التجويد لسه ما اتعملش، فقيّم نفسك على الأحكام اللي استخرجتها من المقطع:</p>
-            {selfGradeBox('tajweed', PARTS[3].max, ['استخرجت أحكام المدود', 'استخرجت أحكام الغنة والإدغام والإقلاب والإخفاء', 'استخرجت أحكام التفخيم والترقيق'])}
+            <p className="font-bold text-accent-800 mb-1">{partName('tajweed')} — {arNum(partMax('tajweed'))} درجة</p>
+            <p className="text-xs text-amber-700 mb-3">للأدمن بس — بنك تجريبي، الأسئلة لسه بتتراجع من الدكتور/متخصص.</p>
+            {tajQ[tajIdx] ? (
+              <>
+                <p className="text-sm text-accent-600 mb-2">سؤال {arNum(tajIdx + 1)} من {arNum(tajQ.length)}</p>
+                <p className="font-bold text-accent-800 mb-3 leading-loose">{tajQ[tajIdx].question}</p>
+                <div className="space-y-2">
+                  {tajQ[tajIdx].options.map((o, i) => (
+                    <button key={i} onClick={() => answerTajweed(i)} className="w-full text-right py-3 px-4 rounded-xl bg-white border border-hairline-emerald text-accent-800 font-semibold">{o}</button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-accent-600 mb-3">مفيش أسئلة تجويد في البنك للمستوى ده لسه.</p>
+                <button onClick={() => goNext('tajweed', 0)} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">كمّل</button>
+              </>
+            )}
           </>
         )}
 
         {step === 'tilawa' && (
           <>
-            <p className="font-bold text-accent-800 mb-1">{PARTS[4].name} — {PARTS[4].max} درجة</p>
+            <p className="font-bold text-accent-800 mb-1">{partName('tilawa')} — {arNum(partMax('tilawa'))} درجة</p>
             <p className="text-sm text-accent-600 mb-3">اقرأ مقطع بصوتك، وبعدين قيّم نفسك. التطبيق لسه ما بيقيّم الصوت:</p>
-            {selfGradeBox('tilawa', PARTS[4].max, ['سلامة المخارج والصفات', 'تطبيق أحكام التجويد', 'حسن الوقف والابتداء'])}
+            {selfGradeBox('tilawa', partMax('tilawa'), ['سلامة المخارج والصفات', 'تطبيق أحكام التجويد', 'حسن الوقف والابتداء'])}
           </>
         )}
 
-        {step === 'done' && (
+        {step === 'done' && saved && (
           <div className="text-center">
-            <p className="text-4xl font-bold text-emerald-700 mb-2">{history[history.length - 1]?.total ?? 0}</p>
-            <p className="text-accent-600 mb-4">من 100</p>
+            <p className="text-4xl font-bold text-emerald-700 mb-2">{arNum(saved.total)}</p>
+            <p className="text-accent-600 mb-4">من {arNum(saved.max ?? maxTotal)}</p>
             <div className="space-y-1 text-right mb-4">
-              {PARTS.map((p) => (
-                <p key={p.id} className="text-sm text-accent-700">{p.name}: {scores[p.id] ?? 0} من {p.max}</p>
+              {parts.map((p) => (
+                <p key={p.id} className="text-sm text-accent-700">{p.name}: {arNum(saved.scores[p.id] ?? 0)} من {arNum(p.max)}</p>
               ))}
             </div>
-            <button onClick={() => setStep('setup')} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">اختبار جديد</button>
+            <button onClick={() => { setStep('scope'); setErr(''); }} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">اختبار جديد</button>
           </div>
         )}
       </div>

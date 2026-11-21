@@ -17,7 +17,11 @@ type Props = {
 };
 
 const TASBIH_KEY = 'quran-tasbih-v1';
-const TASBIH_PHRASES = ['سبحان الله', 'الحمد لله', 'الله أكبر', 'لا إله إلا الله', 'أستغفر الله'];
+const TASBIH_PHRASES = ['سبحان الله', 'الحمد لله', 'الله أكبر', 'لا إله إلا الله', 'أستغفر الله', 'اللهم صل على سيدنا محمد'];
+// v2: one counter per dhikr, never reset by a new day. The v1 key stays
+// readable (migrated once) and is still written so older builds keep working.
+const TASBIH_KEY_V2 = 'quran-tasbih-v2';
+type Tasbih = { phrase: number; counts: Record<string, number> };
 
 function todayKey(): string {
   const d = new Date();
@@ -44,21 +48,29 @@ function nextPrayer(day: AdhanDay): { label: string; time: string } | null {
   return fajr ? { label: 'الفجر (بكرة)', time: fajr.match(/\d{1,2}:\d{2}/)?.[0] ?? fajr } : null;
 }
 
-function readTasbih(): { day: string; phrase: number; count: number } {
-  const fresh = { day: todayKey(), phrase: 0, count: 0 };
+function readTasbih(): Tasbih {
   try {
+    const raw2 = localStorage.getItem(TASBIH_KEY_V2);
+    if (raw2) {
+      const p = JSON.parse(raw2);
+      const phrase = Number.isInteger(p.phrase) && p.phrase >= 0 && p.phrase < TASBIH_PHRASES.length ? p.phrase : 0;
+      return { phrase, counts: p.counts && typeof p.counts === 'object' ? p.counts : {} };
+    }
     const raw = localStorage.getItem(TASBIH_KEY);
-    if (!raw) return fresh;
+    if (!raw) return { phrase: 0, counts: {} };
     const p = JSON.parse(raw);
-    if (p.day !== todayKey()) return { ...fresh, phrase: p.phrase ?? 0 };
-    return { day: p.day, phrase: p.phrase ?? 0, count: p.count ?? 0 };
+    const phrase = Number.isInteger(p.phrase) && p.phrase >= 0 && p.phrase < TASBIH_PHRASES.length ? p.phrase : 0;
+    return { phrase, counts: { [phrase]: Number(p.count) || 0 } };
   } catch {
-    return fresh;
+    return { phrase: 0, counts: {} };
   }
 }
 
-function writeTasbih(v: { day: string; phrase: number; count: number }) {
-  try { localStorage.setItem(TASBIH_KEY, JSON.stringify(v)); } catch { /* ignore */ }
+function writeTasbih(v: Tasbih) {
+  try {
+    localStorage.setItem(TASBIH_KEY_V2, JSON.stringify(v));
+    localStorage.setItem(TASBIH_KEY, JSON.stringify({ day: todayKey(), phrase: v.phrase, count: v.counts[v.phrase] ?? 0 }));
+  } catch { /* ignore */ }
 }
 
 const CARD = 'w-full bg-white rounded-2xl border-2 border-emerald-200 p-5 space-y-3 text-right';
@@ -85,18 +97,19 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
   const wirdPages = wirdTotal(wird.parts);
   const wirdDone = wird.doneDays.includes(todayKey());
 
+  const current = tasbih.counts[tasbih.phrase] ?? 0;
   const tap = (p: number) => {
-    const v = { day: todayKey(), phrase: p, count: p === tasbih.phrase ? tasbih.count : 0 };
+    const v = { ...tasbih, phrase: p };
     setTasbih(v);
     writeTasbih(v);
   };
   const count = () => {
-    const v = { ...tasbih, day: todayKey(), count: tasbih.count + 1 };
+    const v = { ...tasbih, counts: { ...tasbih.counts, [tasbih.phrase]: current + 1 } };
     setTasbih(v);
     writeTasbih(v);
   };
   const resetCount = () => {
-    const v = { ...tasbih, day: todayKey(), count: 0 };
+    const v = { ...tasbih, counts: { ...tasbih.counts, [tasbih.phrase]: 0 } };
     setTasbih(v);
     writeTasbih(v);
   };
@@ -170,7 +183,7 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
         <style>{`@keyframes tasbihFlash { from { opacity: 1 } to { opacity: 0 } } @keyframes dhikrPulse { 0% { opacity: .15; transform: scale(.94) } 100% { opacity: 1; transform: scale(1) } }`}</style>
         <div className="grid grid-cols-3 items-center gap-2">
           <span />
-          <span className="text-center text-xl text-emerald-700/70">{tasbih.count.toLocaleString('ar-EG')}</span>
+          <span className="text-center text-5xl font-extrabold text-emerald-700 tabular-nums" dir="ltr">{current.toLocaleString('en-US')}</span>
           <button onClick={resetCount} className="min-h-[56px] rounded-xl border-2 text-base font-semibold text-ink">
             ابدأ من جديد
           </button>

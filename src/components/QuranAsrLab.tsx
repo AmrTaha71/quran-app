@@ -90,7 +90,7 @@ export default function QuranAsrLab() {
   return (
     <div dir="rtl" className="bg-white border-2 border-amber-300 rounded-2xl p-4 space-y-3">
       <p className="font-bold text-accent-800">التعرّف على التلاوة على جهازك</p>
-      <p className="text-xs text-accent-600">برنامج متدرب على سماع القرآن، بيشتغل على جهازك من غير إنترنت بعد أول تحميل (حوالي 100 ميجا مرة واحدة).</p>
+      <p className="text-xs text-accent-600">التعرف على التلاوة، بيشتغل على جهازك من غير إنترنت بعد أول تحميل (حوالي 100 ميجا مرة واحدة).</p>
       <label className="flex items-center gap-2 text-sm font-semibold text-accent-900 bg-emerald-50 rounded-xl p-3">
         <input type="checkbox" checked={useIt} onChange={(e) => toggleUse(e.target.checked)} className="w-5 h-5 accent-emerald-600" />
         استخدمه هو اللي يسمعني في التسميع المتصل (بدل سمع المتصفح)

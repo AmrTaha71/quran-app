@@ -591,3 +591,10 @@ export function muqattaatParseRun(window: string[]): string | null {
   }
   return best;
 }
+
+/** Display only: U+08E2 (ARABIC DISPUTED END OF AYAH) draws as an empty box on
+ *  iOS Safari (the blank-glyph web font is not applied there). One-to-one swap
+ *  for a zero-width space, so string length and every index/range stay valid. */
+export function blankMarks(text: string): string {
+  return text.replace(/\u08e2/g, '\u200b');
+}

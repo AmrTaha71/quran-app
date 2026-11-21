@@ -8,7 +8,7 @@ import {
 import { APP_URL, buildShareUrl } from '../lib/shareLinks';
 
 export default function ShareButton({
-  verseText, surahName, ayahNo, surahNo, pageNo,
+  verseText, surahName, ayahNo, surahNo, pageNo, label,
 }: {
   verseText: string;
   surahName: string;
@@ -17,6 +17,8 @@ export default function ShareButton({
   surahNo?: number;
   /** Madinah page number, when known — used only if no ayah is given. */
   pageNo?: number;
+  /** Trigger label (default «مشاركة»). */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   useEscapeClose(open, () => setOpen(false));
@@ -170,7 +172,7 @@ export default function ShareButton({
         className="flex items-center gap-2 px-6 py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus"
       >
         <Share2 className="w-6 h-6" />
-        مشاركة
+        {label ?? 'مشاركة'}
       </button>
 
       {open && createPortal(

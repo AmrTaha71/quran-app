@@ -58,11 +58,31 @@ body {
   font-size: clamp(1.02rem, 2vw + 0.6rem, 1.15rem);
 }
 
+/* B-6: U+08E2 (ARABIC DISPUTED END OF AYAH) sits after «القيّوم» in the
+   IndoPak text (ayat al-kursi) and neither Noto Naskh nor Amiri draws it,
+   so it showed as an empty box. This 572-byte inline font maps ONLY that
+   codepoint to a blank zero-width glyph (display only: the stored text,
+   word indexes, highlight ranges and matching are untouched). */
+/* KFGQPC Uthmanic Script Hafs v2.2 (King Fahd Complex) — the digital Mushaf's text font. */
+@font-face {
+  font-family: 'KFGQPC Uthmanic Hafs';
+  src: url('/fonts/uthmanic-hafs-v22.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'QuranBlankMarks';
+  src: url(data:font/woff;base64,d09GRgABAAAAAAI8AAoAAAAAAngAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAABPUy8yAAABWAAAACQAAABgSdhIJmNtYXAAAAGEAAAALQAAADQADAk1Z2x5ZgAAAbwAAAABAAAAAQAAAABoZWFkAAAA9AAAADYAAAA2LV5sgmhoZWEAAAEsAAAAFwAAACQDIf86aG10eAAAAXwAAAAGAAAABgAAAABsb2NhAAABtAAAAAYAAAAGAAAAAG1heHAAAAFEAAAAEwAAACAAAwACbmFtZQAAAcAAAABeAAAAeBnydA1wb3N0AAACIAAAABkAAAAutKE3rQABAAAAAQAAE6HLRF8PPPUAAwPoAAAAAOckFdEAAAAA5yQV0QAAAAAAAAAAAAAAAwACAAAAAAAAeJxjYGRgYFb4b8GAAIwMqIARACjTAV4AeJxjYGRgYGBigAEECwoAAJcABgB4nGNgZmBgnMDAysDCQCKwt7e3Z2DgeMTxCKcSBQYGAJNYA44AAAAAAAAAAHicJcmxEQAQFMDQh18YQM/+Y1lCyaFJLhdkFDRFeg4DIW7Xuffn6u87YHwHRgAAAAAAAAAAAAAAAAAAAHicLYkxDoAgEAQHNTE20ln6CuMD6CngB1cQCgjFGf5vJE6xs8kACzeGD4Md+zGxYpkxy4bh5Pj/xM4VukpzVVrxouWJKfcqSqCjCA1HHS54BKXwEElk+ij6Avl1En4AAHicY2BiwA+YGBgYmdhL8zINLFyNAAruAjoAAAA=) format('woff');
+  unicode-range: U+08E2;
+}
+
 .font-arabic {
   /* Amiri is the fallback when Noto Naskh Arabic is unavailable (offline
      or blocked font fetch): same Naskh style, no binary self-hosting —
      the push tool accepts text only, so no font files are bundled. */
-  font-family: 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
+  font-family: 'QuranBlankMarks', 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
   /* Ayah text: scales with the viewport instead of a fixed small size. */
   font-size: clamp(1.5rem, 4vw + 0.9rem, 2.25rem);
   line-height: 2.1;
@@ -277,7 +297,7 @@ body {
 .page-bg { background-color: var(--page-bg); background-image: var(--page-wash); }
 .app-header { background: var(--header-bg); border-bottom: 1px solid var(--polish-hairline); }
 .border-hairline { border-color: var(--polish-hairline); }
-.font-quran { font-family: "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif; font-synthesis: none; }
+.font-quran { font-family: 'QuranBlankMarks', "Amiri", "Noto Naskh Arabic", "Geeza Pro", serif; font-synthesis: none; }
 .font-display-ar { font-family: "Noto Naskh Arabic", "Amiri", "Geeza Pro", serif; }
 .font-ui { font-family: "Cairo", system-ui, -apple-system, sans-serif; }
 html { -webkit-text-size-adjust: 100%; }
@@ -718,10 +738,50 @@ html[data-device="tv"] .home-tiles { gap: 1.25rem; }
 html[data-device="tv"] .home-tile { min-height: 11rem; }
 html[data-device="tablet"] .home-tile { min-height: 9rem; }
 
-/* وضع التوفير (liteMode.ts): no motion or heavy effects, soft dim over the screen. */
-html.lite *, html.lite *::before, html.lite *::after {
+/* وضع التوفير (liteMode.ts): each effect has its own class (W3-S2), set from
+   the options on the battery page; the master `lite` class stays for old checks. */
+html.lite-motion *, html.lite-motion *::before, html.lite-motion *::after {
   animation: none !important; transition: none !important;
-  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
-  box-shadow: none !important; text-shadow: none !important; filter: none !important;
 }
-html.lite body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }
+html.lite-blur *, html.lite-blur *::before, html.lite-blur *::after {
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important; filter: none !important;
+}
+html.lite-shadows *, html.lite-shadows *::before, html.lite-shadows *::after {
+  box-shadow: none !important; text-shadow: none !important;
+}
+html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }
+
+/* W5-B (2026-11-19): mushaf word highlight. ONE variable controls the
+   colour (oil-green now, also used by the Madinah-paper reveal pop below);
+   to change it edit that one line. Clean edges, no glow, no pulse; inset
+   vertically so a box never bleeds into the next line. */
+:root {
+  --mushaf-hl-rgb: 176, 200, 168; /* 2026-11-20: oil-green (زيتي), chosen by Dr. Amr from 8 candidates on the real page */
+}
+.mushaf-hl {
+  position: absolute;
+  pointer-events: none;
+  /* flat muted-green band, no border/shadow; multiply keeps the black text crisp
+     and lets the page paper show through (reference: Madinah Mushaf app) */
+  background: rgb(var(--mushaf-hl-rgb));
+  mix-blend-mode: multiply;
+  border-radius: 5px;
+  box-shadow: none;
+  transition: background-color 120ms linear;
+}
+/* A new line's strip fades in (the band reaches the next line) instead of popping. */
+@keyframes mushaf-hl-in { from { opacity: 0; } to { opacity: 1; } }
+.mushaf-hl-in { animation: mushaf-hl-in 160ms ease-out; }
+@keyframes mushaf-reveal-pop { from { background-color: rgba(var(--mushaf-hl-rgb), 0.9); } to { background-color: rgba(var(--mushaf-hl-rgb), 0); } }
+.mushaf-reveal-pop { animation: mushaf-reveal-pop 700ms ease-out forwards; mix-blend-mode: multiply; }
+@media (prefers-reduced-motion: reduce) { .mushaf-hl { transition: none; } .mushaf-hl-in { animation: none; } }
+
+/* Landing banner: big, attention-grabbing pulse (off for reduced motion) */
+@keyframes free-banner-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+}
+.free-banner { animation: free-banner-pulse 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .free-banner { animation: none; }
+}

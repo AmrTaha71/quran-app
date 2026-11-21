@@ -29,24 +29,14 @@
 //     - Builds the shareable URL for one ayah (preferred), one page, or
 //       the bare app URL when no target is given.
 
+import { ALL_ROUTES, type Route } from './routes';
+
 export const APP_URL = 'https://rawabit-alziker-alhakim.vercel.app';
 
 export const TOTAL_MUSHAF_PAGES = 604;
 export const TOTAL_SURAHS = 114;
 
-export type AppRoute =
-  | 'home'
-  | 'admin'
-  | 'app'
-  | 'auth'
-  | 'mushaf'
-  | 'settings'
-  | 'follow'
-  | 'test'
-  | 'listen'
-  | 'adhkar'
-  | 'radio'
-  | 'room';
+export type AppRoute = Route;
 
 export interface ParsedHash {
   route: AppRoute;
@@ -64,19 +54,8 @@ export interface ParsedHash {
   raw: string;
 }
 
-const KNOWN_ROUTES: AppRoute[] = [
-  'admin',
-  'app',
-  'auth',
-  'mushaf',
-  'follow',
-  'test',
-  'settings',
-  'listen',
-  'adhkar',
-  'radio',
-  'room',
-];
+// 'home' is handled before this lookup (empty / 'home' path).
+const KNOWN_ROUTES: AppRoute[] = ALL_ROUTES.filter((r) => r !== 'home');
 
 function parsePositiveInt(value: string | null): number | undefined {
   if (value === null || value === '') return undefined;

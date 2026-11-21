@@ -12,7 +12,12 @@ export const MUSHAF_EDITIONS: MushafEdition[] = [
     id: 'madinah',
     name: 'مصحف المدينة المنورة',
     description: 'طبعة مجمع الملك فهد — الخط الأصلي',
-    imageUrl: (page: number) => `https://cdn.jsdelivr.net/gh/sufone/medina-mushaf@master/png-d150/${page}.png`,
+    // 2026-11-21: pages 1-2 (the first impression) are self-hosted WebP, same pixel
+    // size as the CDN PNG (1240x1754) so tap alignment is unchanged. ~0.5 MB vs ~1.8 MB,
+    // same origin, and prefetched from the landing page.
+    imageUrl: (page: number) => page <= 2
+      ? `/mushaf-pages/madinah/${page}.webp`
+      : `https://cdn.jsdelivr.net/gh/sufone/medina-mushaf@master/png-d150/${page}.png`,
   },
   {
     id: 'tajweed',

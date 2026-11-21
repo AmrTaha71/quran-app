@@ -17,20 +17,10 @@ import {
   unregisterSleepStopHandler,
   type SleepTimerMinutes,
 } from '../lib/sleepTimer';
+import type { Route } from '../lib/routes';
 
 const SLEEP_LABELS: Record<SleepTimerMinutes, string> = { 30: '30 دقيقة', 60: 'ساعة', 120: 'ساعتين' };
 
-type Route =
-  | 'home'
-  | 'admin'
-  | 'app'
-  | 'auth'
-  | 'mushaf'
-  | 'settings'
-  | 'follow'
-  | 'test'
-  | 'listen'
-  | 'radio';
 
 // إذاعة القرآن الكريم من القاهرة — بث مباشر. MINIMAL audio-only
 // player on the SHARED audio unit (second redirect): this page

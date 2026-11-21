@@ -2,8 +2,9 @@ import { useState, useEffect, cloneElement } from 'react';
 import { LayoutDashboard, BookOpen, Home, AudioLines, Settings } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { pressFeedback } from '../lib/pressFeedback';
+import { useBottomChromeRef } from '../lib/bottomChrome';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test';
 
 // Remember the kunya label per user so each page's nav starts with the
 // right label instead of flashing 'لوحتي'. 'quran-uid' is mirrored by App.
@@ -22,7 +23,7 @@ function cachedNavLabel(): string {
  * Bottom navigation, in logical RTL order.
  * In an RTL flex row the first DOM item is the rightmost one, so
  * الرئيسية comes first (rightmost), then لوحتي right after it, then
- * المصحف, then الحق الإمام, then الإعدادات (leftmost).
+ * المصحف, then تتبع القراءة, then الإعدادات (leftmost).
  *
  * Visual batch (2026-11-04): water-glass bar (translucent gradient +
  * blur, so page content shows through beneath it), one sliding gold
@@ -43,7 +44,7 @@ export default function BottomNav({
   current,
   onNavigate,
 }: {
-  current: 'home' | 'app' | 'mushaf' | 'settings' | 'follow' | 'test';
+  current: 'home' | 'home2' | 'app' | 'mushaf' | 'settings' | 'follow' | 'test';
   onNavigate: (r: Route) => void;
 }) {
   // The board's name is the user's kunya when they set one
@@ -64,13 +65,16 @@ export default function BottomNav({
     };
     loadLabel();
   }, []);
+  const chromeRef = useBottomChromeRef();
   const items = [
-    { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
+    // TEMPORARY (Dr. Amr 2026-11-21): both home pages are in the bar so they can be compared; nothing removed yet.
+    { id: 'home' as const, label: 'الرئيسية 1', icon: <Home className="w-7 h-7" /> },
+    { id: 'home2' as const, label: 'الرئيسية 2', icon: <Home className="w-7 h-7" /> },
     // لوحتي is a board (wird, self-test, lists, greeting), not just
     // saved items — a dashboard grid reads instantly, a bookmark does not.
     { id: 'app' as const, label: appLabel, icon: <LayoutDashboard className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
-    { id: 'follow' as const, label: 'الْحَقِ الإِمَامَ', icon: <AudioLines className="w-7 h-7" /> },
+    { id: 'follow' as const, label: 'تَتَبُّعُ القِرَاءَةِ', icon: <AudioLines className="w-7 h-7" /> },
     { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
   // Sliding pill: one tab wide (5 equal tabs). In RTL the first tab
@@ -81,6 +85,7 @@ export default function BottomNav({
   const isRtl = typeof document !== 'undefined' && document.documentElement.dir !== 'ltr';
   return (
     <nav
+      ref={chromeRef}
       aria-label="التنقل الرئيسي"
       className="fixed bottom-0 right-0 left-0 z-40 glass-nav nav-enter pb-[calc(0.5rem_+_env(safe-area-inset-bottom))]"
     >
@@ -90,6 +95,7 @@ export default function BottomNav({
             className="nav-tab-pill"
             style={{
               ...(isRtl ? { right: 0 } : { left: 0 }),
+              width: `${100 / items.length}%`,
               transform: `translateX(${(isRtl ? -1 : 1) * activeIndex * 100}%)`,
             }}
             aria-hidden="true"
@@ -110,7 +116,7 @@ export default function BottomNav({
               onClick={() => {
                 onNavigate(item.id);
               }}
-              className={`icon-action relative polish-press flex-1 flex-col py-2 text-sm ${
+              className={`icon-action relative polish-press flex-1 flex-col py-2 text-[11px] ${
                 active ? 'font-extrabold text-emerald-deep' : 'font-semibold text-ink-2 hover:bg-emerald-50/60'
               }`}
               aria-current={active ? 'page' : undefined}

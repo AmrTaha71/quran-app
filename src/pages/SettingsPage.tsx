@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info, BatteryCharging } from 'lucide-react';
 import ShareSheet from '../components/ShareSheet';
 import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
 import { MUSHAF_EDITIONS as EDITIONS } from '../lib/mushafEditions';
+import { MUSHAF_THEMES, THEME_HIGHLIGHTS, loadThemeId, saveThemeId, loadHl, saveHl, type MushafThemeId } from '../lib/mushafThemes';
 import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
 import { LANGUAGES } from '../lib/translations';
 import { loadWird, saveWird, WIRD_TYPE_LABEL, wirdTotal, formatPages, type WirdState, type WirdType } from '../lib/wird';
@@ -29,18 +30,23 @@ import { useLang } from '../lib/LanguageContext';
 import { readRecoveryLog, type RecoveryLogEntry } from '../lib/listenRecovery';
 import BottomNav from '../components/BottomNav';
 import AdhanSettingsSection from '../components/AdhanSettingsSection';
+import Collapsible from '../components/Collapsible';
+import PageHeader from '../components/PageHeader';
+import InstallGuide from '../components/InstallGuide';
 import { loadDeviceChoice } from '../lib/deviceModel';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
+import SrsReviewSettings from '../components/SrsReviewSettings';
 import DeleteAccountButton from '../components/DeleteAccountButton';
-import LiteModeButton from '../components/LiteModeButton';
+import BatterySaverSection from '../components/BatterySaverSection';
 import { DailyReportSettings } from '../components/DailyReport';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
 import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import { setBackTarget } from '../lib/backTarget';
+import { useAdminView, getAdminView } from '../lib/adminPreview';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'settings' | 'follow' | 'test' | 'listen' | 'adhkar' | 'room';
 
 const EDITION_NOTES: Record<string, string> = {
   madinah: 'الصفحات المصورة الكاملة بالخط العثماني والإطار المزخرف',
@@ -90,6 +96,21 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { const d = sessionStorage.getItem('quran-settings-door'); sessionStorage.removeItem('quran-settings-door'); return d; } catch { return null; }
   });
   const [hintsBack, setHintsBack] = useState(false);
+  // W3-S4: the tour starts only once the device is set up (the device decides
+  // layout and sizes). No device chosen yet -> open the device picker first and
+  // say so; the tour starts from the next tap. Same reopen event as before.
+  const [tourNote, setTourNote] = useState('');
+  const startTour = () => {
+    if (!loadDeviceChoice()) {
+      setTourNote('اختار جهازك الأول، وبعدها اضغط على الجولة.');
+      window.dispatchEvent(new Event('quran-open-device-picker'));
+      return;
+    }
+    setTourNote('');
+    clearOnboardingDone();
+    window.dispatchEvent(new Event(ONBOARDING_REOPEN_EVENT));
+    onNavigate('home');
+  };
   // Shared back button (2026-11-06): while a Settings door is open,
   // the shell BackButton goes back to the hub instead of الرئيسية.
   // Cleanup on close/unmount clears it, so no stale target survives.
@@ -101,6 +122,16 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setBackTarget({ label: 'عودة إلى الإعدادات', onBack: () => setOpenDoor(null) });
     return () => setBackTarget(null);
   }, [openDoor]);
+  useEffect(() => { try { window.scrollTo(0, 0); } catch { /* ignore */ } }, [openDoor]);
+  // "Digital Mushaf" (colour-changeable text page) is a choice here, not only a button inside the Mushaf.
+  const [digitalOn, setDigitalOn] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
+  const [themeId, setThemeIdState] = useState<MushafThemeId>(loadThemeId);
+  const [hlRgb, setHlRgb] = useState<string>(() => loadHl(loadThemeId()));
+  const pickDigital = () => {
+    setDigitalOn(true); setEditionIdx(0); setPreviewFailed(false);
+    try { localStorage.setItem('quran-mushaf-digital', '1'); localStorage.setItem('quran-mushaf-edition', '0'); } catch { /* ignore */ }
+    saved();
+  };
   const [editionIdx, setEditionIdx] = useState(() =>
     readStored('quran-mushaf-edition', 0, (raw) => {
       const n = Number(raw);
@@ -384,65 +415,63 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     await deleteDownloadedSurah(reciter, surah);
     refreshAudioLists();
   };
-  // Installed-app (PWA standalone) detection for the install card:
-  // standalone means no Safari chrome, no link bar, no fullscreen
-  // banner — the app already opens like a native app.
-  const [isStandalone] = useState(() => {
-    try {
-      return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    } catch { return false; }
-  });
-  // Install prompt + platform branching (2026-10-28): the old card
-  // gave Safari Share steps to EVERY non-standalone browser, which
-  // is unusable on Android. Now: capture beforeinstallprompt and
-  // offer a real install button where the browser provides one;
-  // otherwise branch the manual steps by platform (Android menu vs
-  // iOS Safari Share). iOS detection covers iPadOS 13+ (which reports
-  // MacIntel + touch) as well as iPhone/iPod.
-  const [installPrompt, setInstallPrompt] = useState<{ prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> } | null>(null);
-  const installPromptRef = useRef<typeof installPrompt>(null);
-  const [installOutcome, setInstallOutcome] = useState('');
-  const [installPlatform] = useState<'ios' | 'android' | 'other'>(() => {
-    try {
-      const ua = window.navigator.userAgent || '';
-      const isIOS = /iPad|iPhone|iPod/.test(ua) || (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
-      if (isIOS) return 'ios';
-      if (/Android/.test(ua)) return 'android';
-      return 'other';
-    } catch { return 'other'; }
-  });
-  useEffect(() => {
-    const handler = (e: Event) => {
-      // Prevent the browser's automatic mini-infobar so our own
-      // install button is the one the user taps.
-      e.preventDefault();
-      const ev = e as unknown as { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
-      installPromptRef.current = ev;
-      setInstallPrompt(ev);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-  const runInstallPrompt = async () => {
-    const ev = installPromptRef.current;
-    if (!ev) return;
-    try {
-      await ev.prompt();
-      const choice = await ev.userChoice;
-      setInstallOutcome(choice.outcome === 'accepted'
-        ? 'تم قبول التثبيت — افتح التطبيق من أيقونة الشاشة الرئيسية.'
-        : 'تم إلغاء التثبيت — تقدر تحاول تاني في أي وقت من هنا.');
-    } catch {
-      setInstallOutcome('تعذر فتح نافذة التثبيت — جرّب الخطوات اليدوية تحت.');
-    } finally {
-      installPromptRef.current = null;
-      setInstallPrompt(null);
-    }
+  // W3-S3: bulk delete (per reciter / per kind / all). Two taps: the first
+  // arms the button («تأكيد المسح»), the second deletes. The same delete
+  // functions as the per-surah buttons, just looped.
+  const [confirmClear, setConfirmClear] = useState<string | null>(null);
+  const tafsirItems = audioList.filter((e) => e.kind === 'tafsir');
+  const juhaniItems = audioList.filter((e) => e.kind === 'juhani');
+  const khatmaByReciter = Object.values(khatmaList.reduce<Record<string, { reciter: string; items: DownloadedSurah[]; bytes: number }>>((acc, e) => {
+    const g = acc[e.reciter] ?? (acc[e.reciter] = { reciter: e.reciter, items: [], bytes: 0 });
+    g.items.push(e);
+    g.bytes += e.bytes;
+    return acc;
+  }, {}));
+  const clearKhatmaReciter = async (reciter: string) => {
+    for (const e of khatmaList.filter((x) => x.reciter === reciter)) await deleteDownloadedSurah(e.reciter, e.surah);
+    refreshAudioLists();
   };
+  const clearAudioKind = async (kind: AudioDownloadKind) => {
+    for (const e of audioList.filter((x) => x.kind === kind)) await deleteAudioDownload(kind, e.surah);
+    refreshAudioLists();
+  };
+  const clearAllAudio = async () => {
+    for (const e of khatmaList) await deleteDownloadedSurah(e.reciter, e.surah);
+    for (const e of audioList) await deleteAudioDownload(e.kind, e.surah);
+    refreshAudioLists();
+  };
+  const clearButton = (id: string, label: string, action: () => Promise<void>, wide = false) =>
+    confirmClear === id ? (
+      <span className={`flex gap-2 ${wide ? 'w-full' : ''}`}>
+        <button
+          onClick={() => { setConfirmClear(null); void action(); }}
+          className={`px-4 py-2 min-h-[44px] bg-red-600 text-white font-bold rounded-xl polish-press ${wide ? 'flex-1' : ''}`}
+        >
+          تأكيد المسح
+        </button>
+        <button
+          onClick={() => setConfirmClear(null)}
+          className="px-4 py-2 min-h-[44px] bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
+        >
+          إلغاء
+        </button>
+      </span>
+    ) : (
+      <button
+        onClick={() => setConfirmClear(id)}
+        className={`px-4 py-2 min-h-[44px] bg-cream border border-red-300 text-red-700 font-semibold rounded-xl polish-press whitespace-nowrap ${wide ? 'w-full' : ''}`}
+      >
+        {label}
+      </button>
+    );
   // ADMIN ENTRY (2026-10-27): shown ONLY to users in admin_users.
   // Normal users never see this section — and BottomNav stays at
   // its final 5 items, so الإدارة lives here, not as a tab.
   const [isAdmin, setIsAdmin] = useState(false);
+  // Admin preview (W2-4): «شوف كمستخدم» hides the admin door and the
+  // diagnostics without touching the real isAdmin check above.
+  const { viewAsUser } = useAdminView();
+  const showAdminUi = isAdmin && !viewAsUser;
   // S5: same gate-retry rule as AdminPage — a transient failure must
   // surface a retry, never silently hide the admin section (which
   // looked exactly like "not an admin"). maybeSingle(): a non-admin
@@ -459,7 +488,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           if (error) { setAdminGateError(true); return; }
           // Diagnostics (stamp lines, diag door) are admin-only; the flag
           // lets SelfTest hide its debug lines for normal users.
-          try { localStorage.setItem('quran-show-diag', row ? '1' : '0'); } catch { /* storage off */ }
+          try { localStorage.setItem('quran-show-diag', row && !getAdminView().viewAsUser ? '1' : '0'); } catch { /* storage off */ }
           if (row) setIsAdmin(true);
         });
     });
@@ -483,8 +512,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   const pickEdition = (i: number) => {
     setEditionIdx(i);
+    setDigitalOn(false);
     setPreviewFailed(false);
-    try { localStorage.setItem('quran-mushaf-edition', String(i)); } catch {}
+    try { localStorage.setItem('quran-mushaf-edition', String(i)); localStorage.setItem('quran-mushaf-digital', '0'); } catch {}
     saved();
   };
   const toggleGold = () => {
@@ -561,7 +591,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const resetDefaults = async () => {
     if (!window.confirm(
       'استعادة الإعدادات الافتراضية؟\n\n' +
-      'سيُعاد: شكل الصفحة، القارئ الافتراضي، الجنس، لغة التطبيق، وأجزاء الورد اليومي.\n' +
+      'سيُعاد: المصحف المختار، القارئ الافتراضي، الجنس، لغة التطبيق، وأجزاء الورد اليومي.\n' +
       'سجل إنجاز الورد (الأيام والاستمرارية) محفوظ ولن يتغير.\n' +
       'لن يتغير: موضعك في المصحف ولا إعدادات التسميع.'
     )) return;
@@ -614,9 +644,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   // detail view, unchanged. The admin door renders only when its
   // section would (admin error or admin user), exactly as before.
   const doors = [
+    { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'wird', icon: CalendarDays, title: 'وردك اليومي', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'look', icon: Sparkles, title: 'شكل الصفحة', sub: 'نسخة المصحف', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'srs', icon: BookOpen, title: 'مراجعة الآيات الضعيفة', sub: 'كل قد إيه ترجعلك الكلمة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'look', icon: Sparkles, title: 'اختر مصحفك', sub: 'مصحف رقمي بألوانك أو مصحف مصوّر', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'adhan', icon: Bell, title: 'مواعيد الأذان', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'battery', icon: BatteryCharging, title: 'توفير البطارية', sub: 'خيارات تقلل الاستهلاك', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'device', icon: Smartphone, title: 'جهازك', sub: 'نوعه وحجمه وطريقة مسكه', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'download', icon: Download, title: 'تحميل المصحف', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -624,7 +657,6 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'onboarding', icon: Compass, title: 'جولة تعريفية', sub: 'شوف شرح التطبيق من الأول', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'reset', icon: RotateCcw, title: 'استعادة الافتراضي', sub: 'إعادة الضبط مع حفظ الإنجاز', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -646,12 +678,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     const job = audioJob?.kind === kind ? audioJob : null;
     const pickDownloaded = isAudioDownloaded(kind, pick);
     return (
-      <div className="border-t border-hairline mt-5 pt-4">
-        <p className="font-semibold text-accent-800 mb-1">{isTafsir ? 'تفسير الآيات (صوت)' : 'ملفات الجهني (حدر)'}</p>
+      <div>
+        <p className="sr-only">{isTafsir ? 'تفسير الآيات (صوت)' : 'ملفات الجهني (حدر)'}</p>
         <Hint id="set-audio-kind"><p className="text-sm text-accent-600 mb-3">
           {isTafsir
-            ? 'مقاطع تفسير الميسر — تسجيل مجمع الملك فهد، مقطع لكل آية. المقطع الواحد حوالي ٢٥٠ كيلوبايت — سورة الفاتحة حوالي ٢ ميجابايت، والبقرة حوالي ٧٠ ميجابايت.'
-            : 'ملف السورة كامل بصوت الجهني — للاستماع الحدر، ولتصحيحات التسميع (من جهازك بدل النت فتبقى أسرع). سور جزء عم (٧٨–١١٤) هي اللي التصحيح بيستخدمها دلوقتي، بس أي سورة تنفع للحدر. ملف البقرة حوالي ٩٦ ميجابايت.'}
+            ? 'تفسير الميسر بصوت مجمع الملك فهد، مقطع لكل آية. الفاتحة حوالي ٢ ميجا، والبقرة حوالي ٧٠ ميجا.'
+            : 'السورة كاملة بصوت الجهني للحدر، وتخلّي تصحيح التسميع أسرع (سور جزء عم ٧٨–١١٤). البقرة حوالي ٩٦ ميجا.'}
         </p></Hint>
         {isTafsir && !tafsirConfigured() ? (
           <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
@@ -761,28 +793,56 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   return (
     <div className="min-h-screen page-bg pb-24 route-in">
-      <header className="sticky top-0 z-40 app-header">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-5 flex flex-wrap items-center gap-3">
-          <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-xl flex items-center justify-center shadow-lg">
-            <Settings className="w-7 h-7 md:w-8 md:h-8 text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800">الإعدادات</h1>
-            <p className="text-sm md:text-base text-accent-600">اختياراتك بتتحفظ لوحدها وتبقى الافتراضي بتاعك في كل مرة تفتح التطبيق</p>
-          </div>
-          {savedTick && (
-            <span className="mr-auto flex items-center gap-1 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-hairline-emerald rounded-full px-3 py-1">
-              <Check className="w-4 h-4" /> تم الحفظ
+      {/* W3-S4: thin shared header; the tour icon sits first, at the very top. */}
+      <PageHeader
+        sticky
+        title="الإعدادات"
+        icon={Settings}
+        actions={(
+          <>
+            {savedTick && (
+              <span className="flex items-center gap-1 text-sm font-semibold text-emerald-700 bg-emerald-50 border border-hairline-emerald rounded-full px-3 py-1">
+                <Check className="w-4 h-4" /> تم الحفظ
+              </span>
+            )}
+            <button
+              type="button"
+              onPointerDown={pressFeedback}
+              onClick={startTour}
+              aria-label="الجولة التعريفية"
+              title="الجولة التعريفية"
+              className="grad-emerald-door polish-press w-11 h-11 rounded-xl flex items-center justify-center text-white"
+            >
+              <Compass className="w-6 h-6" />
+            </button>
+          </>
+        )}
+      />
+      {openDoor === null && (adminGateError || showAdminUi) && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-4">
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setOpenDoor('admin')}
+            className="polish-press w-full flex items-center gap-4 rounded-2xl p-4 sm:p-5 text-right bg-gradient-to-l from-amber-300 via-amber-400 to-amber-500 border-2 border-amber-600 shadow-lg">
+            <span className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-emerald-900 border-2 border-amber-200 flex items-center justify-center flex-shrink-0">
+              <Shield className="w-9 h-9 sm:w-11 sm:h-11 text-amber-300" />
             </span>
-          )}
+            <span className="block min-w-0">
+              <span className="block text-lg sm:text-2xl font-bold text-emerald-950">لوحة الإدارة</span>
+              <span className="block text-xs sm:text-base text-emerald-900 mt-1">للأدمن فقط</span>
+            </span>
+          </button>
         </div>
-      </header>
+      )}
+      {tourNote && (
+        <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pt-3">
+          <p className="text-sm font-semibold text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2" role="status">{tourNote}</p>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
         {openDoor === null && <TodayDatesCard />}
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => (d.id !== 'admin' || adminGateError || isAdmin) && (d.id !== 'diag' || isAdmin)).map((d, i) => (
+            {doors.filter((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi)).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
                 style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
                 className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
@@ -841,20 +901,55 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </p>
         </section>
             </>)}
+            {openDoor === 'srs' && <SrsReviewSettings />}
             {openDoor === 'look' && (<>
         {/* Page look — the section the user asked for by name */}
         <section id="sec-look" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
           <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Sparkles className="w-5 h-5 text-amber-link" /> اختر شكل الصفحة بنفسك
+            <Sparkles className="w-5 h-5 text-amber-link" /> اختر مصحفك
           </h2>
           <Hint id="set-edition"><p className="text-sm text-accent-600 mb-4">شكل صفحة المصحف اللي بتحبها وإطارها — ده اللي هيتفتح بيه المصحف كل مرة.</p></Hint>
           <div className="grid gap-3 sm:grid-cols-2">
+            <button onClick={pickDigital}
+              className={`text-right p-4 rounded-xl border-2 transition-smooth sm:col-span-2 ${digitalOn ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/50'}`}>
+              <p className="font-semibold text-accent-800 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-link" /> المصحف الرقمي بألوانك
+                {digitalOn && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
+              </p>
+              <p className="text-sm text-accent-600 mt-1">صفحة مصحف المدينة بنص رقمي هادي — بتختار لون الصفحة والتظليل اللي يريّح عينك، وأحكام التجويد ملوّنة</p>
+            </button>
+            {digitalOn && (
+              <div className="sm:col-span-2 grid grid-cols-5 gap-2">
+                {MUSHAF_THEMES.map((t) => (
+                  <button key={t.id} onClick={() => { setThemeIdState(t.id); saveThemeId(t.id); setHlRgb(loadHl(t.id)); saved(); }}
+                    className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${themeId === t.id ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
+                    <span className="w-full h-10 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
+                      <span style={{ background: `rgba(${t.hl}, 0.85)`, padding: '0 4px', borderRadius: 4 }}>أ</span>
+                    </span>
+                    <span className="text-[11px] text-accent-800 leading-tight text-center">{t.name}</span>
+                  </button>
+                ))}
+                <p className="col-span-5 text-xs font-bold text-accent-700 mt-1">لون التظليل المناسب</p>
+                {THEME_HIGHLIGHTS[themeId].map((h) => {
+                  const t = MUSHAF_THEMES.find((x) => x.id === themeId)!;
+                  return (
+                    <button key={h.id} onClick={() => { setHlRgb(h.rgb); saveHl(themeId, h.rgb); saved(); }}
+                      className={`flex flex-col items-center gap-1 rounded-xl p-1.5 ${hlRgb === h.rgb ? 'ring-2 ring-emerald-600' : 'ring-1 ring-black/10'}`}>
+                      <span className="w-full h-8 rounded-lg flex items-center justify-center text-base font-bold" style={{ background: t.bg, color: t.ink, boxShadow: `inset 0 0 0 1.5px ${t.frame}` }}>
+                        <span style={{ background: `rgba(${h.rgb}, 0.9)`, padding: '0 6px', borderRadius: 4 }}>بِسْمِ</span>
+                      </span>
+                      <span className="text-[11px] text-accent-800 leading-tight text-center">{h.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {EDITIONS.map((ed, i) => (
               <button key={ed.id} onClick={() => pickEdition(i)}
-                className={`text-right p-4 rounded-xl border-2 transition-smooth ${editionIdx === i ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/30'}`}>
+                className={`text-right p-4 rounded-xl border-2 transition-smooth ${editionIdx === i && !digitalOn ? 'border-emerald-500 bg-emerald-50' : 'border-hairline hover:border-hairline-emerald hover:bg-emerald-50/30'}`}>
                 <p className="font-semibold text-accent-800 flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-emerald-600" /> {ed.name}
-                  {editionIdx === i && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
+                  {editionIdx === i && !digitalOn && <Check className="w-5 h-5 text-emerald-600 mr-auto" />}
                 </p>
                 <p className="text-sm text-accent-600 mt-1">{EDITION_NOTES[ed.id] || ''}</p>
               </button>
@@ -865,7 +960,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               updates on every choice (edition card or gold toggle),
               so the user sees exactly what the Mushaf will open with. */}
           <div className="mt-4">
-            <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {EDITIONS[editionIdx].name}</p>
+            <p className="text-sm font-semibold text-accent-700 mb-2">معاينة: {digitalOn ? 'المصحف الرقمي' : EDITIONS[editionIdx].name}</p>
             <div className="relative mx-auto w-full max-w-[300px] rounded-2xl overflow-hidden shadow-lg bg-amber-50">
               {previewFailed ? (
                 <p className="text-sm text-accent-600 text-center py-16 px-4">تعذر تحميل المعاينة — افتح المصحف لرؤية الصفحة</p>
@@ -905,6 +1000,9 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </button>
         </section>
             </>)}
+            {openDoor === 'battery' && (<>
+        <BatterySaverSection />
+            </>)}
             {openDoor === 'device' && (<>
         <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5 space-y-3">
           <p className="text-sm text-ink-2">{(() => { const c = loadDeviceChoice(); return c ? `${c.brand} — ${c.model} — ${c.variant}` : 'لسه ما اخترتش جهازك'; })()}</p>
@@ -917,56 +1015,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         <AdhanSettingsSection />
             </>)}
             {openDoor === 'pwa' && (<>
-        {/* Part 1 — install the app itself (PWA): no Safari, no link
-            bar, no fullscreen banner. Part 2 (the pages download
-            below) is separate, so the app itself stays light. */}
-        <section id="sec-pwa" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
-          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Smartphone className="w-5 h-5 text-emerald-600" /> ثبّت التطبيق على جهازك
-          </h2>
-          {isStandalone ? (
-            <p className="text-sm text-emerald-700 font-semibold">
-              التطبيق مثبّت على جهازك ✓ — بيفتح من أيقونة الشاشة الرئيسية من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-accent-600 mb-3">
-                الخطوة الأولى قبل تحميل الصفحات: ثبّت التطبيق على الشاشة الرئيسية — كده بيشتغل زي تطبيقات الموبايل، من غير سفاري ولا لينك فوق ولا شريط ملء الشاشة.
-              </p>
-              {/* iOS PWA-orphan warning: the installed app has SEPARATE
-                  storage from Safari (fresh login, counters at 0, and
-                  any pages downloaded in Safari are NOT in the
-                  installed app). Say so before the user installs, and
-                  recommend install-first-then-download ordering. */}
-              {installPlatform === 'ios' && (
-                <p className="text-sm text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-3 leading-relaxed">
-                  تنبيه مهم قبل التثبيت على آيفون/آيباد: النسخة المثبتة لها مساحة تخزين منفصلة عن سفاري — بعد التثبيت هتحتاج تسجيل دخول من جديد، وأي صفحات حمّلتها من سفاري مش هتكون موجودة في النسخة المثبتة وهتحتاج تحميلها تاني. عشان كده: ثبّت الأول، وبعدين حمّل الصفحات من داخل التطبيق المثبت.
-                </p>
-              )}
-              {installPrompt ? (
-                <>
-                  <button onClick={runInstallPrompt}
-                    className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
-                    ثبّت التطبيق الآن
-                  </button>
-                  {installOutcome && <p className="text-sm text-accent-500 mt-2">{installOutcome}</p>}
-                </>
-              ) : installPlatform === 'android' ? (
-                <p className="text-sm text-accent-700 leading-relaxed">
-                  من متصفح كروم على جهازك: افتح قائمة المتصفح (⋮) ثم اختر «إضافة إلى الشاشة الرئيسية» أو «تثبيت التطبيق»، وبعدين افتح التطبيق من الأيقونة الجديدة.
-                </p>
-              ) : installPlatform === 'ios' ? (
-                <p className="text-sm text-accent-700 leading-relaxed">
-                  من سفاري: اضغط زر المشاركة (Share) ثم «إضافة إلى الشاشة الرئيسية» (Add to Home Screen)، وبعدين افتح التطبيق من أيقونة الشاشة الرئيسية.
-                </p>
-              ) : (
-                <p className="text-sm text-accent-700 leading-relaxed">
-                  من قائمة المتصفح اختر «تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية»، وبعدين افتح التطبيق من الأيقونة الجديدة.
-                </p>
-              )}
-            </>
-          )}
-        </section>
+        <InstallGuide />
             </>)}
             {openDoor === 'download' && (<>
         {/* Mushaf pages on the device — one-tap full download (Hafidz
@@ -1144,44 +1193,85 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <CorrRecitersPanel />
             </>)}
             {openDoor === 'audio' && (<>
-        {/* Audio downloads manager — tafsir clips + Juhani surah
-            files, per surah, Cache API; the khatma surah downloads
-            (IndexedDB) are listed here too with delete, so every
-            downloaded sound lives in one place. Nothing downloads
-            on its own: every start is a user tap on a surah, after
-            a size estimate + space preflight. Offline playback
-            needs no code change: the SW serves these URLs
-            cache-first, so the players keep asking for the same
-            URLs and get the cached file when offline. */}
-        <section id="sec-audio" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">
-          <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
-            <Headphones className="w-5 h-5 text-emerald-600" /> التنزيلات الصوتية
-          </h2>
-          <Hint id="set-audio"><p className="text-sm text-accent-600 mb-4">
-            حمّل الصوت على جهازك واسمعه من غير نت — سورة سورة، مش كله مرة واحدة. اللي تحمّله هنا بيشتغل من جهازك حتى لو النت مقطوع، واللي ما تحمّلش بيفضل يشتغل من النت زي قبل كده. مفيش حاجة بتتحمل لوحدها.
-          </p></Hint>
+        {/* Audio downloads manager (W3-S3). Top: what is on the device now,
+            with clear delete buttons per reciter / tafsir / Juhani / all.
+            Below: per-kind download cards and the per-surah list, each in a
+            Collapsible. Nothing downloads on its own: every start is a user
+            tap on a surah, after a size estimate + space preflight. Offline
+            playback needs no code change: the SW serves these URLs
+            cache-first. */}
+        <section id="sec-audio" className="space-y-3 scroll-mt-36">
           {!audioSupported ? (
             <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
-              جهازك مش بيدعم التحميل على الجهاز — الصوت هيفضل يشتغل من النت زي قبل كده.
+              جهازك مش بيدعم التحميل على الجهاز — الصوت هيفضل يشتغل من النت.
             </p>
           ) : (
             <>
-              <p className="text-sm font-semibold text-accent-700 mb-2">
-                {audioStorage === null
-                  ? 'جارٍ فحص المساحة…'
-                  : audioStorage.freeMB !== null
-                    ? `المتاح على جهازك حوالي ${audioStorage.freeMB.toFixed(0)} ميجابايت`
-                    : 'المساحة المتاحة غير معروفة على جهازك'}
-                {' • '}الصوت المحمل هنا: {formatAudioSize(audioDownloadsTotalBytes())}
-                {audioDownloadsHaveUnknownSize() ? ' (بعض الأحجام غير معروفة)' : ''}
-              </p>
-              {audioKindCard('tafsir')}
-              {audioKindCard('juhani')}
-              <div className="border-t border-hairline mt-5 pt-4">
-                <p className="font-semibold text-accent-800 mb-1">سور الختمة المحملة</p>
-                <p className="text-sm text-accent-600 mb-3">دي السور اللي حمّلتها من صفحة «استمع للقرآن» — تقدر تمسحها من هنا، والتحميل نفسه من هناك.</p>
+              <div className="glass-card rounded-2xl p-4">
+                <p className="text-sm text-accent-700 leading-relaxed">
+                  نزّل سورة تسمعها من غير نت. مفيش حاجة بتتنزّل لوحدها.
+                </p>
+                <p className="text-sm font-semibold text-accent-700 mt-2">
+                  {audioStorage === null
+                    ? 'جارٍ فحص المساحة…'
+                    : audioStorage.freeMB !== null
+                      ? `المتاح حوالي ${audioStorage.freeMB.toFixed(0)} ميجا`
+                      : 'المساحة المتاحة غير معروفة'}
+                  {' • '}المنزّل: {formatAudioSize(audioDownloadsTotalBytes() + khatmaList.reduce((a, e) => a + (e.bytes ?? 0), 0))}
+                  {audioDownloadsHaveUnknownSize() ? ' (تقريبي)' : ''}
+                </p>
+              </div>
+
+              <div className="glass-card rounded-2xl p-4">
+                <p className="font-bold text-accent-800 mb-3">المنزّل على جهازك — امسح من هنا</p>
+                {khatmaByReciter.length === 0 && !tafsirItems.length && !juhaniItems.length ? (
+                  <p className="text-sm text-accent-600">مفيش صوت منزّل.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {khatmaByReciter.map((g) => (
+                      <div key={g.reciter} className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-accent-800 truncate">قارئ: {RECITERS.find((r) => r.id === g.reciter)?.name ?? g.reciter}</p>
+                          <p className="text-sm text-accent-600">{g.items.length.toLocaleString('ar-EG')} سورة • {formatApproxSize(g.bytes)}</p>
+                        </div>
+                        {clearButton(`reciter:${g.reciter}`, 'امسح القارئ', () => clearKhatmaReciter(g.reciter))}
+                      </div>
+                    ))}
+                    {tafsirItems.length > 0 && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-accent-800">تفسير الآيات</p>
+                          <p className="text-sm text-accent-600">{tafsirItems.length.toLocaleString('ar-EG')} سورة • {formatAudioSize(tafsirItems.reduce((a, e) => a + (e.bytes ?? 0), 0))}</p>
+                        </div>
+                        {clearButton('kind:tafsir', 'امسح التفسير', () => clearAudioKind('tafsir'))}
+                      </div>
+                    )}
+                    {juhaniItems.length > 0 && (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-hairline p-3">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-accent-800">ملفات الجهني</p>
+                          <p className="text-sm text-accent-600">{juhaniItems.length.toLocaleString('ar-EG')} سورة • {formatAudioSize(juhaniItems.reduce((a, e) => a + (e.bytes ?? 0), 0))}</p>
+                        </div>
+                        {clearButton('kind:juhani', 'امسح الجهني', () => clearAudioKind('juhani'))}
+                      </div>
+                    )}
+                    <div className="pt-1">
+                      {clearButton('all', 'امسح كل الصوت المنزّل', clearAllAudio, true)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Collapsible title="تنزيل تفسير الآيات (صوت)" summary={tafsirItems.length ? `${tafsirItems.length.toLocaleString('ar-EG')} سورة` : undefined} storageKey="audio-tafsir">
+                {audioKindCard('tafsir')}
+              </Collapsible>
+              <Collapsible title="تنزيل ملفات الجهني (حدر)" summary={juhaniItems.length ? `${juhaniItems.length.toLocaleString('ar-EG')} سورة` : undefined} storageKey="audio-juhani">
+                {audioKindCard('juhani')}
+              </Collapsible>
+              <Collapsible title="سور الختمة (مسح بالسورة)" summary={khatmaList.length ? `${khatmaList.length.toLocaleString('ar-EG')} سورة` : undefined} storageKey="audio-khatma">
+                <p className="text-sm text-accent-600 mb-3">التنزيل نفسه من صفحة «استمع للقرآن».</p>
                 {khatmaList.length === 0 ? (
-                  <p className="text-sm text-accent-600">مفيش سور ختمة محملة لسه.</p>
+                  <p className="text-sm text-accent-600">مفيش سور ختمة منزّلة.</p>
                 ) : (
                   <div className="grid gap-2">
                     {khatmaList.map((e) => (
@@ -1192,7 +1282,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </div>
                         <button
                           onClick={() => void clearKhatmaDownload(e.reciter, e.surah)}
-                          className="px-4 py-2 bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
+                          className="px-4 py-2 min-h-[44px] bg-cream border border-hairline text-accent-700 font-semibold rounded-xl polish-press"
                         >
                           مسح
                         </button>
@@ -1200,14 +1290,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ))}
                   </div>
                 )}
-              </div>
-              <Hint id="set-audio-note"><p className="text-xs text-accent-600 mt-5 leading-relaxed">
-                ملحوظة: التسميع بالميكروفون نفسه بيحتاج نت — دي حدود المتصفح، مش التطبيق. اللي بيشتغل دون نت هنا هو الاستماع (الختمة والتفسير والحدر)، وملفات الجهني المحملة بتخلي تصحيحات التسميع أسرع لأنها من جهازك بدل النت.
-              </p></Hint>
-              <p className="text-xs text-accent-600 mt-2 leading-relaxed">
-                {audioStorage?.persisted === true
-                  ? 'التخزين محمي من المسح التلقائي على جهازك ✓ — والقوائم هنا هتبين الناقص لو حصل أي مسح، وتحميله تاني بيرجّعه.'
-                  : 'ملحوظة: المتصفح ممكن يمسح الصوت لو مساحة الجهاز ضاقت — ارجع هنا وحمّل اللي ناقص.'}
+              </Collapsible>
+              <p className="text-xs text-accent-600 leading-relaxed px-1">
+                التسميع بالميكروفون نفسه محتاج نت. {audioStorage?.persisted === true
+                  ? 'التخزين محمي من المسح التلقائي ✓'
+                  : 'المتصفح ممكن يمسح الصوت لو مساحة الجهاز ضاقت، ارجع هنا وحمّل الناقص.'}
               </p>
             </>
           )}
@@ -1242,7 +1329,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </div>
           {!linkGender && <p className="text-xs text-accent-600 mt-2">لم تختر بعد — التطبيق يستخدم الصوت النسائي حتى تختار.</p>}
-          <LiteModeButton className="mt-5" />
+          <button type="button" onPointerDown={pressFeedback} onClick={() => setOpenDoor('battery')}
+            className="mt-5 w-full flex items-center justify-between gap-3 p-3 rounded-xl border-2 border-hairline bg-white polish-press">
+            <span className="flex items-center gap-2 font-bold text-accent-800"><BatteryCharging className="w-5 h-5 text-emerald-600" /> توفير البطارية</span>
+            <span className="text-sm font-semibold text-emerald-700">افتح ←</span>
+          </button>
           <DailyReportSettings />
           <button
             onPointerDown={pressFeedback}
@@ -1299,11 +1390,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             جولة قصيرة من ٣ شاشات: احفظ بالتربيطات، وسـمّع لي، واستمع — وبعدها تجهيز سريع (القارئ ومستواك). تقدر تتخطاها في أي وقت.
           </p></Hint>
           <button
-            onClick={() => {
-              clearOnboardingDone();
-              window.dispatchEvent(new Event(ONBOARDING_REOPEN_EVENT));
-              onNavigate('home');
-            }}
+            onClick={startTour}
             onPointerDown={pressFeedback}
             className="w-full py-3 grad-emerald-door text-white text-base font-bold rounded-xl transition-smooth polish-press polish-focus">
             إعادة الجولة التعريفية
@@ -1355,7 +1442,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </section>
         )}
 
-        {isAdmin && (
+        {showAdminUi && (
           <section id="sec-admin" className="bg-cream rounded-2xl border border-hairline-emerald shadow-sm scroll-mt-36 p-5 md:p-6 lg:p-7">
             <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-emerald-600" /> لوحة الإدارة
@@ -1367,7 +1454,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </button>
           </section>
         )}
-              {!adminGateError && !isAdmin && (
+              {!adminGateError && !showAdminUi && (
                 <p className="text-sm text-accent-600">لا توجد صلاحية إدارة على هذا الحساب — ارجع للأبواب.</p>
               )}
             </>)}
@@ -1377,7 +1464,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           <RotateCcw className="w-5 h-5" /> {resetting ? 'جارٍ الاستعادة…' : 'استعادة الإعدادات الافتراضية'}
         </button>
         <p className="text-xs text-accent-400 leading-relaxed -mt-2">
-          يعيد: شكل الصفحة، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
+          يعيد: المصحف المختار، القارئ الافتراضي، الجنس (على الحساب كمان)، لغة التطبيق، وأجزاء الورد اليومي — مع الاحتفاظ بسجل إنجاز الورد. لا يمسّ موضعك في المصحف ولا إعدادات التسميع.
         </p>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
             </>)}

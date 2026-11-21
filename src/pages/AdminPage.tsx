@@ -1,3 +1,4 @@
+import { blankMarks } from '../lib/arabicNormalize';
 import DrumSelect from '../components/DrumSelect';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
@@ -10,14 +11,16 @@ import { TOTAL_VERSES, LINK_TYPES } from '../lib/types';
 import { formatAr } from '../lib/numerals';
 import { SURAHS } from '../lib/surahs';
 import {
-  BookOpen, LogOut, Search, Bookmark, Settings, Trash2,
+  BookOpen, LogOut, Search, Bookmark, Trash2,
   ChevronRight, ChevronLeft, Download, Filter, X,
-  Check, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic,
+  Check, Layers, RefreshCw, Volume2, Clock, AlertCircle, AudioLines, User, Users, Heart, Loader2, Mic, Menu, BarChart3, PenLine, Lightbulb, Library,
 } from 'lucide-react';
 import CircularProgressIndicator from '../components/CircularProgressIndicator';
 import LinkModal from '../components/LinkModal';
+import FarLinkPicker from '../components/FarLinkPicker';
+import { madinahPageOfAyah } from '../lib/madinahPageStarts';
+import type { Route } from '../lib/routes';
 
-type Route = 'home' | 'admin' | 'app' | 'auth' | 'mushaf' | 'follow';
 
 const PAGE_SIZE = 25;
 
@@ -48,10 +51,22 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   const [balanceDraft, setBalanceDraft] = useState('5');
   const [editingBalance, setEditingBalance] = useState(false);
   // Dashboard sub-doors (2026-11-08): one panel open at a time, all closed by default.
-  const [openPanel, setOpenPanel] = useState<'progress' | 'users' | 'openai' | null>(null);
-  const toggleFor = (p: 'progress' | 'users' | 'openai') => setOpenPanel((cur) => (cur === p ? null : p));
+  const [openPanel, setOpenPanel] = useState<'progress' | 'users' | 'openai' | 'records' | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [usageError, setUsageError] = useState('');
   const [linkModalVerse, setLinkModalVerse] = useState<QuranVerse | null>(null);
+  // Merge (any number of consecutive ayat of one surah -> ONE link) and far link (ayah <-> any other ayah).
+  const [mergeMode, setMergeMode] = useState(false);
+  const [mergeSel, setMergeSel] = useState<QuranVerse[]>([]);
+  const [linkModalGroup, setLinkModalGroup] = useState<QuranVerse[] | undefined>(undefined);
+  const [linkModalRelated, setLinkModalRelated] = useState<QuranVerse | null>(null);
+  const [farFrom, setFarFrom] = useState<QuranVerse | null>(null);
+  // usernames of suggested-link authors (admin-only RPC) + queue filter
+  const [authors, setAuthors] = useState<Record<string, string>>({});
+  const [pendingFilter, setPendingFilter] = useState<'drafts' | 'users' | 'books'>('drafts');
+  // records panel (loaded lazily when opened)
+  const [rec, setRec] = useState<null | { links: number; merged: number; far: number; versesLinked: number; pages: number; today: number; bestDay: { day: string; n: number } | null; longestMerge: number; byUsers: number; byAdmins: number }>(null);
+  const [recLoading, setRecLoading] = useState(false);
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [showLinksFor, setShowLinksFor] = useState<number | null>(null);
 
@@ -100,6 +115,13 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   useEffect(() => {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     const trimmed = search.trim();
+    // A spoken / typed surah name ("الجاثية", "سورة البقرة") jumps straight to that surah.
+    const norm = (t: string) => t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/^سور[هة]\s+/, '').replace(/^ال/, '').trim();
+    if (trimmed && !/^\d/.test(trimmed)) {
+      const q = norm(trimmed);
+      const hit = SURAHS.find((x) => norm(x.name.replace(/^سورة\s+/, '')) === q);
+      if (hit) { setSurahFilter(String(hit.no)); setSearch(''); setPage(0); return; }
+    }
     const isNumber = /^\d+$/.test(trimmed);
     const isColonFormat = /^\d+\s*[:：]\s*\d+$/.test(trimmed);
 
@@ -287,6 +309,66 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     setUserStatsError('');
   }, []);
   useEffect(() => { fetchUserStats(); }, [fetchUserStats]);
+
+  // Admin-only numbers: links, ayat linked, Mushaf pages covered, records. Loaded when the panel opens.
+  const loadRecords = useCallback(async () => {
+    setRecLoading(true);
+    try {
+      const links: { verse_id: number; group_verse_ids: number[] | null; related_verse_id: number | null; created_at: string; created_by: string | null; is_ai_draft: boolean | null; audio_url: string | null }[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('ayah_links')
+          .select('verse_id,group_verse_ids,related_verse_id,created_at,created_by,is_ai_draft,audio_url')
+          .eq('status', 'approved').order('id', { ascending: true }).range(from, from + 999);
+        if (error || !data) throw error;
+        links.push(...(data as typeof links));
+        if (data.length < 1000) break;
+      }
+      const idToAyah = new Map<number, [number, number]>();
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('quran_verses').select('id,surah_no,ayah_no').order('id', { ascending: true }).range(from, from + 999);
+        if (error || !data) throw error;
+        data.forEach((r) => idToAyah.set(r.id as number, [r.surah_no as number, r.ayah_no as number]));
+        if (data.length < 1000) break;
+      }
+      const linked = new Set<number>();
+      let merged = 0, far = 0, longest = 1;
+      const perDay: Record<string, number> = {};
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const adminSet = adminIds;
+      let byUsers = 0;
+      links.forEach((l) => {
+        linked.add(l.verse_id);
+        if (l.group_verse_ids && l.group_verse_ids.length > 1) { merged++; l.group_verse_ids.forEach((v) => linked.add(v)); longest = Math.max(longest, l.group_verse_ids.length); }
+        if (l.related_verse_id) { far++; linked.add(l.related_verse_id); }
+        const day = (l.created_at || '').slice(0, 10);
+        if (day) perDay[day] = (perDay[day] || 0) + 1;
+        if (adminSet && l.created_by && !adminSet.has(l.created_by) && !l.audio_url && !l.is_ai_draft) byUsers++;
+      });
+      const pages = new Set<number>();
+      linked.forEach((id) => { const a = idToAyah.get(id); if (a) pages.add(madinahPageOfAyah(a[0], a[1])); });
+      const best = Object.entries(perDay).sort((a, b) => b[1] - a[1])[0];
+      setRec({
+        links: links.length, merged, far, versesLinked: linked.size, pages: pages.size,
+        today: perDay[todayKey] || 0, bestDay: best ? { day: best[0], n: best[1] } : null,
+        longestMerge: longest, byUsers, byAdmins: links.length - byUsers,
+      });
+    } catch {
+      setAdminError('تعذّر تحميل الأرقام — حاول تاني.');
+    }
+    setRecLoading(false);
+  }, [adminIds]);
+  useEffect(() => { if (openPanel === 'records' && !rec && !recLoading) loadRecords(); }, [openPanel, rec, recLoading, loadRecords]);
+
+  // Usernames for the review queue (only the authors of non-admin rows).
+  useEffect(() => {
+    if (!showPending || !adminIds) return;
+    const ids = Array.from(new Set(pendingLinks.map((l) => l.created_by).filter((x): x is string => !!x && !adminIds.has(x) && !(x in authors))));
+    if (ids.length === 0) return;
+    supabase.rpc('admin_link_authors', { ids }).then(({ data, error }) => {
+      if (error || !data) return;
+      setAuthors((cur) => { const n = { ...cur }; (data as { user_id: string; username: string | null; display_name: string | null }[]).forEach((r) => { n[r.user_id] = r.username || r.display_name || 'مستخدم'; }); ids.forEach((i) => { if (!(i in n)) n[i] = 'مستخدم'; }); return n; });
+    });
+  }, [showPending, pendingLinks, adminIds, authors]);
   useEffect(() => { fetchStats(); }, [fetchStats, verses]);
 
   useEffect(() => {
@@ -384,7 +466,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     try {
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/smart-rephrase`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ''}` },
         body: JSON.stringify({ text: link.link_content, command: cmd || undefined, mode: 'rephrase' }),
       });
       if (!res.ok) throw new Error('فشل');
@@ -561,6 +643,21 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     );
   }
 
+  // A pending row is a user suggestion only when its creator is positively a non-admin AND it carries no recording
+  // (same rule as the old badge); everything else is admin work.
+  const isUserSuggestion = (l: AyahLink) => !l.is_ai_draft && !!l.created_by && adminIds !== null && !adminIds.has(l.created_by) && !l.audio_url;
+  // Three buckets, every pending row lands in exactly one: books > user suggestion > drafts (AI drafts + admin's own).
+  const bucketOf = (l: AyahLink): 'drafts' | 'users' | 'books' => (l.source === 'books' ? 'books' : isUserSuggestion(l) ? 'users' : 'drafts');
+  const bucketCount = { drafts: 0, users: 0, books: 0 };
+  pendingLinks.forEach((l) => { bucketCount[bucketOf(l)]++; });
+  const pendingList = pendingLinks.filter((l) => bucketOf(l) === pendingFilter);
+  const BUCKETS = [
+    { key: 'drafts' as const, title: 'مسودات للمراجعة', hint: 'مسودات الذكاء الاصطناعي وتسجيلاتك', Icon: PenLine, cls: 'from-violet-50 to-white border-violet-200 text-violet-800' },
+    { key: 'users' as const, title: 'تربيطات مقترحة', hint: 'اقتراحات المستخدمين', Icon: Lightbulb, cls: 'from-teal-50 to-white border-teal-200 text-teal-800' },
+    { key: 'books' as const, title: 'من كتب الأثر والتفسير', hint: 'تربيطات مأخوذة من الكتب', Icon: Library, cls: 'from-amber-50 to-white border-amber-300 text-amber-800' },
+  ];
+  const openBucket = (k: 'drafts' | 'users' | 'books') => { setPendingFilter(k); setPendingVisible(50); setShowPending(true); };
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const linkedPercentage = Math.round((stats.withLinks / TOTAL_VERSES) * 100);
   const remaining = TOTAL_VERSES - stats.withLinks;
@@ -597,20 +694,26 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {(pendingLinks.length > 0 || pendingError) && (
-              <button onClick={() => { setPendingVisible(50); setShowPending(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link bg-amber-50 hover:bg-amber-100 rounded-lg transition-smooth font-semibold border border-hairline-amber">
-                <Clock className="w-4 h-4" /> مراجعة ({pendingLinks.length})
+            <button onClick={() => { setMergeMode((m) => !m); setMergeSel([]); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-smooth font-semibold border ${mergeMode ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-hairline-emerald hover:bg-emerald-100'}`}>
+              <Layers className="w-4 h-4" /> دمج آيات
+            </button>
+            <div className="relative">
+              <button onClick={() => setMenuOpen((o) => !o)} aria-label="القائمة" aria-expanded={menuOpen}
+                className="flex items-center justify-center w-10 h-10 text-accent-700 bg-white hover:bg-gray-50 border border-hairline rounded-xl">
+                <Menu className="w-5 h-5" />
               </button>
-            )}
-            <button onClick={() => onNavigate('mushaf')}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-amber-link hover:bg-amber-50 rounded-lg transition-smooth font-semibold">
-              <BookOpen className="w-4 h-4" /> المصحف
-            </button>
-            <button onClick={() => onNavigate('app')} className="px-3 py-1.5 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">تطبيق المستخدم</button>
-            <button onClick={async () => { await signOut(); onNavigate('home'); }} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-smooth font-semibold">
-              <LogOut className="w-4 h-4" /> خروج
-            </button>
+              {menuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute left-0 top-12 z-50 w-48 bg-white border border-hairline rounded-2xl shadow-xl p-1.5 text-sm font-semibold">
+                    <button onClick={() => { setMenuOpen(false); onNavigate('mushaf'); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-right text-accent-700 hover:bg-gray-50 rounded-xl"><BookOpen className="w-4 h-4" /> المصحف</button>
+                    <button onClick={() => { setMenuOpen(false); onNavigate('app'); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-right text-accent-700 hover:bg-gray-50 rounded-xl"><Users className="w-4 h-4" /> تطبيق المستخدم</button>
+                    <button onClick={async () => { setMenuOpen(false); await signOut(); onNavigate('home'); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-right text-red-600 hover:bg-red-50 rounded-xl"><LogOut className="w-4 h-4" /> خروج</button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -628,21 +731,42 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
           </div>
         )}
-        {/* Dashboard sub-doors: small buttons, each opens its own panel */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {([
-            ['progress', 'تقدم التربيطات'],
-            ['users', 'المستخدمين'],
-            ['openai', 'رصيد OpenAI'],
-          ] as const).map(([key, label]) => (
-            <button
-              key={key}
-              onClick={() => toggleFor(key)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-smooth ${openPanel === key ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-800 border-hairline hover:bg-gray-50'}`}
-            >
-              {label} {openPanel === key ? '▴' : '▾'}
+        {/* Review: three clear lists */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          {BUCKETS.map(({ key, title, hint, Icon, cls }) => (
+            <button key={key} onClick={() => openBucket(key)}
+              className={`flex items-center gap-3 text-right rounded-2xl border bg-gradient-to-br p-4 shadow-sm hover:shadow-md transition-smooth ${cls}`}>
+              <span className="w-12 h-12 rounded-xl bg-white/80 border border-white flex items-center justify-center flex-shrink-0"><Icon className="w-6 h-6" /></span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-bold text-sm">{title}</span>
+                <span className="block text-xs opacity-70">{hint}</span>
+              </span>
+              <span className="text-2xl font-extrabold tabular-nums">{formatAr(bucketCount[key])}</span>
             </button>
           ))}
+        </div>
+
+        {/* Stats: ONE button; its four panels are tabs inside */}
+        <div className="mb-4">
+          <button onClick={() => setOpenPanel((cur) => (cur ? null : 'progress'))}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-smooth ${openPanel ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-700 border-hairline hover:bg-gray-50'}`}>
+            <BarChart3 className="w-4 h-4" /> الإحصائيات {openPanel ? '▴' : '▾'}
+          </button>
+          {openPanel && (
+            <div className="flex flex-wrap gap-1.5 mt-3 bg-white border border-hairline rounded-xl p-1 w-fit">
+              {([
+                ['progress', 'التقدم'],
+                ['users', 'المستخدمين'],
+                ['records', 'الأرقام'],
+                ['openai', 'OpenAI'],
+              ] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setOpenPanel(key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${openPanel === key ? 'bg-emerald-700 text-white' : 'text-accent-600 hover:bg-gray-100'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Dashboard — beautified */}
@@ -692,6 +816,42 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         {/* OpenAI balance monitor — estimated from app-side usage logging */}
+        {/* Numbers + records — admin only (this whole page is admin-only) */}
+        <div className={`bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm ${openPanel === 'records' ? '' : 'hidden'}`}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-accent-800">الأرقام والسجلات</h3>
+            <button onClick={() => { setRec(null); }} disabled={recLoading} className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 rounded-lg disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${recLoading ? 'animate-spin' : ''}`} /> تحديث
+            </button>
+          </div>
+          {!rec ? (
+            <div className="py-6 text-center"><Loader2 className="w-6 h-6 mx-auto animate-spin text-emerald-500" /></div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {([
+                ['عدد التربيطات', rec.links],
+                ['آيات مربوطة', rec.versesLinked],
+                ['صفحات مصحف مغطّاة', `${rec.pages} / 604`],
+                ['تربيطات اليوم', rec.today],
+                ['تربيطات مدموجة', rec.merged],
+                ['تربيطات بعيدة', rec.far],
+                ['أطول دمج (آيات)', rec.longestMerge],
+                ['اقتراحات المستخدمين المعتمدة', rec.byUsers],
+              ] as [string, number | string][]).map(([k, v]) => (
+                <div key={k} className="bg-emerald-50/60 border border-hairline-emerald rounded-xl p-3 text-center">
+                  <p className="text-xl font-bold text-emerald-800">{typeof v === 'number' ? v.toLocaleString('ar-EG') : v}</p>
+                  <p className="text-[11px] text-accent-600 mt-0.5">{k}</p>
+                </div>
+              ))}
+              {rec.bestDay && (
+                <div className="col-span-2 sm:col-span-4 bg-amber-50 border border-hairline-amber rounded-xl p-3 text-center">
+                  <p className="text-xs text-amber-800 font-semibold">رقم قياسي: أكتر يوم فيه تربيطات — {rec.bestDay.day} — <b>{rec.bestDay.n.toLocaleString('ar-EG')}</b> تربيط</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className={`bg-white rounded-2xl border border-hairline p-5 mb-4 shadow-sm ${openPanel === 'openai' ? '' : 'hidden'}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -779,31 +939,9 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 </button>
               ))}
             </div>
-            <button onClick={exportExcel} className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-smooth shadow-sm">
-              <Download className="w-4 h-4" /> تصدير
+            <button onClick={exportExcel} aria-label="تصدير إلى إكسل" title="تصدير إلى إكسل" className="flex items-center justify-center w-11 h-11 text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-smooth">
+              <Download className="w-4 h-4" />
             </button>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded border-r-4 border-emerald-400 bg-emerald-50"></div>
-              <span className="text-xs text-accent-600">آية لها تربيط</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded border-r-4 border-red-400 bg-red-50"></div>
-              <span className="text-xs text-accent-600">آية بدون تربيطات</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Bookmark className="w-3.5 h-3.5 text-blue-500" />
-              <span className="text-xs text-accent-600">سجلي المقطع يا رنا — تسجيل تربيط</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Settings className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="text-xs text-accent-600">عرض التربيطات</span>
-            </div>
           </div>
         </div>
 
@@ -836,16 +974,21 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                     <div className="flex items-start gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className="flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg">{verse.surah_no}:{verse.ayah_no}</span>
+                          {mergeMode && (
+                            <input type="checkbox" aria-label={`اختيار الآية ${verse.ayah_no} للدمج`} checked={mergeSel.some((x) => x.id === verse.id)}
+                              onChange={() => setMergeSel((cur) => cur.some((x) => x.id === verse.id) ? cur.filter((x) => x.id !== verse.id) : [...cur, verse])}
+                              className="w-6 h-6 accent-emerald-600" />
+                          )}
+                          <span className="flex flex-col items-center justify-center min-w-[3.25rem] px-2 py-1 bg-emerald-600 text-white rounded-xl leading-none shadow-sm">
+                            <span className="text-[10px] opacity-80">آية</span>
+                            <span className="text-2xl font-extrabold">{verse.ayah_no.toLocaleString('ar-EG')}</span>
+                          </span>
                           <span className="text-sm font-semibold text-accent-700">{verse.surah_name}</span>
                           <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${verse.links_count > 0 ? 'text-emerald-700 bg-emerald-50' : 'text-ink-3 bg-gray-50'}`}>
-                            <Bookmark className="w-3 h-3" /> {verse.links_count || 0} تربيط
-                          </span>
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${verse.has_links ? 'text-emerald-700 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
-                            {verse.has_links ? 'لها تربيط' : 'بدون تربيط'}
+                            <Bookmark className="w-3 h-3" /> {verse.links_count > 0 ? `${verse.links_count} تربيط` : 'بدون تربيط'}
                           </span>
                         </div>
-                        <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{verse.ayah_text}</p>
+                        <p className="font-arabic text-lg text-accent-800 leading-loose line-clamp-2">{blankMarks(verse.ayah_text)}</p>
 
                         {showLinksFor === verse.id && verseLinks.length > 0 && (
                           <div className="mt-3 space-y-1.5 animate-slide-up">
@@ -872,20 +1015,20 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         )}
                       </div>
 
-                      {/* Large save button + show links */}
-                      <div className="flex flex-col items-center gap-2 flex-shrink-0">
+                      {/* One clear action + two quiet text links */}
+                      <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0 w-32">
                         <button onClick={() => setLinkModalVerse(verse)}
-                          title="سجلي المقطع يا رنا"
-                          className="flex flex-col items-center justify-center gap-1 w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-2xl shadow-lg hover:shadow-xl transition-smooth">
-                          <Mic className="w-6 h-6" />
-                          <span className="text-xs font-semibold text-center">سجلي المقطع<br />يا رنا</span>
+                          className="flex items-center justify-center gap-2 px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow font-semibold text-sm">
+                          <Mic className="w-5 h-5" /> سجّلي تربيط
                         </button>
-                        <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
-                          title="عرض التربيطات"
-                          className={`flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-smooth ${
-                            showLinksFor === verse.id ? 'bg-emerald-500 text-white shadow-md' : 'bg-gray-50 text-accent-600 hover:bg-gray-100 border border-hairline'
-                          }`}>
-                          <Settings className="w-3.5 h-3.5" /> التربيطات
+                        {verse.links_count > 0 && (
+                          <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
+                            className={`px-2 py-1.5 text-xs font-semibold rounded-lg ${showLinksFor === verse.id ? 'bg-emerald-600 text-white' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+                            التربيطات ({verse.links_count})
+                          </button>
+                        )}
+                        <button onClick={() => setFarFrom(verse)} className="px-2 py-1.5 text-xs font-semibold rounded-lg text-amber-800 hover:bg-amber-50">
+                          ربط ببعيدة
                         </button>
                       </div>
                     </div>
@@ -921,7 +1064,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-3xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />
-                <h3 className="font-semibold text-accent-800">تربيطات بانتظار المراجعة ({pendingLinks.length})</h3>
+                <h3 className="font-semibold text-accent-800">{BUCKETS.find((b) => b.key === pendingFilter)?.title} ({pendingList.length})</h3>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => fetchPendingLinks()} disabled={pendingLoading}
@@ -944,7 +1087,15 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
                 </div>
               )}
-              {pendingLinks.length === 0 ? (
+              {(
+                <div className="flex flex-wrap gap-1.5">
+                  {(BUCKETS.map((b) => [b.key, `${b.title} (${bucketCount[b.key]})`] as const)).map(([k, label]) => (
+                    <button key={k} onClick={() => { setPendingFilter(k); setPendingVisible(50); }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold border ${pendingFilter === k ? (k === 'users' ? 'bg-teal-600 text-white border-teal-600' : 'bg-emerald-700 text-white border-emerald-700') : 'bg-white text-accent-700 border-hairline'}`}>{label}</button>
+                  ))}
+                </div>
+              )}
+              {pendingList.length === 0 ? (
                 pendingLoading || !pendingLoaded ? (
                   <div className="text-center py-12 text-accent-400">
                     <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin text-emerald-500" />
@@ -953,22 +1104,33 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 ) : (
                 <div className="text-center py-12 text-accent-400">
                   <Check className="w-10 h-10 mx-auto mb-2 text-emerald-400" />
-                  <p>لا توجد تربيطات بانتظار المراجعة</p>
+                  <p>{pendingFilter === 'books' ? 'لسه مفيش تربيطات من كتب الأثر والتفسير' : 'لا توجد تربيطات بانتظار المراجعة هنا'}</p>
                 </div>
                 )
               ) : (
                 <>
-                  {pendingLinks.slice(0, pendingVisible).map((link) => {
+                  {pendingList.slice(0, pendingVisible).map((link) => {
                   const verse = pendingVerses[link.verse_id];
+                  const fromUser = isUserSuggestion(link);
                   return (
-                    <div key={link.id} className="bg-gray-50 rounded-xl p-4 border border-hairline">
+                    <div key={link.id} className={`rounded-xl p-4 border-2 ${fromUser ? 'bg-teal-50/70 border-teal-300' : 'bg-gray-50 border-hairline'}`}>
+                      {fromUser && link.created_by && (
+                        <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-teal-800"><User className="w-3.5 h-3.5" /> من المستخدم: {authors[link.created_by] || '…'}</div>
+                      )}
+                      {link.group_verse_ids && link.group_verse_ids.length > 1 && (
+                        <div className="mb-2 text-xs font-bold text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1">تربيط مدموج: {link.group_verse_ids.length} آيات متتالية</div>
+                      )}
+                      {link.related_verse_id && (
+                        <div className="mb-2 text-xs font-bold text-amber-800 bg-amber-50 rounded-lg px-2 py-1">تربيط ببعيدة (آية رقم داخلي {link.related_verse_id})</div>
+                      )}
                       {verse && (
                         <div className="mb-2 text-xs text-accent-600">
-                          {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{verse.ayah_text?.slice(0, 80)}...</span>
+                          {verse.surah_name} — آية {verse.ayah_no}: <span className="font-arabic text-accent-600">{blankMarks(verse.ayah_text ?? '').slice(0, 80)}...</span>
                         </div>
                       )}
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">{formatTypes(link.link_types)}</span>
+                        {link.source === 'books' && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">من الكتب</span>}
                         {link.is_ai_draft && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700">مسودة ذكاء اصطناعي</span>}
                         {/* S5 (V10): "اقتراح مستخدم" ONLY when the creator is
                             positively known to be a non-admin AND the row
@@ -1100,10 +1262,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                     </div>
                   );
                   })}
-                  {pendingVisible < pendingLinks.length && (
+                  {pendingVisible < pendingList.length && (
                   <button onClick={() => setPendingVisible((v) => v + 50)}
                     className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-link text-sm font-semibold rounded-xl border border-hairline-amber">
-                    عرض المزيد ({pendingLinks.length - pendingVisible} متبقية)
+                    عرض المزيد ({pendingList.length - pendingVisible} متبقية)
                   </button>
                 )}
                 </>
@@ -1114,8 +1276,36 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       )}
 
       {linkModalVerse && (
-        <LinkModal verse={linkModalVerse} onClose={() => setLinkModalVerse(null)} onSaved={() => { setLinkModalVerse(null); fetchVerses(); fetchStats(); fetchPendingLinks(); }} />
+        <LinkModal verse={linkModalVerse} groupVerses={linkModalGroup} relatedVerse={linkModalRelated}
+          onClose={() => { setLinkModalVerse(null); setLinkModalGroup(undefined); setLinkModalRelated(null); }}
+          onSaved={() => { setLinkModalVerse(null); setLinkModalGroup(undefined); setLinkModalRelated(null); setMergeSel([]); setMergeMode(false); setRec(null); fetchVerses(); fetchStats(); fetchPendingLinks(); }} />
       )}
+      {farFrom && (
+        <FarLinkPicker from={farFrom} onClose={() => setFarFrom(null)}
+          onPick={(other) => { setLinkModalRelated(other); setLinkModalGroup(undefined); setLinkModalVerse(farFrom); setFarFrom(null); }} />
+      )}
+      {mergeMode && (() => {
+        const sel = [...mergeSel].sort((a, b) => a.id - b.id);
+        const sameSurah = sel.every((v) => v.surah_no === sel[0]?.surah_no);
+        const consecutive = sel.every((v, i) => i === 0 || v.id === sel[i - 1].id + 1);
+        const ok = sel.length >= 2 && sameSurah && consecutive;
+        return (
+          <div dir="rtl" className="fixed bottom-0 inset-x-0 z-40 bg-white border-t-2 border-emerald-500 shadow-2xl p-3 flex flex-wrap items-center gap-2 justify-between">
+            <div className="text-xs min-w-0">
+              <b className="text-emerald-800">دمج آيات في تربيط واحد</b>
+              <p className="text-accent-600">
+                {sel.length === 0 ? 'علّم على الآيات المتتالية (أي عدد) من نفس السورة' :
+                  `المختار: ${sel.map((v) => v.ayah_no).join('، ')}${!sameSurah ? ' — لازم من نفس السورة' : !consecutive ? ' — لازم متتالية بدون فراغ' : sel.length < 2 ? ' — اختار آيتين على الأقل' : ''}`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setMergeMode(false); setMergeSel([]); }} className="px-3 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-accent-700">إلغاء</button>
+              <button disabled={!ok} onClick={() => { setLinkModalGroup(sel); setLinkModalRelated(null); setLinkModalVerse(sel[0]); }}
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white disabled:opacity-40">سجّل التربيط ({sel.length})</button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

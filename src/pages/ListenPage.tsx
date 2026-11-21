@@ -1,5 +1,7 @@
+import { requestDayRecap } from '../lib/dailyStats';
 import { useEffect, useRef, useState } from 'react';
-import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio, ExternalLink as HubExternal } from 'lucide-react';
+import { closeBlackScreen, openBlackScreen, useBlackScreenOpen } from '../lib/blackScreenStore';
+import { UserRound as HubUser, Shuffle as HubShuffle, Lightbulb as HubLight, ListMusic as HubList, Radio as HubRadio } from 'lucide-react';
 import Hint from '../components/Hint';
 import TimerWheel from '../components/TimerWheel';
 import DrumSelect from '../components/DrumSelect';
@@ -27,7 +29,7 @@ import {
 } from '../lib/listenRecovery';
 import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS } from '../lib/quranBoundaries';
-import { RECITERS, DEFAULT_RECITER_ID } from '../lib/reciters';
+import { RECITERS, DEFAULT_RECITER_ID, SPEED_ORDER, SPEED_LABEL, speedOf } from '../lib/reciters';
 import { RIWAYAT, readRiwayaResume, writeRiwayaResume, clearRiwayaResume } from '../lib/riwayat';
 import type { RiwayaPosition } from '../lib/riwayat';
 import {
@@ -59,19 +61,6 @@ import type { TadabburTafsirOrder, ThreeMode, ThreeModePosition, VariedPlan } fr
 import { readVariedPlan, writeVariedPlan } from '../lib/threeModeListen';
 import { JourneyEngine as JourneyEngineClass } from '../lib/threeModePlayback';
 import type { JourneyEngine, JourneyPlayable } from '../lib/threeModePlayback';
-// Tafsir voice variety (Feature 1, 2026-11-05): natural King Fahd
-// recording (default), generated voice, or alternation by quarter.
-import {
-  TAFSIR_VOICES,
-  readTafsirVoice,
-  resolveDialogueAudio,
-  resolveTafsirAudio,
-  tafsirVoiceLabelForAyah,
-  warmDialogueAudio,
-  warmTafsirAudio,
-  writeTafsirVoice,
-} from '../lib/tafsirVoice';
-import type { TafsirVoice } from '../lib/tafsirVoice';
 import { getQuranTextCache } from '../lib/quranTextCache';
 import type { CachedTextRow } from '../lib/quranTextCache';
 import {
@@ -89,8 +78,9 @@ import {
   unregisterSleepStopHandler,
 } from '../lib/sleepTimer';
 import type { SleepTimerMinutes } from '../lib/sleepTimer';
-import { clearNowPlaying, setNowPlaying } from '../lib/nowPlaying';
+import { clearNowPlaying, setNowPlaying, getNowPlaying } from '../lib/nowPlaying';
 import { setBackTarget } from '../lib/backTarget';
+import { useBottomChromeRef } from '../lib/bottomChrome';
 import type { ListenEngine, ListenMode, ListenPosition } from '../lib/listenPlayback';
 import { ListenEngine as ListenEngineClass } from '../lib/listenPlayback';
 import {
@@ -116,17 +106,8 @@ import {
   type AudioSizeEstimate,
 } from '../lib/audioDownload';
 import { getSharedAudio, registerResume, unregisterResume, clearResumeStack, currentAudioOwner, hasWaitingResumes, releaseAudio } from '../lib/sharedAudio';
+import type { Route } from '../lib/routes';
 
-type Route =
-  | 'home'
-  | 'admin'
-  | 'app'
-  | 'auth'
-  | 'mushaf'
-  | 'settings'
-  | 'follow'
-  | 'test'
-  | 'listen';
 
 function readPersistedReciter(): string {
   try {
@@ -419,6 +400,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     if (hubView === 'single') return journeyReciterId;
     return journeyReciterId === JUHANI_RECITER_ID ? reciterId : journeyReciterId;
   };
+  // Speed class of the current journey reciter ('hadr' = Juhani); drives the speed wheel.
+  const journeySpeedClass: string = (() => {
+    const id = journeyReciterForMode();
+    if (id === JUHANI_RECITER_ID) return 'hadr';
+    const r = RECITERS.find((x) => x.id === id);
+    return r ? speedOf(r) : 'medium';
+  })();
   const journeyReciterName = (id: string): string =>
     id === JUHANI_RECITER_ID
       ? JUHANI_RECITER_NAME
@@ -428,12 +416,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // keeps the order it started with (see startJourney).
   const [tadabburTafsirOrder, setTadabburTafsirOrder] =
     useState<TadabburTafsirOrder>(readTadabburTafsirOrder);
-  // Tadabbur tafsir voice (Feature 1, 2026-11-05): persisted,
-  // default 'natural' (the King Fahd recording). Unlike the order
-  // toggle, this is a LIVE preference: the engine's resolver reads
-  // the stored setting on every clip, so a change takes effect at
-  // the next tafsir clip — including inside a resumed journey.
-  const [tafsirVoice, setTafsirVoice] = useState<TafsirVoice>(readTafsirVoice);
   const [savedJourneys, setSavedJourneys] = useState<
     Partial<Record<ThreeMode, ThreeModePosition>>
   >(() => {
@@ -471,8 +453,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   const [interrupted, setInterrupted] = useState(false);
   const [currentAyah, setCurrentAyah] = useState(1);
   const [ayahs, setAyahs] = useState<CachedTextRow[] | null>(null);
-  const [textLoading, setTextLoading] = useState(false);
-  const [textError, setTextError] = useState<string | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [offlineChecking, setOfflineChecking] = useState(false);
@@ -503,9 +483,29 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // engine, Media Session, or Wake Lock (none is used here). Exit is
   // long-press (>=1000ms) or swipe (>60px) only — never a single
   // tap, so pocket touches cannot dismiss it.
-  const [blackScreen, setBlackScreen] = useState(false);
-  const [showBlackHint, setShowBlackHint] = useState(false);
-  const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
+  // Shared with <BlackScreenOverlay /> (mounted in App) so the overlay can
+  // also cover the fullscreen Mushaf; this page keeps the wake lock + diagnostics.
+  const blackScreen = useBlackScreenOpen();
+  const setBlackScreen = (v: boolean) => { if (v) openBlackScreen(); else closeBlackScreen(); };
+  // «تقبّل الله منك» first (W4-H popup), then the screen goes black a moment later.
+  const closeScreenWithRecap = () => {
+    requestDayRecap();
+    window.setTimeout(() => setBlackScreen(true), 3500);
+  };
+  // 2026-11-19: the «قفل الشاشة» button first asks what to show while listening:
+  // a fullscreen Mushaf (audio + the highlight following it) or the black screen.
+  const [showScreenChoice, setShowScreenChoice] = useState(false);
+  const openMushafWhileListening = (at?: { surah: number; ayah: number }) => {
+    setShowScreenChoice(false);
+    try {
+      const np = getNowPlaying();
+      const ayah = at ? at.ayah : np ? np.ayah : currentAyahRef.current;
+      const sr = at ? at.surah : np ? np.surah : surah;
+      localStorage.setItem('quran-mushaf-target', JSON.stringify({ surah: sr, ayah }));
+      localStorage.setItem('quran-mushaf-from-listen', '1');
+    } catch { /* ignore */ }
+    onNavigate('mushaf');
+  };
 
   const engineRef = useRef<ListenEngine | null>(null);
   const riwayaEngineRef = useRef<RiwayaEngine | null>(null);
@@ -523,6 +523,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // Route visibility: App keeps this page mounted while hidden so
   // audio can resume across routes (anywhere-resume). Mirrored in
   // a ref for the mount effect (which runs once).
+  const bottomChromeRef = useBottomChromeRef();
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
   // [LISTEN_RECOVERY] diagnostics: live overlay state for the hide log
@@ -643,14 +644,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     setCurrentAyah(ayah);
   };
 
-  // Faint exit hint: shows when the overlay opens, hides itself.
-  useEffect(() => {
-    if (!blackScreen) return;
-    setShowBlackHint(true);
-    const timer = setTimeout(() => setShowBlackHint(false), 4000);
-    return () => clearTimeout(timer);
-  }, [blackScreen]);
-
   // Sleep timer (#10): register the page's stop handler once, and
   // subscribe to the shared timer so the countdown re-renders on
   // every 1s tick (and clears when the timer fires or is
@@ -705,23 +698,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     }
     return () => clearNowPlaying();
   }, [active, journeyMode, journeyItem, hadrOn, riwayaId, surah, currentAyah]);
-
-  const blackPressStart = (x: number, y: number) => {
-    blackPressRef.current = { t: Date.now(), x, y };
-  };
-  const blackPressMove = (x: number, y: number) => {
-    const p = blackPressRef.current;
-    if (!p) return;
-    if (Math.hypot(x - p.x, y - p.y) > 60) {
-      blackPressRef.current = null;
-      setBlackScreen(false);
-    }
-  };
-  const blackPressEnd = () => {
-    const p = blackPressRef.current;
-    blackPressRef.current = null;
-    if (p && Date.now() - p.t >= 1000) setBlackScreen(false);
-  };
 
   // Black-screen wake lock (2026-10-30 report: the screen went off
   // mid-listen). While the black overlay is open AND audio plays,
@@ -1133,22 +1109,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             ? (fromSaved.tafsirOrder ?? 'after')
             : tadabburTafsirOrder
           : undefined,
-      // Tafsir voice (Feature 1): the resolver reads the live
-      // setting per clip (natural / generated / alternate by
-      // quarter) and falls back to the natural recording on any
-      // failure; the warmer prefetches generated audio while the
-      // quarter plays. Dialogue mode ('حوار التفسير') plays each
-      // tafsir clip as a 3-part sequence — generated male host,
-      // natural recording as guest, generated female host — via
-      // the dialogue resolver/warmer below; any dialogue failure
-      // plays the natural clip alone. All are no-ops outside
-      // tadabbur (the engine only calls them for tafsir items /
-      // tadabbur ayahs).
-      resolveTafsirUrl: (s, a) => resolveTafsirAudio(s, a),
-      warmTafsirAudio: (s, a) => warmTafsirAudio(s, a),
-      resolveDialogueAudio: (s, a) => resolveDialogueAudio(s, a),
-      warmDialogueAudio: (s, a) => warmDialogueAudio(s, a),
-      isDialogueTafsir: () => readTafsirVoice() === 'dialogue',
+      // Tafsir = the King Fahd recordings only (W5-H, 2026-11-19):
+      // no generated/alternate/dialogue voice; the engine plays the
+      // natural clips and joins an interstitial's clips gaplessly.
       startItem: fromSaved
         ? { kind: fromSaved.kind, surah: fromSaved.surah, ayah: fromSaved.ayah }
         : undefined,
@@ -1207,6 +1170,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     try {
       await engine.play();
       setPlaying(true);
+      // 2026-11-21 (Dr. Amr): a khatma is either read from the screen or listened to with the
+      // screen off. So as soon as it plays, open the fullscreen Mushaf that follows the audio;
+      // its «قفل الشاشة» pill (bottom) turns the screen black to save battery.
+      const np = getNowPlaying();
+      openMushafWhileListening(np
+        ? { surah: np.surah, ayah: np.ayah }
+        : { surah: fromSaved && fromSaved.kind === 'ayah' ? fromSaved.surah : startSurah, ayah: fromSaved && fromSaved.kind === 'ayah' ? fromSaved.ayah : 1 });
     } catch {
       setEngineError('تعذر تشغيل الصوت — تحقق من الاتصال وحاول مجددا.');
       setPlaying(false);
@@ -1973,19 +1943,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       // read-along either (the text block hides, same as riwaya).
       if (riwayaId !== null || hadrOn) {
         setAyahs(null);
-        setTextLoading(false);
-        setTextError(null);
         return;
       }
-      setTextLoading(true);
-      setTextError(null);
       const expected = surahCount(surah);
       try {
         const cached = await getQuranTextCache().getSurah(surah, expected);
         if (cancelled) return;
         if (cached) {
           setAyahs(cached);
-          setTextLoading(false);
           return;
         }
         const { data, error } = await supabase
@@ -1996,7 +1961,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         if (cancelled) return;
         if (error || !data || data.length !== expected) {
           setAyahs(null);
-          setTextError('تعذر تحميل نص السورة — تحقق من الاتصال وحاول مجددا.');
         } else {
           setAyahs(data as CachedTextRow[]);
           void getQuranTextCache().putRows(data);
@@ -2004,10 +1968,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
       } catch {
         if (!cancelled) {
           setAyahs(null);
-          setTextError('تعذر تحميل نص السورة — تحقق من الاتصال وحاول مجددا.');
         }
-      } finally {
-        if (!cancelled) setTextLoading(false);
       }
     };
     void loadText();
@@ -2389,7 +2350,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           Fixed to the bottom of the screen so the user never has to scroll back
           to the top to stop or lock while the page follows the ayah. */}
       {(playing || journeyMode !== null) && (
-        <div className="fixed bottom-0 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-white/95 backdrop-blur border-t border-hairline-emerald shadow-2xl">
+        <div ref={bottomChromeRef} className="fixed bottom-0 inset-x-0 z-50 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-white/95 backdrop-blur border-t border-hairline-emerald shadow-2xl">
           <div className="max-w-5xl mx-auto grid grid-cols-2 gap-3">
             <button
               onClick={stopPlayback}
@@ -2398,7 +2359,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <Square className="w-6 h-6" /> إيقاف
             </button>
             <button
-              onClick={() => setBlackScreen(true)}
+              onClick={() => setShowScreenChoice(true)}
               className="py-4 bg-stone-800 hover:bg-stone-900 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press"
             >
               <Moon className="w-6 h-6" /> قفل الشاشة
@@ -2565,34 +2526,16 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">استمع لأي سورة بصوت أي قارئ — مع القراءة. اختر السورة والقارئ والسرعة بالداخل.</span></Hint>
               </span></span>
             </button>
-            <button
-              disabled={locked}
-              onClick={() => {
-                // Quran radio: every reciter, random order, shown in the
-                // varied panel so the user starts it there (same engine).
-                writeVariedPlan({ kind: 'random', ids: RECITERS.map((r) => r.id), seed: Math.floor(Math.random() * 1e6) + 1 });
-                setHadrOn(false);
-                setHadrSelected(false);
-                changeRiwaya(null);
-                setHubView('varied');
-              }}
-              className="w-full p-5 rounded-2xl font-semibold text-right grad-amber-door glass-door-highlight text-white disabled:opacity-50 shadow-sm polish-listen-card polish-hub-item"
-            >
-              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true"><HubRadio className="w-6 h-6" /></span><span className="flex-1 min-w-0">
-              <span className="block text-lg">إذاعة التطبيق</span>
-              <Hint id="listen-free"><span className="block text-sm font-normal text-amber-100 mt-1">تلاوات متواصلة من كل القراء بترتيب عشوائي. اضغط ابدأ بالداخل.</span></Hint>
-              </span></span>
-            </button>
             <a
               href="https://makkahlive.net/en/radio/quran-cairo"
               target="_blank"
               rel="noopener noreferrer"
-              className="block w-full p-5 rounded-2xl font-semibold text-right bg-white border border-hairline-emerald text-accent-800 shadow-sm polish-hub-item"
+              className="block w-full p-5 rounded-2xl font-semibold text-right grad-emerald-door glass-door-highlight text-white shadow-sm polish-listen-card polish-hub-item"
             >
-              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-emerald-50 shrink-0" aria-hidden="true"><HubExternal className="w-6 h-6 text-emerald-700" /></span><span className="flex-1 min-w-0">
+              <span className="flex items-start gap-3"><span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/20 shrink-0" aria-hidden="true"><HubRadio className="w-6 h-6" /></span><span className="flex-1 min-w-0">
               <span className="block text-lg">إذاعة القرآن الكريم</span>
-              <span className="block text-sm font-normal text-accent-800 mt-1">من القاهرة</span>
-              <span className="block text-sm font-normal text-accent-600 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
+              <span className="block text-sm font-normal text-emerald-100 mt-1">من القاهرة</span>
+              <span className="block text-sm font-normal text-emerald-100 mt-1">بث مباشر على موقع خارجي، يفتح في تبويب جديد.</span>
               </span></span>
             </a>
           </div>
@@ -2639,32 +2582,10 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             </span>
           </button>
 
-          {riwayaId === null && !hadrOn && (
-            <>
-          <p className="font-semibold text-accent-800 mt-5 mb-2">القراء للاختيار بينهم</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {RECITERS.map((r) => (
-              <button
-                key={r.id}
-                disabled={locked}
-                onClick={() => changeReciter(r.id)}
-                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
-                  reciterId === r.id
-                    ? 'grad-emerald-door text-white polish-press'
-                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
-                }`}
-              >
-                {r.name}
-              </button>
-            ))}
-          </div>
-            </>
-          )}
-
           {/* Group 2 — الروايات, as clear rows (not wrapping
               chips): each row shows riwaya + narrator, and the
               selected row is unmistakable (emerald + check). */}
-          <p className="font-semibold text-accent-800 mt-5 mb-2">الروايات</p>
+          <p className="font-semibold text-accent-800 mt-5 mb-2">الرواية (حفص أو غيرها)</p>
           <div className="grid gap-2">
             {RIWAYAT.map((r) => (
               <button
@@ -2686,38 +2607,37 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             وضع الرواية: استماع بملف السورة كاملًا — دون تتبع للآيات، لأن نص الآيات يختلف بين الروايات، ودون تحميل دون اتصال في هذه النسخة (أما صوت الحدر — الجهني — فملف سورته قابل للتحميل من قسم «الاستماع دون اتصال» تحت).
           </p>
 
-          {/* Pace area: electronic speed chips (persisted) +
-              the hadr card. The chips apply to the Hafs, riwaya,
-              and journey engines; hadr disables them (its pace is
-              natural, never electronic) and always plays at 1x.
-              Read-along highlight stays on at every speed: it
-              follows ayah files via 'ended' events, not a clock,
-              so speed cannot desync it (no timers in the ayah
-              advance path — verified by grep, see EVIDENCE.md). */}
-          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
-          <div className="grid grid-cols-3 gap-2">
-            {PLAYBACK_RATES.map((rate) => (
-              <button
-                key={rate}
-                disabled={locked || hadrOn}
-                onClick={() => changeRate(rate)}
-                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
-                  playbackRate === rate
-                    ? 'grad-emerald-door text-white polish-press'
-                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
-                }`}
-              >
-                {PLAYBACK_RATE_LABELS[rate]}
-              </button>
-            ))}
-          </div>
-          <p className="text-sm text-accent-600 mt-2">
-            سرعة إلكترونية — اختيارك يُحفظ لمراتك القادمة.
-          </p>
-          {hadrOn && (
-            <p className="text-sm text-accent-600 mt-1">
-              السرعة الإلكترونية لا تنطبق على وضع الحدر — سرعته طبيعية من التسجيل نفسه.
-            </p>
+          {riwayaId === null && !hadrOn && (
+            <>
+          {/* Speed -> reciter (hafs): groups by measured pace, each reciter shows its audio quality. */}
+          <p className="font-semibold text-accent-800 mt-5 mb-2">السرعة ثم القارئ</p>
+          {SPEED_ORDER.map((sp) => {
+            const group = RECITERS.filter((r) => speedOf(r) === sp);
+            if (group.length === 0) return null;
+            return (
+              <div key={sp} className="mb-3">
+                <p className="text-sm font-semibold text-accent-600 mb-1.5">{SPEED_LABEL[sp]}</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {group.map((r) => (
+                    <button
+                      key={r.id}
+                      disabled={locked}
+                      onClick={() => changeReciter(r.id)}
+                      className={`w-full px-3 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
+                        reciterId === r.id
+                          ? 'grad-emerald-door text-white polish-press'
+                          : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
+                      }`}
+                    >
+                      {r.name}
+                      <span className={`block text-xs font-normal mt-0.5 ${reciterId === r.id ? 'text-emerald-100' : 'text-accent-600'}`}>{r.quality}k{r.unverified ? ' · تجريبي' : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+            </>
           )}
 
           {/* Hadr: natural fast pace, surah-file playback (no
@@ -2784,6 +2704,40 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             </p>
           )}
 
+          {/* Pace area (LAST picker, right above ابدأ الاستماع, Dr. Amr 2026-11-21): electronic speed chips (persisted) +
+              the hadr card. The chips apply to the Hafs, riwaya,
+              and journey engines; hadr disables them (its pace is
+              natural, never electronic) and always plays at 1x.
+              Read-along highlight stays on at every speed: it
+              follows ayah files via 'ended' events, not a clock,
+              so speed cannot desync it (no timers in the ayah
+              advance path — verified by grep, see EVIDENCE.md). */}
+          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
+          <div className="grid grid-cols-3 gap-2">
+            {PLAYBACK_RATES.map((rate) => (
+              <button
+                key={rate}
+                disabled={locked || hadrOn}
+                onClick={() => changeRate(rate)}
+                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
+                  playbackRate === rate
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
+                }`}
+              >
+                {PLAYBACK_RATE_LABELS[rate]}
+              </button>
+            ))}
+          </div>
+          <p className="text-sm text-accent-600 mt-2">
+            سرعة إلكترونية — اختيارك يُحفظ لمراتك القادمة.
+          </p>
+          {hadrOn && (
+            <p className="text-sm text-accent-600 mt-1">
+              السرعة الإلكترونية لا تنطبق على وضع الحدر — سرعته طبيعية من التسجيل نفسه.
+            </p>
+          )}
+
           {!active && (
             <button
               onClick={() =>
@@ -2837,7 +2791,30 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 options={SURAHS.map((x) => ({ value: x.no, label: `${x.no} — ${x.name}` }))}
               />
             </div>
+            {/* Speed wheel FIRST (Dr. Amr 2026-11-21): سريعة / متوسطة / بطيئة / حدر.
+                The reciter wheel below then lists only that speed's reciters.
+                حدر = الجهني (single khatma only). */}
             <div>
+              <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-speed">
+                سرعة القراءة
+              </label>
+              <DrumSelect
+                id="journey-speed"
+                label="سرعة القراءة"
+                value={journeySpeedClass}
+                disabled={locked}
+                onChange={(sp) => {
+                  if (sp === 'hadr') { changeJourneyReciter(JUHANI_RECITER_ID); return; }
+                  const first = RECITERS.find((r) => speedOf(r) === sp);
+                  if (first) changeJourneyReciter(first.id);
+                }}
+                options={[
+                  ...SPEED_ORDER.filter((sp) => RECITERS.some((r) => speedOf(r) === sp)).map((sp) => ({ value: sp as string, label: SPEED_LABEL[sp] })),
+                  ...(hubView === 'single' ? [{ value: 'hadr', label: 'حدر' }] : []),
+                ]}
+              />
+            </div>
+            <div className="col-span-2">
               <label className="block font-medium text-accent-800 mb-2" htmlFor="journey-reciter">
                 قارئ البداية
               </label>
@@ -2847,10 +2824,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
                 value={journeyReciterForMode()}
                 disabled={locked}
                 onChange={changeJourneyReciter}
-                options={[
-                  ...RECITERS.map((r) => ({ value: r.id as string, label: r.name })),
-                  ...(hubView === 'single' ? [{ value: JUHANI_RECITER_ID as string, label: JUHANI_RECITER_NAME }] : []),
-                ]}
+                options={journeySpeedClass === 'hadr'
+                  ? [{ value: JUHANI_RECITER_ID as string, label: JUHANI_RECITER_NAME }]
+                  : RECITERS.filter((r) => speedOf(r) === journeySpeedClass).map((r) => ({ value: r.id as string, label: `${r.name} · ${r.quality}k${r.unverified ? ' · تجريبي' : ''}` }))}
               />
               {hubView === 'single' && journeyReciterForMode() === JUHANI_RECITER_ID && (
                 <p className="text-xs text-accent-600 mt-2">
@@ -2902,43 +2878,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </p>
             </div>
           )}
-          {/* Tadabbur tafsir voice (Feature 1, 2026-11-05): the
-              King Fahd recording is the default; the generated voice
-              matches the user's gender and each clip is generated
-              once and cached for everyone; 'alternate' flips by
-              quarter; 'حوار التفسير' plays each clip as a dialogue
-              — generated male host, the recording as guest,
-              generated female host. A change applies at the next
-              tafsir clip, and any generation failure plays the
-              natural recording instead — never silence. */}
-          {hubView === 'tadabbur' && (
-            <div className="mt-4">
-              <p className="font-semibold text-accent-800 mb-2">صوت التفسير</p>
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="صوت التفسير">
-                {TAFSIR_VOICES.map((v) => (
-                  <button
-                    key={v.id}
-                    disabled={locked}
-                    onClick={() => {
-                      setTafsirVoice(v.id);
-                      writeTafsirVoice(v.id);
-                    }}
-                    className={`py-3 px-2 font-semibold rounded-xl disabled:opacity-50 ${
-                      tafsirVoice === v.id
-                        ? 'grad-emerald-door text-white polish-press'
-                        : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
-                    }`}
-                  >
-                    {v.name}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-accent-600 mt-2">
-                {TAFSIR_VOICES.find((v) => v.id === tafsirVoice)?.description}
-                {' '}يسري التغيير من وقفة التفسير التالية.
-              </p>
-            </div>
-          )}
           {/* Explicit start control: the mode card below also starts
               playback on tap, but it reads as an info card (same
               name as the hub card just tapped), so first-time
@@ -2947,6 +2886,26 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           {hubView === 'varied' && (
             <VariedPlanPanel />
           )}
+          {/* B-14: electronic speed chips for the khatma journeys too
+              (same persisted 'quran-playback-rate' + changeRate as
+              سماع حر). Picked before start; locked while playing. */}
+          <p className="font-semibold text-accent-800 mt-5 mb-2">سرعة التلاوة</p>
+          <div className="grid grid-cols-3 gap-2">
+            {PLAYBACK_RATES.map((rate) => (
+              <button
+                key={`journey-rate-${rate}`}
+                disabled={locked}
+                onClick={() => changeRate(rate)}
+                className={`w-full px-4 py-2.5 rounded-xl font-semibold text-center disabled:opacity-50 ${
+                  playbackRate === rate
+                    ? 'grad-emerald-door text-white polish-press'
+                    : 'bg-white border border-hairline-emerald text-accent-800 polish-press'
+                }`}
+              >
+                {PLAYBACK_RATE_LABELS[rate]}
+              </button>
+            ))}
+          </div>
           {THREE_MODES.filter((m) => m.id === hubView).map((m) => {
             const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
             return (
@@ -3148,14 +3107,6 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
               <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
             )}
-            {/* Which tafsir voice is actually playing now (Feature 1):
-                the label reads the live setting for this ayah, the
-                same mapping the engine's resolver used for the clip. */}
-            {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
-              <p className="text-xs text-accent-600 mt-1">
-                {tafsirVoiceLabelForAyah(journeyItem.surah, journeyItem.ayah)}
-              </p>
-            )}
             {engineError && <p className="text-sm text-red-600 font-medium mt-2">{engineError}</p>}
             {/* Redirect B: interruption resume — prominent, tap-only */}
             {interrupted && (
@@ -3230,7 +3181,7 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
               </button>
             </div>
             <button
-              onClick={() => setBlackScreen(true)}
+              onClick={() => setShowScreenChoice(true)}
               className="mt-3 w-full py-3 bg-stone-800 hover:bg-stone-900 text-white font-semibold rounded-xl flex items-center justify-center gap-2 polish-press"
               aria-label="شاشة سوداء"
             >
@@ -3246,41 +3197,9 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             timer after playback stopped. */}
         {journeyMode !== null && sleepTimerBlock}
 
-        {/* Read-along text — Hafs only: riwaya mode is
-            listening-only (the Hafs text does not match a non-Hafs
-            voice), and hadr is surah-file (no ayah steps), so this
-            block hides under either. */}
-        {riwayaId === null && !hadrOn && hubView !== 'hub' && (
-        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mb-4">
-          <p className="font-semibold text-accent-800 mb-3">سورة {surahName(surah)}</p>
-          {textLoading && <p className="text-accent-600">جارٍ تحميل نص السورة…</p>}
-          {textError && <p className="text-red-600 font-medium">{textError}</p>}
-          {!textLoading && !textError && ayahs && (
-            <div className="space-y-2">
-              {ayahs.map((row) => (
-                <button
-                  key={row.id}
-                  id={`listen-ayah-${row.ayah_no}`}
-                  onClick={() => {
-                    // Hafs single-surah only: journeys advance
-                    // automatically (no intra-journey seeking in
-                    // v1), and riwaya files have no ayah steps.
-                    if (active && engineRef.current) void engineRef.current.seekTo(row.ayah_no);
-                  }}
-                  className={`w-full text-right p-3 rounded-xl border leading-loose ${
-                    active && row.ayah_no === currentAyah
-                      ? 'bg-amber-100 border-amber-300'
-                      : 'bg-white border-hairline-emerald'
-                  }`}
-                  style={{ fontFamily: "'Noto Naskh Arabic', serif", fontSize: '1.25rem' }}
-                >
-                  <span className="text-accent-800">{row.ayah_text}</span>
-                  <span className="text-emerald-700 font-bold mr-2">﴿{row.ayah_no}﴾</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>)}
+        {/* W5-L (2026-11-19, Dr. decision): the spread-out ayah list
+            under the player is gone — listening is by ear (the current
+            ayah still shows in the bar above). */}
 
         {/* Offline section (redirect E: additive only — playback,
             highlight and resume above never wait on any download
@@ -3433,32 +3352,23 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
           معك في كل آية، حتى نُتمّ حفظ كتاب الله
         </p>
       </main>
-      {blackScreen && (
-        <div
-          className="fixed inset-0 z-[100] bg-black flex items-center justify-center select-none touch-none"
-          style={{ WebkitTouchCallout: 'none' }}
-          onContextMenu={(e) => e.preventDefault()}
-          onTouchStart={(e) => {
-            const t = e.touches[0];
-            if (t) blackPressStart(t.clientX, t.clientY);
-          }}
-          onTouchMove={(e) => {
-            const t = e.touches[0];
-            if (t) blackPressMove(t.clientX, t.clientY);
-          }}
-          onTouchEnd={blackPressEnd}
-          onTouchCancel={() => {
-            blackPressRef.current = null;
-          }}
-          onMouseDown={(e) => blackPressStart(e.clientX, e.clientY)}
-          onMouseMove={(e) => {
-            if (blackPressRef.current) blackPressMove(e.clientX, e.clientY);
-          }}
-          onMouseUp={blackPressEnd}
-        >
-          {showBlackHint && (
-            <p className="text-white/20 text-sm font-medium">اضغط مطوّلًا للعودة</p>
-          )}
+      {showScreenChoice && (
+        <div className="fixed inset-0 z-[90] bg-black/60 flex items-end sm:items-center justify-center p-4" onClick={() => setShowScreenChoice(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3" onClick={(e) => e.stopPropagation()} dir="rtl">
+            <p className="text-center font-bold text-lg text-accent-900">اعرض إيه وانت بتسمع؟</p>
+            <button onClick={() => openMushafWhileListening()}
+              className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl polish-press">
+              المصحف بملء الشاشة مع الصوت والتظليل
+            </button>
+            <button onClick={() => { setShowScreenChoice(false); closeScreenWithRecap(); }}
+              className="w-full py-4 bg-stone-800 hover:bg-stone-900 text-white font-bold rounded-xl polish-press">
+              شاشة سوداء
+            </button>
+            <button onClick={() => setShowScreenChoice(false)}
+              className="w-full py-3 bg-stone-100 text-stone-700 font-semibold rounded-xl polish-press">
+              رجوع
+            </button>
+          </div>
         </div>
       )}
     </div>
