@@ -67,11 +67,15 @@ function deduplicateTranscript(text: string): string {
 }
 
 export default function LinkModal({
-  verse, onClose, onSaved,
+  verse, onClose, onSaved, groupVerses, relatedVerse,
 }: {
   verse: QuranVerse;
   onClose: () => void;
   onSaved: () => void;
+  /** Merged link: the consecutive ayat (first = `verse`) this ONE link covers. */
+  groupVerses?: QuranVerse[];
+  /** Far link: the other ayah this link ties `verse` to. */
+  relatedVerse?: QuranVerse | null;
 }) {
   useEscapeClose(true, onClose);
 
@@ -449,6 +453,8 @@ export default function LinkModal({
       status: 'pending',
       rephrase_command: rephraseCommand || null,
       created_by: (await supabase.auth.getSession()).data.session?.user.id || null,
+      group_verse_ids: groupVerses && groupVerses.length > 1 ? groupVerses.map((v) => v.id) : null,
+      related_verse_id: relatedVerse ? relatedVerse.id : null,
     });
 
     if (saveError) {
@@ -499,6 +505,17 @@ export default function LinkModal({
           <div className="bg-gray-50 rounded-2xl p-3">
             <p className="text-xs text-accent-600 mb-1">{verse.surah_name} — آية {verse.ayah_no}</p>
             <p className="font-arabic text-base text-accent-700 line-clamp-2">{blankMarks(verse.ayah_text)}</p>
+            {groupVerses && groupVerses.length > 1 && (
+              <p className="mt-2 text-xs font-bold text-emerald-800 bg-emerald-50 rounded-lg px-2 py-1">
+                تربيط واحد يجمع الآيات {groupVerses.map((v) => v.ayah_no).join(' و ')} من سورة {verse.surah_name}
+              </p>
+            )}
+            {relatedVerse && (
+              <div className="mt-2 text-xs bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+                <p className="font-bold text-amber-800">بيربط الآية دي بـ {relatedVerse.surah_name} — آية {relatedVerse.ayah_no}</p>
+                <p className="font-arabic text-sm text-accent-700 line-clamp-2">{blankMarks(relatedVerse.ayah_text)}</p>
+              </div>
+            )}
           </div>
 
           {/* Multi-type selection */}
