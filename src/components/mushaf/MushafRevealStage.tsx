@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { madinahPageOfAyah } from '../../lib/madinahPageStarts';
 import { loadBoxes, type Box } from '../../lib/mushafBoxes';
 import { MUSHAF_EDITIONS } from '../../lib/mushafEditions';
+import DigitalRevealStage, { useDigitalPage } from './DigitalRevealStage';
 
 // Paper colour of the sufone scans (cream). Slightly warm so the patch
 // disappears into the page; measured on page 3: the scans are RGB(255,255,230).
@@ -31,6 +32,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   const [boxes, setBoxes] = useState<Box[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [imgOk, setImgOk] = useState(true);
+  const digitalPage = useDigitalPage(madinahPageOfAyah(surah, ayah));
 
   useEffect(() => {
     let off = false;
@@ -56,6 +58,20 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   // box file failed, or this ayah has no boxes on its start page. Cover the whole page with
   // paper colour; once loaded, say why. Done screens (showAll) show the page as it is.
   const blocked = !showAll && (!loaded || words.length === 0);
+
+  // Digital page (preferred, 2026-11-21): same reveal on the clean digital Mushaf page. While it loads, a
+  // paper-coloured page (never the uncovered ayah); the scan below stays only for pages without trusted text.
+  if (!digitalPage.ready) return <div className="mx-auto w-full max-w-md rounded-xl border border-hairline" style={{ aspectRatio: '1240 / 1754', background: PAPER }} />;
+  if (digitalPage.digital && words.length > 0) {
+    return (
+      <DigitalRevealStage page={page} state={digitalPage} mark={(s, a, w) => {
+        if (s !== surah || a !== ayah) return undefined;
+        const i = w - 1;
+        if (showAll) return wrongSet.has(i) ? 'wrong' : undefined;
+        return revealed[i] || stickyRef.current.open.has(i) ? undefined : 'hidden';
+      }} />
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-md" dir="ltr">

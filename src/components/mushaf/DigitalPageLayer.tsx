@@ -16,7 +16,7 @@ const PAPER = '#f8f1de';
 const DIGIT_FONT = "'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 const FONT = "'KFGQPC Uthmanic Hafs', 'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 
-function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox; theme?: MushafTheme; uniform?: number | null }) {
+function Word({ word, wPx, hPx, box, theme, uniform, tint }: { word: DigitalWord; wPx: number; hPx: number; box: DigitalBox; theme?: MushafTheme; uniform?: number | null; tint?: string }) {
   const inner = useRef<HTMLSpanElement | null>(null);
   const [fit, setFit] = useState({ size: Math.max(8, hPx * 0.95), k: 1 });
   // Largest font that keeps the line's shape: start from almost the box height, shrink only if the word is
@@ -41,7 +41,7 @@ function Word({ word, wPx, hPx, box, theme, uniform }: { word: DigitalWord; wPx:
         ? { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` }
         : { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%`, background: PAPER, boxShadow: `0 0 0 1.5px ${PAPER}` }}>
       <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: fit.size, lineHeight: 1, whiteSpace: 'nowrap', color: theme ? theme.ink : TAJWEED_INK, ...(theme ? { WebkitTextStroke: '0.014em currentColor', textRendering: 'geometricPrecision' as const, WebkitFontSmoothing: 'antialiased' as const } : {}), transform: `scaleX(${fit.k})`, transformOrigin: 'center' }}>
-        {word.segs.map((s, i) => <span key={i} style={s.rule ? { color: adaptRuleColor(ruleColor(s.rule), !!theme?.dark) } : undefined}>{s.text}</span>)}
+        {word.segs.map((s, i) => <span key={i} style={tint ? { color: tint } : s.rule ? { color: adaptRuleColor(ruleColor(s.rule), !!theme?.dark) } : undefined}>{s.text}</span>)}
       </span>
     </div>
   );
@@ -132,12 +132,20 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
       const hy = hasBasmalaLine ? y - 2 * pitch : y - pitch;
       headerYs.push(hy);
       const name = SURAHS.find((x) => x.no === first.surah)?.name ?? '';
-      furniture.push(
+      const label = name.startsWith('سورة') ? name : `سورة ${name}`;
+      furniture.push(compact ? (
+        <div key={`hd-${first.surah}`} className="absolute flex items-center justify-center"
+          style={{ left: minL, width: textW, top: hy - pitch * 0.46, height: pitch * 0.92, border: `2px solid ${theme.accent}`, borderRadius: 8, background: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(176,138,40,0.10)', boxShadow: `inset 0 0 0 3px ${theme.bg}, inset 0 0 0 4px ${theme.frame}`, overflow: 'hidden' }}>
+          <div className="absolute inset-y-0 left-0" style={{ width: '17%', backgroundImage: `repeating-linear-gradient(45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px), repeating-linear-gradient(-45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px)`, opacity: 0.45 }} />
+          <div className="absolute inset-y-0 right-0" style={{ width: '17%', backgroundImage: `repeating-linear-gradient(45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px), repeating-linear-gradient(-45deg, ${theme.frame} 0 1.5px, transparent 1.5px 6px)`, opacity: 0.45 }} />
+          <span dir="rtl" className="relative px-5" style={{ background: theme.bg, borderRadius: 6, color: theme.accent, fontFamily: FONT, fontSize: pitch * 0.56, lineHeight: 1.25, WebkitTextStroke: '0.02em currentColor' }}>{label}</span>
+        </div>
+      ) : (
         <div key={`hd-${first.surah}`} className="absolute flex items-center justify-center rounded-md"
           style={{ left: minL, width: textW, top: hy - pitch * 0.4, height: pitch * 0.8, border: `1.5px solid ${theme.frame}`, background: theme.dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.035)', color: theme.accent, fontFamily: FONT, fontSize: pitch * 0.5, lineHeight: 1 }}>
-          <span dir="rtl">{name.startsWith('سورة') ? name : `سورة ${name}`}</span>
+          <span dir="rtl">{label}</span>
         </div>
-      );
+      ));
       if (hasBasmalaLine) {
         furniture.push(
           <div key={`bs-${first.surah}`} className="absolute flex items-center justify-center"
@@ -161,7 +169,7 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
       const cx = next && gap > d * 0.6 ? p.l - gap / 2 : p.l - d / 2 - 1;
       furniture.push(
         <div key={`mk-${p.box.key}`} className="absolute flex items-center justify-center rounded-full"
-          style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `1.5px solid ${theme.accent}`, color: theme.accent, fontFamily: DIGIT_FONT, fontSize: d * 0.5, lineHeight: 1 }}>
+          style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `1.5px solid ${theme.accent}`, boxShadow: compact ? `inset 0 0 0 2px ${theme.bg}, inset 0 0 0 3px ${theme.frame}` : undefined, color: theme.accent, fontFamily: DIGIT_FONT, fontSize: d * 0.5, lineHeight: 1 }}>
           <span style={{ display: 'block', lineHeight: `${d}px`, height: d, transform: `translateY(${-d * 0.02}px)`, textAlign: 'center' }}>{toArDigits(p.box.ayah)}</span>
         </div>
       );
@@ -175,33 +183,62 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
   if (compact) {
     // Pages 1 and 2: an ornamental frame filling the page, like the Madinah Mushaf.
     const mx = size.w * 0.035, my = size.h * 0.03, band = Math.max(12, size.w * 0.028);
-    const diamond = (style: React.CSSProperties, k: string) => (
-      <div key={k} className="absolute" style={{ width: band * 1.1, height: band * 1.1, transform: 'rotate(45deg)', background: theme.bg, border: `2px solid ${theme.accent}`, ...style }} />
+    // 8-point star (two squares) with a centre ring: corner / mid-edge ornament, drawn only in theme colours.
+    const star = (style: React.CSSProperties, k: string, r: number) => (
+      <svg key={k} className="absolute" width={r * 2} height={r * 2} viewBox="-20 -20 40 40" style={style}>
+        <circle r="19" fill={theme.bg} stroke={theme.accent} strokeWidth="1.6" />
+        <rect x="-11" y="-11" width="22" height="22" fill="none" stroke={theme.accent} strokeWidth="1.6" />
+        <rect x="-11" y="-11" width="22" height="22" fill="none" stroke={theme.accent} strokeWidth="1.6" transform="rotate(45)" />
+        <circle r="4.2" fill={theme.accent} />
+        <circle r="7.6" fill="none" stroke={theme.frame} strokeWidth="1" />
+      </svg>
     );
-    const dots = `repeating-linear-gradient(45deg, ${theme.frame} 0 2px, transparent 2px 7px), repeating-linear-gradient(-45deg, ${theme.frame} 0 2px, transparent 2px 7px)`;
+    const beads = `radial-gradient(circle, ${theme.frame} 1.3px, transparent 1.7px)`;
+    const R = band * 0.95;
     return (
       <>
-        <div className="absolute rounded-xl" style={{ left: mx, top: my, right: mx, bottom: my, border: `3px solid ${theme.accent}`, backgroundImage: dots, opacity: 1 }} />
-        <div className="absolute rounded-lg" style={{ left: mx + band, top: my + band, right: mx + band, bottom: my + band, background: theme.bg, border: `2px solid ${theme.accent}`, boxShadow: `inset 0 0 0 5px ${theme.bg}, inset 0 0 0 6.5px ${theme.frame}` }} />
-        {diamond({ left: mx - band * 0.55, top: my - band * 0.55 }, 'c1')}
-        {diamond({ right: mx - band * 0.55, top: my - band * 0.55 }, 'c2')}
-        {diamond({ left: mx - band * 0.55, bottom: my - band * 0.55 }, 'c3')}
-        {diamond({ right: mx - band * 0.55, bottom: my - band * 0.55 }, 'c4')}
-        {diamond({ left: size.w / 2 - band * 0.55, top: my - band * 0.55 }, 'c5')}
-        {diamond({ left: size.w / 2 - band * 0.55, bottom: my - band * 0.55 }, 'c6')}
+        <div className="absolute rounded-xl" style={{ left: mx, top: my, right: mx, bottom: my, border: `2px solid ${theme.accent}`, backgroundImage: beads, backgroundSize: '9px 9px', backgroundPosition: 'center' }} />
+        <div className="absolute rounded-lg" style={{ left: mx + band, top: my + band, right: mx + band, bottom: my + band, background: theme.bg, border: `1.5px solid ${theme.accent}`, boxShadow: `inset 0 0 0 4px ${theme.bg}, inset 0 0 0 5px ${theme.frame}, inset 0 0 0 9px ${theme.bg}, inset 0 0 0 9.6px ${theme.frame}` }} />
+        {star({ left: mx - R, top: my - R }, 'c1', R)}
+        {star({ left: size.w - mx - R, top: my - R }, 'c2', R)}
+        {star({ left: mx - R, top: size.h - my - R }, 'c3', R)}
+        {star({ left: size.w - mx - R, top: size.h - my - R }, 'c4', R)}
+        {star({ left: size.w / 2 - R * 1.25, top: my - R * 1.25 }, 'c5', R * 1.25)}
+        {star({ left: size.w / 2 - R * 1.25, top: size.h - my - R * 1.25 }, 'c6', R * 1.25)}
+        <div className="absolute flex items-center justify-center gap-2" style={{ left: size.w * 0.22, right: size.w * 0.22, top: Math.min(bottom + pitch * 0.9, size.h - my - band - pitch * 0.9), height: pitch * 0.5 }}>
+          <div style={{ flex: 1, height: 1.5, background: `linear-gradient(to left, ${theme.accent}, transparent)` }} />
+          <div style={{ width: pitch * 0.16, height: pitch * 0.16, transform: 'rotate(45deg)', background: theme.accent }} />
+          <div style={{ width: pitch * 0.3, height: pitch * 0.3, transform: 'rotate(45deg)', border: `1.5px solid ${theme.accent}`, background: theme.bg }} />
+          <div style={{ width: pitch * 0.16, height: pitch * 0.16, transform: 'rotate(45deg)', background: theme.accent }} />
+          <div style={{ flex: 1, height: 1.5, background: `linear-gradient(to right, ${theme.accent}, transparent)` }} />
+        </div>
         {furniture}
       </>
     );
   }
+  // Regular pages: a thin, quiet double-line frame in the reader's theme colour (hairline outside, finer line inside,
+  // small corner diamonds). Colours come only from `theme`, so it follows whatever palette the reader picked.
+  const fl = minL - padX, fw = textW + 2 * padX, g = 4;
+  const dm = Math.max(5, pitch * 0.2);
+  const corner = (style: React.CSSProperties, k: string) => (
+    <div key={k} className="absolute" style={{ width: dm, height: dm, transform: 'rotate(45deg)', background: theme.bg, border: `1px solid ${theme.frame}`, ...style }} />
+  );
   return (
     <>
-      <div className="absolute rounded-lg" style={{ left: minL - padX, width: textW + 2 * padX, top, height: bottom - top, border: `2px solid ${theme.frame}`, boxShadow: `inset 0 0 0 4px ${theme.bg}, inset 0 0 0 5px ${theme.frame}` }} />
+      <div className="absolute rounded-md" style={{ left: fl, width: fw, top, height: bottom - top, border: `1.25px solid ${theme.frame}` }} />
+      <div className="absolute rounded-sm" style={{ left: fl + g, width: fw - 2 * g, top: top + g, height: bottom - top - 2 * g, border: `0.5px solid ${theme.frame}`, opacity: 0.55 }} />
+      {corner({ left: fl - dm / 2, top: top - dm / 2 }, 'k1')}
+      {corner({ left: fl + fw - dm / 2, top: top - dm / 2 }, 'k2')}
+      {corner({ left: fl - dm / 2, top: top + (bottom - top) - dm / 2 }, 'k3')}
+      {corner({ left: fl + fw - dm / 2, top: top + (bottom - top) - dm / 2 }, 'k4')}
       {furniture}
     </>
   );
 }
 
-export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme; page?: number }) {
+export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page, wordMark }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme; page?: number;
+  /** Tasmee' reveal: 'hidden' = word not drawn (its box and the ayah medallion stay), 'wrong' = drawn in red. */
+  wordMark?: (b: DigitalBox) => 'hidden' | 'wrong' | undefined }) {
   const root = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -248,7 +285,9 @@ export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page
       {size.w > 0 && boxes.map((b) => {
         const word = digitalWordsOf(tajweed, b.surah, b.ayah)?.[b.wordNo - 1];
         if (!word || b.width <= 0 || b.height <= 0) return null;
-        return <Word key={b.key} word={word} box={b} theme={theme} uniform={theme ? uni : null} wPx={(b.width / 100) * size.w} hPx={(b.height / 100) * size.h} />;
+        const mark = wordMark?.(b);
+        if (mark === 'hidden') return null;
+        return <Word key={b.key} word={word} box={b} theme={theme} uniform={theme ? uni : null} tint={mark === 'wrong' ? '#dc2626' : undefined} wPx={(b.width / 100) * size.w} hPx={(b.height / 100) * size.h} />;
       })}
     </div>
   );

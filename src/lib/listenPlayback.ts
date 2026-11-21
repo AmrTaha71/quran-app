@@ -1084,12 +1084,29 @@ export class ListenEngine {
         if (this.destroyed) return;
         this.nextUrl = url;
         this.setPreload(url);
+        this.upgradeNextToBlob(key, url);
       })
       .catch(() => {
         // Resolver failure here is non-fatal: the 'ended' handler's
         // degraded fallback retries the resolver at that point.
         if (this.nextKey === key) this.resolvingNext = false;
       });
+  }
+
+  // iOS Safari does not really buffer a detached <audio> before it is played, so a streamed (remote) next clip
+  // starts only after a fresh download at the swap = an audible gap between ayat. Fetch the next clip into a
+  // blob while the current one plays and swap the pending URL to it. Best-effort: any failure keeps the remote URL.
+  private upgradeNextToBlob(key: string, url: string): void {
+    if (!/^https?:/i.test(url) || typeof fetch !== 'function') return;
+    void fetch(url)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('http'))))
+      .then((blob) => {
+        if (this.destroyed || this.nextKey !== key || this.nextUrl !== url) return;
+        const blobUrl = URL.createObjectURL(blob);
+        this.nextUrl = blobUrl;
+        this.setPreload(blobUrl);
+      })
+      .catch(() => { /* keep the remote URL */ });
   }
 
   // Resolve the current ayah's URL (ready cache first, else the
