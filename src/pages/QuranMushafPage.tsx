@@ -34,7 +34,7 @@ import { getStoredLinkGender, resolveLinkAudio } from '../lib/linkAudio';
 import { parseHash } from '../lib/shareLinks';
 import { HAFS_UNAVAILABLE_PAGE } from '../lib/pageDownload';
 import { useElderlyMode } from '../lib/elderlyMode';
-import { currentListenWord } from '../lib/listenWordTrack';
+import { currentListenWord, currentListenProgress } from '../lib/listenWordTrack';
 import { getNowPlaying, subscribeNowPlaying, setNowPlaying, type NowPlayingAyah } from '../lib/nowPlaying';
 import BottomNav from '../components/BottomNav';
 import ShareButton from '../components/ShareButton';
@@ -4993,6 +4993,12 @@ export default function QuranMushafPage({
                     return (
                       <div className="absolute inset-0 pointer-events-none">
                         <MushafHighlightLayer currentWord={listenWord}
+                          getProgress={() => {
+                            const np = nowPlayingAyah;
+                            if (!np || np.kind !== 'ayah') return -1;
+                            const sorted = boxes.slice().sort((a, b) => a.wordNo - b.wordNo);
+                            return currentListenProgress(np.surah, np.ayah, sorted.map((x) => Math.max(0.5, x.width)), sorted.map((x) => x.wordNo));
+                          }}
                           boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
                       </div>
                     );
@@ -5012,7 +5018,7 @@ export default function QuranMushafPage({
                     // the last highlight stays, faded (never jumps, never vanishes).
                     return (
                       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${followTracking && followTrack === 'searching' ? 'opacity-40' : 'opacity-100'}`}>
-                        <MushafHighlightLayer currentWord={followPos.word ?? -1}
+                        <MushafHighlightLayer currentWord={followPos.word ?? -1} getProgress={() => (followPos.word ?? -1) + 1}
                           boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: b.wordNo }))} />
                       </div>
                     );

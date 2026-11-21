@@ -65,3 +65,43 @@ export function currentListenWord(surah: number, ayah: number, weights: number[]
   }
   return weights.length - 1;
 }
+
+/** Continuous position of the recitation, in word space: 3.4 = 40% of the way through the 4th word
+ *  (0-based word 3). -1 when unknown. Same timings as currentListenWord, but with the fraction inside
+ *  the word, so a highlight can glide with the voice instead of jumping word to word.
+ *  `wordNos` = 1-based word numbers of the boxes (sorted), parallel to `weights`. */
+export function currentListenProgress(surah: number, ayah: number, weights: number[], wordNos: number[]): number {
+  if (weights.length === 0) return -1;
+  let audio: HTMLAudioElement;
+  try { audio = getSharedAudio(); } catch { return -1; }
+  const t = audio.currentTime;
+  if (!Number.isFinite(t)) return -1;
+  const m = /\/data\/([^/]+)\//.exec(audio.currentSrc || audio.src || '');
+  const corr = m ? corrFolderFor(m[1]) : null;
+  if (corr) {
+    const map = ensureMap(corr);
+    const flat = map?.[`${surah}:${ayah}`];
+    if (flat && flat.length >= 2) {
+      const n = Math.floor(flat.length / 2);
+      if (t <= flat[0]) return 0;
+      for (let i = 0; i < n; i++) {
+        const s = flat[2 * i], e = flat[2 * i + 1];
+        if (t <= e) return t >= s && e > s ? i + (t - s) / (e - s) : i; // inside word i, or the gap before it
+      }
+      return n;
+    }
+  }
+  const dur = audio.duration;
+  if (!Number.isFinite(dur) || dur <= 0) return -1;
+  const lead = Math.min(0.25, dur * 0.05);
+  const span = Math.max(0.1, dur - lead * 2);
+  const frac = Math.min(1, Math.max(0, (t - lead) / span));
+  const total = weights.reduce((a, b) => a + b, 0) || 1;
+  let acc = 0;
+  for (let i = 0; i < weights.length; i++) {
+    const w = weights[i] / total;
+    if (frac <= acc + w) return (wordNos[i] - 1) + (w > 0 ? (frac - acc) / w : 0);
+    acc += w;
+  }
+  return wordNos[wordNos.length - 1];
+}
