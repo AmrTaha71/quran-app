@@ -23,7 +23,8 @@ export default function ProgressWidget() {
 
       const { count: totalLinks } = await supabase
         .from('ayah_links')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'approved');
 
       const total = TOTAL_VERSES;
       setStats({
