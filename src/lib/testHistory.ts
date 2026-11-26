@@ -29,7 +29,15 @@ export type TestHistoryEntry = {
   /** W4-E: which test. Missing = the tasmee' test (all older entries). The
    *  tarteel / comprehensive scores are out of 40 and kept on their own curve. */
   kind?: TestKind;
+  /** 17.11: per position, the words that were wrong (optional; older
+   *  entries have none and still show). `ayah` is «surah:ayah». */
+  wrong?: WrongSpot[];
+  /** 17.7: tombstone time (ms). A deleted entry stays in storage (the
+   *  log is append-only) and is hidden; «تراجع» clears the mark. */
+  deletedAt?: number;
 };
+
+export type WrongSpot = { ayah: string; words: string[]; idx?: number[] };
 
 export type TestKind = 'tasmee' | 'tarteel' | 'comprehensive';
 export const TEST_KIND_LABEL: Record<TestKind, string> = { tasmee: 'تسميع', tarteel: 'ترتيل', comprehensive: 'شامل' };
@@ -47,8 +55,13 @@ function valid(e: unknown): e is TestHistoryEntry {
     && typeof r.completed === 'boolean';
 }
 
-/** Newest first. */
+/** Newest first, without deleted entries. */
 export function loadTestHistoryV1(): TestHistoryEntry[] {
+  return loadTestHistoryRaw().filter((e) => !e.deletedAt);
+}
+
+/** Newest first, tombstoned entries included (17.7). */
+export function loadTestHistoryRaw(): TestHistoryEntry[] {
   try {
     const arr = JSON.parse(localStorage.getItem(TEST_HISTORY_V1_KEY) || '[]');
     if (!Array.isArray(arr)) return [];
@@ -64,7 +77,28 @@ export function loadTestHistoryV1(): TestHistoryEntry[] {
 }
 
 export function addTestHistoryV1(e: TestHistoryEntry): TestHistoryEntry[] {
-  const next = [e, ...loadTestHistoryV1()].slice(0, TEST_HISTORY_MAX);
+  const next = [e, ...loadTestHistoryRaw()].slice(0, TEST_HISTORY_MAX);
   try { localStorage.setItem(TEST_HISTORY_V1_KEY, JSON.stringify(next)); } catch { /* quota / blocked */ }
-  return next;
+  return next.filter((x) => !x.deletedAt);
+}
+
+// 17.7: delete = tombstone (undo-able), never an immediate splice.
+function markDeleted(match: (e: TestHistoryEntry) => boolean, at: number | undefined): TestHistoryEntry[] {
+  const next = loadTestHistoryRaw().map((e) => (match(e) ? { ...e, deletedAt: at } : e));
+  try { localStorage.setItem(TEST_HISTORY_V1_KEY, JSON.stringify(next)); } catch { /* quota / blocked */ }
+  return next.filter((x) => !x.deletedAt);
+}
+/** Hide one entry (by its ts); returns the visible list. */
+export function deleteTestHistoryEntry(ts: string, now = Date.now()): TestHistoryEntry[] { return markDeleted((e) => e.ts === ts, now); }
+/** Bring a hidden entry back. */
+export function undoDeleteTestHistoryEntry(ts: string): TestHistoryEntry[] { return markDeleted((e) => e.ts === ts, undefined); }
+/** «مسح الكل»: hides every visible entry, all with the same mark, so one undo brings them back. */
+export function deleteAllTestHistory(now = Date.now()): { list: TestHistoryEntry[]; mark: number } {
+  return { list: markDeleted((e) => !e.deletedAt, now), mark: now };
+}
+/** Undo a «مسح الكل» by its mark. */
+export function undoDeleteAll(mark: number): TestHistoryEntry[] {
+  const next = loadTestHistoryRaw().map((e) => (e.deletedAt === mark ? { ...e, deletedAt: undefined } : e));
+  try { localStorage.setItem(TEST_HISTORY_V1_KEY, JSON.stringify(next)); } catch { /* quota / blocked */ }
+  return next.filter((x) => !x.deletedAt);
 }

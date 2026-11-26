@@ -1,7 +1,9 @@
 // «سجل الدرجات» (W4-D): last 100 tests + a progress curve pinned to one
 // grading level (tabs). Plain SVG, no chart library.
-import { useMemo, useState } from 'react';
-import { HISTORY_LEVEL_LABEL, TEST_KIND_LABEL, kindOf, type HistoryLevel, type TestHistoryEntry, type TestKind } from '../lib/testHistory';
+import { useEffect, useMemo, useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { HISTORY_LEVEL_LABEL, TEST_KIND_LABEL, kindOf, deleteTestHistoryEntry, undoDeleteTestHistoryEntry, deleteAllTestHistory, undoDeleteAll, type HistoryLevel, type TestHistoryEntry, type TestKind } from '../lib/testHistory';
+import { askConfirm } from '../lib/confirmSheet';
 
 // W4-O: the curve + average are computed on a chosen period only. The period
 // uses each entry's stored `ts` (every V1 entry has one; the old
@@ -103,10 +105,29 @@ function Curve({ points }: { points: TestHistoryEntry[] }) {
   );
 }
 
-export default function TestHistoryPanel({ entries, initialLevel }: {
+export default function TestHistoryPanel({ entries, initialLevel, onChange }: {
   entries: TestHistoryEntry[];
   initialLevel: HistoryLevel;
+  /** 17.7: the visible list after a delete / undo. */
+  onChange?: (list: TestHistoryEntry[]) => void;
 }) {
+  // 17.7: delete is a tombstone with a few seconds of «تراجع».
+  const [undo, setUndo] = useState<{ text: string; run: () => TestHistoryEntry[] } | null>(null);
+  useEffect(() => {
+    if (!undo) return;
+    const t = window.setTimeout(() => setUndo(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [undo]);
+  const removeOne = (e: TestHistoryEntry) => {
+    onChange?.(deleteTestHistoryEntry(e.ts));
+    setUndo({ text: `اتمسح «${e.label}»`, run: () => undoDeleteTestHistoryEntry(e.ts) });
+  };
+  const removeAll = async () => {
+    if (!(await askConfirm({ text: 'تمسح كل السجل؟ تقدر ترجّعه بـ«تراجع» خلال ثواني.', confirmLabel: 'امسح الكل', danger: true }))) return;
+    const { list, mark } = deleteAllTestHistory();
+    onChange?.(list);
+    setUndo({ text: 'اتمسح السجل كله', run: () => undoDeleteAll(mark) });
+  };
   const levels: HistoryLevel[] = ['beginner', 'advanced'];
   const [level, setLevel] = useState<HistoryLevel>(levels.includes(initialLevel) ? initialLevel : 'beginner');
   const visible = entries;
@@ -213,16 +234,42 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
           <Curve points={curve} />
         </>
       )}
+      {undo && (
+        <div role="status" className="flex items-center justify-between gap-2 rounded-xl bg-amber-50 border border-hairline-amber px-3 py-2 text-sm text-accent-800">
+          <span className="min-w-0 truncate">{undo.text}</span>
+          <button type="button" onClick={() => { onChange?.(undo.run()); setUndo(null); }}
+            className="min-h-[44px] px-4 rounded-lg bg-white border border-hairline-amber font-bold text-amber-link">تراجع</button>
+        </div>
+      )}
+      {visible.length > 0 && onChange && (
+        <div className="flex justify-end">
+          <button type="button" onClick={() => void removeAll()} className="min-h-[44px] px-3 text-xs font-semibold text-red-700">امسح السجل كله</button>
+        </div>
+      )}
       {visible.length > 0 && (
         <ul className="divide-y divide-hairline text-sm max-h-80 overflow-y-auto">
           {visible.map((e, i) => (
-            <li key={i} className="py-2 flex items-center justify-between gap-2">
+            <li key={e.ts || i} className="py-2">
+              <div className="flex items-center justify-between gap-2">
               <span className="text-accent-700 min-w-0 truncate">{e.label}</span>
               <span className="font-bold text-emerald-700 whitespace-nowrap">{ar(e.score)}٪</span>
               {e.ear === 'manual' && <span className="text-xs text-amber-link whitespace-nowrap">تقييم ذاتي</span>}
               <span className={`text-xs whitespace-nowrap ${e.completed ? 'text-emerald-700' : 'text-amber-link'}`}>{e.completed ? 'كمّل' : 'ما كملش'}</span>
               <span className="text-xs text-ink-2 whitespace-nowrap">{HISTORY_LEVEL_LABEL[e.level]}</span>
               <span className="text-xs text-accent-400 whitespace-nowrap">{when(e.ts)}</span>
+              {onChange && (
+                <button type="button" onClick={() => removeOne(e)} aria-label={`امسح ${e.label}`}
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg text-ink-2 hover:bg-red-50 hover:text-red-700">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              </div>
+              {/* 17.11: where the words went wrong, per position. */}
+              {e.wrong && e.wrong.length > 0 && (
+                <p className="text-xs text-accent-600 mt-1 leading-relaxed">
+                  {e.wrong.map((w) => `آية ${w.ayah.split(':').map((n) => ar(Number(n))).join(':')}: ${w.words.join('، ')}`).join(' · ')}
+                </p>
+              )}
             </li>
           ))}
         </ul>

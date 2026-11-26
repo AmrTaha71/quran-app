@@ -1737,6 +1737,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // SRS step 5 (2026-11-20): third+ slip of one letter pair, shown by SrsSlipNotice.
   const [srsNotices, setSrsNotices] = useState<SlipNotice[]>([]);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
+  // 17.11: a synchronous mirror, so finishTest (which can run in the same
+  // tick as the last ayah's verdict) records every wrong spot.
+  const wrongByAyahRef = useRef<Record<number, string[]>>({});
+  const setWrongBoth = (u: Record<number, string[]> | ((p: Record<number, string[]>) => Record<number, string[]>)) => {
+    const next = typeof u === 'function' ? u(wrongByAyahRef.current) : u;
+    wrongByAyahRef.current = next;
+    setWrongByAyah(next);
+  };
   const [skipped, setSkipped] = useState<boolean[]>([]);
   // Batch 4 part 2 (2026-11-10): practice history. Score never changes on a re-recite.
   const [reRecites, setReRecites] = useState<ReRecites>({});
@@ -2857,7 +2865,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         setTestMode('continuous');
         setIndex(0);
         setRevealed(false);
-        setWrongByAyah({});
+        setWrongBoth({});
         setExtraByAyah({});
         setContExtras([]);
         setContProgress({ matched: 0, total: expected.length, ayahIdx: 0 });
@@ -2912,7 +2920,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setSkipped(skipped0);
       liveRef.current.skipped = skipped0;
       setReRecites({});
-      setWrongByAyah({});
+      setWrongBoth({});
       setExtraByAyah({});
       setContExtras([]);
       setWrongIndices([]);
@@ -3054,6 +3062,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       mode: liveRef.current.mode,
       ear: manualMode || manualUsedRef.current ? 'manual' : earKindRef.current,
       label: explicitAyahIdsRef.current ? 'آياتي الضعيفة' : lbl,
+      // 17.11: the wrong words per position.
+      wrong: Object.entries(wrongByAyahRef.current)
+        .filter(([, w]) => w && w.length > 0)
+        .map(([i, w]) => { const a = ayahs[Number(i)]; return a ? { ayah: `${a.surah_no}:${a.ayah_no}`, words: w.slice(0, 12) } : null; })
+        .filter((x): x is { ayah: string; words: string[] } => !!x),
     }));
     const nextHistory = [rec, ...history].slice(0, 20);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory)); } catch {}
@@ -3119,7 +3132,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       srsPendingRef.current = spoken.length > 0
         ? { surah: ayah.surah_no, ayah: ayah.ayah_no, index, ok: false, ts: Date.now(), words: expected, matched: result.matched, positions: result.positions, consumed: result.consumed, tokens: spoken, spokenCount: spoken.length }
         : null;
-      setWrongByAyah((prev) => ({ ...prev, [index]: wrongWords }));
+      setWrongBoth((prev) => ({ ...prev, [index]: wrongWords }));
       setWrongExtras(result.extras);
       if (result.extras.length > 0) setExtraByAyah((prev) => ({ ...prev, [index]: result.extras }));
       // FEAT5-B: arm the post-correction resume when the ayah was
@@ -3242,7 +3255,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         postCorrRef.current = null;
         setPostCorrHint(false);
         setWrongIndices([]);
-        setWrongByAyah((prev) => { const n = { ...prev }; delete n[armedResume.index]; return n; });
+        setWrongBoth((prev) => { const n = { ...prev }; delete n[armedResume.index]; return n; });
         setWrongExtras([]);
         gradeMic(true);
         return;
@@ -5529,7 +5542,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const noSkips = new Array(ayahCount).fill(false);
     liveRef.current.skipped = noSkips;
     setSkipped(noSkips);
-    setWrongByAyah({});
+    setWrongBoth({});
     setExtraByAyah({});
     setContExtras([]);
     setPhase('done');
@@ -5592,7 +5605,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const noSkips = new Array(ayahCount).fill(false);
     liveRef.current.skipped = noSkips;
     setSkipped(noSkips);
-    setWrongByAyah(missedByAyah);
+    setWrongBoth(missedByAyah);
     setExtraByAyah({});
     // A repeated fix word is not an "extra": he said it because the
     // app asked him to, so it must not appear in the extras note.
@@ -6848,7 +6861,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
 
             {lobbyDoor === 'scores' && (
-              <TestHistoryPanel entries={scoreLog} initialLevel={runLevel} />
+              <TestHistoryPanel entries={scoreLog} initialLevel={runLevel} onChange={setScoreLog} />
             )}
             {lobbyDoor === 'results' && (
               <>
