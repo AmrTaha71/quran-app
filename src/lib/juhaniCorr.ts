@@ -98,8 +98,10 @@ export function correctionWindowSeconds(
 // Manifest lookup + gate.
 // ------------------------------------------------------------------
 
-/** Max correction segments per ayah (D2). The rest stay red on screen. */
-export const MAX_JUHANI_SEGMENTS = 3;
+/** Max correction segments per ayah. Item 4.9: was 3, which silently
+ *  dropped the 4th+ wrong word of a long ayah; every wrong word is now
+ *  played (12 is only a runaway guard). */
+export const MAX_JUHANI_SEGMENTS = 12;
 
 /** Shortest believable window (seconds). Anything shorter is an
  *  alignment artefact and must not be played. */
