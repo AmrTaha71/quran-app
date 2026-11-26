@@ -45,6 +45,7 @@
 
 import { RECITERS } from './reciters';
 import { SURAH_AYAH_COUNTS } from './surahs';
+import { estimateByHead } from './headEstimate';
 
 export interface DownloadedSurah {
   surah: number;
@@ -261,11 +262,11 @@ function defaultFetch(): typeof fetch {
 // --- Contract ---
 
 /**
- * HEAD each ayah URL for the surah and sum Content-Length.
- * If ANY HEAD fails or lacks a usable Content-Length, returns
- * { bytes: null, count } — the UI then shows 'حجم غير معروف'
- * and still allows download with live progress. Never downloads
- * bodies on the estimate path.
+ * HEAD each ayah URL for the surah (at most 6 at a time) and sum
+ * Content-Length; a clip whose HEAD fails counts as the average of
+ * the rest, so the size stays an approximation instead of vanishing
+ * (item 4.24). Only when none answer is it { bytes: null } — the UI
+ * then shows 'حجم غير معروف'. Never downloads bodies here.
  */
 export async function estimateSurahSize(
   reciterId: string,
@@ -275,27 +276,9 @@ export async function estimateSurahSize(
   const count = ayahCount(surah);
   const reciter = findReciter(reciterId);
   if (count === 0 || !reciter) return { bytes: null, count };
-  try {
-    const sizes = await Promise.all(
-      Array.from({ length: count }, async (_, i) => {
-        const url = reciter.audioUrl(surah, i + 1);
-        const res = await fetchFn(url, { method: 'HEAD' });
-        if (!res.ok) return null;
-        const len = res.headers.get('content-length');
-        if (len === null) return null;
-        const n = Number(len);
-        if (!Number.isFinite(n) || n < 0) return null;
-        return n;
-      }),
-    );
-    if (sizes.some((s) => s === null)) return { bytes: null, count };
-    return {
-      bytes: (sizes as number[]).reduce((a, b) => a + b, 0),
-      count,
-    };
-  } catch {
-    return { bytes: null, count };
-  }
+  const urls = Array.from({ length: count }, (_, i) => reciter.audioUrl(surah, i + 1));
+  const { bytes } = await estimateByHead(urls, fetchFn);
+  return { bytes, count };
 }
 
 /**

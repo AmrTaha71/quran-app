@@ -43,6 +43,7 @@
 //   boundary — the mic pipeline is Apple's servers in a web
 //   app). Downloads cover listening + Juhani corrections only.
 
+import { estimateByHead } from './headEstimate';
 import { tafsirClipUrl, tafsirConfigured } from './threeModeListen';
 import { juhaniSurahUrl } from './juhaniCorr';
 import { SURAH_AYAH_COUNTS } from './surahs';
@@ -284,25 +285,9 @@ export async function estimateTafsirSurah(
 ): Promise<AudioSizeEstimate> {
   const urls = tafsirSurahUrls(surah);
   if (urls.length === 0) return { bytes: null, count: 0 };
-  try {
-    const sizes = await Promise.all(
-      urls.map(async (url) => {
-        const res = await fetchFn(url, { method: 'HEAD' });
-        if (!res.ok) return null;
-        const len = res.headers.get('content-length');
-        if (len === null) return null;
-        const n = Number(len);
-        return Number.isFinite(n) && n >= 0 ? n : null;
-      }),
-    );
-    if (sizes.some((s) => s === null)) return { bytes: null, count: urls.length };
-    return {
-      bytes: (sizes as number[]).reduce((a, b) => a + b, 0),
-      count: urls.length,
-    };
-  } catch {
-    return { bytes: null, count: urls.length };
-  }
+  // Item 4.24: 6 HEADs at a time; a failed one is averaged in.
+  const { bytes } = await estimateByHead(urls, fetchFn);
+  return { bytes, count: urls.length };
 }
 
 /**
