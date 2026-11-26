@@ -125,26 +125,44 @@ export function fbank(x: Float32Array): Float32Array {
   return out;
 }
 
-/** Streaming version: identical frames to fbank() over the same signal. */
+/** Streaming version: identical frames to fbank() over the same signal.
+ *  3.21: samples no later frame can touch are dropped (buf[0] is absolute
+ *  sample `off`), so a long session no longer keeps every sample it heard;
+ *  reset() returns to the initial 30 s buffer. */
 export class OnlineFbank {
-  private buf = new Float32Array(16000 * 30);
-  private n = 0;
+  private buf = new Float32Array(OnlineFbank.INIT);
+  private n = 0; // absolute samples accepted
+  private off = 0; // absolute index of buf[0]
   private done = 0;
+  static readonly INIT = 16000 * 30;
+  reset(): void { this.buf = new Float32Array(OnlineFbank.INIT); this.n = 0; this.off = 0; this.done = 0; }
   accept(samples: Float32Array): Float32Array {
-    if (this.n + samples.length > this.buf.length) {
-      const nb = new Float32Array(Math.max(this.buf.length * 2, this.n + samples.length));
-      nb.set(this.buf.subarray(0, this.n));
+    this.trim();
+    const used = this.n - this.off;
+    if (used + samples.length > this.buf.length) {
+      const nb = new Float32Array(Math.max(this.buf.length * 2, used + samples.length));
+      nb.set(this.buf.subarray(0, used));
       this.buf = nb;
     }
-    this.buf.set(samples, this.n);
+    this.buf.set(samples, used);
     this.n += samples.length;
     return this.emit(false);
   }
   finish(): Float32Array { return this.emit(true); }
+  /** Drop the samples before the next frame's start (kept while that start
+   *  is still near 0, where the left-edge reflection reads buf[0..]). */
+  private trim() {
+    const keepFrom = this.done * HOP + HOP / 2 - WIN / 2 - HOP;
+    if (keepFrom - this.off < 16000 * 10) return; // shift in 10 s steps
+    const drop = keepFrom - this.off;
+    this.buf.copyWithin(0, drop, this.n - this.off);
+    this.off += drop;
+  }
   private emit(final: boolean): Float32Array {
     const n = this.n;
+    const off = this.off;
     const buf = this.buf;
-    const get = (i: number) => { let j = i; if (j < 0) j = -j - 1; else if (j >= n) j = 2 * n - 1 - j; return buf[j]; };
+    const get = (i: number) => { let j = i; if (j < 0) j = -j - 1; else if (j >= n) j = 2 * n - 1 - j; return buf[j - off]; };
     const total = final ? Math.floor((n + HOP / 2) / HOP) : Math.max(0, Math.floor((n - (HOP / 2 + WIN / 2)) / HOP) + 1);
     const count = Math.max(0, total - this.done);
     const out = new Float32Array(count * NMEL);

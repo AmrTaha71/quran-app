@@ -23,7 +23,10 @@ let spec: Spec | null = null;
 let tokens: Record<string, string> = {};
 let states: Record<string, ort.Tensor> = {};
 let fb = new OnlineFbank();
-let feats = new Float32Array(0); // pending feature frames (flattened)
+// 3.21: pending feature frames (flattened) in a buffer that grows by 1.5x;
+// featLen floats are live. Was a fresh copy of everything on every chunk.
+let featBuf = new Float32Array(0);
+let featLen = 0;
 let prevId = -1;
 let busy = Promise.resolve();
 let chunkNo = 0; // chunks decoded since reset: gives every token an audio time
@@ -86,8 +89,8 @@ function resetStates() {
       ? new ort.Tensor('int64', new BigInt64Array(n), s.shape)
       : new ort.Tensor('float32', new Float32Array(n), s.shape);
   }
-  fb = new OnlineFbank();
-  feats = new Float32Array(0);
+  fb.reset();
+  featLen = 0;
   prevId = -1;
   chunkNo = 0;
 }
@@ -128,22 +131,26 @@ async function load() {
 
 function appendFeats(f: Float32Array) {
   if (!f.length) return;
-  const n = new Float32Array(feats.length + f.length);
-  n.set(feats); n.set(f, feats.length);
-  feats = n;
+  if (featLen + f.length > featBuf.length) {
+    const nb = new Float32Array(Math.max(Math.ceil(featBuf.length * 1.5), featLen + f.length));
+    nb.set(featBuf.subarray(0, featLen));
+    featBuf = nb;
+  }
+  featBuf.set(f, featLen);
+  featLen += f.length;
 }
 
 async function runChunks(final: boolean) {
   if (!session || !spec) return;
   const { T, shift, blank } = spec;
-  const frames = () => feats.length / FBANK_DIM;
+  const frames = () => featLen / FBANK_DIM;
   const ids: number[] = [];
   const parts: { s: string; t: number }[] = [];
   let text = '';
   let chunks = 0;
   let ms = 0;
   while (frames() >= T || (final && frames() > 0)) {
-    let x = feats.subarray(0, T * FBANK_DIM);
+    let x = featBuf.subarray(0, Math.min(T * FBANK_DIM, featLen));
     if (frames() < T) {
       const pad = new Float32Array(T * FBANK_DIM).fill(PAD_LOG);
       pad.set(x);
@@ -171,7 +178,8 @@ async function runChunks(final: boolean) {
       prevId = best;
     }
     const used = Math.min(shift, frames());
-    feats = feats.slice(used * FBANK_DIM);
+    featBuf.copyWithin(0, used * FBANK_DIM, featLen);
+    featLen -= used * FBANK_DIM;
     if (final && frames() < T - shift) break;
   }
   if (chunks) post({ type: 'tokens', text, ids, parts, chunkMs: Math.round(ms / chunks), chunks });
