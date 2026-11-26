@@ -132,7 +132,7 @@ export default function TestHistoryPanel({ entries, initialLevel, onChange }: {
   const [level, setLevel] = useState<HistoryLevel>(levels.includes(initialLevel) ? initialLevel : 'beginner');
   const visible = entries;
   // W4-E: tarteel / comprehensive scores are out of 40: each kind has its own curve.
-  const kinds = useMemo(() => (['tasmee', 'tarteel', 'comprehensive'] as TestKind[]).filter((k) => visible.some((e) => kindOf(e) === k)), [visible]);
+  const kinds = useMemo(() => (['tasmee', 'tarteel', 'comprehensive', 'written', 'questions'] as TestKind[]).filter((k) => visible.some((e) => kindOf(e) === k)), [visible]);
   const [kind, setKind] = useState<TestKind>('tasmee');
   const ofLevel = useMemo(() => visible.filter((e) => e.level === level && kindOf(e) === kind), [visible, level, kind]);
   const [period, setPeriod] = useState<Period>({ k: 'all' });

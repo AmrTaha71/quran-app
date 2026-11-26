@@ -39,8 +39,8 @@ export type TestHistoryEntry = {
 
 export type WrongSpot = { ayah: string; words: string[]; idx?: number[] };
 
-export type TestKind = 'tasmee' | 'tarteel' | 'comprehensive';
-export const TEST_KIND_LABEL: Record<TestKind, string> = { tasmee: 'تسميع', tarteel: 'ترتيل', comprehensive: 'شامل' };
+export type TestKind = 'tasmee' | 'tarteel' | 'comprehensive' | 'written' | 'questions';
+export const TEST_KIND_LABEL: Record<TestKind, string> = { tasmee: 'تسميع', tarteel: 'ترتيل', comprehensive: 'شامل', written: 'كتابي', questions: 'أسئلة' };
 export const kindOf = (e: TestHistoryEntry): TestKind => e.kind ?? 'tasmee';
 
 export const TEST_HISTORY_V1_KEY = 'quran-test-history-v1';

@@ -11,19 +11,24 @@ import type { Route } from '../../lib/routes';
 
 const BTN = 'py-3 grad-amber-door glass-door-highlight text-white font-semibold rounded-xl text-base polish-press polish-press-depth polish-focus';
 
-export default function HomeQuizView({ onNavigate, onClose, onTarteel, onMutashabihat, onComprehensive }: {
+export default function HomeQuizView({ onNavigate, onClose, onTarteel, onMutashabihat, onComprehensive, onWritten, onQuestions }: {
   onNavigate: (r: Route) => void;
   onClose: () => void;
   onTarteel: () => void;
   onMutashabihat: () => void;
   onComprehensive: () => void;
+  /** 16.2 / 15.9 (phase 6) */
+  onWritten?: () => void;
+  onQuestions?: () => void;
 }) {
   return (
     <div className="min-h-screen page-bg pb-32 route-in">
-      <PageHeader title="اختبر نفسك" icon={Award} subtitle="ترتيل ومتشابهات واختبار شامل" />
+      <PageHeader title="اختبر نفسك" icon={Award} subtitle="ترتيل ومتشابهات وأسئلة وكتابي واختبار شامل" />
       <main className="max-w-5xl mx-auto px-4 py-4 grid grid-cols-2 gap-3 alive-subdoors">
         <button onPointerDown={pressFeedback} onClick={onTarteel} className={BTN}>ترتيل</button>
         <button onPointerDown={pressFeedback} onClick={onMutashabihat} className={BTN}>المتشابهات</button>
+        {onQuestions && <button onPointerDown={pressFeedback} onClick={onQuestions} className={BTN}>أسئلة الحفظ</button>}
+        {onWritten && <button onPointerDown={pressFeedback} onClick={onWritten} className={BTN}>اختبار كتابي</button>}
         <button onPointerDown={pressFeedback} onClick={onComprehensive} className={`col-span-2 ${BTN}`}>اختبار شامل (١٠٠ درجة)</button>
       </main>
       <BottomBackBar hasBottomNav onHome={onClose} />
