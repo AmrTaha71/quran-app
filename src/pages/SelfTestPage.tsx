@@ -7,6 +7,7 @@ import { useWakeLock } from '../lib/wakeLock';
 import EarDownloadCard from '../components/EarDownloadCard';
 import TestHistoryPanel from '../components/TestHistoryPanel';
 import MistakeVoiceList from '../components/MistakeVoiceList';
+import EarOfflineNotice from '../components/EarOfflineNotice';
 import { requestDayRecap } from '../lib/dailyStats';
 import { registerAligner } from '../lib/alignBridge';
 import { applyLisp } from '../lib/lispLetters';
@@ -6486,6 +6487,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </button>
                   )}
                 </div>
+                {/* 15.8: the device ear's files were cleared by the system -> ask again. */}
+                <EarOfflineNotice mode="health" />
                 {/* Item 2.9: say BEFORE the start that the browser ear needs the
                     internet, instead of failing mid-test. */}
                 {typeof navigator !== 'undefined' && navigator.onLine === false && srPresent && !(earLabUsable() || getEar() === 'model') && (
@@ -7454,6 +7457,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
         {phase === 'done' && (
           <div className="space-y-5">
+            {/* 15.8: after a finished test, offer the one-time offline ear download. */}
+            {!contZeroMatch && <EarOfflineNotice mode="offer" />}
             {contZeroMatch && testMode === 'continuous' && (
               <div className="bg-amber-50 border border-hairline-amber rounded-2xl p-5">
                 <p className="font-bold text-amber-800">لم يُطابق الجهاز أي كلمة — هذه ليست نتيجة ٠٪</p>

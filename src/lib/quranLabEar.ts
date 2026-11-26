@@ -71,6 +71,20 @@ export async function earModelCached(): Promise<boolean> {
   } catch { return false; }
 }
 
+// 15.8 (2026-11-26): storage health. Once the model was seen in the
+// cache we remember it; if it is gone later (iOS can clear site storage
+// under pressure), the app asks to download it again instead of falling
+// back silently to an ear that needs the internet.
+const EAR_SEEN_KEY = 'quran-ear-downloaded-v1';
+export type EarHealth = 'ok' | 'missing' | 'never';
+export async function earHealthCheck(): Promise<EarHealth> {
+  const cached = await earModelCached();
+  try {
+    if (cached) { localStorage.setItem(EAR_SEEN_KEY, '1'); return 'ok'; }
+    return localStorage.getItem(EAR_SEEN_KEY) === '1' ? 'missing' : 'never';
+  } catch { return cached ? 'ok' : 'never'; }
+}
+
 const softSkeleton = (w: string) => w.replace(/ة/g, 'ه').replace(/(?<=.)ا(?=.)/g, '').replace(/يي+/g, 'ي').replace(/لل+/g, 'ل');
 export const refKeySkel = (k: string) => expectedWordList(k).map((w) => softSkeleton(w.norm)).join('');
 
