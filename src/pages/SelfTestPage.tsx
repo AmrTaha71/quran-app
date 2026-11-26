@@ -14,6 +14,7 @@ import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import MicLevelHint from '../components/MicLevelHint';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import { timingCoverage } from '../lib/corrCoverage';
+import { normalizeVerifyLevel, type VerifyLevel } from '../lib/verifyLevel';
 import WhisperLoadNote from '../components/WhisperLoadNote';
 import { QuranLabRecognition, earLabOn, earLabUsable, earLabMayStart, EAR_NEEDS_DOWNLOAD_MSG, markEarLabFailed, releaseEarMic } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
@@ -171,13 +172,8 @@ const AYAH_END_SILENCE_MS = 4000;
 // Stored ids stay English ('beginner' | 'advanced') so the old key stays
 // readable; migrateVerifyLevel maps old / Arabic values quietly (a stored
 // 'master' / «متقن» now reads as «متقدم»).
-type VerifyLevel = 'beginner' | 'advanced';
 const VERIFY_LEVEL_LABEL: Record<VerifyLevel, string> = { beginner: 'مبتدئ', advanced: 'متقدم' };
-function migrateVerifyLevel(v: unknown): VerifyLevel {
-  if (v === 'master' || v === 'متقن') return 'advanced';
-  if (v === 'advanced' || v === 'intermediate' || v === 'متقدم' || v === 'متوسط') return 'advanced';
-  return 'beginner';
-}
+const migrateVerifyLevel = normalizeVerifyLevel; // 3.25: shared with roundTest
 /** Strict word grading (extras count) for every level above beginner. */
 function levelIsStrict(level: VerifyLevel): boolean { return level !== 'beginner'; }
 type CorrRate = 'slow' | 'normal' | 'fast' | 'veryFast';

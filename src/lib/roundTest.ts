@@ -9,6 +9,7 @@ import { fromGlobal } from './comprehensiveTest';
 import { getQuranTextCache, type CachedTextRow } from './quranTextCache';
 import { supabase } from './supabase';
 import { createTextLoader } from './quranTextLoader';
+import { normalizeVerifyLevel } from './verifyLevel';
 
 /** Most words an ayah starts with as the prompt (shorter ayat use fewer, see promptLenFor). */
 export const PROMPT_WORDS = 5;
@@ -124,9 +125,7 @@ export const surahNameOnly = (n: number) => SURAHS.find((s) => s.no === n)?.name
 export function currentHistoryLevel(): 'beginner' | 'advanced' {
   try {
     const p = JSON.parse(localStorage.getItem('quran-test-settings') || '{}') as { level?: unknown };
-    const v = p.level;
-    if (v === 'master' || v === 'متقن') return 'advanced';
-    if (v === 'advanced' || v === 'intermediate' || v === 'متقدم' || v === 'متوسط') return 'advanced';
+    return normalizeVerifyLevel(p.level); // 3.25: same mapping as the test page
   } catch { /* ignore */ }
   return 'beginner';
 }

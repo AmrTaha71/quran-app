@@ -1,5 +1,5 @@
 // Tajwid skill selection for SelfTest (spec: claude/recitation-level-spec-2026-11-09.md).
-// Pure logic only. Not yet wired into SelfTestPage.tsx.
+// Pure data: the tajweed skills and their tiers (used by the tajweed bank).
 // Tiers and the level rule are PROVISIONAL until Rana reviews them.
 
 export type SkillTier = 'hafiz' | 'veryGood' | 'good' | 'beginner';
@@ -38,7 +38,6 @@ export const TAJWID_SKILLS: readonly TajwidSkill[] = [
   { id: 'waqf', label: 'الوقف والابتداء', tier: 'beginner' },
 ];
 
-const TIER_RANK: Record<SkillTier, number> = { beginner: 0, good: 1, veryGood: 2, hafiz: 3 };
 
 const SKILL_BY_ID: Map<string, TajwidSkill> = new Map(TAJWID_SKILLS.map((s) => [s.id, s]));
 
@@ -57,29 +56,6 @@ export function sanitizeSkillSelection(ids: unknown): string[] {
   return out;
 }
 
-// PROVISIONAL rule: the level is the hardest tier among the selected skills.
-// The spec also says the count of selected skills should matter; that rule
-// is not decided yet (open question 2 for Rana), so it is not applied here.
-export function levelForSelection(ids: string[]): SkillLevel | null {
-  let best: SkillTier | null = null;
-  for (const id of sanitizeSkillSelection(ids)) {
-    const s = SKILL_BY_ID.get(id);
-    if (!s) continue;
-    if (best === null || TIER_RANK[s.tier] > TIER_RANK[best]) best = s.tier;
-  }
-  return best;
-}
-
-// Equal weights (spec default). Returns 0..100 rounded, or null when nothing is selected.
-export function equalWeightScore(selected: string[], passedIds: string[]): number | null {
-  const sel = sanitizeSkillSelection(selected);
-  if (sel.length === 0) return null;
-  const passed = sel.filter((id) => passedIds.includes(id)).length;
-  return Math.round((passed / sel.length) * 100);
-}
-
-// Corrections only fire for selected skills. Anything else is dropped silently.
-export function filterIssuesToSelection<T extends { skillId: string }>(selected: string[], issues: T[]): T[] {
-  const sel = new Set(sanitizeSkillSelection(selected));
-  return issues.filter((i) => sel.has(i.skillId));
-}
+// 3.25 (2026-11-26): levelForSelection / equalWeightScore /
+// filterIssuesToSelection were never called (the skill picker itself was
+// removed in 2.16) and are deleted; the skill list and tiers stay (tajweed bank).
