@@ -298,7 +298,9 @@ export function juhaniAyahUrl(globalAyah: number): string {
 /** Whole-file plan for a per-ayah file: one segment from 0 to the end
  *  (the player also stops on `ended`). */
 export function wholeAyahPlan(wordCount: number): JuhaniPlan {
-  return { segments: [{ start: 0, end: Math.max(0, wordCount - 1), tStart: 0, tEnd: 120 }], truncated: false };
+  // Item 4.10: 120 s cut long ayat (2:282 in a murattal reading). The
+  // player also stops on `ended`, so a generous cap only matters as a guard.
+  return { segments: [{ start: 0, end: Math.max(0, wordCount - 1), tStart: 0, tEnd: 600 }], truncated: false };
 }
 
 export function juhaniSurahUrl(surah: number): string {

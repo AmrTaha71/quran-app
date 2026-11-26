@@ -9,8 +9,10 @@
 //  - a word not heard at all → nothing (the word aligner sees it missing).
 // Comparison is on consonant skeletons: short vowels and madd lengths are
 // ignored (madd ʿāriḍ / munfaṣil lengths are all valid), and one dropped
-// letter in a word of 3+ letters is tolerated (breath cut). A substituted
-// or added letter is never tolerated (Dr. Amr's rule).
+// letter in a word of 3+ letters is tolerated (breath cut). A clearly
+// different consonant is never tolerated (Dr. Amr's rule); the soft sounds
+// are (item 4.12, see forgive(): alif/hamza, hamzat wasl, tā' marbūta in
+// wasl, a final madd hamza).
 
 import { IMLA_ALT } from './imlaAlt';
 

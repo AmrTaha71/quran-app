@@ -155,9 +155,11 @@ const AYAH_END_SILENCE_MS = 4000;
 //  - beginner «مبتدئ»: words only (missing / different word). A wrong
 //    letter is NEVER forgiven at any level, close letters included
 //    (ث/س، ذ/ز، ص/س، ض/د ...): the ears compare letters exactly (see
-//    softWordEq: spelling folds only; phonemeEar: substitutions never
-//    tolerated). The only leniency is clarity / letter strength / a
-//    breath cut inside a word, which is the same for every level.
+//    softWordEq: spelling folds only). Item 4.12: phonemeEar's forgive()
+//    DOES tolerate the soft sounds — alif/hamza swaps, a dropped hamzat
+//    wasl «ال», tā' marbūta read as ت in wasl, a final madd hamza, and a
+//    breath cut inside a word — the same for every level. A clearly
+//    different consonant is still a mistake.
 //  - advanced «متقدم»: words + extra / repeated words (the Quran-Lab ear's
 //    extra-word check). The old 'intermediate' and 'advanced' merge here.
 //  - the experimental admin-only «متقن» level was removed for good (item
@@ -6478,7 +6480,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
                 <Hint id="st-level"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {runLevel === 'beginner'
-                    ? 'يوقف عند الكلمة الناقصة أو المختلفة. الحرف الغلط ما بيعدّيش في أي مستوى؛ التسامح بس في وضوح النطق. الكلمة الزائدة لا توقفه.'
+                    ? 'يوقف عند الكلمة الناقصة أو المختلفة. الحرف المختلف تمامًا ما بيعدّيش؛ التسامح بس في وضوح النطق وقصّ الحروف الخافتة (زي الهمزة والألف وهمزة الوصل). الكلمة الزائدة لا توقفه.'
                     : 'زي المبتدئ، وكمان يوقف عند الكلمة الزائدة أو المكررة.'}
                 </p></Hint>
                 <Hint id="st-mode"><p className="col-span-2 text-xs text-accent-600 leading-snug">
