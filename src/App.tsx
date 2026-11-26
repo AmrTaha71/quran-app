@@ -16,7 +16,7 @@ import {
   getTabId,
   recLog,
 } from './lib/listenRecovery';
-import { LanguageProvider, useLang } from './lib/LanguageContext';
+import { LanguageProvider } from './lib/LanguageContext';
 import type { Session } from '@supabase/supabase-js';
 import UserAppPage from './pages/UserAppPage';
 // 6.1/6.2 (owner decision §11.1–2, 2026-11-26): «الرئيسية 2» is THE home.
@@ -241,13 +241,16 @@ function AppContent() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
   const [session, setSession] = useState<Session | null>(null);
-  // Bumped after the device picker is answered, so it unmounts.
+  // Bumped after the device picker is answered, so it unmounts (a
+  // false->false setDevicePickerOpen alone would not re-render; 10.23 kept).
   const [, setDeviceTick] = useState(0);
   const [devicePickerOpen, setDevicePickerOpen] = useState(false);
   const [referralDone, setReferralDone] = useState<boolean>(() => { try { return localStorage.getItem(REFERRAL_DONE_KEY) === '1'; } catch { return true; } });
   const statsRouteRef = useRef(route);
   statsRouteRef.current = route;
-  useEffect(() => { const iv = window.setInterval(() => tickStats(statsRouteRef.current), 10000); return () => window.clearInterval(iv); }, []);
+  // 10.23: the daily-stats tick counts signed-in use only (not the
+  // landing or sign-in pages); 'quran-uid' mirrors the session.
+  useEffect(() => { const iv = window.setInterval(() => { let on = false; try { on = !!localStorage.getItem('quran-uid'); } catch { /* ignore */ } if (on) tickStats(statsRouteRef.current); }, 10000); return () => window.clearInterval(iv); }, []);
   useEffect(() => {
     applyDeviceLayout();
     wireDeviceLayout();
