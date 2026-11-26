@@ -1,9 +1,9 @@
-// Follow-the-imam tracking ("الحق الإمام"): match heard words against the
+// Follow-the-imam tracking ("تتبع قراءة الإمام"): match heard words against the
 // Quran text (normalized, so IndoPak/Uthmani/imla'i spellings all match)
 // and walk forward with the recitation.
 //
 // MERGED follow-auto spec (2026-10-27, base 20fbad1): the user taps
-// الحق الإمام then ابدأ الاستماع and nothing else. Two constants
+// تتبع قراءة الإمام then ابدأ الاستماع and nothing else. Two constants
 // govern the lock, and BOTH engines read these same two — no per-engine
 // numbers, no duplicates (trigger + live + whisper roles merged):
 //  - FOLLOW_TRIGGER_WORDS = 5: normalized words CAPTURED (cumulative

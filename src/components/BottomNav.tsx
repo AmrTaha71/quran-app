@@ -23,7 +23,7 @@ function cachedNavLabel(): string {
  * Bottom navigation, in logical RTL order.
  * In an RTL flex row the first DOM item is the rightmost one, so
  * الرئيسية comes first (rightmost), then لوحتي right after it, then
- * المصحف, then تتبع القراءة, then الإعدادات (leftmost).
+ * المصحف, then تتبع قراءة الإمام, then الإعدادات (leftmost).
  *
  * Visual batch (2026-11-04): water-glass bar (translucent gradient +
  * blur, so page content shows through beneath it), one sliding gold
@@ -74,7 +74,7 @@ export default function BottomNav({
     // saved items — a dashboard grid reads instantly, a bookmark does not.
     { id: 'app' as const, label: appLabel, icon: <LayoutDashboard className="w-7 h-7" /> },
     { id: 'mushaf' as const, label: 'المصحف', icon: <BookOpen className="w-7 h-7" /> },
-    { id: 'follow' as const, label: 'تَتَبُّعُ القِرَاءَةِ', icon: <AudioLines className="w-7 h-7" /> },
+    { id: 'follow' as const, label: 'تتبع قراءة الإمام', icon: <AudioLines className="w-7 h-7" /> },
     { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
   // Sliding pill: one tab wide (5 equal tabs). In RTL the first tab
@@ -125,7 +125,7 @@ export default function BottomNav({
                 <span className={`nav-icon ${active ? 'nav-icon-on' : ''}`}>
                   {iconEl}
                 </span>
-                <span>{item.label}</span>
+                <span className="leading-tight text-center">{item.label}</span>
               </span>
             </button>
           );

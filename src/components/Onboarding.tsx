@@ -63,7 +63,7 @@ const SCREENS = [
   {
     kind: 'imam' as DemoKind,
     icon: Headphones,
-    title: 'الحق الإمام',
+    title: 'تتبع قراءة الإمام',
     line: 'افتح المصحف وهو يقرأ، والتطبيق ينوّر الكلمة اللي بيقولها الإمام وإنت تتابع بعينك.',
   },
   {

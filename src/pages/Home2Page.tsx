@@ -40,7 +40,7 @@ const SECTIONS: {
     Icon: BookOpen,
     tabs: [
       { label: 'المصحف', route: 'mushaf' },
-      { label: 'الحق الإمام', route: 'follow' },
+      { label: 'تتبع قراءة الإمام', route: 'follow' },
     ],
   },
 ];

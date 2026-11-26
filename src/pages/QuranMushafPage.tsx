@@ -1634,7 +1634,7 @@ export default function QuranMushafPage({
   // during render, so a deps entry referencing a const declared below
   // throws a TDZ ReferenceError on first render and blanks the page
   // (no error boundary) — that is exactly what broke #/mushaf in c9587b5.
-  // Follow-the-imam mode ("الحق الإمام"; the bottom tab still says تتبع القراءة until item 6.1): listen to the imam, lock onto
+  // Follow-the-imam mode ("تتبع قراءة الإمام", owner decision 2026-11-26): listen to the imam, lock onto
   // the ayah being recited, open its Mushaf page fullscreen, and move a
   // clear amber highlight along with the recitation. Listening runs on
   // the browser's live speech recognition where available (free, instant)
@@ -2454,7 +2454,7 @@ export default function QuranMushafPage({
   useEffect(() => { followInterimRef.current = onFollowInterim; });
 
   // ---- W5-N3: continuous follow-the-imam on the Quran-Lab ear ----------
-  // «الحق الإمام» → «ابدأ»: when the device ear is on and loaded (or
+  // «تتبع قراءة الإمام» → «ابدأ»: when the device ear is on and loaded (or
   // cached), the start tap opens THIS path instead of the lock-once one.
   // Same mic path as the tasmee' ear (QuranLabPhonemeTap: stream asked
   // inside the tap, iOS rebuild logic); each decoded chunk's phonemes go
@@ -4179,7 +4179,7 @@ export default function QuranMushafPage({
           <div className="flex items-center justify-center gap-3 flex-wrap bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-1.5 mb-2">
             <span className="flex items-center gap-2 text-sm font-bold text-emerald-800">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              الحق الإمام شغال
+              تتبع قراءة الإمام شغال
             </span>
             <button onClick={() => { setShowFullscreen(true); requestNativeFullscreen(); }}
               className="px-3 py-1.5 text-sm font-bold text-emerald-700 bg-white border border-emerald-300 rounded-lg polish-press">
@@ -4542,7 +4542,7 @@ export default function QuranMushafPage({
           {(followOn || startInFollow) && !followPos && !showRatelIntro && (
             <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70 p-6" onClick={(e) => e.stopPropagation()}>
               <div className="w-full max-w-md bg-emerald-900 rounded-2xl p-5 shadow-2xl text-white">
-                <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> الحق الإمام</p>
+                <p className="font-bold flex items-center gap-2 text-lg"><StudioMic className="w-6 h-6 text-amber-300" /> تتبع قراءة الإمام</p>
                 {followHelpShow && (<>
                 {followHelpOpen && (<>
                 <p className="text-[11px] text-emerald-200/80 mt-2">التعليمات دي هتظهر أول 3 مرات بس.</p>
@@ -5276,7 +5276,7 @@ export default function QuranMushafPage({
                       {followTracking
                         ? (followTrack === 'following' ? 'تابعت' : followTrack === 'searching' ? 'بدوّر على الموضع…' : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'بسمع…')
                         : followStatus === 'locked' && followPos
-                        ? 'الحق الإمام شغال'
+                        ? 'تتبع قراءة الإمام شغال'
                         : followMicWaiting ? 'بانتظار إذن الميكروفون…' : 'جارٍ الاستماع للإمام…'}
                     </span>
                     <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
