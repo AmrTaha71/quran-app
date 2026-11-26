@@ -10,7 +10,7 @@
 //               | {type:'tokens', text, ids, chunkMs, chunks} | {type:'error', message}
 import * as ort from 'onnxruntime-web/webgpu';
 import { OnlineFbank, FBANK_DIM } from '../lib/kaldiFbank';
-import { QURANLAB_BASE as BASE, QURANLAB_MODEL_URL as MODEL_URL, QURANLAB_MODEL_CACHE as MODEL_CACHE } from '../lib/earModelCache';
+import { QURANLAB_BASE as BASE, QURANLAB_MODEL_URL as MODEL_URL, QURANLAB_MODEL_CACHE as MODEL_CACHE, QURANLAB_MODEL_CACHE_PREFIX as MODEL_CACHE_PREFIX } from '../lib/earModelCache';
 const PAD_LOG = Math.log(1e-10);
 
 type StateSpec = { name: string; type: 'float32' | 'int64'; shape: number[] };
@@ -63,6 +63,16 @@ async function fetchModel(): Promise<ArrayBuffer> {
   return buf.buffer;
 }
 
+/** 3.7: a new model ships under a new cache name (QURANLAB_MODEL_VERSION);
+ *  the old version's cache is deleted here so two models never sit on the
+ *  device together. */
+async function dropStaleModelCaches() {
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith(MODEL_CACHE_PREFIX) && k !== MODEL_CACHE).map((k) => caches.delete(k)));
+  } catch { /* no Cache API */ }
+}
+
 function resetStates() {
   if (!spec) return;
   states = {};
@@ -78,10 +88,30 @@ function resetStates() {
   chunkNo = 0;
 }
 
+/** 3.6: the two small JSON files beside the model. Checked (a 404 used to
+ *  surface as a bare SyntaxError from .json()) and kept in the model cache
+ *  so they are not fetched again on every load. */
+async function fetchJson<T>(name: string): Promise<T> {
+  const url = `${BASE}${name}`;
+  let cache: Cache | null = null;
+  try {
+    cache = await caches.open(MODEL_CACHE);
+    const hit = await cache.match(url);
+    if (hit) return await hit.json() as T;
+  } catch { cache = null; }
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${name} ${res.status}`);
+  const text = await res.text();
+  const data = JSON.parse(text) as T;
+  try { await cache?.put(url, new Response(text, { headers: { 'content-type': 'application/json' } })); } catch { /* quota */ }
+  return data;
+}
+
 async function load() {
   const t0 = performance.now();
-  spec = await (await fetch(`${BASE}states.json`)).json();
-  tokens = await (await fetch(`${BASE}tokens.json`)).json();
+  void dropStaleModelCaches();
+  spec = await fetchJson<Spec>('states.json');
+  tokens = await fetchJson<Record<string, string>>('tokens.json');
   const model = await fetchModel();
   session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
   resetStates();
