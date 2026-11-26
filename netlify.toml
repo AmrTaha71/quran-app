@@ -6,3 +6,16 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# 9.6 (2026-11-26): the same headers as vercel.json (the live site is on
+# Vercel; this keeps a Netlify deploy equal). COOP/COEP make the page
+# cross-origin isolated, so the on-device ear runs multi-threaded.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "credentialless"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "microphone=(self), camera=(), geolocation=(self), payment=()"
