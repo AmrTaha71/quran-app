@@ -1,10 +1,17 @@
 // Browser smoke test: loads the locally served build, checks that the page
 // renders visible text, opens the self-test entry, and prints a JSON summary.
 // Starts no server; run `npx vite preview --port 4173` first.
-import { chromium } from '/tmp/pwt/node_modules/playwright-core/index.mjs';
+// 9.13: Playwright comes from the environment, not a machine-only path:
+// PW_MODULE (module name or absolute path to its index.mjs), else the
+// 'playwright' package. CHROME_PATH picks the browser binary (unset =
+// Playwright's own). OUT_DIR is where screenshots go (default: os tmp).
+import os from 'node:os';
+import path from 'node:path';
+const { chromium } = await import(process.env.PW_MODULE || 'playwright');
 
-const BASE = 'http://localhost:4173/';
-const CHROME = '/usr/bin/google-chrome';
+const BASE = process.env.SMOKE_BASE || 'http://localhost:4173/';
+const CHROME = process.env.CHROME_PATH || undefined;
+const OUT_DIR = process.env.OUT_DIR || os.tmpdir();
 const VIEWPORT = { width: 820, height: 1180 };
 const RENDER_TIMEOUT_MS = 20000;
 
@@ -40,7 +47,7 @@ try {
     rendered = false;
   }
 
-  await page.screenshot({ path: '/tmp/pwt/home.png' });
+  await page.screenshot({ path: path.join(OUT_DIR, 'smoke-home.png') });
 
   // Open the self-test page through a link or button whose text contains «اختبر».
   let openedSelfTest = false;
@@ -58,7 +65,7 @@ try {
     }
   }
   if (openedSelfTest) {
-    await page.screenshot({ path: '/tmp/pwt/selftest.png' });
+    await page.screenshot({ path: path.join(OUT_DIR, 'smoke-selftest.png') });
   }
 
   const title = await page.title();

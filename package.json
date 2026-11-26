@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "node --test src/lib/*.test.ts"
+    "test": "node --test src/lib/*.test.ts",
+    "version:native": "node scripts/bump-native-version.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",
