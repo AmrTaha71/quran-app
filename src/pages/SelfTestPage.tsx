@@ -1767,6 +1767,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Extra spoken words (strict levels only): current ayah's extras,
   // per-ayah extras for the review list, and continuous-mode extras.
   const [wrongExtras, setWrongExtras] = useState<string[]>([]);
+  // Items 4.5(a)/17.4: the user disputed the engine on this ayah.
+  const [engineDisputed, setEngineDisputed] = useState(false);
   const [extraByAyah, setExtraByAyah] = useState<Record<number, string[]>>({});
   const [contExtras, setContExtras] = useState<string[]>([]);
   // Continuous-mode display state (matched words / current ayah).
@@ -2529,6 +2531,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setCountdown(liveRef.current.corrDelay);
     setWrongIndices([]);
     setWrongExtras([]);
+    setEngineDisputed(false);
     // FEAT5-B: leaving the ayah cancels any armed post-correction resume.
     postCorrRef.current = null;
     setPostCorrHint(false);
@@ -7111,6 +7114,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </p>
                   {wrongExtras.length > 0 && (
                     <p className="text-sm text-amber-link mt-3">كلمات زائدة سمعتها: {wrongExtras.join(' ')}</p>
+                  )}
+                  {/* Item 17.4: the written difference, word by word. */}
+                  {wrongIndices.length > 0 && (() => {
+                    const exp = expectedWordList(ayahs[index].ayah_text);
+                    const heardToks = spokenTokens(liveRef.current.finals);
+                    return (
+                      <ul className="text-sm text-accent-700 mt-3 space-y-0.5" dir="rtl">
+                        {wrongIndices.slice(0, 8).map((i) => (
+                          <li key={i}>
+                            «{exp[i]?.orig}»: {heardToks.length === 0 ? 'ما اتسمعتش' : i >= heardToks.length ? 'ناقصة (وقفت قبلها)' : 'ناقصة أو مبدَّلة'}
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
+                  {/* Items 4.5(a) + 17.4: the user can say the ENGINE misheard.
+                      The pending review verdict for this ayah is dropped BEFORE
+                      it reaches the review table (flushSrs runs on leaving the
+                      ayah). The score itself is unchanged. */}
+                  {srsPendingRef.current && !engineDisputed && (
+                    <button onClick={() => { srsPendingRef.current = null; setEngineDisputed(true); diagPush('engine-disputed', { label: `${ayahs[index].surah_no}:${ayahs[index].ayah_no}` }); }}
+                      className="mt-3 block mx-auto text-sm font-semibold text-accent-600 underline">
+                      قلتها صح — الجهاز هو اللي سمع غلط
+                    </button>
+                  )}
+                  {engineDisputed && (
+                    <p className="text-xs text-accent-600 mt-2">تمام — الآية دي مش هتدخل جدول المراجعة بسبب السمعة دي (غير مؤكَّد).</p>
                   )}
                   {(wrongByAyah[index]?.length ?? 0) > 0 && (
                     <button onClick={() => replayAyahCorrection()}
