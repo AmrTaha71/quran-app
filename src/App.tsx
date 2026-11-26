@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { supabase } from './lib/supabase';
 import {
@@ -193,12 +193,52 @@ function switchRoute(prev: Route, next: Route, apply: () => void): void {
   }
 }
 
+// 6.17: per-route scroll memory (sessionStorage, this tab only).
+const SCROLL_KEY = 'quran-route-scroll-v1';
+const OWN_SCROLL: Route[] = ['mushaf', 'follow', 'test'];
+function saveRouteScroll(r: Route, y: number) {
+  if (OWN_SCROLL.includes(r)) return;
+  try {
+    const m = JSON.parse(sessionStorage.getItem(SCROLL_KEY) || '{}') as Record<string, number>;
+    m[r] = Math.max(0, Math.round(y));
+    sessionStorage.setItem(SCROLL_KEY, JSON.stringify(m));
+  } catch { /* ignore */ }
+}
+function restoreRouteScroll(r: Route) {
+  let y = 0;
+  if (!OWN_SCROLL.includes(r)) {
+    try { y = (JSON.parse(sessionStorage.getItem(SCROLL_KEY) || '{}') as Record<string, number>)[r] || 0; } catch { y = 0; }
+  }
+  const go = (top: number) => { try { window.scrollTo(0, top); if (top === 0) { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } } catch { /* ignore */ } };
+  go(0);
+  if (y <= 0) return;
+  // A lazy page may need a moment to reach its full height.
+  let tries = 0;
+  const tick = () => {
+    if (document.documentElement.scrollHeight - window.innerHeight >= y || tries >= 12) { go(y); return; }
+    tries++; window.setTimeout(tick, 50);
+  };
+  requestAnimationFrame(tick);
+}
+
 function AppContent() {
   const [route, setRoute] = useState<Route>(getRouteFromHash());
-  // Every page opens at its top, not wherever the previous page was scrolled to.
-  useEffect(() => {
-    try { window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0; } catch { /* ignore */ }
+  // 6.17: a page opens where the user left it in this session (scroll
+  // saved per route in sessionStorage), or at its top the first time.
+  // The Mushaf / follow / test pages keep their own position logic.
+  const lastScrollRef = useRef(0);
+  const scrollRouteRef = useRef<Route>(route);
+  useLayoutEffect(() => {
+    const prev = scrollRouteRef.current;
+    scrollRouteRef.current = route;
+    if (prev !== route) saveRouteScroll(prev, lastScrollRef.current);
+    restoreRouteScroll(route);
   }, [route]);
+  useEffect(() => {
+    const onScroll = () => { lastScrollRef.current = window.scrollY; };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   const [session, setSession] = useState<Session | null>(null);
   // Bumped after the device picker is answered, so it unmounts.
   const [, setDeviceTick] = useState(0);

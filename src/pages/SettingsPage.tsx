@@ -140,7 +140,10 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setBackTarget({ label: 'عودة إلى الإعدادات', onBack: () => setOpenDoor(null) });
     return () => setBackTarget(null);
   }, [openDoor]);
+  const doorScrollFirst = useRef(true);
   useEffect(() => {
+    // The first run is the page opening: App restores its scroll (6.17).
+    if (doorScrollFirst.current) { doorScrollFirst.current = false; if (openDoor === null) return; }
     try {
       if (openDoor === null) { const y = hubScrollRef.current; requestAnimationFrame(() => window.scrollTo(0, y)); }
       else window.scrollTo(0, 0);
