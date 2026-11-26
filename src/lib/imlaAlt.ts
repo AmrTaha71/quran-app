@@ -1,4 +1,6 @@
-// GENERATED 2026-11-10. Do not hand-edit (regenerate instead).
+// GENERATED 2026-11-10. Do not hand-edit (regenerate instead) — except the
+// IMLA_PAIR_ALT_MANUAL merge at the end of this file, which must survive a rebuild.
+import { IMLA_PAIR_ALT_MANUAL } from './imlaPairManual';
 // The Quran text in the database is IndoPak rasm; speech recognizers
 // answer in everyday (imla'i) spelling, and the on-device model in
 // Uthmani spelling. This table lists, for each normalized IndoPak word
@@ -17,3 +19,6 @@ export const IMLA_ALT: Record<string, string[]> = {"االذكرين":["الذك
 // Two IndoPak tokens that are ONE word in everyday spelling (the
 // in-word iqlab space: «اَنۭۡ بِيَآءَ» = أنبياء), keyed "first second".
 export const IMLA_PAIR_ALT: Record<string, string[]> = {"الان با":["الانبا"],"الان بيا":["الانبيا"],"الذن ب":["الذنب"],"ان با":["انبا"],"ان باهم":["انباهم"],"ان باوا":["انبا"],"ان بايكم":["انبايكم"],"ان بايها":["انبايها"],"ان بتت":["انبتت"],"ان بتنا":["انبتنا"],"ان بعاثهم":["انبعاثهم"],"ان بوني":["انبيوني"],"ان بيا":["انبيا"],"او اباونا":["اواباونا"],"او لما":["اولما"],"اين ما":["اينما"],"بالجن ب":["بالجنب"],"بذن به":["بذنبه"],"بعد ما":["بعدما"],"تن بت":["تنبت"],"تن بتوا":["تنبتوا"],"جن ب":["جنب"],"ذن ب":["ذنب"],"ذن بك":["ذنبك"],"سن بلات":["سنبلات"],"سن بله":["سنبله"],"فان بتنا":["فانبتنا"],"فان بجست":["فانبجست"],"فان بذ":["فانبذ"],"فما ذا":["فماذا"],"لجن به":["لجنبه"],"لذن بك":["لذنبك"],"و حشرنا":["وحشرنا"],"و للرسول":["وللرسول"],"و يعلم":["ويعلم"],"وان بتت":["وانبتت"],"وان بتنا":["وانبتنا"],"وان بتها":["وانبتها"],"ويستن بونك":["ويستنبيونك"],"يستن بطونه":["يستنبطونه"],"ين بت":["ينبت"],"ين بغي":["ينبغي"],"ين بوعا":["ينبوعا"]};
+
+// Hand-added pairs (see imlaPairManual.ts). Generated entries win on a clash.
+for (const [k, v] of Object.entries(IMLA_PAIR_ALT_MANUAL)) if (!IMLA_PAIR_ALT[k]) IMLA_PAIR_ALT[k] = v;
