@@ -1310,8 +1310,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [appShell] = useState(detectAppShell);
   const BUILD_SHA = typeof __BUILD_SHA__ === 'string' && __BUILD_SHA__ ? __BUILD_SHA__ : 'dev';
   const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'}`;
-  // Debug stamp lines are admin-only (flag set by Settings' admin check).
-  // Shown by default while recitation correction is being tuned (2026-11-08); set 'quran-show-diag' = '0' to hide.
+  // Debug stamp lines + the diagnostics log: see showDiag below (item 2.11).
   // Standing note about correction clips: stays until the user taps «فهمت».
   const CORR_NOTE_KEY = 'quran-corr-note-ack-v1';
   const [corrNoteAck, setCorrNoteAck] = useState<boolean>(() => { try { return localStorage.getItem(CORR_NOTE_KEY) === '1'; } catch { return false; } });
@@ -1323,7 +1322,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         className="mt-3 px-4 py-2 rounded-xl bg-emerald-700 text-white text-sm font-bold">فهمت</button>
     </div>
   );
-  const showDiag = (() => { try { return localStorage.getItem('quran-show-diag') !== '0'; } catch { return true; } })();
   // D1 shell-aware mic-absent wording (R7): when SR is absent AND
   // the shell is known, name the shell and the actionable move
   // (open in Safari) instead of only the generic message. The claim
@@ -1691,6 +1689,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const isAdminViewRef = useRef(isAdminView);
   isAdminViewRef.current = isAdminView;
   const runLevel = runLevelFor(verifyLevel, isAdminView);
+  // Item 2.11 (2026-11-26): developer diagnostics (build stamp, event log)
+  // are hidden from regular users. Shown for the admin view, or with
+  // ?debug=1 in the URL. The old 'quran-show-diag' key still works:
+  // '1' forces it on, '0' forces it off (even for the admin).
+  const showDiag = (() => {
+    try {
+      const v = localStorage.getItem('quran-show-diag');
+      if (v === '0') return false;
+      if (v === '1') return true;
+      return isAdminView || new URLSearchParams(window.location.search).get('debug') === '1';
+    } catch { return isAdminView; }
+  })();
   const [reciteMode, setReciteMode] = useState<ReciteMode>(() => loadTestSettings().mode);
   const [corrDelay, setCorrDelay] = useState<number>(() => loadTestSettings().corrDelay);
   const [corrDelayMode, setCorrDelayMode] = useState<CorrDelayMode>(() => loadTestSettings().corrDelayMode);
@@ -7088,7 +7098,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 )}
               </div>
             )}
-            {/* Always-visible diagnostics copy (2026-11-08): one tap, right under the score. */}
+            {/* Diagnostics copy (item 2.11): only for the admin/debug view, or
+                on a failed run (nothing matched) so a problem can still be reported. */}
+            {(showDiag || contZeroMatch) && (
             <div className="flex flex-col items-center gap-1">
               <button type="button" onClick={() => void diagCopyJson()}
                 className="min-h-[48px] px-6 rounded-xl bg-slate-800 text-white font-bold">
@@ -7096,6 +7108,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
               {diagCopied && <span className="text-sm text-emerald-700">{diagCopied}</span>}
             </div>
+            )}
             {!contZeroMatch && testMode === 'continuous' && (
               <div className="bg-white border border-hairline rounded-xl px-4 py-3">
                 <p className="text-sm text-accent-600 leading-relaxed" dir="rtl">
