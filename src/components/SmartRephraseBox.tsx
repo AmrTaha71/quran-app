@@ -107,12 +107,17 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
 
   const handleAccept = async () => {
     try {
-      await supabase.from('rephrased_contents').insert({
+      // Item 1.2: record the author so RLS lets them see their own row.
+      // 'approved' is an admin action: RLS rejects it for non-admins (1.1).
+      const uid = (await supabase.auth.getSession()).data.session?.user.id ?? null;
+      const { error: insErr } = await supabase.from('rephrased_contents').insert({
         verse_id: verse.id,
         original_text: originalText,
         rephrased_text: rephrasedText,
         status: 'approved',
+        created_by: uid,
       });
+      if (insErr) throw insErr;
       setSaveStatus('saved');
       setTimeout(() => resetAll(), 2000);
     } catch {
