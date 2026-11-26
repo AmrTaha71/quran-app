@@ -930,6 +930,21 @@ Deno.serve(async (req: Request) => {
     // the v14 lock release.
     supabaseClient = createClient(supabaseUrl!, serviceRoleKey!);
 
+    // Item 1.9 (2026-11-26): free-text mode ({text, voice}, no mode) is for
+    // admin link generation only (LinkModal / AdminPage). corr, tafsir and
+    // dialogue stay open to every signed-in user. Fail closed on a lookup
+    // error. Checked before any lock, cap or spend.
+    if (!isCorrMode && !isTafsirMode && !isDialogueMode) {
+      const { data: adminRow, error: adminErr } = await supabaseClient
+        .from("admin_users").select("user_id").eq("user_id", userId).maybeSingle();
+      if (adminErr || !adminRow) {
+        return new Response(
+          JSON.stringify({ error: "هذه الخدمة للمشرفين فقط" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Position-mode verification (v12): rebuild the spoken text
     // from the seeded quran_verses rows and reject ANY mismatch.
     // Lengths only in the log — never the texts. Runs BEFORE the
@@ -1396,7 +1411,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    let audioBuffer: ArrayBuffer;
+    let audioBuffer!: ArrayBuffer;
     let ttsModel = "azure";
     let ttsProvider = "azure";
     let ttsCost: number | null = null;
@@ -1409,11 +1424,25 @@ Deno.serve(async (req: Request) => {
     let corrCacheable = false;
     let corrEngine = "";
 
+    // Item 4.2 (2026-11-26): Azure first when configured, but an Azure
+    // failure now falls through to Realtime → Speech instead of a 500.
+    // corrEngine always names the engine that really produced the audio,
+    // so the cache file name never puts Realtime audio under an Azure key
+    // (or the reverse). As of 2026-11-26 no Azure call was ever logged in
+    // ai_usage_events, i.e. AZURE_SPEECH_KEY is not set live and this
+    // branch is dormant.
+    let azureOk = false;
     if (azureKey) {
-      audioBuffer = await generateAzureTTS(text, voice || "male", azureKey, azureRegion);
-      corrCacheable = true;
-      corrEngine = "azure";
-    } else {
+      try {
+        audioBuffer = await generateAzureTTS(text, voice || "male", azureKey, azureRegion);
+        corrCacheable = true;
+        corrEngine = "azure";
+        azureOk = true;
+      } catch (azErr) {
+        console.warn("azure failed, falling back to realtime:", String((azErr as Error)?.message || azErr).slice(0, 200));
+      }
+    }
+    if (!azureOk) {
       // v10: Realtime first; the old Speech chain is the fallback.
       try {
         const rt = await generateViaRealtime(text, voice || "male", openaiKey!, effectiveSpeed);
