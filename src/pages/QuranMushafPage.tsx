@@ -730,6 +730,15 @@ export default function QuranMushafPage({
   const tafsirCache = useRef<Record<string, string>>({});
 
   const edition = EDITIONS[selectedEdition];
+  // Item 5.13: a page that fails to load while offline points to the
+  // offline page download (Settings), the moment the reader needs it.
+  const offlinePagesCta = typeof navigator !== 'undefined' && navigator.onLine === false ? (
+    <div className="mt-3 max-w-xs mx-auto" onClick={(e) => e.stopPropagation()}>
+      <p className="text-sm text-amber-700 leading-relaxed mb-2">انت مش متصل بالإنترنت. تقدر تنزّل صفحات المصحف مرة واحدة وتقرأ بعدها من غير نت.</p>
+      <button type="button" onClick={() => { exitFullscreenView(); onNavigate('settings'); }}
+        className="px-4 py-2 grad-emerald-door text-white text-sm font-semibold rounded-lg polish-press">نزّل صفحات المصحف من الإعدادات</button>
+    </div>
+  ) : null;
   // Item 5.11: one tap from a non-Madinah edition's warning to Madinah.
   const switchToMadinah = () => {
     const idx = EDITIONS.findIndex((e) => e.id === 'madinah');
@@ -4268,6 +4277,7 @@ export default function QuranMushafPage({
                     className="px-4 py-2 grad-amber-door text-white text-sm font-semibold rounded-lg transition-smooth polish-press">
                     إعادة المحاولة
                   </button>
+                  {offlinePagesCta}
                 </div>
               ) : (
                 <RetryPageImg key={`${edition.id}-${currentPage}`} src={edition.imageUrl(currentPage)}
@@ -5212,6 +5222,7 @@ export default function QuranMushafPage({
                   <p className="text-white/50 text-base">تعذر تحميل الصفحة</p>
                   <button onClick={(e) => { e.stopPropagation(); setImageError(false); setImageLoading(true); }}
                     className="mt-3 px-4 py-2 grad-amber-door text-white text-sm rounded-lg polish-press">إعادة المحاولة</button>
+                  {offlinePagesCta}
                 </div>
               )}
 
