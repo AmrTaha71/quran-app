@@ -259,6 +259,15 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
   // cannot stop the listening (2026-10-30 report: screen went off
   // mid-listen). If wakeLock is unavailable, background audio is
   // the fallback. Released on overlay close, pause, or unmount.
+  const stickSentinelRef = useRef<HTMLDivElement | null>(null);
+  const [compactNow, setCompactNow] = useState(false);
+  useEffect(() => {
+    const el = stickSentinelRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(([e]) => setCompactNow(!e.isIntersecting && e.boundingClientRect.top < 0));
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const [blackScreen, setBlackScreen] = useState(false);
   const [showBlackHint, setShowBlackHint] = useState(false);
   const blackPressRef = useRef<{ t: number; x: number; y: number } | null>(null);
@@ -778,8 +787,25 @@ export default function AdhkarPage({ onNavigate, visible = true }: { onNavigate:
         {/* Now playing — first: the play control is the primary
             action on this page, so the sleep timer sits below it
             (2026-11-06 beauty pass), not above it. */}
-        <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 mt-4 polish-listen-card sticky top-0 z-30">
-          {completed ? (
+        {/* 7.6: once the card sticks at the top while scrolling the
+            list, it shrinks to one bar (the dhikr title + play/pause) so
+            it stops covering the list. The sentinel marks where it sticks. */}
+        <div ref={stickSentinelRef} aria-hidden="true" className="h-px mt-4" />
+        <div className={`bg-white rounded-2xl border border-hairline-emerald shadow-sm polish-listen-card sticky top-0 z-30 ${compactNow && !completed ? 'px-4 py-2' : 'p-5'}`}>
+          {compactNow && !completed ? (
+            <div className="flex items-center gap-3">
+              <p className="flex-1 min-w-0 truncate text-base font-bold text-accent-900">{index + 1}/{list.length} — {preview(clip.display)}</p>
+              {playing ? (
+                <button onClick={pause} className="p-3 grad-emerald-door text-white rounded-full polish-press" aria-label="إيقاف">
+                  <Pause className="w-5 h-5" />
+                </button>
+              ) : (
+                <button onClick={play} className="p-3 grad-emerald-door text-white rounded-full polish-press" aria-label="تشغيل">
+                  <Play className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          ) : completed ? (
             <div className="text-center">
               <p className="text-lg font-bold text-emerald-700">تم وردك ✓</p>
               <p className="text-base text-accent-700 mt-1">أذكار {wird === 'morning' ? 'الصباح' : 'المساء'} كاملة — تقبّل الله.</p>
