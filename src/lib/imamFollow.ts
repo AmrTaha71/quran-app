@@ -47,7 +47,7 @@ function gramCode(s: string, i: number): number {
   return ((s.charCodeAt(i) * 65536 + s.charCodeAt(i + 1)) * 65536 + s.charCodeAt(i + 2)) * 65536 + s.charCodeAt(i + 3);
 }
 /** Positions in the Mushaf letters where H[i..i+4) occurs (empty if none). */
-function gramHits(idx: FollowIndex, H: string, i: number): { from: number; to: number } {
+export function gramHits(idx: FollowIndex, H: string, i: number): { from: number; to: number } {
   const k = gramCode(H, i);
   const K = idx.gramKey;
   let lo = 0, hi = K.length;
@@ -58,7 +58,7 @@ function gramHits(idx: FollowIndex, H: string, i: number): { from: number; to: n
   return { from, to: lo };
 }
 
-const GRAM = 4;
+export const GRAM = 4;
 
 /** Phonetic script → skeleton (same rules as phonemeEar.phonSkel). */
 export function followSkel(s: string): string {

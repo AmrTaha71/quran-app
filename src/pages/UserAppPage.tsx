@@ -5,6 +5,7 @@ import StudioMic from '../components/StudioMic';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Sama3 from '../components/Sama3';
 import { supabase } from '../lib/supabase';
+import AyahVoiceSearch from '../components/AyahVoiceSearch';
 import { loadVerseIndex, loadLinkIndex, searchVerseIds } from '../lib/searchIndex';
 import { signOut } from '../lib/auth';
 import type { QuranVerse, AyahLink } from '../lib/types';
@@ -153,6 +154,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [searchHint, setSearchHint] = useState('');
+  const [ayahVoiceOpen, setAyahVoiceOpen] = useState(false);
   // Voice search: browser SpeechRecognition, locale follows the chosen UI
   // language (ar-EG for Egyptian dialect, ar-SA otherwise), same pattern as
   // LinkModal. The transcript is written into `search`, so the same
@@ -713,6 +715,12 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     <StudioMic className="w-5 h-5" />
                   </button>
                 </div>
+                {/* 15.7: find an ayah by reciting a piece of it. */}
+                <button type="button" onClick={() => setAyahVoiceOpen(true)}
+                  className="mt-2 w-full min-h-[44px] px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-sm font-bold flex items-center justify-center gap-2 polish-press">
+                  <StudioMic className="w-5 h-5" /> سمّع جزء من آية ونقولك هي فين
+                </button>
+                {ayahVoiceOpen && <AyahVoiceSearch onClose={() => setAyahVoiceOpen(false)} />}
                 {searchHint && (
                   <div className="flex items-center gap-1.5 text-sm text-emerald-700 bg-emerald-50 px-3 py-2 rounded-lg border border-hairline-emerald mt-2">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
