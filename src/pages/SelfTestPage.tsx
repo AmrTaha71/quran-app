@@ -297,6 +297,10 @@ interface TestProgress {
   // (see resumeTest) instead of the covering range, so no non-weak
   // ayah ever sneaks back in.
   explicitIds?: number[];
+  // Item 2.3: 'continuous' = saved mid-way through a continuous test;
+  // resume starts a NEW continuous run from ayah `index` (the earlier
+  // part is not scored again). Missing = ayah-by-ayah.
+  mode?: 'continuous';
 }
 function loadProgress(): TestProgress | null {
   try {
@@ -2509,6 +2513,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     const e = rangeEnd || globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + to - 1);
     return { surah: s.surah, from: s.ayah, to: e.ayah, index: index0, grades: grades0, skipped: skipped0, startGlobal: s.global, endGlobal: e.global, endSurah: e.surah, endAyah: e.ayah, explicitIds: explicitAyahIdsRef.current ?? undefined };
   };
+  // Item 2.3: continuous tests keep their place too. Every time the
+  // reciter reaches a new ayah the position is saved, so leaving by any
+  // route (cancel button, bottom bar, closing the app) can be resumed.
+  useEffect(() => {
+    if (phase !== 'testing' || testMode !== 'continuous' || explicitAyahIdsRef.current) return;
+    if (ayahs.length === 0 || contProgress.ayahIdx <= 0 || contProgress.ayahIdx >= ayahs.length) return;
+    saveProgress({ ...makeProgress(contProgress.ayahIdx, [], []), mode: 'continuous' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, testMode, contProgress.ayahIdx, ayahs.length]);
 
   // Feature #5 — weak ayahs: the source is the user's OWN toggles,
   // the same user_lists rows the Mushaf/lists UI writes (see
@@ -2857,8 +2870,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       })();
       return;
     }
-    // Resume is always ayah-by-ayah (continuous tests save no
-    // mid-stream progress), without touching the saved preference.
+    // Item 2.3: a continuous save resumes as a new continuous run from
+    // the saved ayah. Otherwise resume is ayah-by-ayah, without touching
+    // the saved preference.
+    if (p.mode === 'continuous' && typeof p.startGlobal === 'number' && typeof p.endGlobal === 'number') {
+      void startTestGlobal(Math.min(p.endGlobal, p.startGlobal + p.index), p.endGlobal, null, 'continuous');
+      return;
+    }
     if (typeof p.startGlobal === 'number' && typeof p.endGlobal === 'number') {
       void startTestGlobal(p.startGlobal, p.endGlobal, { index: p.index, grades: p.grades, skipped: p.skipped }, 'ayah');
     } else {
@@ -6131,6 +6149,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     ? <>من سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} آية {savedProgress.from.toLocaleString('ar-EG')} إلى سورة {SURAHS.find((s) => s.no === savedProgress.endSurah)?.name || ''} آية {(savedProgress.endAyah || savedProgress.to).toLocaleString('ar-EG')}</>
                     : <>سورة {SURAHS.find((s) => s.no === savedProgress.surah)?.name || ''} — من آية {savedProgress.from.toLocaleString('ar-EG')} إلى آية {savedProgress.to.toLocaleString('ar-EG')}</>}
                   ، واقف عند الآية رقم {savedProgress.index + 1}
+                  {savedProgress.mode === 'continuous' && <> — تسميع متصل: الاستكمال بيبدأ تسميع متصل جديد من الآية دي</>}
                 </p>
                 <div className="flex gap-3">
                   <button onClick={resumeTest} disabled={recording && !!savedProgress.endSurah && savedProgress.endSurah !== savedProgress.surah}
@@ -6808,9 +6827,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
             {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
-            <button onClick={() => { diagPush('tap', { label: 'stop-to-setup' }); stopContinuousMic(); setPhase('setup'); }}
+            <button onClick={() => { diagPush('tap', { label: 'stop-to-setup' }); stopContinuousMic(); setSavedProgress(loadProgress()); setPhase('setup'); }}
               className="block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
-              إلغاء التسميع والعودة للإعدادات
+              {contProgress.ayahIdx > 0 && !explicitAyahIdsRef.current ? 'إنهاء التسميع وحفظ مكاني' : 'إنهاء بدون حفظ والعودة للإعدادات'}
             </button>
           </div>
         )}
