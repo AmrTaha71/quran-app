@@ -685,6 +685,10 @@ export default function QuranMushafPage({
   // (with a choice of three published tafsirs inside it). Links is
   // the default tab; hopping between similar ayahs keeps the
   // mutashabihat tab so verses can still be compared by hopping.
+  // W5-D: one-line feedback under «احفظها لبعدين» (cleared per ayah).
+  const [saveLaterMsg, setSaveLaterMsg] = useState<string | null>(null);
+  useEffect(() => { setSaveLaterMsg(null); }, [selectedVerse]);
+  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'asbab' | 'tafsir'>('links');
   // Item 5.21: irab iframe state; 15 s without a load counts as failed.
   const [irabState, setIrabState] = useState<'loading' | 'ok' | 'error'>('loading');
   const [irabTry, setIrabTry] = useState(0);
@@ -694,10 +698,6 @@ export default function QuranMushafPage({
     const t = setTimeout(() => setIrabState((st) => (st === 'loading' ? 'error' : st)), 15000);
     return () => clearTimeout(t);
   }, [popupTab, irabState, irabTry]);
-  // W5-D: one-line feedback under «احفظها لبعدين» (cleared per ayah).
-  const [saveLaterMsg, setSaveLaterMsg] = useState<string | null>(null);
-  useEffect(() => { setSaveLaterMsg(null); }, [selectedVerse]);
-  const [popupTab, setPopupTab] = useState<'mutashabihat' | 'links' | 'irab' | 'meanings' | 'asbab' | 'tafsir'>('links');
   // ?debug=1 only: while the ayah popup is open, show where each touch / click really lands
   // (the event type and the element under the finger), so a dead button can be diagnosed on a phone.
   const [tapDbg, setTapDbg] = useState<string[]>([]);
