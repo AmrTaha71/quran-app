@@ -332,8 +332,6 @@ const SLEEP_TIMER_LABELS: Record<SleepTimerMinutes, string> = {
 // not something a headless render can prove). This page only owns
 // the UI: pickers, text, controls, and the offline section.
 // No whole-Quran download, no synthetic audio, no pre-generation.
-// 2026-11-06: hub-level journey resume cards are hidden (sub-doors keep their own استئناف).
-const SHOW_HUB_RESUMES = false;
 
 export default function ListenPage({ onNavigate, visible = true }: { onNavigate: (r: Route) => void; visible?: boolean }) {
   const [surah, setSurah] = useState(1);
@@ -2151,13 +2149,15 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
   // render, so referencing `locked` from the old position (above
   // its declaration) would throw a TDZ ReferenceError.
   useEffect(() => {
-    if (!visible || hubView === 'hub' || locked) {
+    // 7.1: kept while locked too; the hub's start/resume buttons are
+    // all disabled while a session is live, so no second journey.
+    if (!visible || hubView === 'hub') {
       setBackTarget(null);
       return;
     }
     setBackTarget({ label: 'عودة إلى الكروت', onBack: () => setHubView('hub') });
     return () => setBackTarget(null);
-  }, [visible, hubView, locked]);
+  }, [visible, hubView]);
 
   // Follow-along (#4): the ayah row for the now-playing bar — the
   // row must belong to the CURRENT surah (during a journey the
@@ -2382,82 +2382,41 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         </div>
       )}
       <main className="max-w-5xl mx-auto px-4 py-5">
-        {/* Resume card FIRST, when a listening wird is saved */}
-        {savedWird && showResume && (
-          <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-5 mb-4">
-            <p className="font-semibold text-accent-800">
-              استئناف من سورة {surahName(savedWird.surah)}، الآية {savedWird.ayah}
-            </p>
-            <p className="text-sm text-accent-600 mt-1">ورد استماع محفوظ من آخر مرة توقفت فيها.</p>
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={resumeSaved}
-                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
-              >
-                استئناف
-              </button>
-              <button
-                onClick={dismissResume}
-                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-              >
-                ابدأ من الأول
-              </button>
+        {/* 7.2: ONE «أكمل من حيث توقفت» card instead of up to three
+            stacked ones. The selected riwaya / hadr position wins (that
+            is the mode on screen), else the saved listening wird.
+            7.1: its buttons are locked while a recitation is live. */}
+        {(() => {
+          const slot = riwayaId !== null && savedRiwayatResume && showRiwayatResume
+            ? { line: `سورة ${surahName(savedRiwayatResume.surah)}، رواية ${RIWAYAT.find((r) => r.id === savedRiwayatResume.riwaya)?.name || ''}`, resume: resumeRiwayatSaved, dismiss: dismissRiwayatResume }
+            : hadrOn && savedHadrResume && showHadrResume
+              ? { line: `${HADR_NAME}: سورة ${surahName(savedHadrResume.surah)}`, resume: resumeHadrSaved, dismiss: dismissHadrResume }
+              : savedWird && showResume
+                ? { line: `سورة ${surahName(savedWird.surah)}، الآية ${savedWird.ayah}`, resume: resumeSaved, dismiss: dismissResume }
+                : null;
+          if (!slot) return null;
+          return (
+            <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-4 mb-4">
+              <p className="font-semibold text-accent-800">أكمل من حيث توقفت — {slot.line}</p>
+              <div className="flex gap-3 mt-3">
+                <button
+                  onClick={slot.resume}
+                  disabled={locked}
+                  className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus disabled:opacity-50"
+                >
+                  استئناف
+                </button>
+                <button
+                  onClick={slot.dismiss}
+                  disabled={locked}
+                  className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press disabled:opacity-50"
+                >
+                  ابدأ من الأول
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-
-        {/* Riwaya resume card, when a position is saved for the
-            selected riwaya. Per-riwaya: switching riwaya shows
-            that riwaya's own saved position, not another's. */}
-        {riwayaId !== null && savedRiwayatResume && showRiwayatResume && (
-          <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-5 mb-4">
-            <p className="font-semibold text-accent-800">
-              استئناف — سورة {surahName(savedRiwayatResume.surah)}، رواية{' '}
-              {RIWAYAT.find((r) => r.id === savedRiwayatResume.riwaya)?.name || ''}
-            </p>
-            <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بهذه الرواية.</p>
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={resumeRiwayatSaved}
-                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
-              >
-                استئناف
-              </button>
-              <button
-                onClick={dismissRiwayatResume}
-                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-              >
-                ابدأ من الأول
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Hadr resume card, when a hadr position is saved.
-            Mirrors the riwaya card; shown only while hadr is the
-            selected pace mode. */}
-        {hadrOn && savedHadrResume && showHadrResume && (
-          <div className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-5 mb-4">
-            <p className="font-semibold text-accent-800">
-              استئناف — {HADR_NAME}: سورة {surahName(savedHadrResume.surah)}
-            </p>
-            <p className="text-sm text-accent-600 mt-1">موضع محفوظ من آخر مرة توقفت فيها بوضع الحدر.</p>
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={resumeHadrSaved}
-                className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
-              >
-                استئناف
-              </button>
-              <button
-                onClick={dismissHadrResume}
-                className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-              >
-                ابدأ من الأول
-              </button>
-            </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Listening hub (Amr 2026-10-30): four big cards; entering a
             card shows its details below. Cards are disabled while an
@@ -2470,44 +2429,14 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
         <div className="mb-4">
           <p className="font-semibold text-accent-800 text-lg mb-1">اختر طريقة الاستماع</p>
           <Hint id="listen-free"><p className="text-sm text-accent-600 mb-4">اضغط على كارت لاختيار التفاصيل والبدء. ولتوفير البطارية، يمكنك قفل الشاشة.</p></Hint>
-          {/* Saved journey resumes first, so a returning journey
-              user continues in one tap without entering a card. */}
-          {THREE_MODES.map((m) => {
-            const saved = savedJourneys[m.id];
-            // 2026-11-06: hub-level resume cards removed (each sub-door keeps its own استئناف).
-            if (!SHOW_HUB_RESUMES || !saved || hiddenJourneyResumes.includes(m.id)) return null;
-            return (
-              <div key={`hub-resume-${m.id}`} className="bg-amber-50 rounded-2xl border border-hairline-amber shadow-sm p-4 mb-3">
-                <p className="font-semibold text-accent-800">
-                  استئناف — {m.name}:{' '}
-                  {saved.kind === 'tafsir'
-                    ? `تفسير سورة ${surahName(saved.surah)} آية ${saved.ayah}`
-                    : saved.startReciterId === JUHANI_RECITER_ID
-                      // A Juhani position is a surah file: its ayah
-                      // is always 1, so no ayah number is shown.
-                      ? `سورة ${surahName(saved.surah)} — حدر (الجهني)`
-                      : `سورة ${surahName(saved.surah)}، الآية ${saved.ayah}`}
-                </p>
-                <div className="flex gap-3 mt-3">
-                  <button
-                    onClick={() => { resumeJourneySaved(m.id); setHubView(m.id); }}
-                    className="flex-1 py-3 grad-emerald-door text-white font-bold rounded-xl polish-press polish-focus"
-                  >
-                    استئناف
-                  </button>
-                  <button
-                    onClick={() => dismissJourneyResume(m.id)}
-                    className="flex-1 py-3 bg-white border border-hairline-emerald text-accent-800 font-semibold rounded-xl polish-press"
-                  >
-                    ابدأ من الأول
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {/* 7.2: the dead hub-level journey resume block is gone; each
+              sub-door keeps its own استئناف. */}
           <div className="grid gap-3 polish-hub">
             {THREE_MODES.map((m) => {
-              const disabled = locked || (m.id === 'tadabbur' && !tafsirConfigured());
+              // 7.3: no dead card in the hub — «ختمة وتفسير» stays hidden
+              // until the tafsir clips are configured (hide only).
+              if (m.id === 'tadabbur' && !tafsirConfigured()) return null;
+              const disabled = locked;
               return (
                 <button
                   key={m.id}
