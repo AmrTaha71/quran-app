@@ -7053,7 +7053,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="bg-amber-50 border border-hairline-amber rounded-2xl p-5">
                 <p className="font-bold text-amber-800">لم يُطابق الجهاز أي كلمة — هذه ليست نتيجة ٠٪</p>
                 <p className="text-sm text-accent-700 leading-relaxed mt-2">
-                  سمعت {contHeardWords.toLocaleString('ar-EG')} كلمة، وطابقت {contMatchedWords.toLocaleString('ar-EG')} كلمة. عندما لا يطابق الجهاز أي كلمة، لا نعرض قائمة "آيات تحتاج مراجعة" ولا نسجل النتيجة في السجل، لأنها ستكون مضللة: المشكلة غالبًا في ما سمعه الجهاز أو في الميكروفون، وليست في حفظك. تأكد من الميكروفون، ثم أعد التسميع. النص الخام أدناه هو ما سمعه الجهاز حرفيًا — صوّره مع رقم النسخة إن تكرر الأمر.
+                  سمعت {contHeardWords.toLocaleString('ar-EG')} كلمة، وطابقت {contMatchedWords.toLocaleString('ar-EG')} كلمة. عندما لا يطابق الجهاز أي كلمة، لا نعرض قائمة "آيات تحتاج مراجعة" ولا نسجل النتيجة في السجل، لأنها ستكون مضللة: المشكلة غالبًا في ما سمعه الجهاز أو في الميكروفون، وليست في حفظك. تأكد من الميكروفون، ثم أعد التسميع. النص الخام أدناه هو ما سمعه الجهاز حرفيًا — لو تكرر الأمر، انسخ سجل التشخيص من الزر تحت وابعته.
                 </p>
                 <p className="text-sm text-accent-600 leading-relaxed mt-2" dir="rtl">
                   ما سمعه الجهاز حرفيًا (نص خام، مختصر للعرض): {heardCapped || '— لا يوجد نص مسموع —'}
@@ -7073,8 +7073,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <Award className="w-12 h-12 mx-auto mb-2 text-amber-200" />
               <p className="text-2xl font-bold">نتيجتك: {correct} من {attempted} ({pct}٪)</p>
               <p className="text-emerald-50 mt-2 leading-relaxed">
-                {pct >= 90 ? 'ما شاء الله — حفظ متقن، ثبّت الله ما حفظت' : pct >= 60 ? 'تقدّم طيب — راجع الآيات التي أخطأت فيها ثم أعد التسميع' : 'لا بأس — التعثر أول طريق الإتقان، راجع الآيات ثم أعد المحاولة'}
+                {pct >= 90 ? 'ما شاء الله — كلمات الحفظ سليمة، ثبّت الله ما حفظت' : pct >= 60 ? 'تقدّم طيب — راجع الآيات التي أخطأت فيها ثم أعد التسميع' : 'لا بأس — التعثر أول طريق الإتقان، راجع الآيات ثم أعد المحاولة'}
               </p>
+              {/* Item 4.4: the score measures words only — say so to everyone. */}
+              <p className="text-emerald-50/90 text-xs mt-1">الدرجة على صحة الكلمات فقط، وليست تقييمًا للتجويد</p>
               {totalReRecites(reRecites) > 0 && (
                 <p className="text-emerald-50/90 text-sm mt-1">أعيدت ممارسة {totalReRecites(reRecites).toLocaleString('ar-EG')} مرة — النتيجة لم تتغير</p>
               )}
