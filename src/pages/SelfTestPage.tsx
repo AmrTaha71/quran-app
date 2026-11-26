@@ -15,7 +15,7 @@ import MicLevelHint from '../components/MicLevelHint';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import { timingCoverage } from '../lib/corrCoverage';
 import WhisperLoadNote from '../components/WhisperLoadNote';
-import { QuranLabRecognition, earLabOn, earLabUsable, earLabMayStart, EAR_NEEDS_DOWNLOAD_MSG, markEarLabFailed } from '../lib/quranLabEar';
+import { QuranLabRecognition, earLabOn, earLabUsable, earLabMayStart, EAR_NEEDS_DOWNLOAD_MSG, markEarLabFailed, releaseEarMic } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
@@ -1440,6 +1440,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [blindMode, setBlindModeState] = useState<boolean>(() => { try { return localStorage.getItem('quran-blind-mode') === '1'; } catch { return false; } });
   const setBlindMode = (on: boolean) => { setBlindModeState(on); try { localStorage.setItem('quran-blind-mode', on ? '1' : '0'); } catch { /* ignore */ } };
   const [blindShowAll, setBlindShowAll] = useState(false);
+  // 3.22: leaving the tasmee' page lets go of the parked mic at once (it was
+  // kept 60 s for a quick next start, with the mic light on).
+  useEffect(() => () => releaseEarMic(), []);
   const paperDrawn = paperOn && paperStatus !== 'no-boxes';
   const [contHeardWords, setContHeardWords] = useState(0);
   // DIAG (Claude P0-5): on-screen event log + Copy JSON export.
