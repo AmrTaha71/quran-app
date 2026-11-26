@@ -5652,6 +5652,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
     }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    // Item 4.28: NO server fallback in self-test, on purpose (privacy and
+    // cost): the ears are the browser's speech API or the on-device
+    // model, and when both fail the attempt ends in manual grading. The
+    // extension point, if a server ear is ever wanted, is the
+    // recognizer's onerror handler below.
     // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
     // Batch 4 fallback (2026-11-10): no browser speech API -> the on-device ear, automatically.
     // 2026-11-13: the new phoneme ear (Quran-Lab), per-device flag.

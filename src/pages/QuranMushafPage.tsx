@@ -1642,9 +1642,11 @@ export default function QuranMushafPage({
   // the ayah being recited, open its Mushaf page fullscreen, and move a
   // clear amber highlight along with the recitation. Listening runs on
   // the browser's live speech recognition where available (free, instant)
-  // and falls back to 8-second Whisper chunks via the transcribe-audio
-  // edge function where it is not (Safari) — the fallback lags ~10s and
-  // spends OpenAI balance, and is labelled as such in the panel.
+  // and, where it is not (Safari), falls back to short recorded chunks
+  // transcribed ON THE DEVICE by quranEar's transcribeBlob — no upload,
+  // no cloud call, no cost (item 4.28). The 'whisper' names below are
+  // historical. The transcribe-audio edge function is used only by
+  // LinkModal, never by follow or self-test.
   const [followOn, setFollowOn] = useState(false);
   const [followReady, setFollowReady] = useState(false); // panel shown, engine not started yet
   const [followEngine, setFollowEngine] = useState<'live' | 'whisper' | 'lab' | null>(null);
@@ -2861,8 +2863,8 @@ export default function QuranMushafPage({
     // provider uses (localStorage 'app-lang'): ar-EG -> ar-EG, anything
     // else -> ar-SA. A language change mid-session does NOT retune a
     // running recognizer — the user must stop and tap again. The
-    // Whisper path has no client-side locale: the transcribe-audio edge
-    // function hardcodes language='ar'.
+    // Fallback ('whisper') path has no client-side locale: it is the
+    // on-device transcribeBlob (quranEar), Arabic only.
     // S4 DOCUMENTED INCONSISTENCY (deliberately NOT flipped here):
     // self-test pins ar-SA (SelfTestPage TEST_SPEECH_LOCALE) while
     // follow keeps ar-EG here. The V3 per-device A/B counts decide
