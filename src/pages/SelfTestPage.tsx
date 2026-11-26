@@ -241,10 +241,21 @@ function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: 
       const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
       // A stored corrDelayMode wins; otherwise migrate the legacy numeric
       // corrDelay (1-2 -> 1s, 3 -> 3s, 4+ -> 5s; missing/invalid -> 3s default).
-      const corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
-      // Item 2.6 (2026-11-26): the old one-time forced move to '1s'
-      // ('quran-corr-1s-default-v1') is gone. A stored choice is kept as
-      // is; only a missing/invalid value falls back to the 3s default.
+      let corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
+      // Item 2.6 (owner decision 2026-11-26): the old one-time forced move
+      // to '1s' ('quran-corr-1s-default-v1') is gone, and the users it
+      // moved go back to the 3s default ONCE: marker set + still on '1s'.
+      // After that the user's own choice is always kept; a missing/invalid
+      // value falls back to the 3s default.
+      try {
+        if (localStorage.getItem('quran-corr-3s-restore-v1') !== '1') {
+          localStorage.setItem('quran-corr-3s-restore-v1', '1');
+          if (localStorage.getItem('quran-corr-1s-default-v1') === '1' && corrDelayMode === '1s') {
+            corrDelayMode = '3s';
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...p, level, corrDelayMode, corrDelay: corrDelaySeconds(corrDelayMode) }));
+          }
+        }
+      } catch { /* storage blocked */ }
       const corrDelay = corrDelaySeconds(corrDelayMode);
       const corrRate: CorrRate = p.corrRate === 'slow' || p.corrRate === 'fast' || p.corrRate === 'veryFast' ? p.corrRate : 'normal';
       return { level, mode, corrDelay, corrDelayMode, corrRate };
