@@ -12,16 +12,16 @@
 // Why AlQuranCloud and not the Mushaf's Quranpedia lists, and not
 // SURAH_START_PAGES — verified 2026-11-06 against the Madinah page
 // IMAGES the app itself displays:
-// - Quranpedia's mushaf 1 is a DIFFERENT print: surah 67 starts on
-//   its page 562 (Madinah: 556), surah 77 on 580 (Madinah: 578),
-//   surah 78 on 582 — and with its lists, page 581 resolved to
-//   nothing at all. Rejected.
+// - Quranpedia's mushaf 1 lists resolved page 581 to nothing at all.
+//   Rejected. (An older note here said surah 67 is on Madinah page
+//   556; the app's scans print 67:1 on page 562 and 77:1 on 580 —
+//   corrected 2026-11-26, item 16.11.)
 // - The app's own SURAH_START_PAGES says surah 78 starts on 581,
 //   but the printed page 581 is Al-Mursalat 77:20–50 and Juz 30
 //   starts on 582 (78:1–30, Juz-30 marker on the page) — the table
 //   is off by a page here (the app's quranIndex.ts already says Juz
-//   30 starts on 582). That is a PRE-EXISTING Mushaf-table bug,
-//   flagged to the parent, NOT fixed here.
+//   30 starts on 582). FIXED 2026-11-26 (item 16.11): surahs 60-78 in
+//   SURAH_START_PAGES now follow the scans (e.g. 67 -> 562, 78 -> 582).
 // - AlQuranCloud agrees with Quran.com on every page checked
 //   (1, 2, 50, 578–583, 604) AND with the printed images for the
 //   disputed pages 581/582. That is the source used here.

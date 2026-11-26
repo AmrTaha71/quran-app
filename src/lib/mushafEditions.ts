@@ -42,6 +42,9 @@ export const MUSHAF_EDITIONS: MushafEdition[] = [
 
 export const TOTAL_MUSHAF_PAGES = 604;
 
+// Item 16.11 (2026-11-26): surahs 60-78 corrected to the page where ayah 1
+// is printed in the app's Madinah scans (madinahPageStarts); checked by
+// tools/ayah-identity/verify.ts.
 export const SURAH_START_PAGES: { surah: number; page: number }[] = [
   { surah: 1, page: 1 }, { surah: 2, page: 2 }, { surah: 3, page: 50 },
   { surah: 4, page: 77 }, { surah: 5, page: 106 }, { surah: 6, page: 128 },
@@ -62,13 +65,13 @@ export const SURAH_START_PAGES: { surah: number; page: number }[] = [
   { surah: 49, page: 515 }, { surah: 50, page: 518 }, { surah: 51, page: 520 },
   { surah: 52, page: 523 }, { surah: 53, page: 526 }, { surah: 54, page: 528 },
   { surah: 55, page: 531 }, { surah: 56, page: 534 }, { surah: 57, page: 537 },
-  { surah: 58, page: 542 }, { surah: 59, page: 545 }, { surah: 60, page: 548 },
-  { surah: 61, page: 549 }, { surah: 62, page: 550 }, { surah: 63, page: 551 },
-  { surah: 64, page: 552 }, { surah: 65, page: 553 }, { surah: 66, page: 554 },
-  { surah: 67, page: 556 }, { surah: 68, page: 558 }, { surah: 69, page: 561 },
-  { surah: 70, page: 563 }, { surah: 71, page: 566 }, { surah: 72, page: 568 },
-  { surah: 73, page: 570 }, { surah: 74, page: 572 }, { surah: 75, page: 574 },
-  { surah: 76, page: 577 }, { surah: 77, page: 578 }, { surah: 78, page: 581 },
+  { surah: 58, page: 542 }, { surah: 59, page: 545 }, { surah: 60, page: 549 },
+  { surah: 61, page: 551 }, { surah: 62, page: 553 }, { surah: 63, page: 554 },
+  { surah: 64, page: 556 }, { surah: 65, page: 558 }, { surah: 66, page: 560 },
+  { surah: 67, page: 562 }, { surah: 68, page: 564 }, { surah: 69, page: 566 },
+  { surah: 70, page: 568 }, { surah: 71, page: 570 }, { surah: 72, page: 572 },
+  { surah: 73, page: 574 }, { surah: 74, page: 575 }, { surah: 75, page: 577 },
+  { surah: 76, page: 578 }, { surah: 77, page: 580 }, { surah: 78, page: 582 },
   { surah: 79, page: 583 }, { surah: 80, page: 585 }, { surah: 81, page: 586 },
   { surah: 82, page: 587 }, { surah: 83, page: 587 }, { surah: 84, page: 589 },
   { surah: 85, page: 590 }, { surah: 86, page: 591 }, { surah: 87, page: 591 },
