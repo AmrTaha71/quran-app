@@ -22,6 +22,7 @@ import { madinahPageOfAyah } from '../lib/madinahPageStarts';
 import type { Route } from '../lib/routes';
 import { askConfirm } from '../lib/confirmSheet';
 import StatCard from '../components/admin/StatCard';
+import AdminsPanel from '../components/admin/AdminsPanel';
 
 
 const PAGE_SIZE = 25;
@@ -79,10 +80,11 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // Pending queue pagination: the queue renders cards with inputs and
   // voice buttons, so showing hundreds at once would freeze the page.
   // Rana sees 50 at a time and loads more on demand.
-  const [pendingVisible, setPendingVisible] = useState(50);
+  const [bucketCounts, setBucketCounts] = useState<{ drafts: number; users: number; books: number } | null>(null);
+  const [pendingHasMore, setPendingHasMore] = useState(false);
   // 16.12: which top tab is open (kept for this session).
-  const [adminTab, setAdminTab] = useState<'review' | 'verses' | 'stats'>(() => {
-    try { const t = sessionStorage.getItem('quran-admin-tab'); return t === 'verses' || t === 'stats' ? t : 'review'; } catch { return 'review'; }
+  const [adminTab, setAdminTab] = useState<'review' | 'verses' | 'stats' | 'admins'>(() => {
+    try { const t = sessionStorage.getItem('quran-admin-tab'); return t === 'verses' || t === 'stats' || t === 'admins' ? t : 'review'; } catch { return 'review'; }
   });
   const [rephrasingId, setRephrasingId] = useState<number | null>(null);
   // S5: per-card rephrase input (was one shared string, so typing in
@@ -240,52 +242,61 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
     setStats({ withLinks: withCount, withoutLinks: Math.max(0, totalRows - withCount) });
   }, []);
 
-  const fetchPendingLinks = useCallback(async () => {
-    // WHY THE QUEUE SHOWED ONLY 1000 (2026-10-27): Supabase/PostgREST
-    // caps a single query at 1000 rows by default, and this fetch had
-    // no .range(), so it silently returned only the newest 1000 of
-    // the 6236 pending drafts — nothing was lost, the rest were just
-    // never fetched. Fetch in 1000-row pages until a short page ends
-    // the loop, so the header count and the "عرض المزيد" list cover
-    // all 6236. Rendering still slices to pendingVisible (50) at a
-    // time, so the page itself does not try to render thousands of
-    // cards at once.
-    // S5: a failed load now sets pendingError and KEEPS the previous
-    // list (was: silently ignored, so a failure looked exactly like
-    // an empty queue and the review button never appeared).
+  // 6.19 (owner approval 2026-11-26): the queue is paged on the server, 50
+  // rows at a time per bucket, instead of downloading all ~6,237 drafts and
+  // showing 50. The bucket is ayah_links.source (filled for every row and set
+  // on insert by migration 20261126000010): 'books'; 'user' without a
+  // recording = a user suggestion; everything else (AI drafts, admin work, a
+  // user row with a recording) = drafts. The three counts are head-only.
+  const PENDING_PAGE = 50;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic PostgREST builder types blow up (TS2589)
+  const bucketFilter = (q: any, k: 'drafts' | 'users' | 'books'): any =>
+    k === 'books' ? q.eq('source', 'books')
+      : k === 'users' ? q.eq('source', 'user').is('audio_url', null)
+        : q.or('source.is.null,source.in.(ai,admin),and(source.eq.user,audio_url.not.is.null)');
+  const pendingFilterRef = useRef(pendingFilter);
+  pendingFilterRef.current = pendingFilter;
+  const pendingLenRef = useRef(0);
+  pendingLenRef.current = pendingLinks.length;
+
+  const fetchPendingCounts = useCallback(async () => {
+    const keys = ['drafts', 'users', 'books'] as const;
+    const res = await Promise.all(keys.map((k) => bucketFilter(supabase.from('ayah_links').select('id', { count: 'exact', head: true }).eq('status', 'pending'), k)));
+    if (res.some((r) => r.error)) return;
+    setBucketCounts({ drafts: res[0].count ?? 0, users: res[1].count ?? 0, books: res[2].count ?? 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchPendingLinks = useCallback(async (opts?: { bucket?: 'drafts' | 'users' | 'books'; append?: boolean }) => {
+    // S5: a failed load sets pendingError and KEEPS the previous list.
+    const k = opts?.bucket ?? pendingFilterRef.current;
+    const from = opts?.append ? pendingLenRef.current : 0;
     setPendingLoading(true);
     setPendingError('');
-    const all: any[] = [];
-    let from = 0;
-    for (;;) {
-      const { data, error } = await supabase
-        .from('ayah_links')
-        .select(`*, quran_verses!inner(id, surah_no, surah_name, ayah_no, ayah_text)`)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .range(from, from + 999);
-      if (error || !data) {
-        setPendingError('تعذّر تحميل قائمة المراجعة — تحقق من الاتصال وحاول تاني. القائمة المعروضة (لو فيه) قديمة.');
-        setPendingLoading(false);
-        return;
-      }
-      if (data.length === 0) break;
-      all.push(...data);
-      if (data.length < 1000) break;
-      from += 1000;
+    if (!opts?.append) void fetchPendingCounts();
+    const { data, error } = await bucketFilter(supabase
+      .from('ayah_links')
+      .select(`*, quran_verses!inner(id, surah_no, surah_name, ayah_no, ayah_text)`)
+      .eq('status', 'pending'), k)
+      .order('created_at', { ascending: false })
+      .range(from, from + PENDING_PAGE - 1);
+    if (error || !data) {
+      setPendingError('تعذّر تحميل قائمة المراجعة — تحقق من الاتصال وحاول تاني. القائمة المعروضة (لو فيه) قديمة.');
+      setPendingLoading(false);
+      return;
     }
-    // Always set, even when empty: after the last pending link is
-    // decided, the queue must read empty instead of going stale.
-    setPendingLinks(all as unknown as AyahLink[]);
-    const verseMap: Record<number, QuranVerse> = {};
-    all.forEach((d) => {
-      const v = d.quran_verses;
-      if (v) verseMap[d.verse_id] = v;
+    const rows = data as unknown as (AyahLink & { quran_verses?: QuranVerse })[];
+    setPendingLinks((prev) => (opts?.append ? [...prev, ...rows.filter((r) => !prev.some((p) => p.id === r.id))] : rows));
+    setPendingVerses((prev) => {
+      const verseMap: Record<number, QuranVerse> = opts?.append ? { ...prev } : {};
+      rows.forEach((d) => { if (d.quran_verses) verseMap[d.verse_id] = d.quran_verses; });
+      return verseMap;
     });
-    setPendingVerses(verseMap);
+    setPendingHasMore(rows.length === PENDING_PAGE);
     setPendingLoaded(true);
     setPendingLoading(false);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchPendingCounts]);
 
   useEffect(() => { fetchVerses(); }, [fetchVerses]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
@@ -406,6 +417,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // the full queue reloads on demand via "تحديث القائمة".
   const removePendingLocal = (linkId: number) => {
     const removed = pendingLinks.find((l) => l.id === linkId);
+    if (removed) setBucketCounts((c) => (c ? { ...c, [pendingFilter]: Math.max(0, c[pendingFilter] - 1) } : c));
     setPendingLinks((prev) => prev.filter((l) => l.id !== linkId));
     if (removed && !pendingLinks.some((l) => l.id !== linkId && l.verse_id === removed.verse_id)) {
       setPendingVerses((prev) => {
@@ -589,7 +601,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
 
   // ADMINS ARE USERS TOO (2026-10-27): there is no separate admin
   // account anymore. Access is granted per user in admin_users
-  // (SQL only — no user can grant themselves, and the table has no
+  // (16.12b: from the «الأدمن» tab through admin_grant/admin_revoke RPCs; was SQL only — no user can grant themselves, and the table has no
   // write policy for authenticated users). A logged-in admin uses
   // the normal app and reaches here from Settings; a normal user
   // never sees an admin entry and, even if they type #/admin,
@@ -653,16 +665,15 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // (same rule as the old badge); everything else is admin work.
   const isUserSuggestion = (l: AyahLink) => !l.is_ai_draft && !!l.created_by && adminIds !== null && !adminIds.has(l.created_by) && !l.audio_url;
   // Three buckets, every pending row lands in exactly one: books > user suggestion > drafts (AI drafts + admin's own).
-  const bucketOf = (l: AyahLink): 'drafts' | 'users' | 'books' => (l.source === 'books' ? 'books' : isUserSuggestion(l) ? 'users' : 'drafts');
-  const bucketCount = { drafts: 0, users: 0, books: 0 };
-  pendingLinks.forEach((l) => { bucketCount[bucketOf(l)]++; });
-  const pendingList = pendingLinks.filter((l) => bucketOf(l) === pendingFilter);
+  // 6.19: the counts come from the server; the list holds the loaded pages of the current bucket.
+  const bucketCount = bucketCounts ?? { drafts: 0, users: 0, books: 0 };
+  const pendingList = pendingLinks;
   const BUCKETS = [
     { key: 'drafts' as const, title: 'مسودات للمراجعة', hint: 'مسودات الذكاء الاصطناعي وتسجيلاتك', Icon: PenLine, cls: 'from-violet-50 to-white border-violet-200 text-violet-800' },
     { key: 'users' as const, title: 'تربيطات مقترحة', hint: 'اقتراحات المستخدمين', Icon: Lightbulb, cls: 'from-teal-50 to-white border-teal-200 text-teal-800' },
     { key: 'books' as const, title: 'من كتب الأثر والتفسير', hint: 'تربيطات مأخوذة من الكتب', Icon: Library, cls: 'from-amber-50 to-white border-amber-300 text-amber-800' },
   ];
-  const openBucket = (k: 'drafts' | 'users' | 'books') => { setPendingFilter(k); setPendingVisible(50); setShowPending(true); };
+  const openBucket = (k: 'drafts' | 'users' | 'books') => { setPendingFilter(k); setShowPending(true); if (k !== pendingFilter || !pendingLoaded) { setPendingLinks([]); void fetchPendingLinks({ bucket: k }); } };
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const linkedPercentage = Math.round((stats.withLinks / TOTAL_VERSES) * 100);
@@ -740,7 +751,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         {/* 16.12: top tabs (same look as the stats tabs): review lists /
             verse table / statistics. Only one area shows at a time. */}
         <div role="tablist" aria-label="أقسام لوحة الإدارة" className="flex gap-1.5 mb-4 bg-white border border-hairline rounded-xl p-1 w-fit">
-          {([['review', 'المراجعة'], ['verses', 'جدول الآيات'], ['stats', 'الإحصائيات']] as const).map(([key, label]) => (
+          {([['review', 'المراجعة'], ['verses', 'جدول الآيات'], ['stats', 'الإحصائيات'], ['admins', 'الأدمن']] as const).map(([key, label]) => (
             <button key={key} role="tab" aria-selected={adminTab === key}
               onClick={() => { setAdminTab(key); if (key === 'stats' && !openPanel) setOpenPanel('progress'); try { sessionStorage.setItem('quran-admin-tab', key); } catch { /* ignore */ } }}
               className={`min-h-[44px] px-4 rounded-lg text-sm font-semibold ${adminTab === key ? 'bg-emerald-700 text-white' : 'text-accent-600 hover:bg-gray-100'}`}>
@@ -932,6 +943,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         </div>
 
         </div>
+        {adminTab === 'admins' && <AdminsPanel selfId={session?.user?.id ?? null} />}
         <div className={adminTab === 'verses' ? '' : 'hidden'}>
         {/* Toolbar — beautified */}
         <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
@@ -1087,7 +1099,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="flex items-center justify-between p-4 border-b border-hairline sticky top-0 bg-white rounded-t-3xl z-10">
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-amber-600" />
-                <h3 className="font-semibold text-accent-800">{BUCKETS.find((b) => b.key === pendingFilter)?.title} ({pendingList.length})</h3>
+                <h3 className="font-semibold text-accent-800">{BUCKETS.find((b) => b.key === pendingFilter)?.title} ({formatAr(bucketCount[pendingFilter])})</h3>
               </div>
               <div className="flex items-center gap-1">
                 <button onClick={() => fetchPendingLinks()} disabled={pendingLoading}
@@ -1113,7 +1125,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               {(
                 <div className="flex flex-wrap gap-1.5">
                   {(BUCKETS.map((b) => [b.key, `${b.title} (${bucketCount[b.key]})`] as const)).map(([k, label]) => (
-                    <button key={k} onClick={() => { setPendingFilter(k); setPendingVisible(50); }}
+                    <button key={k} onClick={() => { if (k === pendingFilter) return; setPendingFilter(k); setPendingLinks([]); void fetchPendingLinks({ bucket: k }); }}
                       className={`px-3 py-1.5 rounded-full text-xs font-bold border ${pendingFilter === k ? (k === 'users' ? 'bg-teal-600 text-white border-teal-600' : 'bg-emerald-700 text-white border-emerald-700') : 'bg-white text-accent-700 border-hairline'}`}>{label}</button>
                   ))}
                 </div>
@@ -1132,7 +1144,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 )
               ) : (
                 <>
-                  {pendingList.slice(0, pendingVisible).map((link) => {
+                  {pendingList.map((link) => {
                   const verse = pendingVerses[link.verse_id];
                   const fromUser = isUserSuggestion(link);
                   return (
@@ -1285,10 +1297,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                     </div>
                   );
                   })}
-                  {pendingVisible < pendingList.length && (
-                  <button onClick={() => setPendingVisible((v) => v + 50)}
+                  {pendingHasMore && (
+                  <button onClick={() => void fetchPendingLinks({ append: true })} disabled={pendingLoading}
                     className="w-full py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-link text-sm font-semibold rounded-xl border border-hairline-amber">
-                    عرض المزيد ({pendingList.length - pendingVisible} متبقية)
+                    {pendingLoading ? 'جارٍ التحميل…' : `عرض المزيد (${formatAr(Math.max(0, bucketCount[pendingFilter] - pendingList.length))} متبقية)`}
                   </button>
                 )}
                 </>
