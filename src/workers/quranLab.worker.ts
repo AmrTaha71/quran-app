@@ -22,7 +22,7 @@ let session: ort.InferenceSession | null = null;
 let spec: Spec | null = null;
 let tokens: Record<string, string> = {};
 let states: Record<string, ort.Tensor> = {};
-let fb = new OnlineFbank();
+const fb = new OnlineFbank();
 // 3.21: pending feature frames (flattened) in a buffer that grows by 1.5x;
 // featLen floats are live. Was a fresh copy of everything on every chunk.
 let featBuf = new Float32Array(0);
