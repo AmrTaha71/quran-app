@@ -133,6 +133,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
   const [joinInput, setJoinInput] = useState('');
   const [joinError, setJoinError] = useState('');
   const [members, setMembers] = useState(0);
+  const [linkState, setLinkState] = useState<'connecting' | 'ok' | 'retry'>('connecting');
   const [pos, setPos] = useState<Pos>({ surah: 1, ayah: 1, by: '', at: 0 });
   useEffect(() => {
     if (!tvView) return;
@@ -279,6 +280,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
 
   useEffect(() => {
     if (!code) return;
+    setLinkState('connecting');
     const ch = supabase.channel(`room-${code}`, {
       config: { broadcast: { self: false }, presence: { key: me } },
     });
@@ -383,6 +385,8 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         setVoiceStatus('');
       })
       .subscribe(async (status) => {
+        // 7.4: the sync link state is visible next to the room code.
+        setLinkState(status === 'SUBSCRIBED' ? 'ok' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED' ? 'retry' : 'connecting');
         if (status === 'SUBSCRIBED') await ch.track({ at: Date.now() });
       });
 
@@ -723,6 +727,10 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
         <div>
           <p className="text-xs text-slate-500">كود الغرفة</p>
           <p dir="ltr" className="text-2xl font-bold tracking-widest text-slate-800">{code}</p>
+          <p role="status" className={`text-xs font-semibold mt-1 flex items-center gap-1 ${linkState === 'ok' ? 'text-emerald-700' : 'text-amber-700'}`}>
+            <span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full ${linkState === 'ok' ? 'bg-emerald-600' : 'bg-amber-500 animate-pulse'}`} />
+            {linkState === 'ok' ? 'متصل' : linkState === 'retry' ? 'الاتصال اتقطع — بنحاول نرجّعه…' : 'بيتصل…'}
+          </p>
         </div>
         <button onClick={copyCode} className="flex items-center gap-1 px-3 py-2 rounded-lg border text-sm">
           <Copy className="w-4 h-4" /> {copied ? 'اتنسخ' : 'انسخ الكود'}
