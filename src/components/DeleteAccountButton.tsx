@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { askConfirm } from '../lib/confirmSheet';
+import { clearAccountData } from '../lib/accountData';
 
 export default function DeleteAccountButton() {
   const [busy, setBusy] = useState(false);
@@ -29,7 +30,9 @@ export default function DeleteAccountButton() {
         setBusy(false);
         return;
       }
-      try { localStorage.clear(); } catch { /* ignore */ }
+      // 10.5: the account's data only; the device's setup (adhan,
+      // downloads, device model, Mushaf look) stays.
+      try { clearAccountData(localStorage); sessionStorage.clear(); } catch { /* ignore */ }
       await supabase.auth.signOut().catch(() => {});
       window.location.hash = '#/home';
       window.location.reload();
