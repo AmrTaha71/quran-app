@@ -10,6 +10,8 @@
 
 import { publishMicLevel } from './micLevel';
 import { unloadEarLab } from './quranLabEar';
+import { Downsampler, downsampleTo16k } from './resample16k';
+import { earMicConstraints } from './earMic';
 
 export const EAR_KEY = 'quran-ear';
 export type EarKind = 'model' | 'browser';
@@ -161,7 +163,7 @@ export async function transcribeBlob(blob: Blob): Promise<string | null> {
         const data = decoded.getChannelData(c);
         for (let i = 0; i < data.length; i++) mono[i] += data[i] / decoded.numberOfChannels;
       }
-      const pcm = downsample(mono, decoded.sampleRate);
+      const pcm = downsampleTo16k(mono, decoded.sampleRate);
       const r = await transcribe(pcm);
       return r?.text ?? null;
     } finally {
@@ -181,19 +183,6 @@ const SOFT_SILENCE_MS = 160;
 const KEEPALIVE_MS = 400;
 const MIN_SEGMENT_S = 0.35;
 
-function downsample(input: Float32Array, fromRate: number): Float32Array {
-  if (fromRate === TARGET_RATE) return new Float32Array(input);
-  const ratio = fromRate / TARGET_RATE;
-  const out = new Float32Array(Math.floor(input.length / ratio));
-  for (let i = 0; i < out.length; i++) {
-    const start = Math.floor(i * ratio);
-    const end = Math.min(input.length, Math.floor((i + 1) * ratio));
-    let sum = 0;
-    for (let j = start; j < end; j++) sum += input[j];
-    out[i] = sum / Math.max(1, end - start);
-  }
-  return out;
-}
 
 // One mic stream shared across sessions (2026-11-12): reopening the mic
 // after every correction cost time and the first word of the resumed
@@ -203,7 +192,7 @@ let micTimer: ReturnType<typeof setTimeout> | null = null;
 async function getMicStream(): Promise<MediaStream> {
   if (micTimer) { clearTimeout(micTimer); micTimer = null; }
   if (micStream && micStream.getAudioTracks().some((t) => t.readyState === 'live')) return micStream;
-  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  micStream = await navigator.mediaDevices.getUserMedia(earMicConstraints());
   return micStream;
 }
 function releaseMicStreamLater() {
@@ -289,6 +278,8 @@ export class QuranModelRecognition {
     }
   }
 
+  private dsr: Downsampler | null = null;
+  private ds(rate: number): Downsampler { if (!this.dsr || this.dsr.fromRate !== rate) this.dsr = new Downsampler(rate); return this.dsr; }
   private onAudio(buf: Float32Array, rate: number) {
     if (this.stopped) return;
     let sum = 0;
@@ -315,11 +306,11 @@ export class QuranModelRecognition {
       this.onspeechstart?.();
     }
     if (!this.inSpeech) {
-      this.pre.push(downsample(buf, rate));
+      this.pre.push(this.ds(rate).process(buf));
       if (this.pre.length > 3) this.pre.shift();
     }
     if (this.inSpeech) {
-      const ds = downsample(buf, rate);
+      const ds = this.ds(rate).process(buf);
       this.seg.push(ds);
       this.segRms.push(rms);
       this.segSamples += ds.length;

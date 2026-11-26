@@ -10,6 +10,8 @@ import { buildPhonWords, PhonemeStream, type PhonWord } from './phonemeEar';
 import { expectedWordList } from './expectedWords';
 import { QURANLAB_MODEL_CACHE, QURANLAB_MODEL_URL } from './earModelCache';
 import { publishMicLevel } from './micLevel';
+import { Downsampler } from './resample16k';
+import { earMicConstraints } from './earMic';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
 // W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
@@ -62,7 +64,6 @@ export async function earModelCached(): Promise<boolean> {
   } catch { return false; }
 }
 
-const TARGET = 16000;
 const softSkeleton = (w: string) => w.replace(/ة/g, 'ه').replace(/(?<=.)ا(?=.)/g, '').replace(/يي+/g, 'ي').replace(/لل+/g, 'ل');
 export const refKeySkel = (k: string) => expectedWordList(k).map((w) => softSkeleton(w.norm)).join('');
 
@@ -185,19 +186,6 @@ export function preloadEarLab(confirmed = false): void {
   }).catch(() => {});
 }
 
-function downsample(input: Float32Array, fromRate: number): Float32Array {
-  if (fromRate === TARGET) return new Float32Array(input);
-  const ratio = fromRate / TARGET;
-  const out = new Float32Array(Math.floor(input.length / ratio));
-  for (let i = 0; i < out.length; i++) {
-    const s = Math.floor(i * ratio);
-    const e = Math.min(input.length, Math.floor((i + 1) * ratio));
-    let sum = 0;
-    for (let j = s; j < e; j++) sum += input[j];
-    out[i] = sum / Math.max(1, e - s);
-  }
-  return out;
-}
 
 // Keyed by the words' content, not the array identity: ayah mode builds a new
 // array on every (re)start, so every resume after a correction rebuilt it.
@@ -274,7 +262,7 @@ export class QuranLabRecognition {
     // Ask for the microphone NOW (inside the tap): after a long model load the
     // gesture is gone and iOS may never show the prompt / return a stream.
     try {
-      this.streamP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } });
+      this.streamP = navigator.mediaDevices.getUserMedia(earMicConstraints());
       this.streamP.then(() => { if (!this.stopped) this.onmicgranted?.(); }).catch(() => {});
     } catch { this.streamP = null; }
     void this.begin();
@@ -307,7 +295,7 @@ export class QuranLabRecognition {
       }
       listener = (m) => this.onWorker(m);
       w.postMessage({ type: 'reset' });
-      this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true } }));
+      this.stream = await (this.streamP ?? navigator.mediaDevices.getUserMedia(earMicConstraints()));
       if (this.stopped) { this.release(); this.finishEnd(); return; }
       this.mark('stream-ready');
       this.attach(w);
@@ -339,7 +327,7 @@ export class QuranLabRecognition {
     ctx.onstatechange = () => { if (!this.stopped && ctx.state !== 'running') void ctx.resume().catch(() => {}); };
     this.src = ctx.createMediaStreamSource(this.stream!);
     this.node = ctx.createScriptProcessor(4096, 1, 1);
-    const rate = ctx.sampleRate;
+    const ds = new Downsampler(ctx.sampleRate);
     this.node.onaudioprocess = (ev) => {
       if (this.stopped) return;
       this.frames++;
@@ -351,7 +339,7 @@ export class QuranLabRecognition {
       if (rms > this.maxRms) this.maxRms = rms;
       if (!this.seenFrame) { this.seenFrame = true; this.mark('first-frame'); }
       if (!this.seenSound && rms > 1e-5) { this.seenSound = true; this.mark('first-signal'); }
-      const s = downsample(ch, rate);
+      const s = ds.process(ch);
       w.postMessage({ type: 'audio', samples: s }, [s.buffer]);
     };
     this.frames = 0;
@@ -394,7 +382,7 @@ export class QuranLabRecognition {
       this.ctx = null; this.node = null; this.src = null;
       await new Promise((r) => setTimeout(r, 120));
       if (this.stopped) return;
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: this.retries < 2, noiseSuppression: false, autoGainControl: true } });
+      this.stream = await navigator.mediaDevices.getUserMedia(earMicConstraints({ echoCancellation: this.retries < 2 }));
       if (this.stopped) { this.release(); return; }
       this.seenFrame = false; this.seenSound = false;
       this.mark(`rebuilt-${this.retries}`);

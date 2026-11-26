@@ -4,22 +4,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { earLabOn, setEarLab, borrowEarWorker, getEarLabState, subscribeEarLab } from '../lib/quranLabEar';
 import { speechErrorMessage } from '../lib/speechErrors';
+import { Downsampler } from '../lib/resample16k';
+import { earMicConstraints } from '../lib/earMic';
 
 const TARGET = 16000;
 
-function downsample(input: Float32Array, fromRate: number): Float32Array {
-  if (fromRate === TARGET) return new Float32Array(input);
-  const ratio = fromRate / TARGET;
-  const out = new Float32Array(Math.floor(input.length / ratio));
-  for (let i = 0; i < out.length; i++) {
-    const s = Math.floor(i * ratio);
-    const e = Math.min(input.length, Math.floor((i + 1) * ratio));
-    let sum = 0;
-    for (let j = s; j < e; j++) sum += input[j];
-    out[i] = sum / Math.max(1, e - s);
-  }
-  return out;
-}
 
 export default function EarLabPage() {
   // 3.20: the shared ear worker (quranLabEar), not a second private one.
@@ -77,7 +66,7 @@ export default function EarLabPage() {
     // 3.12: a refused mic used to be an unhandled rejection with no message.
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: clean, noiseSuppression: clean, autoGainControl: true } });
+      stream = await navigator.mediaDevices.getUserMedia(earMicConstraints(clean ? { noiseSuppression: true } : undefined));
     } catch (err) {
       const name = (err as { name?: string })?.name || '';
       const m = speechErrorMessage(name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture');
@@ -89,10 +78,10 @@ export default function EarLabPage() {
     const ctx = new Ctx();
     const src = ctx.createMediaStreamSource(stream);
     const node = ctx.createScriptProcessor(4096, 1, 1);
-    const rate = ctx.sampleRate;
+    const dsr = new Downsampler(ctx.sampleRate);
     const state = { ctx, stream, node, t0: performance.now(), samples: 0 };
     node.onaudioprocess = (ev) => {
-      const s = downsample(ev.inputBuffer.getChannelData(0), rate);
+      const s = dsr.process(ev.inputBuffer.getChannelData(0));
       state.samples += s.length;
       worker.current?.post({ type: 'audio', samples: s }, [s.buffer]);
     };

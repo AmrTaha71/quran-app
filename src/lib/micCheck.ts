@@ -1,3 +1,4 @@
+import { earMicConstraints } from './earMic.ts';
 // micCheck.ts — a small, dependency-free microphone check for the
 // SelfTest lobby. Call it from a tap handler BEFORE a recitation
 // session starts: it opens the mic, measures how loud the room is for
@@ -204,7 +205,8 @@ export async function checkMic(options: MicCheckOptions = {}): Promise<MicCheckR
 
     let gum: Promise<MediaStream>;
     try {
-      gum = navigator.mediaDevices.getUserMedia({ audio: true });
+      // 3.24: the same mic settings the ears use, so the check tests them.
+      gum = navigator.mediaDevices.getUserMedia(earMicConstraints());
     } catch (err) {
       finish(errorResult(reasonOfError(err)));
       return;
