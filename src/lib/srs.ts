@@ -38,6 +38,27 @@ export const HAMZA_FORMS = 'أإآءؤئ';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** Phase 6 (4.27): a word is due at the START of its local calendar day,
+ *  not 24 rolling hours later (a word reviewed at 23:00 is due the next
+ *  morning, not the next night). */
+export function startOfLocalDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function dueAfter(now: number, days: number): number {
+  return startOfLocalDay(now + days * DAY_MS);
+}
+
+/** Phase 6 (4.15): how many due words one day's review offers at most
+ *  (oldest first). The rest stay due for the next days. */
+export const SRS_DAILY_LIMIT = 20;
+
+/** Phase 6 (4.13): a slip counter forgets after this many days without the
+ *  same letter pair, so three slips months apart are not a pattern. */
+export const SRS_SLIP_DECAY_DAYS = 30;
+
 // ---- Scheduling ---------------------------------------------------
 
 /** stage is 1-based: stage k waits intervals[k-1] before the next review. */
@@ -60,7 +81,7 @@ export function sanitizeIntervals(intervals?: readonly number[] | null): readonl
 /** A word that just entered the table: stage 1, due after the first gap. */
 export function newEntry(now: number, intervals?: readonly number[] | null): SrsEntry {
   const iv = sanitizeIntervals(intervals);
-  return { stage: 1, due: now + iv[0] * DAY_MS };
+  return { stage: 1, due: dueAfter(now, iv[0]) };
 }
 
 /** Review succeeded: move to the next stage; after the LAST stage the word
@@ -71,12 +92,20 @@ export function scheduleAfterSuccess(
   const iv = sanitizeIntervals(intervals);
   const stage = Math.min(Math.max(Math.trunc(entry.stage) || 1, 1), iv.length);
   if (stage >= iv.length) return { graduated: true };
-  return { graduated: false, entry: { stage: stage + 1, due: now + iv[stage] * DAY_MS } };
+  return { graduated: false, entry: { stage: stage + 1, due: dueAfter(now, iv[stage]) } };
 }
 
-/** Review failed: back to stage 1, due after the first gap. */
-export function scheduleAfterFailure(now: number, intervals?: readonly number[] | null): SrsEntry {
-  return newEntry(now, intervals);
+/** Review failed. Phase 6 (4.14, owner 2026-11-26 §11.10): the word does
+ *  not move forward and does not fall back to stage 1. It keeps its stage
+ *  and repeats it: the next review is after the first gap (tomorrow), and a
+ *  success then moves it on from where it was. Without an entry (old
+ *  callers) it is a fresh stage-1 entry. */
+export function scheduleAfterFailure(
+  now: number, intervals?: readonly number[] | null, entry?: SrsEntry | null,
+): SrsEntry {
+  const iv = sanitizeIntervals(intervals);
+  const stage = entry ? Math.min(Math.max(Math.trunc(entry.stage) || 1, 1), iv.length) : 1;
+  return { stage, due: dueAfter(now, iv[0]) };
 }
 
 export function isDue(entry: SrsEntry, now: number): boolean {

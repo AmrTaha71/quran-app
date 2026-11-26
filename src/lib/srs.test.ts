@@ -9,7 +9,7 @@ import {
 import type { SrsEntry, SlipCounts } from './srs.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
-const T0 = 1_700_000_000_000;
+const T0 = new Date(2023, 10, 14).getTime(); // local midnight: due times are day-aligned (4.27)
 
 describe('constants', () => {
   it('defaults are day, 3 days, week, 2 weeks, month; promote at 3', () => {

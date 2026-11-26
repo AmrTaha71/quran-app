@@ -10,7 +10,7 @@ import { SRS_SETTINGS_KEY } from './srsSettings.ts';
 import { getGlobalAyahNumber } from './surahs.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
-const T0 = 1_700_000_000_000;
+const T0 = new Date(2023, 10, 14).getTime(); // local midnight: due times are day-aligned (4.27)
 
 class FakeStorage {
   map = new Map<string, string>();
@@ -42,9 +42,11 @@ describe('heardForWord', () => {
   it('zero tokens in the gap (forgotten) -> null', () => {
     assert.equal(heardForWord(2, matched, [0, 1, -1, 2, 3], consumed, T('a b d e')), null);
   });
-  it('first and last word are never candidates', () => {
-    assert.equal(heardForWord(0, [false, true, true], [-1, 1, 2], [1, 1, 1], T('x a b')), null);
-    assert.equal(heardForWord(2, [true, true, false], [0, 1, -1], [1, 1, 1], T('a b x')), null);
+  it('first and last word qualify with exactly one token on their open side (4.13)', () => {
+    assert.equal(heardForWord(0, [false, true, true], [-1, 1, 2], [1, 1, 1], T('x a b')), 'x');
+    assert.equal(heardForWord(2, [true, true, false], [0, 1, -1], [1, 1, 1], T('a b x')), 'x');
+    assert.equal(heardForWord(0, [false, true, true], [-1, 2, 3], [1, 1, 1], T('y x a b')), null);
+    assert.equal(heardForWord(2, [true, true, false], [0, 1, -1], [1, 1, 1], T('a b x y')), null);
   });
   it('two wrong words in a row -> null for both', () => {
     const m = [true, false, false, true];
@@ -96,13 +98,13 @@ describe('applyOutcomes: ordinary mistakes', () => {
     assert.equal(r.added, 1);
     assert.deepEqual(getReviewEntry(wordKey(2, 5, 3)), { stage: 1, due: T0 + DAY, word: 'نور' });
   });
-  it('wrong word already in the table -> recordFailure (back to stage 1)', () => {
+  it('wrong word already in the table -> recordFailure (keeps its stage, 4.14)', () => {
     addWord(2, 5, 3, 'نور', T0 - 40 * DAY);
     ls.map.set('quran-srs-v1', JSON.stringify({ '2:5:3': { s: 4, d: T0 + 5 * DAY, o: 'نور' } }));
     const r = applyOutcomes(2, 5, [out(3, 'نور', false)], { reviewSession: false, now: T0 });
     assert.equal(r.failed, 1);
     assert.equal(r.added, 0);
-    assert.deepEqual(getReviewEntry(wordKey(2, 5, 3)), { stage: 1, due: T0 + DAY, word: 'نور' });
+    assert.deepEqual(getReviewEntry(wordKey(2, 5, 3)), { stage: 4, due: T0 + DAY, word: 'نور' });
   });
   it('a candidate that is not a letter-pair slip is an ordinary mistake', () => {
     const r = applyOutcomes(2, 5, [out(2, 'ربك', false, 'مالك')], { reviewSession: false, now: T0 });
@@ -110,12 +112,34 @@ describe('applyOutcomes: ordinary mistakes', () => {
     assert.equal(r.notices.length, 0);
     assert.equal(getSlipList().length, 0);
   });
-  it('correct words are ignored outside a review session', () => {
+  it('a due word said right moves forward in any test (4.15)', () => {
     addWord(2, 5, 1, 'خلق', T0 - 2 * DAY);
-    const before = getReviewEntry(wordKey(2, 5, 1));
     const r = applyOutcomes(2, 5, [out(1, 'خلق', true)], { reviewSession: false, now: T0 });
-    assert.equal(r.succeeded, 0);
-    assert.deepEqual(getReviewEntry(wordKey(2, 5, 1)), before);
+    assert.equal(r.succeeded, 1);
+    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 2);
+  });
+  it('one isolated mistake is only «مشكوك» until a later session repeats it (4.5ب)', () => {
+    const o = [out(1, 'خلق', true), out(2, 'ربك', false), out(3, 'نور', true)];
+    let r = applyOutcomes(2, 5, o, { reviewSession: false, now: T0 });
+    assert.equal(r.suspect, 1);
+    assert.equal(getReviewEntry(wordKey(2, 5, 2)), null);
+    r = applyOutcomes(2, 5, o, { reviewSession: false, now: T0 + 60_000 }); // same session
+    assert.equal(getReviewEntry(wordKey(2, 5, 2)), null);
+    r = applyOutcomes(2, 5, o, { reviewSession: false, now: T0 + 2 * 3600_000 }); // later session
+    assert.equal(r.added, 1);
+    assert.equal(getReviewEntry(wordKey(2, 5, 2))?.stage, 1);
+  });
+  it('a right answer clears the doubt', () => {
+    const wrongOnce = [out(1, 'خلق', true), out(2, 'ربك', false), out(3, 'نور', true)];
+    applyOutcomes(2, 5, wrongOnce, { reviewSession: false, now: T0 });
+    applyOutcomes(2, 5, [out(1, 'خلق', true), out(2, 'ربك', true), out(3, 'نور', true)], { reviewSession: false, now: T0 + 3600_000 });
+    const r = applyOutcomes(2, 5, wrongOnce, { reviewSession: false, now: T0 + 2 * 3600_000 });
+    assert.equal(r.suspect, 1);
+    assert.equal(getReviewEntry(wordKey(2, 5, 2)), null);
+  });
+  it('two wrong words in an ayah enter the table at once', () => {
+    const r = applyOutcomes(2, 5, [out(1, 'خلق', false), out(2, 'ربك', false), out(3, 'نور', true)], { reviewSession: false, now: T0 });
+    assert.equal(r.added, 2);
   });
 });
 
@@ -145,7 +169,7 @@ describe('applyOutcomes: slips', () => {
     const r = applyOutcomes(4, 9, [out(1, 'خوف', false, 'غوف')], { reviewSession: false, now: T0 });
     assert.equal(r.notices.length, 1);
     assert.equal(r.failed, 1);
-    assert.equal(getReviewEntry(wordKey(4, 9, 1))?.stage, 1);
+    assert.equal(getReviewEntry(wordKey(4, 9, 1))?.stage, 3);
   });
   it('the notice text names the right word and the heard text', () => {
     const t = slipNoticeText({ word: 'خوف', heard: 'غوف', pair: 'خ/غ', count: 3 });
@@ -199,8 +223,10 @@ describe('flushPending / sessionCovers', () => {
     assert.equal(getReviewEntry(wordKey(2, 5, 2)), null);
     assert.ok(first.matched.includes(false));                // (first would have added word 2)
   });
-  it('the final wrong verdict is recorded once at its judgement time', () => {
+  it('the final wrong verdict is recorded at its judgement time (a single mistake waits for a second session)', () => {
     flushPending(pend({}), null);
+    assert.equal(getReviewEntry(wordKey(2, 5, 2)), null);
+    flushPending(pend({ ts: T0 + 3600_000 }), null);
     assert.deepEqual(getReviewEntry(wordKey(2, 5, 2)), { stage: 1, due: T0 + DAY, word: 'ربك' });
   });
   it('a silent attempt records nothing; null pending records nothing', () => {
@@ -208,12 +234,12 @@ describe('flushPending / sessionCovers', () => {
     assert.deepEqual(flushPending(null, null), []);
     assert.equal(getReviewEntry(wordKey(2, 5, 2)), null);
   });
-  it('success only counts for the ayah inside the card session', () => {
+  it('success counts in a normal test too (4.15), once', () => {
     ls.map.set('quran-srs-v1', JSON.stringify({ '2:5:1': { s: 1, d: T0 - 1, o: 'خلق' } }));
     flushPending(pend({ ok: true, matched: [true, true, true] }), null);
-    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 1);          // normal test: no success
+    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 2);
     flushPending(pend({ ok: true, matched: [true, true, true] }), range);
-    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 2);          // card session: success
+    assert.equal(getReviewEntry(wordKey(2, 5, 1))?.stage, 2);          // not due any more
   });
   it('never throws, even if storage is unavailable', () => {
     Reflect.deleteProperty(globalThis, 'localStorage');

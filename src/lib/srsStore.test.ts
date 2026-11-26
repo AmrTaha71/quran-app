@@ -9,7 +9,7 @@ import {
 import { WORD_MISTAKES_KEY } from './wordMistakes.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
-const T0 = 1_700_000_000_000;
+const T0 = new Date(2023, 10, 14).getTime(); // local midnight: due times are day-aligned (4.27)
 
 // Minimal localStorage stand-in (no library).
 class FakeStorage {
@@ -83,13 +83,30 @@ describe('review table', () => {
     assert.deepEqual(raw(SRS_STORE_KEY), {});
   });
 
-  it('failure goes back to stage 1 and keeps the word text', () => {
+  it('failure keeps the stage, is due tomorrow and keeps the word text (4.14)', () => {
     const key = wordKey(2, 5, 3);
     addWord(2, 5, 3, 'كلمة', T0);
     recordSuccess(key, T0);
     recordSuccess(key, T0);
-    assert.deepEqual(recordFailure(key, T0 + 9 * DAY), { stage: 1, due: T0 + 10 * DAY });
-    assert.deepEqual(getReviewEntry(key), { stage: 1, due: T0 + 10 * DAY, word: 'كلمة' });
+    assert.deepEqual(recordFailure(key, T0 + 9 * DAY), { stage: 3, due: T0 + 10 * DAY });
+    assert.deepEqual(getReviewEntry(key), { stage: 3, due: T0 + 10 * DAY, word: 'كلمة' });
+  });
+
+  it('due times fall at the start of the local day (4.27)', () => {
+    addWord(1, 1, 1, 'ك', T0 + 23 * 3600_000);
+    assert.equal(getReviewEntry('1:1:1')?.due, T0 + DAY); // next morning, not 23:00 tomorrow
+  });
+
+  it('ties are in Mushaf order, numerically, and limit caps the day (4.27, 4.15)', () => {
+    addWord(10, 1, 1, 'ا', T0);
+    addWord(2, 1, 1, 'ب', T0);
+    addWord(2, 1, 10, 'ج', T0);
+    addWord(2, 1, 9, 'د', T0);
+    assert.deepEqual(getDueWords(T0 + DAY).map((d) => d.key), ['2:1:9', '2:1:10', '2:1:1', '10:1:1'].sort((a, b) => {
+      const x = a.split(':').map(Number), y = b.split(':').map(Number);
+      return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+    }));
+    assert.equal(getDueWords(T0 + DAY, 2).length, 2);
   });
 
   it('success/failure on a word not in the table return null and write nothing', () => {

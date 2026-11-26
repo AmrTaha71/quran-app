@@ -14,12 +14,16 @@
 //  - A wrong word that looks like a letter-pair slip goes to recordWordSlip
 //    first: slips 1 and 2 of a pair stay in the separate list (table untouched),
 //    slip 3+ is "review" (ordinary mistake logic + a notice for the user).
-//  - recordSuccess only inside a review session started from the home card,
-//    and only for a word that was due at judgement time.
+//  - recordSuccess for a word that was due at judgement time, in ANY test
+//    (phase 6, 4.15: an ordinary test moves due words forward too).
+//  - A single isolated wrong word in an ayah (and not a slip) is only marked
+//    «مشكوك» the first time; it enters the table when wrong again in a later
+//    session (phase 6, 4.5ب). Words already in the table fail as before.
 //  - The heard text is never stored by this file; it is only handed to
 //    recordWordSlip (which keeps it in the slip list) and shown in the notice.
 import {
   addWord, getReviewEntry, recordFailure, recordSuccess, recordWordSlip, wordKey,
+  markSuspect, clearSuspect,
 } from './srsStore.ts';
 import { isDue } from './srs.ts';
 import { loadSrsIntervals } from './srsSettings.ts';
@@ -64,14 +68,18 @@ export type ApplyResult = {
   failed: number;
   succeeded: number;
   graduated: number;
+  /** single isolated mistakes only marked «مشكوك» (4.5ب) */
+  suspect: number;
   notices: SlipNotice[];
 };
 
 /** The spoken token that stands in for expected word `i`, or null.
- *  Only an ISOLATED wrong word qualifies: the word before and the word after
- *  are both matched, and exactly one spoken token sits between the end of the
- *  previous match and the start of the next one. Anything else (nothing said,
- *  several tokens, first/last word, two wrong words in a row) is null. */
+ *  Only an ISOLATED wrong word qualifies: its matched neighbours (one side
+ *  for the first or last word, phase 6 4.13) and exactly one spoken token
+ *  between them. The first word needs the token right before the next match
+ *  to be the attempt's first token; the last word needs exactly one token
+ *  left after the previous match. Anything else (nothing said, several
+ *  tokens, two wrong words in a row) is null. */
 export function heardForWord(
   i: number,
   matched: readonly boolean[],
@@ -81,14 +89,31 @@ export function heardForWord(
 ): string | null {
   if (!positions || !tokens) return null;
   if (matched[i]) return null;
-  if (i <= 0 || i >= matched.length - 1) return null;
-  if (!matched[i - 1] || !matched[i + 1]) return null;
-  const prev = positions[i - 1];
-  const next = positions[i + 1];
-  if (!Number.isInteger(prev) || !Number.isInteger(next) || prev < 0 || next < 0) return null;
-  const span = Math.max(1, Math.trunc(consumed?.[i - 1] ?? 1));
-  const gapStart = prev + span;
-  if (next - gapStart !== 1) return null;
+  const n = matched.length;
+  if (i < 0 || i >= n || n < 2) return null;
+  const ok = (x: number) => Number.isInteger(x) && x >= 0;
+  let gapStart: number;
+  let gapEnd: number; // exclusive
+  if (i === 0) {
+    if (!matched[1]) return null;
+    const next = positions[1];
+    if (!ok(next)) return null;
+    gapStart = 0; gapEnd = next;
+  } else if (i === n - 1) {
+    if (!matched[i - 1]) return null;
+    const prev = positions[i - 1];
+    if (!ok(prev)) return null;
+    gapStart = prev + Math.max(1, Math.trunc(consumed?.[i - 1] ?? 1));
+    gapEnd = tokens.length;
+  } else {
+    if (!matched[i - 1] || !matched[i + 1]) return null;
+    const prev = positions[i - 1];
+    const next = positions[i + 1];
+    if (!ok(prev) || !ok(next)) return null;
+    gapStart = prev + Math.max(1, Math.trunc(consumed?.[i - 1] ?? 1));
+    gapEnd = next;
+  }
+  if (gapEnd - gapStart !== 1) return null;
   const t = tokens[gapStart];
   return typeof t === 'string' && t.length > 0 ? t : null;
 }
@@ -107,19 +132,22 @@ export function buildOutcomes(p: SrsPending): WordOutcome[] {
   }));
 }
 
-/** Apply the outcomes of one ayah to the review table. `reviewSession` is true
- *  only for a test started from the home card. */
+/** Apply the outcomes of one ayah to the review table. `reviewSession` (a test
+ *  started from the home card) no longer changes the rules (4.15); kept for callers. */
 export function applyOutcomes(
   surah: number, ayah: number, outcomes: readonly WordOutcome[],
   opts: { reviewSession: boolean; now: number },
 ): ApplyResult {
-  const res: ApplyResult = { added: 0, failed: 0, succeeded: 0, graduated: 0, notices: [] };
+  const res: ApplyResult = { added: 0, failed: 0, succeeded: 0, graduated: 0, suspect: 0, notices: [] };
   const now = opts.now;
   const iv = loadSrsIntervals();
+  // 4.5ب: one wrong word in the whole ayah, with its neighbours right.
+  const wrong = outcomes.filter((o) => !o.ok);
+  const single = wrong.length === 1 && outcomes.length >= 3 ? wrong[0].wordNo : -1;
   for (const o of outcomes) {
     const key = wordKey(surah, ayah, o.wordNo);
     if (o.ok) {
-      if (!opts.reviewSession) continue;
+      clearSuspect(key, now);
       // Double-call guard: the entry is read from storage right here, not from
       // an earlier snapshot. After the first success the word is no longer due
       // (its next gap is at least a day), so recording the same verdict again
@@ -142,8 +170,9 @@ export function applyOutcomes(
         continue;
       }
     }
-    if (before) { if (recordFailure(key, now, iv)) res.failed++; }
-    else if (addWord(surah, ayah, o.wordNo, o.orig, now, iv).added) res.added++;
+    if (before) { if (recordFailure(key, now, iv)) res.failed++; continue; }
+    if (o.wordNo === single && markSuspect(key, now) === 'marked') { res.suspect++; continue; }
+    if (addWord(surah, ayah, o.wordNo, o.orig, now, iv).added) res.added++;
   }
   return res;
 }
