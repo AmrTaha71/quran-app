@@ -27,6 +27,8 @@ export type RoundResult = {
   mistakes?: number;
   /** The level the round ran at was «مبتدئ». */
   beginner?: boolean;
+  /** Item 17.6 (b): the user skipped this position with «تجاوز الآية». */
+  skipped?: boolean;
 };
 
 export type PickedAyah = {

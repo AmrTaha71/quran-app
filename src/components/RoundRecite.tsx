@@ -15,6 +15,7 @@ import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
 import { DeadlineTimer, RoundState, roundCutMs, loadRoundCutMode, ROUND_CUT_LABEL } from '../lib/roundJudge';
+import { mistakeBuzz, acceptChime, roundBuzzOn, roundChimeOn, setRoundBuzz, setRoundChime } from '../lib/roundFeel';
 import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
@@ -35,7 +36,14 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const [msg, setMsg] = useState('');
   const [heard, setHeard] = useState(0);
   const [manualWrong, setManualWrong] = useState<Set<number>>(new Set());
+  // Item 17.5: the word the pointer is stopped on (absolute index in the
+  // completed part), and whether its first-letter hint is shown.
+  const [stuckAt, setStuckAt] = useState<number | null>(null);
+  const [hintShown, setHintShown] = useState(false);
+  const [buzz, setBuzz] = useState(roundBuzzOn);
+  const [chime, setChime] = useState(roundChimeOn);
 
+  const stuckRef = useRef<number | null>(null);
   const stRef = useRef<RoundState | null>(null);
   // Item 16.9: the unfixed-mistake clock follows the user's setting (10 s / 15 s / ayah end).
   if (!stRef.current) stRef.current = new RoundState(rest.length, corrections, roundCutMs(loadRoundCutMode()));
@@ -108,9 +116,25 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     if (finished.current) return;
     finished.current = true;
     stopRec();
+    const sum = st.summary(locked);
+    if (!locked && sum.mistakes === 0) acceptChime();
     onFinish({
-      total: rest.length, ...st.summary(locked), beginner: currentHistoryLevel() === 'beginner',
+      total: rest.length, ...sum, beginner: currentHistoryLevel() === 'beginner',
       promptLen: effRef.current, extras: extra, ear: kindRef.current,
+    });
+  }
+
+  // Item 17.6 (b): «تجاوز الآية» closes the position as skipped — nothing
+  // credited, every word left counted as not said.
+  function skipAyah() {
+    if (finished.current) return;
+    finished.current = true;
+    stopRec();
+    audio.current?.cancel();
+    onFinish({
+      total: rest.length, credited: 0, wrong: rest.map((_, i) => i), locked: false, corrected: st.mistaken.size,
+      mistakes: st.mistaken.size, beginner: currentHistoryLevel() === 'beginner',
+      promptLen: effRef.current, extras: extra, ear: kindRef.current, skipped: true,
     });
   }
 
@@ -123,6 +147,15 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
     const act = st.evaluate(al.matched, al.allMatched, final, Date.now(), al.lastWrong);
+    // Item 17.5: a confident mismatch (a later word already matched) stops
+    // the pointer on that word; the user re-says it or asks for a hint.
+    const nowStuck = act.kind === 'continue' ? st.pendingIdx : null;
+    if (nowStuck !== stuckRef.current) {
+      if (nowStuck !== null) mistakeBuzz();
+      stuckRef.current = nowStuck;
+      setStuckAt(nowStuck);
+      setHintShown(false);
+    }
     if (act.kind === 'correct') { stopRec(); void playCorrection(); }
     else if (act.kind === 'finish') finishAll(act.locked);
     else dl.sync(st.msUntilDue(Date.now())); // an unfixed mistake is waiting for its clock
@@ -201,6 +234,13 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
         <>
           <p className="text-sm text-accent-700">هتسمع أول {eff.toLocaleString('ar-EG')} كلمات من آية بصوت القارئ، وبعدين كمّل الآية بصوتك.</p>
           <button onClick={() => void playPrompt()} className={`${btn} grad-amber-door`}>اسمع الكلمات</button>
+          {/* Item 17.6 (c): optional feedback, both off by default. */}
+          <div className="flex flex-wrap gap-2 justify-center text-xs">
+            <button type="button" aria-pressed={buzz} onClick={() => { setRoundBuzz(!buzz); setBuzz(!buzz); }}
+              className={`min-h-[44px] px-3 rounded-lg border ${buzz ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-700 border-hairline'}`}>اهتزاز عند الغلط {buzz ? '✓' : ''}</button>
+            <button type="button" aria-pressed={chime} onClick={() => { setRoundChime(!chime); setChime(!chime); }}
+              className={`min-h-[44px] px-3 rounded-lg border ${chime ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-700 border-hairline'}`}>رنّة لما الآية تخلص صح {chime ? '✓' : ''}</button>
+          </div>
         </>
       )}
       {phase === 'prompting' && <p className="text-center text-accent-700 font-bold py-4">بنسمّعك الكلمات…</p>}
@@ -226,7 +266,18 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
               ? `باقي لك تصحيح واحد. لو غلطت ومصلّحتش، القارئ يوقفك ${ROUND_CUT_LABEL[loadRoundCutMode()]}. غلطة تانية بعد التصحيح بتقفل الموضع.`
               : 'خلص التصحيح — غلطة تانية دلوقتي بتقفل الموضع.'}
           </p>
-          <button onClick={stopAndGrade} className={`${btn} grad-emerald-door`}>خلصت</button>
+          {stuckAt !== null && stuckAt < rest.length && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-center space-y-2" role="status" aria-live="polite">
+              <p className="text-sm font-bold text-amber-900">وقفت عند كلمة محتاجة تتصلّح — قولها تاني.</p>
+              {hintShown
+                ? <p className="text-sm text-accent-800">أولها حرف «<span className="font-arabic text-lg font-bold">{firstLetter(rest[stuckAt].orig)}</span>»</p>
+                : <button type="button" onClick={() => setHintShown(true)} className="min-h-[44px] px-4 rounded-lg border border-amber-300 text-amber-900 font-bold text-sm">تلميح: أول حرف</button>}
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={stopAndGrade} className={`${btn} grad-emerald-door col-span-2`}>خلصت</button>
+            <button type="button" onClick={skipAyah} className="w-full py-3 rounded-xl border border-hairline text-accent-800 font-bold text-sm">تجاوز الآية</button>
+          </div>
         </>
       )}
       {phase === 'grading' && <p className="text-center text-accent-700 font-bold py-4">بنراجع…</p>}
@@ -247,6 +298,12 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
       <RoundDebugOverlay />
     </div>
   );
+}
+
+/** Item 17.5: the first Arabic letter of a word (diacritics and tatweel skipped). */
+function firstLetter(word: string): string {
+  const m = /[\u0621-\u063A\u0641-\u064A\u0671]/.exec(word);
+  return m ? m[0] : '';
 }
 
 /** ?debug=1 only: which ear ran and the finals it had when «خلصت» was pressed. */
