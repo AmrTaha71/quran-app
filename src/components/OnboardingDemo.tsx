@@ -35,7 +35,7 @@ export default function OnboardingDemo({ kind }: { kind: DemoKind }) {
         <p dir="rtl" style={quran} className={`text-lg leading-loose text-center transition-colors ${t >= 3 ? 'text-amber-700' : 'text-ink'}`}>{WORDS.join(' ')} <span className="text-sm">﴿١﴾</span></p>
         <div className={`flex gap-1.5 transition-all duration-300 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
           {['قبلها', 'بعدها', 'متشابه'].map((c, i) => (
-            <span key={c} className="px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 text-white" style={{ transitionDelay: `${i * 90}ms` }}>{c}</span>
+            <span key={c} className="px-2 py-1 rounded-lg text-[11px] font-bold bg-emerald-700 text-white" style={{ transitionDelay: `${i * 90}ms` }}>{c}</span>
           ))}
         </div>
       </Frame>

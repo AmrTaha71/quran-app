@@ -476,7 +476,7 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
 
           <button
             onClick={playing ? stopStream : playStream}
-            className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg"
+            className="w-full py-4 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 text-lg"
           >
             {playing ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
             {playing ? 'إيقاف البث' : 'تشغيل البث'}

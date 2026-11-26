@@ -76,7 +76,7 @@ export default function VoiceSelector({ text }: { text: string }) {
 
       <button
         onClick={() => setShowSettings(!showSettings)}
-        className="p-1.5 text-accent-500 hover:bg-gray-100 rounded-lg transition-smooth"
+        className="p-1.5 text-ink-2 hover:bg-gray-100 rounded-lg transition-smooth"
       >
         <Settings2 className="w-4 h-4" />
       </button>

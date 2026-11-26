@@ -85,7 +85,7 @@ export default function AdminLogin({ onNavigate }: { onNavigate: (r: Route) => v
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold rounded-xl shadow-lg transition-smooth"
+              className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 disabled:bg-emerald-400 text-white font-semibold rounded-xl shadow-lg transition-smooth"
             >
               {loading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}
             </button>

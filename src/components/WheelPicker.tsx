@@ -82,7 +82,7 @@ export default function WheelPicker<T extends string | number>({
             role="option"
             aria-selected={i === index}
             onClick={() => { if (ref.current) ref.current.scrollTop = i * ITEM_H; }}
-            className={`snap-center flex items-center justify-center px-3 text-center text-lg font-bold ${i === index ? 'text-emerald-900' : 'text-accent-500'}`}
+            className={`snap-center flex items-center justify-center px-3 text-center text-lg font-bold ${i === index ? 'text-emerald-900' : 'text-ink-2'}`}
             style={{ height: ITEM_H }}
           >
             {o.label}

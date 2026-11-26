@@ -115,7 +115,7 @@ export function ListToggleButtons({
 }) {
   const items: { type: ListType; icon: React.ReactNode; activeColor: string }[] = [
     { type: 'read_later', icon: <Bookmark className="w-4 h-4" />, activeColor: 'bg-blue-500 text-white' },
-    { type: 'difficult', icon: <AlertTriangle className="w-4 h-4" />, activeColor: 'bg-amber-500 text-white' },
+    { type: 'difficult', icon: <AlertTriangle className="w-4 h-4" />, activeColor: 'bg-amber-700 text-white' },
     { type: 'memorized', icon: <BadgeCheck className="w-4 h-4" />, activeColor: 'bg-emerald-500 text-white' },
   ];
 

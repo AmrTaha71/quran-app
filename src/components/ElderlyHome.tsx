@@ -149,7 +149,7 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
         <button
           onPointerDown={pressFeedback}
           onClick={() => onNavigate('listen')}
-          className={`${BIG_BTN} bg-emerald-600 text-white`}
+          className={`${BIG_BTN} bg-emerald-700 text-white`}
         >
           <Headphones className="w-7 h-7" /> الورد
         </button>
@@ -164,7 +164,7 @@ export default function ElderlyHome({ onNavigate, onResume }: Props) {
               key={p}
               onPointerDown={pressFeedback}
               onClick={() => tap(i)}
-              className={`min-h-[56px] rounded-xl border-2 font-bold text-lg ${tasbih.phrase === i ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-ink border-emerald-200'}`}
+              className={`min-h-[56px] rounded-xl border-2 font-bold text-lg ${tasbih.phrase === i ? 'bg-emerald-700 text-white border-emerald-600' : 'bg-white text-ink border-emerald-200'}`}
             >
               {p}
             </button>

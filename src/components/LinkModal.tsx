@@ -564,7 +564,7 @@ export default function LinkModal({
               {LINK_TYPES.map((t) => (
                 <button key={t.value} type="button" onClick={() => toggleType(t.value)}
                   className={`py-2 text-xs font-semibold rounded-lg border transition-smooth ${
-                    selectedTypes.includes(t.value) ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
+                    selectedTypes.includes(t.value) ? 'bg-emerald-700 text-white border-emerald-600 shadow-sm' : 'bg-white text-accent-600 border-hairline hover:border-hairline-emerald'
                   }`}>
                   {t.label}
                 </button>
@@ -587,7 +587,7 @@ export default function LinkModal({
                 <div className="flex flex-col gap-2.5">
                   <button onClick={isRecording ? stopRecording : startRecording}
                     className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-smooth ${
-                      isRecording ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
+                      isRecording ? 'bg-red-600 hover:bg-red-600 text-white animate-pulse' : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-md'
                     }`}>
                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                     {isRecording ? 'وقفي التسجيل يا رنا' : 'سجلي مباشر يا رنا'}

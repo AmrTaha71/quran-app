@@ -179,7 +179,7 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
       <p className="text-sm text-accent-700">الجملة دي في {countAyat(answers.length)}. كمّل كل آية بصوتك — آية آية.</p>
       {found.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {found.map((k, i) => <span key={k} className="px-3 py-1 rounded-full bg-emerald-600 text-white text-sm font-bold">✓ الآية {(i + 1).toLocaleString('ar-EG')}</span>)}
+          {found.map((k, i) => <span key={k} className="px-3 py-1 rounded-full bg-emerald-700 text-white text-sm font-bold">✓ الآية {(i + 1).toLocaleString('ar-EG')}</span>)}
         </div>
       )}
       {answers.map((k, i) => (hintWords[k] && !found.includes(k)

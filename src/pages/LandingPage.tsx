@@ -145,7 +145,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
           <p className="mt-1 text-sm sm:text-lg text-accent-600 max-w-md leading-snug [@media(max-height:600px)]:hidden">{c.tag}</p>
         </div>
 
-        <div className="free-banner w-full flex items-center justify-center gap-3 px-4 py-2 sm:py-3 rounded-2xl bg-emerald-600 text-white shadow-xl">
+        <div className="free-banner w-full flex items-center justify-center gap-3 px-4 py-2 sm:py-3 rounded-2xl bg-emerald-700 text-white shadow-xl">
           <HeartHandshake className="w-7 h-7 shrink-0" />
           <div className="text-start leading-tight">
             <p className="font-extrabold text-lg sm:text-2xl">{c.free}</p>
@@ -156,7 +156,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
         <div className="w-full flex gap-3">
           <button
             onClick={() => onNavigate(session ? 'app' : 'auth')}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold rounded-xl shadow-lg transition-smooth"
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:py-3.5 bg-emerald-700 hover:bg-emerald-800 text-white text-base font-bold rounded-xl shadow-lg transition-smooth"
           >
             <Headphones className="w-5 h-5 shrink-0" />
             {session ? c.dash : c.start}

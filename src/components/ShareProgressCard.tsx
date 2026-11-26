@@ -291,7 +291,7 @@ export default function ShareProgressCard({ memorizedFromStart }: { memorizedFro
             onClick={() => void share()}
             onPointerDown={pressFeedback}
             disabled={busy}
-            className="btn-3d-amber flex-1 flex items-center justify-center gap-2 py-3 bg-amber-500 text-white font-bold rounded-xl disabled:opacity-60"
+            className="btn-3d-amber flex-1 flex items-center justify-center gap-2 py-3 bg-amber-700 text-white font-bold rounded-xl disabled:opacity-60"
           >
             <Share2 className="w-5 h-5" /> {busy ? 'جارٍ تجهيز البطاقة…' : 'شارك بطاقة تقدّمك'}
           </button>

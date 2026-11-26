@@ -492,7 +492,7 @@ function AdhanVoicePicker() {
         </button>
       ))}
       <button disabled={dl === 'busy' || dl === 'yes'} onClick={async () => { setDl('busy'); setDl((await downloadAdhanVoice(cur)) ? 'yes' : 'fail'); }}
-        className="mt-1 min-h-[44px] rounded-lg bg-emerald-600 text-white text-sm font-semibold disabled:opacity-70">
+        className="mt-1 min-h-[44px] rounded-lg bg-emerald-700 text-white text-sm font-semibold disabled:opacity-70">
         {dl === 'yes' ? '✓ متنزّل، هيشتغل من غير إنترنت' : dl === 'busy' ? 'بينزّل…' : dl === 'fail' ? 'التنزيل فشل، جرّب تاني' : 'عجبك؟ نزّله يشتغل من غير إنترنت'}
       </button>
     </div>

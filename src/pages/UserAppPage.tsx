@@ -709,7 +709,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                   <button type="button" onClick={toggleVoiceSearch}
                     onPointerDown={pressFeedback}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
-                    className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
+                    className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
                     <StudioMic className="w-5 h-5" />
                   </button>
                 </div>

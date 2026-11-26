@@ -96,13 +96,13 @@ export default function QuranAsrLab() {
         استخدمه هو اللي يسمعني في التسميع المتصل (بدل سمع المتصفح)
       </label>
       {status === 'idle' && (
-        <button type="button" onClick={() => void load()} className="w-full min-h-[48px] rounded-xl bg-amber-500 text-white font-bold flex items-center justify-center gap-2">
+        <button type="button" onClick={() => void load()} className="w-full min-h-[48px] rounded-xl bg-amber-700 text-white font-bold flex items-center justify-center gap-2">
           <Download className="w-5 h-5" /> حمّل البرنامج
         </button>
       )}
       {status === 'loading' && <p className="text-sm text-accent-700">بيحمّل… {pct}%</p>}
       {(status === 'ready' || status === 'working') && (
-        <button type="button" disabled={status === 'working'} onClick={() => void startRec()} className="w-full min-h-[48px] rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+        <button type="button" disabled={status === 'working'} onClick={() => void startRec()} className="w-full min-h-[48px] rounded-xl bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
           <Mic className="w-5 h-5" /> {status === 'working' ? 'بيحلّل…' : 'جرّب: سجّل كام آية'}
         </button>
       )}
@@ -114,7 +114,7 @@ export default function QuranAsrLab() {
       {info && <p className="text-xs text-accent-600">{info}</p>}
       {text && <p className="text-lg leading-loose bg-emerald-50 rounded-xl p-3 text-accent-900">{text}</p>}
       {err && <p className="text-xs text-red-600 break-all">{err}</p>}
-      <p className="text-[11px] text-accent-500">النموذج: tarteel-ai/whisper-base-ar-quran (Apache-2.0)</p>
+      <p className="text-[11px] text-ink-2">النموذج: tarteel-ai/whisper-base-ar-quran (Apache-2.0)</p>
     </div>
   );
 }

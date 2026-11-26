@@ -50,7 +50,7 @@ export default function DevicePicker({ userId, onDone, onClose }: Props) {
           {col('ماسك الجهاز إزاي؟', <DrumReel label="اتجاه الجهاز" labels={ORIENT.map((o) => o.label)} index={oi} onIndex={setOi} />)}
         </div>
         <div className="flex gap-2 sticky bottom-0 bg-white py-3 -mx-4 px-4 border-t border-slate-100">
-          <button type="button" onClick={save} className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold">تمام</button>
+          <button type="button" onClick={save} className="flex-1 py-3 rounded-xl bg-emerald-700 text-white font-bold">تمام</button>
           {onClose && <button type="button" onClick={onClose} className="px-4 py-3 rounded-xl border border-slate-300 text-slate-700">إلغاء</button>}
         </div>
       </div>

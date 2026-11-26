@@ -610,7 +610,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
           <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 mb-2">لوحة الإدارة</h1>
           <p className="text-sm text-accent-600 mb-5">سجل دخول بحسابك العادي أولاً — لو حسابك أدمن، الإدارة هتفتح لك من الإعدادات.</p>
-          <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">تسجيل الدخول</button>
+          <button onClick={() => onNavigate('auth')} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl">تسجيل الدخول</button>
           <button onClick={() => onNavigate('home')} className="w-full text-sm text-accent-600 hover:text-accent-700 py-3">العودة للرئيسية</button>
         </div>
       </div>
@@ -624,9 +624,9 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
           <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 mb-2">تعذّر التأكد من صلاحية الإدارة</h1>
-          <p className="text-sm text-accent-500 mb-5">الاتصال بالخادم فشل أثناء التحقق — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
-          <button onClick={() => setGateAttempt((a) => a + 1)} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">إعادة المحاولة</button>
-          <button onClick={() => onNavigate('app')} className="w-full text-sm text-accent-500 hover:text-accent-700 py-3">العودة للوحتي</button>
+          <p className="text-sm text-ink-2 mb-5">الاتصال بالخادم فشل أثناء التحقق — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
+          <button onClick={() => setGateAttempt((a) => a + 1)} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl">إعادة المحاولة</button>
+          <button onClick={() => onNavigate('app')} className="w-full text-sm text-ink-2 hover:text-accent-700 py-3">العودة للوحتي</button>
         </div>
       </div>
     );
@@ -637,7 +637,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
         <div className="bg-white rounded-2xl shadow-xl border border-hairline-emerald p-8 w-full max-w-md text-center">
           <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800 mb-2">الصفحة دي للأدمن بس</h1>
           <p className="text-sm text-accent-600 mb-5">حسابك شغال كمستخدم عادي تماماً، وده مقصود — الإدارة مش بتظهر للمستخدم العادي.</p>
-          <button onClick={() => onNavigate('app')} className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl">العودة للوحتي</button>
+          <button onClick={() => onNavigate('app')} className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl">العودة للوحتي</button>
         </div>
       </div>
     );
@@ -695,7 +695,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => { setMergeMode((m) => !m); setMergeSel([]); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-smooth font-semibold border ${mergeMode ? 'bg-emerald-600 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-hairline-emerald hover:bg-emerald-100'}`}>
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-smooth font-semibold border ${mergeMode ? 'bg-emerald-700 text-white border-emerald-600' : 'text-emerald-700 bg-emerald-50 border-hairline-emerald hover:bg-emerald-100'}`}>
               <Layers className="w-4 h-4" /> دمج آيات
             </button>
             <div className="relative">
@@ -932,8 +932,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 <button key={f} onClick={() => { setStatusFilter(f); setPage(0); }}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-smooth ${
                     statusFilter === f
-                      ? f === 'green' ? 'bg-emerald-500 text-white shadow-sm' : f === 'red' ? 'bg-red-500 text-white shadow-sm' : 'bg-accent-700 text-white shadow-sm'
-                      : 'text-accent-500 hover:bg-gray-100'
+                      ? f === 'green' ? 'bg-emerald-500 text-white shadow-sm' : f === 'red' ? 'bg-red-600 text-white shadow-sm' : 'bg-accent-700 text-white shadow-sm'
+                      : 'text-ink-2 hover:bg-gray-100'
                   }`}>
                   {f === 'all' ? 'الكل' : f === 'green' ? 'له تربيط' : 'بدون تربيط'}
                 </button>
@@ -979,7 +979,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                               onChange={() => setMergeSel((cur) => cur.some((x) => x.id === verse.id) ? cur.filter((x) => x.id !== verse.id) : [...cur, verse])}
                               className="w-6 h-6 accent-emerald-600" />
                           )}
-                          <span className="flex flex-col items-center justify-center min-w-[3.25rem] px-2 py-1 bg-emerald-600 text-white rounded-xl leading-none shadow-sm">
+                          <span className="flex flex-col items-center justify-center min-w-[3.25rem] px-2 py-1 bg-emerald-700 text-white rounded-xl leading-none shadow-sm">
                             <span className="text-[10px] opacity-80">آية</span>
                             <span className="text-2xl font-extrabold">{verse.ayah_no.toLocaleString('ar-EG')}</span>
                           </span>
@@ -1023,7 +1023,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                         </button>
                         {verse.links_count > 0 && (
                           <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}
-                            className={`px-2 py-1.5 text-xs font-semibold rounded-lg ${showLinksFor === verse.id ? 'bg-emerald-600 text-white' : 'text-emerald-700 hover:bg-emerald-50'}`}>
+                            className={`px-2 py-1.5 text-xs font-semibold rounded-lg ${showLinksFor === verse.id ? 'bg-emerald-700 text-white' : 'text-emerald-700 hover:bg-emerald-50'}`}>
                             التربيطات ({verse.links_count})
                           </button>
                         )}
@@ -1255,7 +1255,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <Check className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ النشر…' : 'اقبلي وانشري يا رنا'}
                         </button>
                         <button onClick={() => rejectLink(link.id)} disabled={!!savingIds[link.id]}
-                          className="flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth disabled:opacity-50">
+                          className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth disabled:opacity-50">
                           <X className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ الرفض…' : 'ارفضيه يا رنا'}
                         </button>
                       </div>
@@ -1301,7 +1301,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <div className="flex gap-2">
               <button onClick={() => { setMergeMode(false); setMergeSel([]); }} className="px-3 py-2 rounded-xl text-sm font-semibold bg-gray-100 text-accent-700">إلغاء</button>
               <button disabled={!ok} onClick={() => { setLinkModalGroup(sel); setLinkModalRelated(null); setLinkModalVerse(sel[0]); }}
-                className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-600 text-white disabled:opacity-40">سجّل التربيط ({sel.length})</button>
+                className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-700 text-white disabled:opacity-40">سجّل التربيط ({sel.length})</button>
             </div>
           </div>
         );

@@ -106,7 +106,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
           <div key={r.folder} className={`rounded-xl border p-3 space-y-2 ${chosen === r.folder ? 'border-emerald-500 bg-emerald-50' : 'border-hairline bg-white'}`}>
             <div className="flex items-center justify-between gap-2">
               <button type="button" onClick={() => choose(r.folder)} className="flex items-center gap-2 text-right">
-                <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${chosen === r.folder ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-accent-300'}`}>
+                <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${chosen === r.folder ? 'border-emerald-600 bg-emerald-700 text-white' : 'border-accent-300'}`}>
                   {chosen === r.folder && <Check className="w-4 h-4" />}
                 </span>
                 <span className="font-bold text-accent-900">{r.name}</span>
@@ -122,7 +122,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                 <p className="text-sm font-semibold text-accent-900">هيسمّعلك في جزء واحد ولا في القرآن كله؟</p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button type="button" onClick={() => { setAskFor(null); setOpenJuz(r.folder); }}
-                    className="min-h-[44px] rounded-lg bg-emerald-600 text-white text-sm font-bold">جزء أو أكتر (من {juzSizeMb(r.folder, 1)} ميجا للجزء)</button>
+                    className="min-h-[44px] rounded-lg bg-emerald-700 text-white text-sm font-bold">جزء أو أكتر (من {juzSizeMb(r.folder, 1)} ميجا للجزء)</button>
                   <button type="button" onClick={() => setAskFor(null)}
                     className="min-h-[44px] rounded-lg border text-sm">بالنت بس دلوقتي</button>
                 </div>
@@ -142,7 +142,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                     const running = juzBusy && juzBusy.f === r.folder && juzBusy.j === j;
                     return (
                       <button key={j} type="button" onClick={() => void toggleJuz(r.folder, j)}
-                        className={`min-h-[44px] rounded-lg text-xs font-bold border ${has ? 'bg-emerald-600 text-white border-emerald-600' : running ? 'bg-amber-100 border-amber-400' : 'bg-white border-hairline text-accent-800'}`}>
+                        className={`min-h-[44px] rounded-lg text-xs font-bold border ${has ? 'bg-emerald-700 text-white border-emerald-600' : running ? 'bg-amber-100 border-amber-400' : 'bg-white border-hairline text-accent-800'}`}>
                         {running ? `${juzBusy!.pct}%` : <>ج{j}<span className="block font-normal opacity-80">{juzSizeMb(r.folder, j)} ميجا</span></>}
                       </button>
                     );

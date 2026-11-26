@@ -23,7 +23,7 @@ export default function AdminViewToggle() {
         onClick={() => setViewAsUser(!viewAsUser)}
         aria-pressed={viewAsUser}
         className={`pointer-events-auto inline-flex items-center gap-2 min-h-[44px] px-4 rounded-full text-sm font-bold shadow-lg polish-press ${
-          viewAsUser ? 'bg-amber-500 text-white' : 'bg-white/95 text-emerald-800 border border-hairline-emerald'
+          viewAsUser ? 'bg-amber-700 text-white' : 'bg-white/95 text-emerald-800 border border-hairline-emerald'
         }`}
       >
         {viewAsUser ? <Shield className="w-4 h-4" aria-hidden="true" /> : <Eye className="w-4 h-4" aria-hidden="true" />}

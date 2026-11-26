@@ -122,7 +122,7 @@ export function DailyReportCard({ onClose, recap = false }: { onClose: () => voi
             ))}
           </div>
         )}
-        <button onClick={onClose} className="btn-3d mt-5 w-full py-3 bg-emerald-600 text-white font-bold rounded-2xl">تمام</button>
+        <button onClick={onClose} className="btn-3d mt-5 w-full py-3 bg-emerald-700 text-white font-bold rounded-2xl">تمام</button>
       </div>
     </div>
   );

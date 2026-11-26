@@ -314,7 +314,10 @@ html { -webkit-text-size-adjust: 100%; }
    Two pre-existing failures were fixed inside this batch's own
    scope: white on emerald-600 (3.77) and white on amber-600 (3.19)
    are replaced by the verified gradients on the Home buttons that
-   used them. Small muted labels use ink-2 (#4b5a53, 7.20 on cream)
+   used them. (Correction, item 8.1/8.2/8.4, 2026-11-26: that fix
+   covered the Home buttons only — 57 other white-on-emerald-600
+   spots remained. Now every white text sits on emerald-700,
+   amber-700 or red-600, never on emerald-600 / amber-500 / red-500.) Small muted labels use ink-2 (#4b5a53, 7.20 on cream)
    instead of accent-500 (4.24, large-only).
    Rules kept: transform/opacity-only animation; no parallax, no
    sheen (the top highlight is a static inset edge, not a moving

@@ -205,7 +205,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
 
             <div className="flex flex-wrap gap-2 min-h-[32px]">
               {current.answers.map((k) => found.has(k) ? (
-                <span key={k} className="px-3 py-1 rounded-full bg-emerald-600 text-white text-sm font-bold">{SURAHS[Number(k.split(':')[0]) - 1].name} {k.split(':')[1]}</span>
+                <span key={k} className="px-3 py-1 rounded-full bg-emerald-700 text-white text-sm font-bold">{SURAHS[Number(k.split(':')[0]) - 1].name} {k.split(':')[1]}</span>
               ) : null)}
             </div>
 

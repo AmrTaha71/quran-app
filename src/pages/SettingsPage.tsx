@@ -1019,7 +1019,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             {openDoor === 'device' && (<>
         <section className="bg-white rounded-2xl border border-hairline shadow-sm p-5 space-y-3">
           <p className="text-sm text-ink-2">{(() => { const c = loadDeviceChoice(); return c ? `${c.brand} — ${c.model} — ${c.variant}` : 'لسه ما اخترتش جهازك'; })()}</p>
-          <button type="button" onClick={() => window.dispatchEvent(new Event('quran-open-device-picker'))} className="w-full py-3 rounded-xl bg-emerald-600 text-white font-bold">غيّر جهازك</button>
+          <button type="button" onClick={() => window.dispatchEvent(new Event('quran-open-device-picker'))} className="w-full py-3 rounded-xl bg-emerald-700 text-white font-bold">غيّر جهازك</button>
         </section>
             </>)}
             {openDoor === 'adhan' && (<>
@@ -1447,7 +1447,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             <h2 className="text-base md:text-lg font-semibold text-accent-800 flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-amber-600" /> لوحة الإدارة
             </h2>
-            <p className="text-sm text-accent-500 mb-4">تعذّر التأكد من صلاحية الإدارة — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
+            <p className="text-sm text-ink-2 mb-4">تعذّر التأكد من صلاحية الإدارة — ده مش معناه إن حسابك مش أدمن. حاول تاني.</p>
             <button onClick={() => setAdminGateAttempt((a) => a + 1)}
               className="w-full py-2.5 grad-emerald-door text-white text-sm font-bold rounded-xl transition-smooth polish-press polish-focus">
               إعادة المحاولة
@@ -1492,7 +1492,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             تحديث السجل
           </button>
           {recoveryLog.length === 0 ? (
-            <p className="text-sm text-accent-500">لا توجد أحداث بعد — اسمع شيئًا ثم اقفل الشاشة وارجع، وستظهر الأحداث هنا.</p>
+            <p className="text-sm text-ink-2">لا توجد أحداث بعد — اسمع شيئًا ثم اقفل الشاشة وارجع، وستظهر الأحداث هنا.</p>
           ) : (
             <pre dir="ltr" className="text-left text-xs leading-relaxed text-accent-700 bg-gray-50 rounded-xl p-3 overflow-auto max-h-96 whitespace-pre-wrap break-words">
               {[...recoveryLog].reverse().map((e) => {

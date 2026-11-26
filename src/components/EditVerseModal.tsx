@@ -137,7 +137,7 @@ export default function EditVerseModal({
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50"
               >
                 <Save className="w-4 h-4" />
                 {saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}

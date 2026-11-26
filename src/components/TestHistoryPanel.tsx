@@ -133,7 +133,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
   const hijriOk = HIJRI_FMT !== null && hijriOf(now) !== null;
   const chip = (label: string, on: boolean, onClick: () => void) => (
     <button type="button" key={label} onClick={onClick}
-      className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold whitespace-nowrap ${on ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-700'}`}>{label}</button>
+      className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold whitespace-nowrap ${on ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>{label}</button>
   );
   const thisMonth: Period = { k: 'greg', y: now.getFullYear(), m: now.getMonth() + 1 };
   const same = (a: Period, b: Period) => JSON.stringify(a) === JSON.stringify(b);
@@ -154,7 +154,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
         <div className="flex gap-1.5">
           {kinds.map((k) => (
             <button key={k} type="button" onClick={() => setKind(k)}
-              className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${kind === k ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-accent-700'}`}>{TEST_KIND_LABEL[k]}</button>
+              className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${kind === k ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>{TEST_KIND_LABEL[k]}</button>
           ))}
         </div>
       )}
@@ -221,7 +221,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
               <span className="font-bold text-emerald-700 whitespace-nowrap">{ar(e.score)}٪</span>
               {e.ear === 'manual' && <span className="text-xs text-amber-link whitespace-nowrap">تقييم ذاتي</span>}
               <span className={`text-xs whitespace-nowrap ${e.completed ? 'text-emerald-700' : 'text-amber-link'}`}>{e.completed ? 'كمّل' : 'ما كملش'}</span>
-              <span className="text-xs text-accent-500 whitespace-nowrap">{HISTORY_LEVEL_LABEL[e.level]}</span>
+              <span className="text-xs text-ink-2 whitespace-nowrap">{HISTORY_LEVEL_LABEL[e.level]}</span>
               <span className="text-xs text-accent-400 whitespace-nowrap">{when(e.ts)}</span>
             </li>
           ))}

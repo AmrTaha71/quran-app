@@ -44,7 +44,7 @@ export default function ReferralSurvey({ onDone }: { onDone: () => void }) {
         <input value={other} onChange={(e) => setOther(e.target.value)} maxLength={80} placeholder="غير كده؟ اكتب هنا"
           className="mt-3 w-full border rounded-xl px-3 py-2.5 text-base" aria-label="مصدر آخر" />
         <button onClick={() => void finish(true)} onPointerDown={pressFeedback}
-          className="btn-3d mt-4 w-full py-3.5 bg-emerald-600 text-white text-base font-bold rounded-2xl">تمام</button>
+          className="btn-3d mt-4 w-full py-3.5 bg-emerald-700 text-white text-base font-bold rounded-2xl">تمام</button>
       </div>
     </div>
   );

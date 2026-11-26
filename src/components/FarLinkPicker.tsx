@@ -62,8 +62,8 @@ export default function FarLinkPicker({ from, onPick, onClose }: { from: QuranVe
 
           <p className="font-semibold text-accent-800 text-sm">الآية التانية في نفس صفحة المصحف؟</p>
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setSame(true)} className={`py-2.5 rounded-xl font-semibold text-sm ${same === true ? 'bg-emerald-600 text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>أيوه، نفس الصفحة</button>
-            <button onClick={() => setSame(false)} className={`py-2.5 rounded-xl font-semibold text-sm ${same === false ? 'bg-emerald-600 text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>لا، صفحة تانية</button>
+            <button onClick={() => setSame(true)} className={`py-2.5 rounded-xl font-semibold text-sm ${same === true ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>أيوه، نفس الصفحة</button>
+            <button onClick={() => setSame(false)} className={`py-2.5 rounded-xl font-semibold text-sm ${same === false ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline-emerald text-accent-800'}`}>لا، صفحة تانية</button>
           </div>
 
           {same === false && (

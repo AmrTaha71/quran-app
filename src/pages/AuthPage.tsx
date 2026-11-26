@@ -411,7 +411,7 @@ export default function AuthPage({
               <button type="button"
                 onClick={() => { setMode('login'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
-                  mode === 'login' ? 'bg-emerald-600 text-white shadow-md' : 'text-accent-500 hover:text-accent-700'
+                  mode === 'login' ? 'bg-emerald-700 text-white shadow-md' : 'text-ink-2 hover:text-accent-700'
                 }`}
               >
                 {t('login')}
@@ -419,7 +419,7 @@ export default function AuthPage({
               <button type="button"
                 onClick={() => { setMode('signup'); setCheckEmail(null); }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-smooth ${
-                  mode === 'signup' ? 'bg-emerald-600 text-white shadow-md' : 'text-accent-500 hover:text-accent-700'
+                  mode === 'signup' ? 'bg-emerald-700 text-white shadow-md' : 'text-ink-2 hover:text-accent-700'
                 }`}
               >
                 {t('signup')}
@@ -439,7 +439,7 @@ export default function AuthPage({
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
               {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
               <button type="button" onClick={handleResendConfirmation} disabled={loading}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
+                className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                 {loading ? '...' : 'إعادة إرسال رابط التأكيد'}
               </button>
               <button type="button" onClick={() => { setCheckEmail(null); setSuccess(''); setError(''); setMode('login'); }}
@@ -456,7 +456,7 @@ export default function AuthPage({
                     انتهت صلاحية رابط استرجاع كلمة السر أو تم استخدامه من قبل. اطلب رابطًا جديدًا من صفحة استرجاع كلمة السر.
                   </div>
                   <button type="button" onClick={() => { onRecoveryExit?.(); setMode('recover'); }}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth">
+                    className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl transition-smooth">
                     طلب رابط جديد
                   </button>
                 </>
@@ -464,7 +464,7 @@ export default function AuthPage({
                 <>
                   {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
                   <button type="button" onClick={() => { onRecoveryExit?.(); onNavigate('app'); }}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth">
+                    className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl transition-smooth">
                     الذهاب إلى لوحتي
                   </button>
                 </>
@@ -494,11 +494,11 @@ export default function AuthPage({
                   </div>
                   {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
                   <button type="submit" disabled={loading}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
+                    className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                     {loading ? '...' : 'حفظ كلمة السر الجديدة'}
                   </button>
                   <button type="button" onClick={() => { onRecoveryExit?.(); setMode('login'); }}
-                    className="w-full text-sm text-accent-500 hover:text-accent-700 py-2">
+                    className="w-full text-sm text-ink-2 hover:text-accent-700 py-2">
                     إلغاء والعودة لتسجيل الدخول
                   </button>
                 </>
@@ -520,7 +520,7 @@ export default function AuthPage({
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
               {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
               <button type="submit" disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50">
+                className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50">
                 <RotateCcw className="w-4 h-4" />
                 {loading ? '...' : t('recoverPassword')}
               </button>
@@ -571,7 +571,7 @@ export default function AuthPage({
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
 
               <button type="submit" disabled={loading}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
+                className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                 {loading ? '...' : t('login')}
               </button>
 
@@ -635,14 +635,14 @@ export default function AuthPage({
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setGender('male')}
                     className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-smooth ${
-                      gender === 'male' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-gray-50 text-accent-500 border-hairline'
+                      gender === 'male' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-gray-50 text-ink-2 border-hairline'
                     }`}>
                     <Shield className="w-4 h-4" />
                     {t('male')}
                   </button>
                   <button type="button" onClick={() => setGender('female')}
                     className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-smooth ${
-                      gender === 'female' ? 'bg-pink-50 text-pink-700 border-pink-300' : 'bg-gray-50 text-accent-500 border-hairline'
+                      gender === 'female' ? 'bg-pink-50 text-pink-700 border-pink-300' : 'bg-gray-50 text-ink-2 border-hairline'
                     }`}>
                     <Heart className="w-4 h-4" />
                     {t('female')}
@@ -679,7 +679,7 @@ export default function AuthPage({
               {profileWarning && <div className="p-2.5 bg-amber-50 border border-hairline-amber rounded-2xl text-xs text-amber-800 text-center leading-relaxed">{profileWarning}</div>}
 
               <button type="submit" disabled={loading}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
+                className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
                 {loading ? '...' : t('signup')}
               </button>
             </form>

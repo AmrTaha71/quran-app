@@ -6134,7 +6134,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           className="w-full px-3 py-3.5 pl-16 rounded-xl border border-hairline text-base bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300" />
         <button type="button" onClick={(e) => { e.preventDefault(); surahVoiceSearch(); }}
           aria-label="ابحث بالصوت"
-          className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-xl ${surahVoiceOn ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white shadow'}`}>
+          className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-xl ${surahVoiceOn ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-700 text-white shadow'}`}>
           <StudioMic className="w-6 h-6" />
         </button>
       </div>
@@ -6177,7 +6177,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             options={CORR_RECITERS.map((r) => ({ value: r.folder, label: r.name }))} />
         </div>
       </label>
-      <p className="text-[11px] text-accent-500" dir="rtl">توقيت الكلمات: cpfair/quran-align (CC BY 4.0) • الصوت: EveryAyah</p>
+      <p className="text-[11px] text-ink-2" dir="rtl">توقيت الكلمات: cpfair/quran-align (CC BY 4.0) • الصوت: EveryAyah</p>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-accent-800">إعدادات هذا التسميع</p>
         <label className="flex items-center gap-1.5 text-xs font-semibold text-accent-700">
@@ -6255,7 +6255,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         {phase === 'setup' && (
           <div className="space-y-5">
             {corrNote}
-            {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine}</p>)}
+            {showDiag && (<p className="text-xs text-ink-2 text-center">{stampLine}</p>)}
             {/* Batch 1: the old unsupported note was a small line
                 buried in the settings card. A user on a voiceless
                 browser deserves this banner first, not last. */}
@@ -6304,7 +6304,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       {CORR_RECITERS.find((r) => r.folder === f)?.name || f}
                     </button>
                   ))}
-                  <button type="button" onClick={() => setReciterAsk(null)} className="w-full text-sm text-accent-500 underline">إلغاء</button>
+                  <button type="button" onClick={() => setReciterAsk(null)} className="w-full text-sm text-ink-2 underline">إلغاء</button>
                 </div>
               </div>
             )}
@@ -6318,7 +6318,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <CorrRecitersPanel onChosen={() => setCorrReciterState(getCorrReciter())} />
                   <button type="button" onClick={() => { markChosenReciter(); setCorrReciterState(getCorrReciter()); setAskReciter(false); }}
                     className="w-full min-h-[48px] rounded-xl bg-emerald-700 text-white font-bold">تمام — يلا نسمّع</button>
-                  <p className="text-xs text-center text-accent-500">تقدر تغيّر القارئ أو تنزّل وتمسح بعدين من الإعدادات ← عايز مين يسمّعلك؟</p>
+                  <p className="text-xs text-center text-ink-2">تقدر تغيّر القارئ أو تنزّل وتمسح بعدين من الإعدادات ← عايز مين يسمّعلك؟</p>
                 </div>
               </div>
             )}
@@ -6648,7 +6648,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       if (!plDraft.spoken.trim() || !plDraft.expected.trim()) return;
                       setRecPlan((prev) => [...prev, { surah: plDraft.surah, ayah: plDraft.ayah, spoken: plDraft.spoken.trim(), expectedWord: plDraft.expected.trim(), type: plDraft.type }]);
                       setPlDraft((d) => ({ ...d, spoken: '', expected: '' }));
-                    }} className="mt-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة إلى الخطة</button>
+                    }} className="mt-2 px-4 py-2 bg-emerald-700 text-white text-sm font-bold rounded-xl">إضافة إلى الخطة</button>
                   </div>
                   {((chosenRange && chosenRange.start.surah !== chosenRange.end.surah) || (savedProgress?.endSurah && savedProgress.endSurah !== savedProgress.surah)) && (
                     <p className="text-sm text-red-600 font-semibold">تنبيه: التسجيل يدعم سورة واحدة فقط — النطاق المختار (أو الاستكمال) يمتد لأكثر من سورة، فزر البدء معطل حتى تختار نطاقًا داخل سورة واحدة أو توقف التسجيل.</p>
@@ -6898,7 +6898,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {loading ? 'جارٍ تحميل الآيات…' : `سمّع الآيات اللي فيها كلماتي الغلط (${weakWordAyahs().length.toLocaleString('ar-EG')})`}
                       </button>
                       <button onClick={() => { clearWeakWords(); setWordLogTick((n) => n + 1); }}
-                        className="block mx-auto text-xs font-semibold text-accent-500 underline">مسح السجل</button>
+                        className="block mx-auto text-xs font-semibold text-ink-2 underline">مسح السجل</button>
                     </>
                   )}
                 </div>
@@ -6988,7 +6988,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <p className="text-lg font-bold text-accent-700" role="status" aria-live="polite">بسمعك… كمّل من غير توقف</p>
                   </div>
                   <MicLevelHint active={contListening} heardSomething={!!(transcript || interim) || contProgress.matched > 0} />
-                  <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
+                  <p className="text-xs text-ink-2 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                   {ayahs[contProgress.ayahIdx] && (
                     <p className="text-sm font-semibold text-emerald-700 mb-4">
                       الآن عند: سورة {SURAHS.find((s) => s.no === ayahs[contProgress.ayahIdx].surah_no)?.name || ''} — آية {ayahs[contProgress.ayahIdx].ayah_no}
@@ -7035,7 +7035,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
               )}
             </div>
-            {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
+            {showDiag && (<p className="text-xs text-ink-2 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
             <button onClick={() => { diagPush('tap', { label: 'stop-to-setup' }); stopContinuousMic(); setSavedProgress(loadProgress()); setPhase('setup'); }}
               className="block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
               {contProgress.ayahIdx > 0 && !explicitAyahIdsRef.current ? 'إنهاء التسميع وحفظ مكاني' : 'إنهاء بدون حفظ والعودة للإعدادات'}
@@ -7095,7 +7095,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <Check className="w-6 h-6" /> صح
                         </button>
                         <button onClick={() => grade(false)}
-                          className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press">
+                          className="flex-1 py-3 bg-red-600 hover:bg-red-600 text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 polish-press">
                           <X className="w-6 h-6" /> خطأ
                         </button>
                       </div>
@@ -7207,7 +7207,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                             الاستماع وقف — لكن اللي سمعته محفوظ ومش هيضيع
                           </p>
                           {transcript && (
-                            <p className="text-sm text-accent-500 leading-relaxed mt-1" dir="rtl">
+                            <p className="text-sm text-ink-2 leading-relaxed mt-1" dir="rtl">
                               ما سمعه الجهاز حرفيًا (نص خام، مختصر للعرض): {heardCapped}
                             </p>
                           )}
@@ -7293,7 +7293,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </>
                         );
                       })()}
-                      <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
+                      <p className="text-xs text-ink-2 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                       {corrSpeaking && (
                         <p className="text-sm font-semibold text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-3" role="status" aria-live="polite">الميكروفون واقف لحد ما المصحح يخلّص — استنى، وبعدين كمّل</p>
                       )}
@@ -7345,7 +7345,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               )}
             </div>
 
-            {showDiag && (<p className="text-xs text-accent-500 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
+            {showDiag && (<p className="text-xs text-ink-2 text-center">{stampLine} • النص الخام أعلاه كما سمعه الجهاز حرفيًا</p>)}
             <div className="flex justify-between">
               <button onClick={() => goToAyah(index - 1, true)}
                 disabled={index === 0}
@@ -7378,7 +7378,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </p>
                 {fullHeardToggle}
                 {fullHeardContent}
-                {showDiag && (<p className="text-xs text-accent-500 mt-2">{stampLine}</p>)}
+                {showDiag && (<p className="text-xs text-ink-2 mt-2">{stampLine}</p>)}
               </div>
             )}
             {/* Feature #3: the same gold reward on the done screen
@@ -7464,7 +7464,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
 
             {!contZeroMatch && showDiag && (
-              <p className="text-xs text-accent-500 text-center">{stampLine}</p>
+              <p className="text-xs text-ink-2 text-center">{stampLine}</p>
             )}
             {/* DIAG (Claude P0-5): collapsible event log + Copy JSON.
                 Renders on every done screen (both modes, zero-match
@@ -7491,12 +7491,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         {ev.label ? ` ${ev.label}` : ''}{ev.code ? ` (${ev.code})` : ''}{ev.final !== undefined ? (ev.final ? ' final' : ' interim') : ''}{ev.text ? `: ${ev.text}` : ''}
                       </p>
                     ))}
-                    {diagEventsRef.current.length === 0 && <p className="text-xs text-accent-500">لا توجد أحداث مسجلة.</p>}
+                    {diagEventsRef.current.length === 0 && <p className="text-xs text-ink-2">لا توجد أحداث مسجلة.</p>}
                   </div>
                   {diagTruncatedRef.current && <p className="text-xs text-amber-link" dir="rtl">السجل تجاوز 2000 حدث — الأقدم حُذف من الأحداث (قائمة النهائيات كاملة في JSON).</p>}
-                  {diagEventsRef.current.length > DIAG_DISPLAY_CAP && <p className="text-xs text-accent-500" dir="rtl">معروض آخر 500 حدث فقط — باقي الأحداث في JSON.</p>}
+                  {diagEventsRef.current.length > DIAG_DISPLAY_CAP && <p className="text-xs text-ink-2" dir="rtl">معروض آخر 500 حدث فقط — باقي الأحداث في JSON.</p>}
                   <div className="flex items-center gap-2">
-                    <button type="button" onClick={() => void diagCopyJson()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl">نسخ JSON التشخيصي</button>
+                    <button type="button" onClick={() => void diagCopyJson()} className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl">نسخ JSON التشخيصي</button>
                     {diagCopied && <span className="text-xs text-emerald-700">{diagCopied}</span>}
                   </div>
                 </div>
@@ -7614,7 +7614,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                     options={TAXONOMY_VALUES.map((t) => ({ value: t, label: TAXONOMY_LABELS[t] }))} /></div>
                                   <input placeholder="تفاصيل اختيارية" value={(unDraft[key]?.free) || ''} onChange={(e) => setUnDraft((prev) => ({ ...prev, [key]: { ...(prev[key] || { spoken: '', expected: '', type: 'substitution' as FixedTaxonomy, free: '' }), free: e.target.value } }))} className="px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
                                 </div>
-                                <button onClick={() => addUnintended(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة خطأ غير مقصود</button>
+                                <button onClick={() => addUnintended(key)} className="px-4 py-2 bg-emerald-700 text-white text-sm font-bold rounded-xl">إضافة خطأ غير مقصود</button>
                               </div>
                             )}
                             {st === 'self-corrected' && (
@@ -7630,7 +7630,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                                 })}
                                 <div className="flex gap-2">
                                   <input placeholder="الكلمة التي تعثرت فيها" value={scDraft[key] || ''} onChange={(e) => setScDraft((prev) => ({ ...prev, [key]: e.target.value }))} className="flex-1 px-3 py-2 rounded-xl border border-hairline text-sm" dir="rtl" />
-                                  <button onClick={() => addSelfCorrected(key)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl">إضافة</button>
+                                  <button onClick={() => addSelfCorrected(key)} className="px-4 py-2 bg-emerald-700 text-white text-sm font-bold rounded-xl">إضافة</button>
                                 </div>
                               </div>
                             )}
@@ -7654,7 +7654,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </label>
                       <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 leading-relaxed">تحذير خصوصية: نصوص التسميع بيانات صوتية. لا يُرفع أي شيء تلقائيًا — هذه الحالة لا تغادر جهازك إلا إذا نسختها ولصقتها بنفسك. إن كان الصوت لطفل أو لشخص آخر، لا تصدّره إلا بإذنه الصريح. وإن أُضيف الصوت الخام لاحقًا، فسيبقى على الجهاز ويُحذف مع الحالة ولا يُرفع أبدًا دون إذن صريح.</p>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => void recCaseCopyJson()} disabled={!recConsent} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl">تصدير حالة الاختبار (JSON)</button>
+                        <button onClick={() => void recCaseCopyJson()} disabled={!recConsent} className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-sm font-bold rounded-xl">تصدير حالة الاختبار (JSON)</button>
                         {recCaseCopied && <span className="text-xs text-emerald-700">{recCaseCopied}</span>}
                       </div>
                     </>

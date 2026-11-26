@@ -122,7 +122,7 @@ export default function InstallGuide() {
             <Step n={2} icon={<span className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2 text-accent-800 font-semibold"><SquarePlus className="w-6 h-6" aria-hidden="true" /> إضافة إلى الشاشة الرئيسية</span>} title="اختار «إضافة إلى الشاشة الرئيسية»">
               لو مش ظاهرة، اسحب القائمة لفوق.
             </Step>
-            <Step n={3} icon={<span className="rounded-xl bg-emerald-600 px-6 py-2 text-white font-bold">إضافة</span>} title="دوس «إضافة»">
+            <Step n={3} icon={<span className="rounded-xl bg-emerald-700 px-6 py-2 text-white font-bold">إضافة</span>} title="دوس «إضافة»">
               وبعدين افتح التطبيق من الأيقونة الجديدة.
             </Step>
           </ol>

@@ -22,7 +22,7 @@ export default function BigScreenSheet({ onClose, onRemote }: { onClose: () => v
             <li>انزل من أعلى يمين الشاشة (مركز التحكم).</li>
             <li>دوس «انعكاس الشاشة» (Screen Mirroring) واختار التلفزيون.</li>
           </ol>
-          <p className="text-xs text-accent-500">التلفزيون لازم يدعم AirPlay (أغلب تلفزيونات LG وSamsung الحديثة بتدعمه).</p>
+          <p className="text-xs text-ink-2">التلفزيون لازم يدعم AirPlay (أغلب تلفزيونات LG وSamsung الحديثة بتدعمه).</p>
         </div>
 
         <div className="rounded-xl border-2 border-amber-200 p-4 space-y-2">

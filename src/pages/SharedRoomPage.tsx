@@ -543,7 +543,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           <button
             onPointerDown={pressFeedback}
             onClick={createRoom}
-            className="w-full py-4 bg-emerald-600 text-white font-bold rounded-xl text-lg"
+            className="w-full py-4 bg-emerald-700 text-white font-bold rounded-xl text-lg"
           >
             ابدأ
           </button>
@@ -736,7 +736,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           <button
             onPointerDown={pressFeedback}
             onClick={() => voiceApiRef.current?.start()}
-            className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-2"
+            className="w-full py-3 bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2"
           >
             <Mic className="w-5 h-5" /> شغّل الصوت
           </button>
@@ -777,7 +777,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
           options={CORR_RECITERS.map((r) => ({ value: r.folder, label: r.name }))} />
         <div className="grid grid-cols-3 gap-2">
           <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, khatma: { reciter: pos.khatma?.reciter ?? CORR_RECITERS[0].folder, playing: !pos.khatma?.playing } })}
-            className="min-h-[48px] rounded-xl bg-amber-500 text-white font-bold">{pos.khatma?.playing ? 'إيقاف مؤقت' : 'شغّل'}</button>
+            className="min-h-[48px] rounded-xl bg-amber-700 text-white font-bold">{pos.khatma?.playing ? 'إيقاف مؤقت' : 'شغّل'}</button>
           <button onClick={() => { const c = SURAH_AYAH_COUNTS[pos.surah - 1] ?? 1; sendPos({ surah: pos.surah, ayah: Math.min(c, pos.ayah + 1), khatma: pos.khatma }); }}
             className="min-h-[48px] rounded-xl border text-sm">الآية اللي بعدها</button>
           <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} disabled={!pos.khatma}
@@ -811,7 +811,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             <div className="grid grid-cols-4 gap-2">
               {DHIKR_FRAMES.map((f, i) => (
                 <button key={f} onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, tasbih: { ...pos.tasbih!, frame: i } })}
-                  className={`min-h-[44px] rounded-lg border text-sm ${((pos.tasbih!.frame ?? 0) === i) ? 'bg-amber-500 text-white' : 'bg-white'}`}>{f}</button>
+                  className={`min-h-[44px] rounded-lg border text-sm ${((pos.tasbih!.frame ?? 0) === i) ? 'bg-amber-700 text-white' : 'bg-white'}`}>{f}</button>
               ))}
             </div>
           </>
@@ -837,7 +837,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
             <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah })} className="w-full py-2 rounded-lg border text-sm">ارجع لعرض الآية</button>
           </>
         ) : (
-          <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, page: getSurahStartPage(pos.surah) })} className="w-full min-h-[52px] rounded-xl bg-amber-500 text-white font-bold">اعرض صفحة المصحف (سورة {surahName})</button>
+          <button onClick={() => sendPos({ surah: pos.surah, ayah: pos.ayah, page: getSurahStartPage(pos.surah) })} className="w-full min-h-[52px] rounded-xl bg-amber-700 text-white font-bold">اعرض صفحة المصحف (سورة {surahName})</button>
         )}
       </div>
 
@@ -865,7 +865,7 @@ export default function SharedRoomPage({ session, onNavigate }: Props) {
               options={Array.from({ length: Math.max(1, ayahCount) }, (_, i) => ({ value: i + 1, label: `آية ${i + 1}` }))} />
           </div>
         </div>
-        <button onClick={openInMushaf} className="w-full py-3 rounded-lg bg-emerald-600 text-white font-semibold flex items-center justify-center gap-2">
+        <button onClick={openInMushaf} className="w-full py-3 rounded-lg bg-emerald-700 text-white font-semibold flex items-center justify-center gap-2">
           <BookOpen className="w-4 h-4" /> افتحها في المصحف
         </button>
       </div>

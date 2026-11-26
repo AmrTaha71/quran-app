@@ -284,7 +284,7 @@ export default function SmartRephraseBox({ verse }: { verse: QuranVerse }) {
             </button>
             <button
               onClick={handleReject}
-              className="flex items-center gap-1.5 px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth"
+              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth"
             >
               <X className="w-4 h-4" />
               رفض

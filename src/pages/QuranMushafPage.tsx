@@ -4368,7 +4368,7 @@ export default function QuranMushafPage({
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-2xl shadow-sm text-base font-bold text-accent-700 hover:bg-emerald-50/50 transition-smooth">
               <BookOpen className="w-5 h-5 text-emerald-700" />
               {versesListOpen ? 'إخفاء آيات السورة' : `عرض آيات سورة ${currentSurahName}`}
-              <span className="text-accent-500">{versesListOpen ? '▲' : '▼'}</span>
+              <span className="text-ink-2">{versesListOpen ? '▲' : '▼'}</span>
             </button>
             {versesListOpen && (
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden sticky top-24 mt-4">
@@ -4527,7 +4527,7 @@ export default function QuranMushafPage({
               ]).map((tab) => (
                 <button key={tab.id} onClick={() => setIndexTab(tab.id)}
                   className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-smooth ${
-                    indexTab === tab.id ? 'text-emerald-700 border-b-2 border-emerald-600 bg-emerald-50/50' : 'text-accent-500 hover:text-accent-700 hover:bg-gray-50'
+                    indexTab === tab.id ? 'text-emerald-700 border-b-2 border-emerald-600 bg-emerald-50/50' : 'text-ink-2 hover:text-accent-700 hover:bg-gray-50'
                   }`}>
                   {tab.icon} {tab.label}
                 </button>
@@ -5390,7 +5390,7 @@ export default function QuranMushafPage({
                   container that fades 1.5 s after each tap, so a reader
                   stuck on the wrong ayah could not see the way out. */}
               {followStatus === 'locked' && followPos && !followOn && (
-                <div className="absolute left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]"
+                <div className="absolute left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-amber-700 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]"
                   style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4.5rem)' }}
                   onClick={(e) => e.stopPropagation()}>
                   {/* W5-E: no «سورة X — آية N» text — the mushaf page itself shows where the imam is. */}
@@ -5429,9 +5429,9 @@ export default function QuranMushafPage({
                         disabled={displayedPage !== currentPage}
                         title={displayedPage !== currentPage ? 'جارٍ تحميل الصفحة…' : undefined}
                         className={`relative flex items-center justify-center w-8 h-8 rounded-md text-xs font-bold transition-smooth flex-shrink-0 disabled:opacity-40 ${
-                          followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
-                          searchHighlight && searchHighlight.surah === v.surah_no && searchHighlight.ayah === v.ayah_no ? 'bg-amber-500 text-white ring-2 ring-amber-300' :
-                          selectedVerse?.id === v.id ? 'bg-emerald-600 text-white' :
+                          followPos && followPos.surah === v.surah_no && followPos.ayah === v.ayah_no ? 'bg-amber-700 text-white ring-2 ring-amber-300' :
+                          searchHighlight && searchHighlight.surah === v.surah_no && searchHighlight.ayah === v.ayah_no ? 'bg-amber-700 text-white ring-2 ring-amber-300' :
+                          selectedVerse?.id === v.id ? 'bg-emerald-700 text-white' :
                           v.has_links ? 'bg-emerald-500/30 text-emerald-300 hover:bg-emerald-500/50' : 'bg-white/20 text-white hover:bg-white/30'
                         }`}>
                         {v.ayah_no}
@@ -5495,7 +5495,7 @@ export default function QuranMushafPage({
                             className={`py-2.5 rounded-xl text-xs font-bold transition-smooth polish-press flex flex-col items-center justify-center gap-0.5 ${popupTab === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                             {l}
                             {k === 'mutashabihat' && similarLabel && (
-                              <span className={`text-[10px] font-semibold leading-tight ${popupTab === k ? 'text-white/90' : 'text-accent-500'}`}>{similarLabel}</span>
+                              <span className={`text-[10px] font-semibold leading-tight ${popupTab === k ? 'text-white/90' : 'text-ink-2'}`}>{similarLabel}</span>
                             )}
                           </button>
                         ))}
@@ -5524,7 +5524,7 @@ export default function QuranMushafPage({
                         </div>
                       ) : mutashabihatError ? (
                         <div className="text-center py-6 bg-gray-50 rounded-lg">
-                          <p className="text-base text-accent-500 mb-3">{mutashabihatError}</p>
+                          <p className="text-base text-ink-2 mb-3">{mutashabihatError}</p>
                           <button onClick={() => selectedVerse && findSimilar(selectedVerse)}
                             className="px-4 py-2 grad-emerald-door text-white text-sm font-semibold rounded-lg polish-press">
                             إعادة المحاولة
@@ -5662,7 +5662,7 @@ export default function QuranMushafPage({
                             </div>
                           ) : tafsirError ? (
                             <div className="text-center py-6 bg-gray-50 rounded-lg">
-                              <p className="text-base text-accent-500 mb-3">{tafsirError}</p>
+                              <p className="text-base text-ink-2 mb-3">{tafsirError}</p>
                               <button onClick={() => selectedVerse && loadTafsir(tafsirEdition, selectedVerse)}
                                 className="px-4 py-2 grad-amber-door text-white text-sm font-semibold rounded-lg polish-press">
                                 إعادة المحاولة
@@ -5716,7 +5716,7 @@ export default function QuranMushafPage({
                         return (<>
                           <button onClick={() => { void toggleMemorized(); }}
                             aria-pressed={memorized}
-                            className={`w-full mb-2 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 polish-press ${memorized ? 'bg-emerald-600 text-white' : 'bg-white border border-hairline-emerald text-emerald-800'}`}>
+                            className={`w-full mb-2 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 polish-press ${memorized ? 'bg-emerald-700 text-white' : 'bg-white border border-hairline-emerald text-emerald-800'}`}>
                             <BadgeCheck className="w-4 h-4" /> {memorized ? 'محفوظة ✓' : 'حفظتها'}
                           </button>
                           <div className="grid grid-cols-3 gap-1.5 mb-2">

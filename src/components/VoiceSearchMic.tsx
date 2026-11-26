@@ -111,7 +111,7 @@ export default function VoiceSearchMic() {
       // pointerdown + preventDefault keeps the field focused (no blur).
       onPointerDown={(e) => { e.preventDefault(); if (target && !listening) listen(target); }}
       style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 2000 }}
-      className={`w-12 h-12 rounded-xl flex items-center justify-center shadow ${listening ? 'bg-red-500 text-white animate-pulse' : 'bg-emerald-600 text-white'}`}
+      className={`w-12 h-12 rounded-xl flex items-center justify-center shadow ${listening ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-700 text-white'}`}
     >
       <StudioMic className="w-6 h-6" />
     </button>

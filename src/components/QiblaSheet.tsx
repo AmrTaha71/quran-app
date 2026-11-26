@@ -84,7 +84,7 @@ export default function QiblaSheet({ onClose }: { onClose: () => void }) {
               <button onClick={startCompass} className="w-full min-h-[52px] rounded-xl grad-amber-door text-white font-bold">شغّل البوصلة</button>
             )}
             {compassErr && <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3">{compassErr}</p>}
-            <p className="text-xs text-accent-500 text-center">امسك الجهاز مسطّح بعيد عن الحديد والمغناطيس. الدقة تقريبية، ولو في شك اتأكد من اتجاه المسجد.</p>
+            <p className="text-xs text-ink-2 text-center">امسك الجهاز مسطّح بعيد عن الحديد والمغناطيس. الدقة تقريبية، ولو في شك اتأكد من اتجاه المسجد.</p>
           </>
         )}
       </div>

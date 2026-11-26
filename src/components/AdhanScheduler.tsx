@@ -140,7 +140,7 @@ export default function AdhanScheduler() {
           </button>
           <button
             onClick={() => setBanner(null)}
-            className="flex-1 py-2 bg-emerald-600 text-white font-bold rounded-xl"
+            className="flex-1 py-2 bg-emerald-700 text-white font-bold rounded-xl"
           >
             إغلاق
           </button>
