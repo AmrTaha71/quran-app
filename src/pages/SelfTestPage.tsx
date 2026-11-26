@@ -1068,6 +1068,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // reciter is used and the lobby shows a one-line «المصحح: X — غيّره»
   // that opens the same picker on demand.
   const [askReciter, setAskReciter] = useState<boolean>(false);
+  const rangeReciterPickRef = useRef('');
+  const [, setRangeReciterTick] = useState(0);
   const firstVisitRef = useRef(!hasChosenReciter());
   const [reciterAsk, setReciterAsk] = useState<{ options: string[]; run: (f: string) => void } | null>(null);
   // 2026-11-10: range with no single reciter -> split between readers, switched per ayah.
@@ -2678,7 +2680,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         setTimeout(() => setReciterNote(''), 4000);
       }
     }
-    if (!opts?.reciterChosen && !restore) {
+    // Item 2.23: a reciter picked in the lobby for this exact range counts
+    // as chosen, so the start is not interrupted by the same question.
+    if (!opts?.reciterChosen && !restore && rangeReciterPickRef.current !== `${startGlobal}-${endGlobal}`) {
       const avail = availNow;
       if (avail.length > 1) {
         setReciterAsk({ options: avail, run: (f: string) => { setCorrReciter(f); setCorrReciterState(f); setReciterAsk(null); void startTestGlobal(startGlobal, endGlobal, restore, forceMode, settingsOverride, { ...(opts || {}), reciterChosen: true }); } });
@@ -6304,6 +6308,33 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               المصحح: <b>{CORR_RECITERS.find((r) => r.folder === corrReciter)?.name || corrReciter}</b>
               {' — '}
               <button type="button" onClick={() => setAskReciter(true)} className="font-semibold text-emerald-700 underline">{firstVisitRef.current ? 'اختار قارئ تاني' : 'غيّره'}</button>
+              {/* Item 2.23: decide the reciter(s) for the range BEFORE «ابدأ»,
+                  not as an interruption after it. */}
+              {(() => {
+                const lo = passageRange.start.global, hi = passageRange.end.global, k = `${lo}-${hi}`;
+                const avail = recitersForRange(lo, hi);
+                if (avail.length > 1) {
+                  return (
+                    <span className="block mt-1">
+                      <span className="text-xs text-accent-600">أكتر من قارئ منزّل للنطاق ده — اختار: </span>
+                      {avail.map((f) => (
+                        <button key={f} type="button"
+                          onClick={() => { setCorrReciter(f); setCorrReciterState(f); rangeReciterPickRef.current = k; setRangeReciterTick((n) => n + 1); }}
+                          className={`mx-0.5 px-2 py-0.5 rounded-lg text-xs font-semibold ${corrReciter === f && rangeReciterPickRef.current === k ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>
+                          {CORR_RECITERS.find((r) => r.folder === f)?.name || f}
+                        </button>
+                      ))}
+                    </span>
+                  );
+                }
+                if (avail.length === 0) {
+                  const parts = planRangeReciters(lo, hi);
+                  if (parts && parts.length > 1) {
+                    return <span className="block text-xs text-accent-600 mt-1">النطاق ده هيتقسم بين {parts.length.toLocaleString('ar-EG')} قرّاء حسب المنزّل: {parts.map((p) => CORR_RECITERS.find((r) => r.folder === p.folder)?.name || p.folder).join('، ')}</span>;
+                  }
+                }
+                return null;
+              })()}
               {/* Item 2.21: downloaded or online, and whether its word timings
                   cover the chosen range (else it corrects with the whole ayah). */}
               <span className="block text-xs text-accent-600 mt-0.5">
