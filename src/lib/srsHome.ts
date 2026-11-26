@@ -44,3 +44,48 @@ export function firstDueAyahText(due: readonly DueWord[]): string | null {
   const t = firstDueAyah(due);
   return t ? `${surahLabel(t.surah)} — آية ${toArabicIndic(t.ayah)}` : null;
 }
+
+/** Phase 6 (15.4ب): today's session, built from what is due. Your own
+ *  mistakes («أخطائي», most-missed first) come first, then the review words
+ *  oldest first, capped at `limit` words. The test page takes ONE range, so
+ *  the session is the stretch of ayat (same surah, at most `maxAyahs` long)
+ *  around the first item that holds as many of those words as fit.
+ *  `words` = how many of the day's words the stretch covers. */
+export type DaySession = DueAyahTarget & { words: number; fromMistakes: number };
+
+export function daySession(
+  weak: readonly { surah: number; ayah: number }[],
+  due: readonly { surah: number; ayah: number }[],
+  opts: { limit?: number; maxAyahs?: number } = {},
+): DaySession | null {
+  const limit = opts.limit ?? 20;
+  const maxAyahs = Math.max(1, opts.maxAyahs ?? 10);
+  const items = [
+    ...weak.map((w) => ({ ...w, mistake: true })),
+    ...due.map((d) => ({ ...d, mistake: false })),
+  ].slice(0, Math.max(1, limit));
+  const first = items[0];
+  if (!first) return null;
+  let lo = first.ayah;
+  let hi = first.ayah;
+  let words = 0;
+  let fromMistakes = 0;
+  for (const it of items) {
+    if (it.surah !== first.surah) continue;
+    const nlo = Math.min(lo, it.ayah);
+    const nhi = Math.max(hi, it.ayah);
+    if (nhi - nlo + 1 > maxAyahs) continue;
+    lo = nlo; hi = nhi; words++;
+    if (it.mistake) fromMistakes++;
+  }
+  const range = lo === hi ? `آية ${toArabicIndic(lo)}` : `آيات ${toArabicIndic(lo)}–${toArabicIndic(hi)}`;
+  return {
+    surah: first.surah,
+    ayah: lo,
+    startGlobal: getGlobalAyahNumber(first.surah, lo),
+    endGlobal: getGlobalAyahNumber(first.surah, hi),
+    label: `اختبار اليوم: ${surahLabel(first.surah)} — ${range}`,
+    words,
+    fromMistakes,
+  };
+}

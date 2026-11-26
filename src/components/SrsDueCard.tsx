@@ -10,14 +10,25 @@
 import { useReadOnReturn } from '../lib/useReadOnReturn';
 import { Play, Repeat } from 'lucide-react';
 import { pressFeedback } from '../lib/pressFeedback';
-import { getDueWords } from '../lib/srsStore';
-import { listWeakWords } from '../lib/wordMistakes';
-import { dueWordsText, firstDueAyah, firstDueAyahText } from '../lib/srsHome';
+import { getDueWords, suspectCount } from '../lib/srsStore';
+import { listWeakWords, type WeakWord } from '../lib/wordMistakes';
+import { dueWordsText, daySession } from '../lib/srsHome';
+import { SRS_DAILY_LIMIT } from '../lib/srs';
+import { SRS_STORE_KEY } from '../lib/srsStore';
 import { TEST_RANGE_CHOICE_KEY, TEST_RANGE_PRESET_KEY } from '../lib/homeFeatures';
 import { SRS_REVIEW_SESSION_KEY } from '../lib/srsTasmee';
 
-function readWeakCount() { try { return listWeakWords().length; } catch { return 0; } }
-function readDue() { try { return getDueWords(); } catch { return []; } }
+function readWeak(): WeakWord[] { try { return listWeakWords(); } catch { return []; } }
+function readDue() { try { return getDueWords(Date.now(), SRS_DAILY_LIMIT); } catch { return []; } }
+// 4.26: how many words the review table holds at all, and how many are only
+// «مشكوك» (one isolated miss, 4.5ب), so the user sees the system working.
+function readTable() {
+  let inTable = 0;
+  try { inTable = Object.keys(JSON.parse(localStorage.getItem(SRS_STORE_KEY) ?? '{}') as object).length; } catch { /* 0 */ }
+  let doubtful = 0;
+  try { doubtful = suspectCount(); } catch { /* 0 */ }
+  return { inTable, doubtful };
+}
 
 export default function SrsDueCard({
   onNavigate,
@@ -28,9 +39,13 @@ export default function SrsDueCard({
   const due = useReadOnReturn(readDue);
   // 15.4(أ): today's due at a glance: the words you keep missing («أخطائي»)
   // plus the review words due today, under one «اختبار اليوم» entry.
-  const weak = useReadOnReturn(readWeakCount);
+  const weakList = useReadOnReturn(readWeak);
+  const table = useReadOnReturn(readTable);
+  const weak = weakList.length;
   const total = due.length + weak;
-  const target = firstDueAyah(due);
+  // 15.4ب: one session from what is due: your mistakes first, then the
+  // oldest review words, capped at the daily limit, as one stretch of ayat.
+  const target = daySession(weakList, due, { limit: SRS_DAILY_LIMIT });
 
   const start = () => {
     if (!target) return;
@@ -66,20 +81,12 @@ export default function SrsDueCard({
         </p>
       )}
       {!target ? (
-        weak > 0 ? (
-          <button type="button" onPointerDown={pressFeedback} onClick={() => onNavigate('test')}
-            className="mt-4 w-full py-3.5 grad-amber-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-focus">
-            <Play className="w-5 h-5" />
-            اختبار اليوم: أخطائي
-          </button>
-        ) : (
-          <p className="text-lg text-ink-2 mt-3">مفيش مراجعة النهاردة</p>
-        )
+        <p className="text-lg text-ink-2 mt-3">مفيش مراجعة النهاردة</p>
       ) : (
         <div className="mt-3">
-          <p className="text-sm text-ink-2">المستحق للمراجعة النهاردة</p>
-          <p className="text-3xl font-bold text-amber-800 mt-1">{dueWordsText(due.length)}</p>
-          <p className="text-sm text-ink-2 mt-2">أول آية: {firstDueAyahText(due)}</p>
+          <p className="text-sm text-ink-2">جلسة النهاردة: أخطاءك الأول، وبعدين الأقدم من غير تسميع (لحد {dueWordsText(SRS_DAILY_LIMIT)} في اليوم)</p>
+          <p className="text-base font-bold text-amber-800 mt-1">{target.label}</p>
+          <p className="text-sm text-ink-2 mt-1">فيها {dueWordsText(target.words)}{target.fromMistakes > 0 ? `، منها ${dueWordsText(target.fromMistakes)} من أخطائك` : ''}</p>
           <button
             type="button"
             onPointerDown={pressFeedback}
@@ -90,6 +97,11 @@ export default function SrsDueCard({
             اختبار اليوم
           </button>
         </div>
+      )}
+      {(table.inTable > 0 || table.doubtful > 0) && (
+        <p className="text-xs text-ink-2 mt-3" data-testid="srs-table-count">
+          في المراجعة الذكية: {dueWordsText(table.inTable)}{table.doubtful > 0 ? ` + ${dueWordsText(table.doubtful)} مشكوك فيها (غلطة واحدة، بتدخل لو اتكررت)` : ''}
+        </p>
       )}
     </div>
   );
