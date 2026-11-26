@@ -324,10 +324,13 @@ export class ListenEngine {
       try {
         const p = this.audio.play() as unknown as Promise<void> | undefined;
         if (p && typeof p.catch === 'function') {
-          p.catch(() => {
-            // Locked-page play rejection: stay silent here; the
-            // next user gesture resumes via play().
+          p.catch((e: unknown) => {
             this.playingFlag = false;
+            // Item 4.31: a locked-page rejection (NotAllowedError) used
+            // to stop here in silence with the marker on a finished
+            // ayah — show the usual resume button instead. An
+            // AbortError (src replaced by a newer move) stays silent.
+            if ((e as { name?: string } | null)?.name === 'NotAllowedError') this.callInterrupted();
           });
         }
       } catch {

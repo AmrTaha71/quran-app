@@ -1368,8 +1368,10 @@ export class JourneyEngine {
       const p = this.audio.play() as unknown as Promise<void> | undefined;
       this.playingFlag = true;
       if (p && typeof p.catch === 'function') {
-        p.catch(() => {
+        p.catch((e: unknown) => {
           this.playingFlag = false;
+          // Item 4.31: locked-page rejection → the resume button, not silence.
+          if ((e as { name?: string } | null)?.name === 'NotAllowedError') this.callInterrupted();
         });
       }
     } catch {
