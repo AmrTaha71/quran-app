@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { normalizeArabic } from '../lib/arabicNormalize';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info, BatteryCharging } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Compass, Share2, Info, BatteryCharging } from 'lucide-react';
 import ShareSheet from '../components/ShareSheet';
 import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
@@ -89,14 +90,28 @@ function TodayDatesCard() {
   );
 }
 
+// 6.9: doors merged by meaning. The old ids still open the merged door.
+const MERGED_DOORS: Record<string, string> = { reciters: 'voice', audio: 'download' };
+function doorMatches(d: { title: string; sub: string; keys?: string }, q: string): boolean {
+  const n = normalizeArabic(q.trim());
+  if (!n) return true;
+  const hay = normalizeArabic(`${d.title} ${d.sub} ${d.keys ?? ''}`);
+  return n.split(/\s+/).every((w) => hay.includes(w));
+}
+
 export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const { lang, setLang } = useLang();
   // Settings hub (2026-11-04): null = hub grid of doors; otherwise
   // the id of the open door. All section state lives in this
   // component, so switching hub<->detail never loses a control.
   const [openDoor, setOpenDoor] = useState<string | null>(() => {
-    try { const d = sessionStorage.getItem('quran-settings-door'); sessionStorage.removeItem('quran-settings-door'); return d; } catch { return null; }
+    try { const d = sessionStorage.getItem('quran-settings-door'); sessionStorage.removeItem('quran-settings-door'); return d ? (MERGED_DOORS[d] ?? d) : null; } catch { return null; }
   });
+  // 6.9: a text search over the doors, and the hub scroll position comes
+  // back when a door closes (it used to jump to the top every time).
+  const [doorQuery, setDoorQuery] = useState('');
+  const hubScrollRef = useRef(0);
+  const openDoorAt = (id: string) => { hubScrollRef.current = window.scrollY; setOpenDoor(MERGED_DOORS[id] ?? id); };
   const [hintsBack, setHintsBack] = useState(false);
   // W3-S4: the tour starts only once the device is set up (the device decides
   // layout and sizes). No device chosen yet -> open the device picker first and
@@ -124,7 +139,12 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setBackTarget({ label: 'عودة إلى الإعدادات', onBack: () => setOpenDoor(null) });
     return () => setBackTarget(null);
   }, [openDoor]);
-  useEffect(() => { try { window.scrollTo(0, 0); } catch { /* ignore */ } }, [openDoor]);
+  useEffect(() => {
+    try {
+      if (openDoor === null) { const y = hubScrollRef.current; requestAnimationFrame(() => window.scrollTo(0, y)); }
+      else window.scrollTo(0, 0);
+    } catch { /* ignore */ }
+  }, [openDoor]);
   // "Digital Mushaf" (colour-changeable text page) is a choice here, not only a button inside the Mushaf.
   const [digitalOn, setDigitalOn] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
   const [themeId, setThemeIdState] = useState<MushafThemeId>(loadThemeId);
@@ -366,7 +386,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     setKhatmaList(listDownloadedSurahs());
   };
   useEffect(() => {
-    if (openDoor !== 'audio') return;
+    if (openDoor !== 'download') return;
     refreshAudioLists();
     void estimateDownloadStorage().then((est) => setAudioStorage({ freeMB: est.freeMB, persisted: est.persisted }));
   }, [openDoor]);
@@ -655,10 +675,8 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'battery', icon: BatteryCharging, title: 'توفير البطارية', sub: 'خيارات تقلل الاستهلاك', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'device', icon: Smartphone, title: 'جهازك', sub: 'نوعه وحجمه وطريقة مسكه', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pwa', icon: Smartphone, title: 'تثبيت التطبيق', sub: 'أضفه إلى الشاشة الرئيسية', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'download', icon: Download, title: 'تحميل المصحف', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'reciters', icon: Headphones, title: 'عايز مين يسمّعلك؟', sub: 'قارئ التصحيح والتسميع', box: 'bg-amber-50 border-hairline-amber', fg: 'text-amber-700' },
-    { id: 'audio', icon: Headphones, title: 'التنزيلات الصوتية', sub: 'الختمة والتفسير دون نت', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
-    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'download', icon: Download, title: 'التحميل للاستخدام دون نت', sub: 'صفحات المصحف والصوتيات', keys: 'تحميل المصحف التنزيلات الصوتية الختمة التفسير الجهني', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
+    { id: 'voice', icon: Volume2, title: 'التلاوة والصوت', sub: 'القارئ اللي يسمّعلك وإعدادات الصوت', keys: 'عايز مين يسمّعلك قارئ التصحيح والتسميع اللثغة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'lang', icon: Globe, title: 'لغة التطبيق', sub: '', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'pass', icon: Lock, title: 'كلمة السر', sub: 'تغيير كلمة السر مباشرة', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
     { id: 'admin', icon: Shield, title: 'لوحة الإدارة', sub: 'للأدمن فقط', box: 'bg-emerald-50 border-hairline-emerald', fg: 'text-emerald-700' },
@@ -843,10 +861,21 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-5 md:px-6 lg:px-8 py-6 md:py-8 space-y-6 md:space-y-8">
         {openDoor === null && <TodayDatesCard />}
+        {openDoor === null && (
+          <div>
+            <label htmlFor="settings-search" className="sr-only">ابحث في الإعدادات</label>
+            <input id="settings-search" type="search" dir="rtl" value={doorQuery} onChange={(e) => setDoorQuery(e.target.value)}
+              placeholder="ابحث في الإعدادات… (مثلًا: صوت، أذان، تحميل)"
+              className="w-full min-h-[44px] rounded-2xl border border-hairline bg-white px-4 py-3 text-base text-ink placeholder:text-ink-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            {doorQuery.trim() && !doors.some((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi) && doorMatches(d, doorQuery)) && (
+              <p className="text-sm text-ink-2 mt-2" role="status">مفيش إعداد بالاسم ده — جرّب كلمة تانية.</p>
+            )}
+          </div>
+        )}
         {openDoor === null ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi)).map((d, i) => (
-              <button key={d.id} onPointerDown={pressFeedback} onClick={() => setOpenDoor(d.id)}
+            {doors.filter((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi) && doorMatches(d, doorQuery)).map((d, i) => (
+              <button key={d.id} onPointerDown={pressFeedback} onClick={() => openDoorAt(d.id)}
                 style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
                 className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
                 <span className="w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3 md:mb-4">
@@ -1203,11 +1232,11 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             {openDoor === 'account-delete' && (<>
               <DeleteAccountButton />
             </>)}
-            {openDoor === 'reciters' && (<>
+            {openDoor === 'voice' && (<>
               <CorrRecitersPanel />
               <LispLettersCard />
             </>)}
-            {openDoor === 'audio' && (<>
+            {openDoor === 'download' && (<>
         {/* Audio downloads manager (W3-S3). Top: what is on the device now,
             with clear delete buttons per reciter / tafsir / Juhani / all.
             Below: per-kind download cards and the per-surah list, each in a
