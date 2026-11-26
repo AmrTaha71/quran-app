@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { normalizeArabic } from '../lib/arabicNormalize';
+import DiagErrorsCard from '../components/DiagErrorsCard';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
@@ -1517,6 +1518,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         {resetMsg && <p className="text-sm font-semibold text-accent-700 -mt-2">{resetMsg}</p>}
             </>)}
             {openDoor === 'diag' && (<>
+        <DiagErrorsCard />
         <details open className="glass-card rounded-2xl p-5 md:p-6 lg:p-7">
           <summary className="text-base md:text-lg font-semibold text-accent-800 cursor-pointer">سجل تشخيص الاستماع (مؤقت)</summary>
           <p className="text-xs text-accent-400 leading-relaxed mt-2 mb-3">

@@ -2,6 +2,10 @@ import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
+import { installGlobalErrorLog } from './lib/errorReporting.ts';
+
+// 10.3: uncaught errors and rejected promises go to the local error log.
+installGlobalErrorLog();
 // Keep the browser's install prompt from app start (Settings → ثبّت التطبيق reads it).
 import './lib/installPrompt';
 // Every launch opens the Madinah mushaf (2026-11-11, on purpose): the links,

@@ -83,6 +83,7 @@ import { tickStats } from './lib/dailyStats';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
 import ConfirmHost from './components/ConfirmHost';
+import ErrorBoundary from './components/ErrorBoundary';
 import BottomBackBar from './components/BottomBackBar';
 import AdminViewToggle from './components/AdminViewToggle';
 import { resetAdminView, setRealAdmin } from './lib/adminPreview';
@@ -690,10 +691,10 @@ function AppContent() {
       {session ? (
         <>
           <div style={{ display: route === 'listen' ? undefined : 'none' }}>
-            <ListenPage onNavigate={navigate} visible={route === 'listen'} />
+            <ErrorBoundary page="listen"><ListenPage onNavigate={navigate} visible={route === 'listen'} /></ErrorBoundary>
           </div>
           <div style={{ display: route === 'adhkar' ? undefined : 'none' }}>
-            <AdhkarPage onNavigate={navigate} visible={route === 'adhkar'} />
+            <ErrorBoundary page="adhkar"><AdhkarPage onNavigate={navigate} visible={route === 'adhkar'} /></ErrorBoundary>
           </div>
           {/* Black screen lives above every route (Listen page or fullscreen Mushaf);
               closing it just reveals the page underneath. */}
@@ -701,7 +702,8 @@ function AppContent() {
         </>
       ) : null}
       <div key={routeKey} className={routeEnterClass}>
-        <Suspense fallback={<PageLoading />}>{page}</Suspense>
+        {/* 10.4: a crash in one page stays in that page. */}
+        <ErrorBoundary page={route}><Suspense fallback={<PageLoading />}>{page}</Suspense></ErrorBoundary>
       </div>
       {/* Admin-only «شوف كأدمن / كمستخدم» switch (W2-4); renders nothing for
           non-admins. Skipped where the UI is already crowded or admin. */}
