@@ -11,10 +11,12 @@ import { useReadOnReturn } from '../lib/useReadOnReturn';
 import { Play, Repeat } from 'lucide-react';
 import { pressFeedback } from '../lib/pressFeedback';
 import { getDueWords } from '../lib/srsStore';
+import { listWeakWords } from '../lib/wordMistakes';
 import { dueWordsText, firstDueAyah, firstDueAyahText } from '../lib/srsHome';
 import { TEST_RANGE_CHOICE_KEY, TEST_RANGE_PRESET_KEY } from '../lib/homeFeatures';
 import { SRS_REVIEW_SESSION_KEY } from '../lib/srsTasmee';
 
+function readWeakCount() { try { return listWeakWords().length; } catch { return 0; } }
 function readDue() { try { return getDueWords(); } catch { return []; } }
 
 export default function SrsDueCard({
@@ -24,6 +26,10 @@ export default function SrsDueCard({
 }) {
   // 6.12: read when the page opens and again whenever it comes back.
   const due = useReadOnReturn(readDue);
+  // 15.4(أ): today's due at a glance: the words you keep missing («أخطائي»)
+  // plus the review words due today, under one «اختبار اليوم» entry.
+  const weak = useReadOnReturn(readWeakCount);
+  const total = due.length + weak;
   const target = firstDueAyah(due);
 
   const start = () => {
@@ -54,11 +60,24 @@ export default function SrsDueCard({
         مراجعة الكلمات الضعيفة
       </p>
 
+      {total > 0 && (
+        <p className="text-base text-ink mt-3" data-testid="due-today">
+          النهاردة عندك {dueWordsText(total)}: {dueWordsText(weak)} من أخطائك + {dueWordsText(due.length)} للمراجعة
+        </p>
+      )}
       {!target ? (
-        <p className="text-lg text-ink-2 mt-3">مفيش مراجعة النهاردة</p>
+        weak > 0 ? (
+          <button type="button" onPointerDown={pressFeedback} onClick={() => onNavigate('test')}
+            className="mt-4 w-full py-3.5 grad-amber-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-focus">
+            <Play className="w-5 h-5" />
+            اختبار اليوم: أخطائي
+          </button>
+        ) : (
+          <p className="text-lg text-ink-2 mt-3">مفيش مراجعة النهاردة</p>
+        )
       ) : (
         <div className="mt-3">
-          <p className="text-sm text-ink-2">المستحق النهاردة</p>
+          <p className="text-sm text-ink-2">المستحق للمراجعة النهاردة</p>
           <p className="text-3xl font-bold text-amber-800 mt-1">{dueWordsText(due.length)}</p>
           <p className="text-sm text-ink-2 mt-2">أول آية: {firstDueAyahText(due)}</p>
           <button
@@ -68,7 +87,7 @@ export default function SrsDueCard({
             className="mt-4 w-full py-3.5 grad-amber-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
           >
             <Play className="w-5 h-5" />
-            ابدأ المراجعة
+            اختبار اليوم
           </button>
         </div>
       )}
