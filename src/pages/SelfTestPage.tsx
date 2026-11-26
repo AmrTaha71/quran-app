@@ -6,6 +6,7 @@ import Hint from '../components/Hint';
 import { useWakeLock } from '../lib/wakeLock';
 import EarDownloadCard from '../components/EarDownloadCard';
 import TestHistoryPanel from '../components/TestHistoryPanel';
+import MistakeVoiceList from '../components/MistakeVoiceList';
 import { requestDayRecap } from '../lib/dailyStats';
 import { registerAligner } from '../lib/alignBridge';
 import { applyLisp } from '../lib/lispLetters';
@@ -6965,6 +6966,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </span>
                         ))}
                       </div>
+                      {/* 15.3: «أخطائي» voice clips, local only. */}
+                      <MistakeVoiceList words={weakWordList} />
                       {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                       <button onClick={() => void startWeakWordsTest()} disabled={loading}
                         className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
