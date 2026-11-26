@@ -1430,6 +1430,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // screens show the plain text (the paper cannot draw red words without boxes).
   const paperStatus = useMedinaPaperStatus(ayahs[index]?.surah_no, ayahs[index]?.ayah_no, ayahs[index]?.ayah_text);
   const paperOn = paperView && paperStatus !== 'count-mismatch';
+  // Item 15.2: «التسميع الأعمى» — optional. On a mistake only the wrong
+  // words are uncovered (the rest of the ayah stays hidden) until the
+  // user asks for the whole ayah; before the first word only the ayah's
+  // place (surah / ayah number) is shown. Words already appear only as
+  // they are recited (paper view) or as dots, in every mode.
+  const [blindMode, setBlindModeState] = useState<boolean>(() => { try { return localStorage.getItem('quran-blind-mode') === '1'; } catch { return false; } });
+  const setBlindMode = (on: boolean) => { setBlindModeState(on); try { localStorage.setItem('quran-blind-mode', on ? '1' : '0'); } catch { /* ignore */ } };
+  const [blindShowAll, setBlindShowAll] = useState(false);
   const paperDrawn = paperOn && paperStatus !== 'no-boxes';
   const [contHeardWords, setContHeardWords] = useState(0);
   // DIAG (Claude P0-5): on-screen event log + Copy JSON export.
@@ -2535,6 +2543,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     liveRef.current.micState = 'idle';
     setMicState('idle');
     setMicStalled(false);
+    setBlindShowAll(false);
     setTranscript('');
     setInterim('');
     setCountdown(liveRef.current.corrDelay);
@@ -7124,10 +7133,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   )}
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
                   <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
-                  {paperDrawn && (
-                    <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} showAll />
+                  {paperDrawn && (blindMode && !blindShowAll
+                    ? <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} onlyWrong />
+                    : <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} showAll />
                   )}
-                  <p className={paperDrawn ? 'sr-only' : 'text-2xl leading-[2.2] font-bold'} dir="rtl">
+                  {blindMode && !blindShowAll && (
+                    <button type="button" onClick={() => setBlindShowAll(true)}
+                      className="my-3 px-4 py-2 rounded-xl border border-hairline-amber text-amber-900 font-bold text-sm polish-press">أظهر الآية كلها</button>
+                  )}
+                  <p className={paperDrawn || (blindMode && !blindShowAll) ? 'sr-only' : 'text-2xl leading-[2.2] font-bold'} dir="rtl">
                     {expectedWordList(ayahs[index].ayah_text).map((w, i) => (
                       <span key={i} className={wrongIndices.includes(i) ? 'text-red-600 tasmii-flash' : 'text-accent-800'}>{w.orig} </span>
                     ))}
@@ -7251,6 +7265,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <button onClick={() => setPaperView(!paperView)}
                         className="mt-3 block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
                         {paperView ? 'إخفاء ورق المصحف' : 'إظهار ورق المصحف'}
+                      </button>
+                      <button onClick={() => setBlindMode(!blindMode)} aria-pressed={blindMode}
+                        className="mt-3 block mx-auto text-sm font-semibold text-accent-600 hover:text-accent-700 underline">
+                        {blindMode ? 'التسميع الأعمى شغّال ✓ (الغلط بيظهر لوحده)' : 'التسميع الأعمى: لو غلطت تظهر الكلمة الغلط بس'}
                       </button>
                     </>
                   )}

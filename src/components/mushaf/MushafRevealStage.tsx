@@ -18,7 +18,7 @@ import DigitalRevealStage, { useDigitalPage } from './DigitalRevealStage';
 // disappears into the page; measured on page 3: the scans are RGB(255,255,230).
 const PAPER = '#ffffe6';
 
-export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAll }: {
+export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAll, onlyWrong }: {
   surah: number;
   ayah: number;
   /** revealed[i] = word i (0-based, in ayah order) was recited correctly in place. */
@@ -27,6 +27,8 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   wrong?: number[];
   /** Done screens: uncover the whole ayah (wrong words get a red wash). */
   showAll?: boolean;
+  /** Item 15.2 (blind mode): on a mistake uncover ONLY the wrong words (red), the rest stays covered. */
+  onlyWrong?: boolean;
 }) {
   const page = madinahPageOfAyah(surah, ayah);
   const [boxes, setBoxes] = useState<Box[] | null>(null);
@@ -57,7 +59,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   // Not drawable while listening: boxes still loading (never flash the uncovered ayah), the
   // box file failed, or this ayah has no boxes on its start page. Cover the whole page with
   // paper colour; once loaded, say why. Done screens (showAll) show the page as it is.
-  const blocked = !showAll && (!loaded || words.length === 0);
+  const blocked = !showAll && !onlyWrong && (!loaded || words.length === 0);
 
   // Digital page (preferred, 2026-11-21): same reveal on the clean digital Mushaf page. While it loads, a
   // paper-coloured page (never the uncovered ayah); the scan below stays only for pages without trusted text.
@@ -67,6 +69,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
       <DigitalRevealStage page={page} state={digitalPage} mark={(s, a, w) => {
         if (s !== surah || a !== ayah) return undefined;
         const i = w - 1;
+        if (onlyWrong) return wrongSet.has(i) ? 'wrong' : 'hidden';
         if (showAll) return wrongSet.has(i) ? 'wrong' : undefined;
         return revealed[i] || stickyRef.current.open.has(i) ? undefined : 'hidden';
       }} />
@@ -89,8 +92,8 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
         )}
         {words.map((b) => {
           const i = b.w - 1;
-          const open = showAll || !!revealed[i] || stickyRef.current.open.has(i);
-          const isWrong = showAll && wrongSet.has(i);
+          const open = onlyWrong ? wrongSet.has(i) : showAll || !!revealed[i] || stickyRef.current.open.has(i);
+          const isWrong = (showAll || onlyWrong) && wrongSet.has(i);
           // Pad: tashkeel and word tails reach a little past the measured box.
           const padX = 0.5, padTop = 1.25, padBot = 0.6;
           const style: React.CSSProperties = {
