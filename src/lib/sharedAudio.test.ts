@@ -19,3 +19,23 @@ test('4.21: silenceSharedAudio pauses, notifies the holder, and never auto-resum
   assert.equal(resumed, 0);
   m.clearResumeStack();
 });
+
+test('4.29: a source preempted within 10 minutes resumes; an older one does not', () => {
+  let t = 1_000_000;
+  m.__setNowForTest(() => t);
+  let resumed = 0;
+  m.registerResume('listen', () => { resumed++; });
+  m.acquireAudio('listen', () => {});
+  m.acquireAudio('radio', () => {});
+  t += 5 * 60 * 1000;
+  m.releaseAudio('radio');
+  assert.equal(resumed, 1);
+
+  m.acquireAudio('listen', () => {});
+  m.acquireAudio('radio', () => {});
+  t += 60 * 60 * 1000;
+  m.releaseAudio('radio');
+  assert.equal(resumed, 1);
+  assert.equal(m.hasWaitingResumes(), false);
+  m.unregisterResume('listen');
+});

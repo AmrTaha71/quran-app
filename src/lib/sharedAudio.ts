@@ -51,7 +51,16 @@ const resumeByOwner = new Map<AudioOwner, ResumeFn>();
 
 // Preempted owners waiting for the current holder to release.
 // Entries are one-shot: popped before invocation, never replayed.
-let resumeStack: Array<{ owner: AudioOwner; resume: ResumeFn }> = [];
+let resumeStack: Array<{ owner: AudioOwner; resume: ResumeFn; at: number }> = [];
+
+// Item 4.29: a source waits at most this long to come back on its own.
+// Stopping the radio must not restart a listening session from an hour
+// ago; past the window the entry is dropped and the owner keeps the
+// tap-to-resume button it showed when it was preempted.
+export const AUTO_RESUME_WINDOW_MS = 10 * 60 * 1000;
+let nowFn: () => number = () => Date.now();
+/** Test hook: replace the clock. */
+export function __setNowForTest(fn: () => number): void { nowFn = fn; }
 
 export function getSharedAudio(): HTMLAudioElement {
   if (!shared) {
@@ -84,6 +93,12 @@ export function hasWaitingResumes(): boolean {
 function popAndResume(): void {
   const entry = resumeStack.pop();
   if (!entry) return;
+  if (nowFn() - entry.at > AUTO_RESUME_WINDOW_MS) {
+    // Too old to come back by itself (4.29); older entries are older
+    // still, so the whole stack goes.
+    resumeStack = [];
+    return;
+  }
   try {
     entry.resume();
   } catch {
@@ -123,7 +138,7 @@ export function acquireAudio(owner: AudioOwner, onPreempted?: () => void): HTMLA
       }
     }
     if (prevResume) {
-      resumeStack.push({ owner: prevOwner, resume: prevResume });
+      resumeStack.push({ owner: prevOwner, resume: prevResume, at: nowFn() });
     }
   }
   // Acquiring means playing again: any entries where this owner
