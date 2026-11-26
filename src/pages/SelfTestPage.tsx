@@ -2592,6 +2592,28 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
   };
 
+  // Item 2.24: keep a range's text on the device ahead of time (the same
+  // cache a started test fills), so it can be recited offline later.
+  const [rangeSaved, setRangeSaved] = useState<{ key: string; state: 'saving' | 'saved' | 'error' } | null>(null);
+  const saveRangeOffline = async (lo: number, hi: number) => {
+    const key = `${lo}-${hi}`;
+    setRangeSaved({ key, state: 'saving' });
+    try {
+      if (await getQuranTextCache().getRange(lo, hi)) { setRangeSaved({ key, state: 'saved' }); return; }
+      const { data, error } = await supabase
+        .from('quran_verses')
+        .select('id, surah_no, ayah_no, ayah_text')
+        .gte('id', lo)
+        .lte('id', hi)
+        .order('id', { ascending: true });
+      if (error || !data || data.length === 0) throw error || new Error('empty');
+      await getQuranTextCache().putRows(data);
+      setRangeSaved({ key, state: (await getQuranTextCache().getRange(lo, hi)) ? 'saved' : 'error' });
+    } catch {
+      setRangeSaved({ key, state: 'error' });
+    }
+  };
+
   // Feature #5 helper: fetch verse rows for an explicit id list
   // (weak test + its resume). Network first; the offline text cache
   // covers the same ids when the range was opened before.
@@ -6363,6 +6385,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-sm text-accent-600 text-center">
                   سورة {surahName} — من آية {Math.max(1, Math.min(from, to, surahCount)).toLocaleString('ar-EG')} إلى آية {Math.min(Math.max(from, to), surahCount).toLocaleString('ar-EG')}
                 </p>
+                {(() => {
+                  const k = `${passageRange.start.global}-${passageRange.end.global}`;
+                  const st = rangeSaved && rangeSaved.key === k ? rangeSaved.state : null;
+                  return (
+                    <button type="button" onClick={() => void saveRangeOffline(passageRange.start.global, passageRange.end.global)} disabled={st === 'saving' || st === 'saved'}
+                      className="block mx-auto text-sm font-semibold text-emerald-700 underline disabled:no-underline disabled:opacity-80">
+                      {st === 'saving' ? 'بنحفظ النطاق…' : st === 'saved' ? 'النطاق محفوظ على جهازك ✓' : st === 'error' ? 'ما قدرناش نحفظه — جرّب تاني وانت متصل' : 'احفظ النطاق ده على جهازك (للتسميع من غير نت)'}
+                    </button>
+                  );
+                })()}
               </>
             )}
             {lobbyDoor === 'settings' && (
