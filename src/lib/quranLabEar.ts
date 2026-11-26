@@ -202,6 +202,15 @@ function wordsKey(expected: { norm: string; ayahIdx: number }[]): string {
   return k;
 }
 
+// 3.18: contexts whose ear-tap worklet module is loaded.
+const workletReady = new WeakSet<BaseAudioContext>();
+const workletLoading = new WeakSet<BaseAudioContext>();
+function loadTapWorklet(ctx: AudioContext) {
+  if (workletReady.has(ctx) || workletLoading.has(ctx) || !ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return;
+  workletLoading.add(ctx);
+  ctx.audioWorklet.addModule('/worklets/ear-tap.js').then(() => { workletReady.add(ctx); }).catch(() => {});
+}
+
 export class QuranLabRecognition {
   lang = 'ar';
   continuous = true;
@@ -226,7 +235,7 @@ export class QuranLabRecognition {
   private stream: MediaStream | null = null;
   private streamP: Promise<MediaStream> | null = null;
   private ctx: AudioContext | null = null;
-  private node: ScriptProcessorNode | null = null;
+  private node: ScriptProcessorNode | AudioWorkletNode | null = null;
   private src: MediaStreamAudioSourceNode | null = null;
   private ps: PhonemeStream | null = null;
   private stopped = false;
@@ -332,12 +341,10 @@ export class QuranLabRecognition {
     if (ctx.state !== 'running') void ctx.resume().catch(() => {});
     ctx.onstatechange = () => { if (!this.stopped && ctx.state !== 'running') void ctx.resume().catch(() => {}); };
     this.src = ctx.createMediaStreamSource(this.stream!);
-    this.node = ctx.createScriptProcessor(4096, 1, 1);
     const ds = new Downsampler(ctx.sampleRate);
-    this.node.onaudioprocess = (ev) => {
+    const onChunk = (ch: Float32Array) => {
       if (this.stopped) return;
       this.frames++;
-      const ch = ev.inputBuffer.getChannelData(0);
       let sum = 0;
       for (let i = 0; i < ch.length; i += 8) sum += ch[i] * ch[i];
       const rms = Math.sqrt(sum / (ch.length / 8));
@@ -350,7 +357,25 @@ export class QuranLabRecognition {
     };
     this.frames = 0;
     this.maxRms = 0;
+    // 3.18: the AudioWorklet tap (audio thread) once its module is loaded
+    // on this context — a kept context (the next ayah) has it. The first
+    // start on a new context, and every dead-mic rebuild, use the old
+    // ScriptProcessor: no wait for addModule, and a known-good path if the
+    // worklet itself is what failed.
+    const worklet = this.retries === 0 && workletReady.has(ctx);
+    if (worklet) {
+      const node = new AudioWorkletNode(ctx, 'ear-tap', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1 });
+      node.port.onmessage = (e) => onChunk(e.data as Float32Array);
+      this.node = node;
+      this.mark('tap-worklet');
+    } else {
+      const node = ctx.createScriptProcessor(4096, 1, 1);
+      node.onaudioprocess = (ev) => onChunk(ev.inputBuffer.getChannelData(0));
+      this.node = node;
+      loadTapWorklet(ctx);
+    }
     this.src.connect(this.node);
+    // The tap writes no sound; it is connected only so the graph pulls it.
     this.node.connect(ctx.destination);
   }
 
@@ -451,7 +476,8 @@ export class QuranLabRecognition {
     if (this.idleTimer) { clearTimeout(this.idleTimer); this.idleTimer = null; }
     try { this.node?.disconnect(); } catch { /* ignore */ }
     try { this.src?.disconnect(); } catch { /* ignore */ }
-    if (this.node) this.node.onaudioprocess = null;
+    if (this.node && 'port' in this.node) this.node.port.onmessage = null;
+    else if (this.node) this.node.onaudioprocess = null;
     // A capture that delivered real sound is parked for the next start.
     const healthy = this.stream && this.ctx && this.frames > 0 && this.maxRms > 1e-6
       && this.stream.getAudioTracks().some((t) => t.readyState === 'live') && this.ctx.state !== 'closed';
