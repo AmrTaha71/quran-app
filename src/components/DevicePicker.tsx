@@ -39,15 +39,15 @@ export default function DevicePicker({ userId, onDone, onClose }: Props) {
 
   return (
     <div dir="rtl" className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-2" style={{ height: '100dvh' }}>
-      <div className="w-full max-w-lg bg-white rounded-2xl px-4 pt-4 space-y-3 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100dvh - 1rem)' }}>
+      <div className="w-full max-w-4xl bg-white rounded-2xl px-4 pt-4 space-y-3 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100dvh - 1rem)' }}>
         <h2 className="text-lg font-bold text-emerald-800">أنهي جهاز ده؟</h2>
         <p className="text-xs text-slate-600">لف البكرات: كل واحدة بتحدد اللي بعدها، والتطبيق يتظبط على مقاس شاشتك.</p>
         <div className="grid grid-cols-2 landscape:grid-cols-5 gap-3">
-          {col('نوع الجهاز', <DrumReel label="نوع الجهاز" labels={CATS.map((c) => CAT_LABELS[c])} index={CATS.indexOf(cat)} onIndex={(i) => { setCat(CATS[i]); setBi(0); setMi(0); setVi(0); }} />)}
-          {col(t1, <DrumReel key={`b-${cat}`} label={t1} labels={brands} index={bi} onIndex={(i) => { setBi(i); setMi(0); setVi(0); }} />)}
-          {col(t2, <DrumReel key={`m-${cat}-${brand}`} label={t2} labels={models} index={mi} onIndex={(i) => { setMi(i); setVi(0); }} />)}
-          {col(t3, <DrumReel key={`v-${cat}-${brand}-${model}`} label={t3} labels={variants} index={vi} onIndex={setVi} />)}
-          {col('ماسك الجهاز إزاي؟', <DrumReel label="اتجاه الجهاز" labels={ORIENT.map((o) => o.label)} index={oi} onIndex={setOi} />)}
+          {col('نوع الجهاز', <DrumReel itemH={44} wrap label="نوع الجهاز" labels={CATS.map((c) => CAT_LABELS[c])} index={CATS.indexOf(cat)} onIndex={(i) => { setCat(CATS[i]); setBi(0); setMi(0); setVi(0); }} />)}
+          {col(t1, <DrumReel itemH={44} wrap key={`b-${cat}`} label={t1} labels={brands} index={bi} onIndex={(i) => { setBi(i); setMi(0); setVi(0); }} />)}
+          {col(t2, <DrumReel itemH={44} wrap key={`m-${cat}-${brand}`} label={t2} labels={models} index={mi} onIndex={(i) => { setMi(i); setVi(0); }} />)}
+          {col(t3, <DrumReel itemH={44} wrap key={`v-${cat}-${brand}-${model}`} label={t3} labels={variants} index={vi} onIndex={setVi} />)}
+          {col('ماسك الجهاز إزاي؟', <DrumReel itemH={44} wrap label="اتجاه الجهاز" labels={ORIENT.map((o) => o.label)} index={oi} onIndex={setOi} />)}
         </div>
         <div className="flex gap-2 sticky bottom-0 bg-white py-3 -mx-4 px-4 border-t border-slate-100">
           <button type="button" onClick={save} className="flex-1 py-3 rounded-xl bg-emerald-700 text-white font-bold">تمام</button>

@@ -20,7 +20,7 @@ const gen = (from: number, to: number, f: (n: number) => [string, Variants]): Re
 const S_ONE = (w: number, h: number): Variants => ({ 'عادي': [w, h] });
 
 const IPHONE: Record<string, Variants> = {
-  'آيفون SE (2 / 3)': S_ONE(375, 667), 'آيفون X': S_ONE(375, 812), 'آيفون XS': { 'عادي': [375, 812], 'ماكس': [414, 896] }, 'آيفون XR': S_ONE(414, 896),
+  'آيفون SE': S_ONE(375, 667), 'آيفون X': S_ONE(375, 812), 'آيفون XS': { 'عادي': [375, 812], 'ماكس': [414, 896] }, 'آيفون XR': S_ONE(414, 896),
   'آيفون 11': { 'عادي': [414, 896], 'برو': [375, 812], 'برو ماكس': [414, 896] },
   'آيفون 12': { 'ميني': [360, 780], 'عادي': [390, 844], 'برو': [390, 844], 'برو ماكس': [428, 926] },
   'آيفون 13': { 'ميني': [375, 812], 'عادي': [390, 844], 'برو': [390, 844], 'برو ماكس': [428, 926] },
@@ -93,7 +93,11 @@ const KEY = 'quran-device-model-v1';
 export function loadDeviceChoice(): DeviceChoice | null {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as DeviceChoice | null;
-    return v && CATS.includes(v.cat) ? v : null;
+    if (!v || !CATS.includes(v.cat)) return null;
+    // Renamed 2026-11-26: 'آيفون SE (2 / 3)' → 'آيفون SE' (same 375×667 size,
+    // covers SE 2nd/3rd gen). Migrate saved choices so they still resolve.
+    if (v.model === 'آيفون SE (2 / 3)') v.model = 'آيفون SE';
+    return v;
   } catch { return null; }
 }
 export function saveDeviceChoice(c: DeviceChoice): void { try { localStorage.setItem(KEY, JSON.stringify(c)); } catch { /* ignore */ } }

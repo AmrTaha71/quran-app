@@ -279,6 +279,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
       .select(`*, quran_verses!inner(id, surah_no, surah_name, ayah_no, ayah_text)`)
       .eq('status', 'pending'), k)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, from + PENDING_PAGE - 1);
     if (error || !data) {
       setPendingError('تعذّر تحميل قائمة المراجعة — تحقق من الاتصال وحاول تاني. القائمة المعروضة (لو فيه) قديمة.');
@@ -995,7 +996,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                 return (
                   <div key={verse.id} className={`p-4 ${bgClass} ${isRanaTarget ? 'ring-2 ring-amber-400 ring-offset-1' : ''} hover:shadow-sm transition-smooth animate-fade-in relative`}>
                     {isRanaTarget && (
-                      <div className="absolute -top-2 right-4 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg animate-bounce-slow">
+                      <div className="absolute -top-2 left-4 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg animate-bounce-slow">
                         <span className="text-xs font-semibold whitespace-nowrap">سجلي من هنا يا رنا</span>
                         <svg className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />

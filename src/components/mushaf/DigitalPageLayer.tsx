@@ -169,8 +169,8 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
       const cx = next && gap > d * 0.6 ? p.l - gap / 2 : p.l - d / 2 - 1;
       furniture.push(
         <div key={`mk-${p.box.key}`} className="absolute flex items-center justify-center rounded-full"
-          style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `1.5px solid ${theme.accent}`, boxShadow: compact ? `inset 0 0 0 2px ${theme.bg}, inset 0 0 0 3px ${theme.frame}` : undefined, color: theme.accent, fontFamily: DIGIT_FONT, fontSize: d * 0.5, lineHeight: 1 }}>
-          <span style={{ display: 'block', lineHeight: `${d}px`, height: d, transform: `translateY(${-d * 0.02}px)`, textAlign: 'center' }}>{toArDigits(p.box.ayah)}</span>
+          style={{ left: cx - d / 2, top: p.cy - d / 2, width: d, height: d, border: `2.5px solid ${theme.accent}`, boxShadow: compact ? `inset 0 0 0 2px ${theme.bg}, inset 0 0 0 3px ${theme.frame}` : undefined, color: theme.accent, fontFamily: DIGIT_FONT, fontSize: d * 0.5, lineHeight: 1 }}>
+          <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', lineHeight: 1, textAlign: 'center' }}>{toArDigits(p.box.ayah)}</span>
         </div>
       );
     });

@@ -8,9 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export const DRUM_ITEM_H = 32;
 const VIEW_H = 176;
-const PAD = (VIEW_H - DRUM_ITEM_H) / 2;
 const STEP_DEG = 24;
-const RADIUS = Math.round(DRUM_ITEM_H / 2 / Math.tan((STEP_DEG / 2) * (Math.PI / 180)));
 
 // Two looks (2026-11-12): 'range' = cream, dark-red bold choice, grey rest;
 // 'clock' = iOS-style dark drum with a soft grey band, for timers.
@@ -51,6 +49,11 @@ export function DrumReel({
   label,
   className = '',
   variant = 'range',
+  // Opt-in (DevicePicker only): taller rows + wrapping labels so long Arabic
+  // model names fit instead of being cut off. Defaults keep every other
+  // drum (clock, timer, selects) exactly as before.
+  itemH,
+  wrap = false,
 }: {
   labels: string[];
   index: number;
@@ -58,14 +61,21 @@ export function DrumReel({
   label: string;
   className?: string;
   variant?: DrumVariant;
+  itemH?: number;
+  wrap?: boolean;
 }) {
   const look = LOOK[variant];
+  // Row geometry follows the (possibly taller) row height, so the cylinder
+  // radius, snap padding and scroll math all stay consistent.
+  const IH = itemH ?? DRUM_ITEM_H;
+  const PAD_IH = (VIEW_H - IH) / 2;
+  const RADIUS_IH = Math.round(IH / 2 / Math.tan((STEP_DEG / 2) * (Math.PI / 180)));
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState(index);
   const lastIdx = useRef(index);
 
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = index * DRUM_ITEM_H;
+    if (ref.current) ref.current.scrollTop = index * IH;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,14 +84,14 @@ export function DrumReel({
     const el = ref.current;
     if (!el || lastIdx.current === index) return;
     lastIdx.current = index;
-    el.scrollTop = index * DRUM_ITEM_H;
+    el.scrollTop = index * IH;
     setPos(index);
   }, [index]);
 
   function onScroll() {
     const el = ref.current;
     if (!el) return;
-    const p = Math.max(0, Math.min(labels.length - 1, el.scrollTop / DRUM_ITEM_H));
+    const p = Math.max(0, Math.min(labels.length - 1, el.scrollTop / IH));
     setPos(p);
     const i = Math.round(p);
     if (i !== lastIdx.current) {
@@ -92,14 +102,14 @@ export function DrumReel({
     }
   }
 
-  const go = (i: number) => ref.current?.scrollTo({ top: i * DRUM_ITEM_H, behavior: 'smooth' });
+  const go = (i: number) => ref.current?.scrollTo({ top: i * IH, behavior: 'smooth' });
 
   return (
     <div className={`relative min-w-0 overflow-hidden select-none font-ui ${className}`} style={{ height: VIEW_H, background: look.bg }}>
       <div
         className="absolute inset-x-1 top-1/2 -translate-y-1/2 rounded-xl pointer-events-none"
         style={{
-          height: DRUM_ITEM_H + 2,
+          height: IH + 2,
           background: look.band,
           borderRadius: 14,
         }}
@@ -113,15 +123,21 @@ export function DrumReel({
             return (
               <div
                 key={`${i}-${l}`}
-                className="absolute inset-x-0 flex items-center justify-center whitespace-nowrap px-1 tabular-nums"
+                className={`absolute inset-x-0 flex items-center justify-center px-1 tabular-nums ${wrap ? '' : 'whitespace-nowrap'}`}
                 style={{
-                  top: -DRUM_ITEM_H / 2,
-                  height: DRUM_ITEM_H,
-                  transform: `rotateX(${-d * STEP_DEG}deg) translateZ(${RADIUS}px)`,
+                  top: -IH / 2,
+                  height: IH,
+                  transform: `rotateX(${-d * STEP_DEG}deg) translateZ(${RADIUS_IH}px)`,
                   backfaceVisibility: 'hidden',
-                  // Same size on every row: the cylinder alone shrinks and curves
-                  // the far rows (as in the iOS picker). Only colour/weight mark the choice.
-                  fontSize: l.length > 22 ? `${Math.max(0.9, (1.45 * 22) / l.length).toFixed(2)}rem` : '1.45rem',
+                  // Wrapping mode: smaller type that wraps to two balanced
+                  // lines (two lines at 1rem ≈ 38px < 44px row). Every label
+                  // has spaces and its longest single word is 9 chars, so
+                  // no word is ever cut. Non-wrapping drums keep the old
+                  // 1.45rem + shrink-if-longer-than-22 behaviour.
+                  fontSize: wrap ? '1rem' : l.length > 22 ? `${Math.max(0.9, (1.45 * 22) / l.length).toFixed(2)}rem` : '1.45rem',
+                  lineHeight: wrap ? 1.2 : undefined,
+                  textAlign: wrap ? 'center' : undefined,
+                  textWrap: wrap ? 'balance' : undefined,
                   fontWeight: sel ? 700 : 600,
                   color: sel ? look.sel : look.rest,
                   opacity: sel ? 1 : Math.max(0.1, 1 - 0.27 * Math.abs(d)),
@@ -148,13 +164,13 @@ export function DrumReel({
         role="listbox"
         aria-label={label}
       >
-        <div style={{ height: PAD }} />
+        <div style={{ height: PAD_IH }} />
         {labels.map((l, i) => (
-          <div key={`${i}-${l}`} role="option" aria-selected={i === Math.round(pos)} onClick={() => go(i)} className="snap-center" style={{ height: DRUM_ITEM_H }}>
+          <div key={`${i}-${l}`} role="option" aria-selected={i === Math.round(pos)} onClick={() => go(i)} className="snap-center" style={{ height: IH }}>
             {l}
           </div>
         ))}
-        <div style={{ height: PAD }} />
+        <div style={{ height: PAD_IH }} />
       </div>
     </div>
   );

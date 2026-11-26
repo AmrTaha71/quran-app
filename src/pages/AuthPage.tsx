@@ -584,7 +584,7 @@ export default function AuthPage({
           ) : (
             <form onSubmit={handleSignup} className="space-y-3">
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('username')}</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('username')} <span className="text-red-600">*</span></label>
                 <div className="relative">
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="text" aria-label={t('username')} value={username} onChange={(e) => setUsername(e.target.value)} required
@@ -606,7 +606,7 @@ export default function AuthPage({
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="font-normal text-accent-600">(مطلوب)</span></label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('email')} <span className="text-red-600">*</span></label>
                 <div className="relative">
                   <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type="email" aria-label={t('email')} value={email} onChange={(e) => setEmail(e.target.value)} required
@@ -617,7 +617,7 @@ export default function AuthPage({
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('password')}</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('password')} <span className="text-red-600">*</span></label>
                 <div className="relative">
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
                   <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} required
@@ -632,7 +632,7 @@ export default function AuthPage({
 
               {/* Gender */}
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('gender')}</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('gender')} <span className="text-red-600">*</span></label>
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setGender('male')}
                     className={`flex items-center justify-center gap-2 py-2.5 text-sm font-semibold rounded-xl border transition-smooth ${
@@ -651,12 +651,15 @@ export default function AuthPage({
                 </div>
               </div>
 
-              {/* Birth date */}
+              {/* Birth date — OPTIONAL: the user may leave it empty.
+                  The profile insert already sends birth_date: null when
+                  empty (handleSignup), and the column is nullable in the
+                  schema, so no DB change was needed. */}
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('birthDate')} ({t('age')})</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('birthDate')} ({t('age')}) <span className="font-normal text-accent-600">(اختياري)</span></label>
                 <div className="relative">
                   <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-accent-400" />
-                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} required
+                  <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)}
                   className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
                 {birthDate && (
@@ -664,15 +667,20 @@ export default function AuthPage({
                 )}
               </div>
 
-              {/* Country + Phone */}
+              {/* Country + Phone — OPTIONAL: the number is only stored
+                  in the profile row; nothing in the app reads it (no
+                  SMS, no OTP, no recovery), and the column has no
+                  UNIQUE constraint, so one number may be shared by
+                  two accounts. */}
               <div>
-                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('country')} / {t('phone')}</label>
+                <label className="block text-sm font-semibold text-accent-700 mb-1.5">{t('country')} / {t('phone')} <span className="font-normal text-accent-600">(اختياري)</span></label>
                 <div className="flex gap-2">
                   <div className="w-28 shrink-0"><DrumSelect label="كود الدولة" value={countryCode} onChange={setCountryCode} options={COUNTRY_CODES.map((c) => ({ value: c.code, label: `${c.flag} ${c.code}` }))} /></div>
                   <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                     placeholder={t('phone')}
                     className="flex-1 px-3 py-2.5 bg-gray-50 border border-hairline-input rounded-xl text-sm focus:outline-none focus:border-emerald-500 transition-smooth" />
                 </div>
+                <p className="text-xs text-accent-600 mt-1">رقم الموبايل مش بيستخدم في أي حاجة في التطبيق — لا رسائل ولا استرجاع كلمة سر — وتقدر تسيبه فاضي، أو تستخدم نفس الرقم لحساب تاني.</p>
               </div>
 
               {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
