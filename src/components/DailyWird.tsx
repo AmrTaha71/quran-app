@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { CalendarDays, Flame, Check, Settings } from 'lucide-react';
-import { loadWird, saveWird, type WirdState } from '../lib/wird';
+import { loadWird, saveWird, formatPages, WIRD_TYPE_LABEL, WIRD_TYPES_ORDER, type WirdState } from '../lib/wird';
+import { readRecentActivity } from '../lib/homeFeatures';
+import { useReadOnReturn } from '../lib/useReadOnReturn';
 import { playSuccessCue } from '../lib/pressFeedback';
 import type { Route } from '../lib/routes';
 
@@ -16,6 +18,14 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
   const [wird, setWird] = useState<WirdState>(loadWird);
   const today = todayStr();
   const doneToday = wird.doneDays.includes(today);
+  // 6.14 / 15.6(أ): the card says what today's wird is, and «أنجزت» is
+  // tied to real activity: when a listen or tasmee' was recorded today it
+  // says so; otherwise it is plainly a manual mark (no hidden checking).
+  const recent = useReadOnReturn(readRecentActivity);
+  const todayActivity = recent.filter((e) => e.type !== 'adhkar' && todayStr(new Date(e.ts)) === today);
+  const testedToday = todayActivity.some((e) => e.type === 'test');
+  const wirdParts = WIRD_TYPES_ORDER.filter((t) => (wird.parts[t] || 0) > 0)
+    .map((t) => `${WIRD_TYPE_LABEL[t]}: ${formatPages(wird.parts[t])}`);
 
   const update = (patch: Partial<WirdState>) => {
     const next = { ...wird, ...patch };
@@ -91,6 +101,16 @@ export default function DailyWird({ onNavigate }: { onNavigate: (r: Route) => vo
         <Settings className="w-4 h-4" /> تعديل الورد من الإعدادات
       </button>
 
+      <p className="text-base text-ink mb-1" data-testid="wird-today">
+        {wirdParts.length ? `ورد النهاردة — ${wirdParts.join(' · ')}` : 'لسه ما حددتش وردك — اختاره من الإعدادات.'}
+      </p>
+      {!doneToday && (
+        <p className="text-sm text-ink-2 mb-3">
+          {todayActivity.length
+            ? `سجّلنا لك النهاردة: ${testedToday ? 'تسميع' : 'استماع'} (${todayActivity[0].label}). علّم الورد لما تخلّصه.`
+            : 'العلامة دي يدوية: اضغطها لما تخلّص وردك.'}
+        </p>
+      )}
       <div className="flex gap-2">
         {!doneToday && (
           <button onClick={markDone}
