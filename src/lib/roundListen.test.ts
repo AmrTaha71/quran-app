@@ -185,15 +185,15 @@ describe('round scoring: self-corrected mistakes do not count', () => {
             (base) => say(rest, base, {}),       // after the correction the user goes on from the mistaken word
           ]);
           assert.equal(r.mistakes, 1);
-          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+          assert.equal(r.score, 4); // 4.25: one mistake costs half the ayah part at every level
         });
         it(`${tag} ${level}: first word wrong and not fixed -> counted like any other word`, () => {
           const { norms, rest } = restOf(s, a);
           const r = play(norms, corrections, level, [() => say(rest, 0, { wrongBare: [0] }), (base) => say(rest, base, {})]);
           assert.equal(r.mistakes, 1);
-          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+          assert.equal(r.score, 4); // 4.25: one mistake costs half the ayah part at every level
         });
-        it(`${tag} ${level}: two mistakes the reciter had to correct -> ${level === 'beginner' ? 4 : 0}`, () => {
+        it(`${tag} ${level}: two mistakes the reciter had to correct -> beginner 4, else 0 (one mistake when there is no correction: 4)`, () => {
           const { norms, rest } = restOf(s, a);
           const r = play(norms, corrections, level, [
             () => say(rest, 0, { wrongBare: [2] }),
@@ -201,7 +201,7 @@ describe('round scoring: self-corrected mistakes do not count', () => {
             (base) => say(rest, base, {}),
           ]);
           assert.equal(r.mistakes, corrections === 0 ? 1 : 2); // no correction: closes at the first; with the reciter correction: at the second
-          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+          assert.equal(r.score, level === 'beginner' || r.mistakes === 1 ? 4 : 0);
         });
         it(`${tag} ${level}: one self-fixed + one the reciter corrected -> counts as ONE mistake`, () => {
           const { norms, rest } = restOf(s, a);
@@ -210,7 +210,7 @@ describe('round scoring: self-corrected mistakes do not count', () => {
             (base) => say(rest, base, {}),
           ]);
           assert.equal(r.mistakes, 1);
-          assert.equal(r.score, level === 'beginner' ? 4 : 0);
+          assert.equal(r.score, 4); // 4.25: one mistake costs half the ayah part at every level
         });
       }
     }
@@ -227,7 +227,7 @@ describe('round scoring: self-corrected mistakes do not count', () => {
       const { norms, rest } = restOf(s, a);
       const one = play(norms, B.ROUND_CORRECTIONS, level, [() => say(rest, 0, { wrongBare: [3] }), (b) => say(rest, b, {})]);
       assert.equal(one.mistakes, 1);
-      assert.equal(one.score, level === 'beginner' ? 4 : 0);
+      assert.equal(one.score, 4);
     }
   });
 

@@ -124,16 +124,17 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     });
   }
 
-  // Item 17.6 (b): «تجاوز الآية» closes the position as skipped — nothing
-  // credited, every word left counted as not said.
+  // Item 17.6 (b) + 17.10: «تجاوز الآية» closes the position as skipped. It is
+  // not a mistake and does not count in the average (the modal leaves it
+  // out and the result says «اتخطّت»); the correction budget is untouched.
   function skipAyah() {
     if (finished.current) return;
     finished.current = true;
     stopRec();
     audio.current?.cancel();
     onFinish({
-      total: rest.length, credited: 0, wrong: rest.map((_, i) => i), locked: false, corrected: st.mistaken.size,
-      mistakes: st.mistaken.size, beginner: currentHistoryLevel() === 'beginner',
+      total: rest.length, credited: 0, wrong: [], locked: false, corrected: 0,
+      mistakes: 0, beginner: currentHistoryLevel() === 'beginner',
       promptLen: effRef.current, extras: extra, ear: kindRef.current, skipped: true,
     });
   }
@@ -274,6 +275,8 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
                 : <button type="button" onClick={() => setHintShown(true)} className="min-h-[44px] px-4 rounded-lg border border-amber-300 text-amber-900 font-bold text-sm">تلميح: أول حرف</button>}
             </div>
           )}
+          {/* 4.25(ب): rounds do not count extra words; say so instead of hiding it. */}
+          <p className="text-xs text-accent-600 text-center">في الجولات الكلمات الزيادة مش بتتحسب عليك — المهم تكمّل الآية صح.</p>
           <div className="grid grid-cols-3 gap-2">
             <button onClick={stopAndGrade} className={`${btn} grad-emerald-door col-span-2`}>خلصت</button>
             <button type="button" onClick={skipAyah} className="w-full py-3 rounded-xl border border-hairline text-accent-800 font-bold text-sm">تجاوز الآية</button>

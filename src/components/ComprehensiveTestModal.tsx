@@ -24,7 +24,7 @@ import {
 } from '../lib/comprehensiveTest';
 import DrumSelect from './DrumSelect';
 import {
-  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange,
+  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange, playedOnly,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
@@ -175,7 +175,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
       // Ran out of usable ayat before the chosen count: close with what was played
       // (the /40 is the mean of the played positions, so it stays out of 40).
       setCount(positions.length);
-      setScores({ tasmee: positionsFinal(positions.map((p) => p.frac)) });
+      setScores({ tasmee: positionsFinal(playedOnly(positions).map((p) => p.frac)) });
       setStep('mutashabihat');
       return;
     }
@@ -187,7 +187,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
   // single surah that question is pointless and is skipped (the ayah carries the 10).
   function onPositionDone(result: RoundResult) {
     if (!cur) return;
-    if (ctx.current && ctx.current.pool.length === 1) settlePosition(result, null);
+    if ((ctx.current && ctx.current.pool.length === 1) || result.skipped) settlePosition(result, null);
     else setAskSurah(result);
   }
 
@@ -202,7 +202,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
 
   function afterPositions() {
     if (positions.length >= count) {
-      setScores({ tasmee: positionsFinal(positions.map((p) => p.frac)) });
+      setScores({ tasmee: positionsFinal(playedOnly(positions).map((p) => p.frac)) });
       setStep('mutashabihat');
     } else void nextPosition();
   }
@@ -252,7 +252,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
       score: Math.round((total / maxTotal) * 100),
       correct: total,
       attempted: maxTotal,
-      completed: true,
+      completed: playedOnly(positions).length === positions.length, // 17.10
       mode: 'ayah',
       ear,
       label: `اختبار شامل — ${span.label}`,
@@ -349,10 +349,12 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
             )}
             {showRes && (
               <>
-                <p className={`text-2xl font-bold mb-2 ${positionPerfect(showRes.result) ? 'text-emerald-700' : 'text-rose-700'}`}>{positionPerfect(showRes.result) ? '✓ صح' : '✗ غلط'}</p>
+                {showRes.result.skipped
+                  ? <p className="text-2xl font-bold mb-2 text-amber-700">اتخطّت</p>
+                  : <p className={`text-2xl font-bold mb-2 ${positionPerfect(showRes.result) ? 'text-emerald-700' : 'text-rose-700'}`}>{positionPerfect(showRes.result) ? '✓ صح' : '✗ غلط'}</p>}
                 <RoundReveal ayah={showRes.ayah} result={showRes.result} />
                 <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}{showRes.surahOk === null ? '' : showRes.surahOk ? ' · السورة ✓' : ' · السورة ✗'}</p>
-                <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل: غلطة تانية بعد التصحيح بتنهي الموضع)' : ''}</p>
+                {showRes.result.skipped ? <p className="text-sm text-accent-800 my-3 font-bold">الموضع ده مش محسوب في الدرجة.</p> : <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل: غلطة تانية بعد التصحيح بتنهي الموضع)' : ''}</p>}
                 {showRes.result.extras > 0 && <p className="text-xs text-amber-700 mb-2">طلبت «كلمتين كمان» {arNum(showRes.result.extras)} مرة — خصم {arNum(showRes.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
                 {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
                 <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">

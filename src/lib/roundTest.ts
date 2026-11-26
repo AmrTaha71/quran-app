@@ -57,12 +57,20 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
  *  surah question is skipped (surahOk = null) and the ayah carries all 10. */
 export const AYAH_PART = 8;
 /** A counted mistake (one the reciter corrected, or that closed the position): a beginner's
- *  ayah gets half of the ayah part (4 of 8) however many such mistakes follow; any other
- *  level gets 0. Same for the tarteel test and the comprehensive test. */
+ *  ayah gets half of the ayah part (4 of 8) however many such mistakes follow.
+ *  Phase 6 (4.25, owner §11.8): any other level no longer drops to 0 on ONE mistake: one
+ *  costs half the ayah part (4 of 8); a second one still gives 0. Same for the tarteel
+ *  test and the comprehensive test. */
 export const BEGINNER_MISTAKE_SHARE = 0.5;
+export const ONE_MISTAKE_SHARE = 0.5;
 export const SURAH_PART = 2;
+function mistakeShare(r: RoundResult): number {
+  const m = r.mistakes ?? 0;
+  if (r.beginner) return BEGINNER_MISTAKE_SHARE;
+  return m === 1 ? ONE_MISTAKE_SHARE : 0;
+}
 export function tarteelRoundScore(r: RoundResult, surahOk: boolean | null): { completion: number; surah: number; total: number } {
-  const share = (r.mistakes ?? 0) > 0 ? (r.beginner ? BEGINNER_MISTAKE_SHARE : 0) : r.total ? r.credited / r.total : 0;
+  const share = (r.mistakes ?? 0) > 0 ? mistakeShare(r) : r.total ? r.credited / r.total : 0;
   const keep = Math.max(0, 1 - HINT_COST * (r.extras ?? 0));
   const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share * keep);
   const surah = surahOk ? SURAH_PART : 0;
@@ -83,6 +91,9 @@ export function oralFraction(found: number, total: number, surahRight: number, h
 export const HINT_COST = 0.1;
 export const HINT_WORDS = 2;
 export const MAX_HINTS = 3;
+
+/** 17.10: rounds the user skipped are left out of every average. */
+export const playedOnly = <T extends { result: RoundResult }>(rs: readonly T[]): T[] => rs.filter((r) => !r.result.skipped);
 
 /** Final /40 = average of the rounds (each /10) x 4. */
 export function tarteelFinal(roundTotals: number[]): number {

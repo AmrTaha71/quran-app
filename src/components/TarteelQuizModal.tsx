@@ -9,7 +9,7 @@ import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal, RoundDebugOverlay } from './RoundRecite';
 import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
-import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, playedOnly, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
 import { SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
@@ -145,7 +145,8 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
 
   function onRecited(result: RoundResult) {
     if (!cur) return;
-    if (oneSurah) { settle({ ayah: cur.ayah, result }, null); return; }
+    // 17.10: a skipped round asks nothing more.
+    if (oneSurah || result.skipped) { settle({ ayah: cur.ayah, result }, null); return; }
     setCur({ ayah: cur.ayah, result });
     setPhase('surah');
   }
@@ -155,10 +156,11 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     settle({ ayah: cur.ayah, result: cur.result }, s === cur.ayah.surah);
   }
 
-  const final40 = tarteelFinal(rounds.map((r) => r.total));
+  const played = playedOnly(rounds);
+  const final40 = tarteelFinal(played.map((r) => r.total));
 
   function save() {
-    if (saved.current || rounds.length === 0) return;
+    if (saved.current || played.length === 0) return;
     saved.current = true;
     const ear = rounds[rounds.length - 1].result.ear;
     addTestHistoryV1({
@@ -167,7 +169,8 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
       score: Math.round((final40 / 40) * 100),
       correct: final40,
       attempted: 40,
-      completed: true,
+      // 17.10: a test with skipped rounds is logged as not complete.
+      completed: played.length === rounds.length,
       mode: 'ayah',
       ear: ear === 'manual' ? 'manual' : ear,
       label: `ترتيل — ${rangeLabel()} (${arNum(rounds.length)} جولة)`,
@@ -298,12 +301,16 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
           <>
             <RoundReveal ayah={cur.ayah} result={cur.result} />
             <p className="text-sm text-accent-700 mt-1">{surahNameOf(cur.ayah.surah)} — آية {arNum(cur.ayah.ayah)}</p>
+            {cur.result.skipped ? (
+              <p className="bg-amber-50 rounded-lg p-3 border border-hairline-amber my-3 text-sm font-bold text-amber-800">اتخطّت — الجولة دي مش محسوبة في المتوسط ولا غلط.</p>
+            ) : (
             <div className="bg-gray-50 rounded-lg p-3 border border-emerald-100 my-3 text-sm text-accent-800 space-y-1">
               <p>إكمال الآية: {arNum(lastRound.completion)} من {arNum(lastRound.surahOk === null ? 10 : 8)} ({arNum(cur.result.credited)} من {arNum(cur.result.total)} كلمة)</p>
               {lastRound.surahOk !== null && <p>السورة: {lastRound.surahOk ? '✓ صح' : '✗ غلط'} — {arNum(lastRound.surah)} من ٢</p>}
               {cur.result.extras > 0 && <p className="text-amber-700">طلبت «كلمتين كمان» {arNum(cur.result.extras)} مرة — خصم {arNum(cur.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
               <p className="font-bold">درجة الجولة: {arNum(lastRound.total)} من ١٠</p>
             </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={() => void nextRound()} className="py-3 grad-emerald-door text-white font-bold rounded-xl">جولة تانية</button>
               <button onClick={() => { save(); setPhase('summary'); }} className="py-3 grad-amber-door text-white font-bold rounded-xl">خلاص</button>
@@ -319,7 +326,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <p className="text-accent-600 mb-3">من ٤٠ — متوسط {arNum(rounds.length)} جولة × ٤</p>
             <div className="space-y-1 text-right mb-4">
               {rounds.map((r, i) => (
-                <p key={i} className="text-sm text-accent-700">الجولة {arNum(i + 1)}: {surahNameOf(r.ayah.surah)} آية {arNum(r.ayah.ayah)} — {arNum(r.total)} من ١٠ {r.surahOk === null ? '' : r.surahOk ? '✓' : '✗'}</p>
+                <p key={i} className="text-sm text-accent-700">الجولة {arNum(i + 1)}: {surahNameOf(r.ayah.surah)} آية {arNum(r.ayah.ayah)} — {r.result.skipped ? 'اتخطّت (مش محسوبة)' : <>{arNum(r.total)} من ١٠ {r.surahOk === null ? '' : r.surahOk ? '✓' : '✗'}</>}</p>
               ))}
             </div>
             <button onClick={() => { saved.current = false; setRounds([]); used.current = new Set(); setCur(null); setPhase('setup'); }} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">اختبار جديد</button>
