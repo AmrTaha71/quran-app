@@ -50,10 +50,12 @@ import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, Headphones, BadgeCheck } from 'lucide-react';
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, Headphones, BadgeCheck, Moon } from 'lucide-react';
 import { useUserLists } from '../components/UserLists';
 import type { Route } from '../lib/routes';
 import { silenceSharedAudio } from '../lib/sharedAudio';
+import { isMushafNight, setMushafNight } from '../lib/mushafNight';
+import '../lib/mushafDim';
 
 
 const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
@@ -205,7 +207,7 @@ function FacingStripImg({ src, pageNo, className, style }: {
       alt=""
       draggable={false}
       onError={() => { if (attempt === 0) setAttempt(1); else if (attempt === 1 && fallback) setAttempt(2); else setFailed(true); }}
-      className={className}
+      className={`mushaf-scan ${className}`}
       style={style}
     />
   );
@@ -256,7 +258,7 @@ function RetryPageImg({ src, alt, className, style, loading, onLoad, onFinalErro
         else if (attempt === 2 && fallback) setAttempt(3);
         else onFinalError();
       }}
-      className={className}
+      className={`mushaf-scan ${className}`}
       style={style}
     />
   );
@@ -730,6 +732,7 @@ export default function QuranMushafPage({
   const tafsirCache = useRef<Record<string, string>>({});
 
   const edition = EDITIONS[selectedEdition];
+  const [nightOn, setNightOn] = useState(isMushafNight);
   // Item 5.13: a page that fails to load while offline points to the
   // offline page download (Settings), the moment the reader needs it.
   const offlinePagesCta = typeof navigator !== 'undefined' && navigator.onLine === false ? (
@@ -4207,6 +4210,10 @@ export default function QuranMushafPage({
                 <span className="text-xs text-accent-600 w-11 text-center font-semibold">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
                   className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
+                {/* Item 5.14: night margins straight from the Mushaf (the page scan itself stays as is). */}
+                <button onClick={() => { const nv = !nightOn; setNightOn(nv); setMushafNight(nv); }}
+                  title={nightOn ? 'هوامش ليلية شغالة — الصفحة نفسها زي ما هي' : 'هوامش ليلية (الصفحة نفسها زي ما هي)'} aria-label="هوامش ليلية" aria-pressed={nightOn}
+                  className={`p-1 rounded-lg transition-smooth ${nightOn ? 'bg-amber-200 text-amber-900' : 'text-accent-600 hover:bg-gray-100'}`}><Moon className="w-5 h-5" /></button>
                 <button onClick={openFullscreen} title="ملء الشاشة" aria-label="ملء الشاشة"
                   className="p-1 text-accent-600 hover:bg-amber-100 rounded-lg transition-smooth"><Maximize2 className="w-5 h-5" /></button>
               </span>

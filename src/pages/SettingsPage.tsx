@@ -42,6 +42,7 @@ import { DailyReportSettings } from '../components/DailyReport';
 import { pressFeedback, TAP_SOUND_KEY } from '../lib/pressFeedback';
 import { clearOnboardingDone, ONBOARDING_REOPEN_EVENT } from '../components/Onboarding';
 import { isMushafNight, setMushafNight } from '../lib/mushafNight';
+import { isMushafDimOn, setMushafDim } from '../lib/mushafDim';
 import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import { setBackTarget } from '../lib/backTarget';
 import { useAdminView, getAdminView } from '../lib/adminPreview';
@@ -142,6 +143,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
   });
   const [mushafNight, setMushafNightState] = useState(isMushafNight);
+  const [mushafDim, setMushafDimState] = useState(isMushafDimOn);
   const [elderlyMode, setElderlyModeState] = useState(isElderlyMode);
   // Tap sound (visual batch 2026-11-04): soft click on nav + Home
   // presses, default ON. pressFeedback reads this key live, so the
@@ -982,10 +984,21 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             className={`mt-3 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${mushafNight ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
             <span className="text-right">
               <span className="block font-medium text-accent-800">خلفية القراءة الليلية</span>
-              <span className="block text-sm text-accent-600">تعتيم هادئ لهوامش صفحة المصحف — صورة الصفحة نفسها لا تتغير</span>
+              <span className="block text-sm text-accent-600">هوامش أغمق حوالين الصفحة — الصفحة نفسها زي ما هي</span>
             </span>
             <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${mushafNight ? 'bg-amber-500' : 'bg-gray-300'}`}>
               <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${mushafNight ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
+            </span>
+          </button>
+          {/* Item 5.14: optional real dim of the page scan, 21:00 → sunrise. */}
+          <button onClick={() => { const next = !mushafDim; setMushafDimState(next); setMushafDim(next); saved(); }}
+            className={`mt-3 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${mushafDim ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
+            <span className="text-right">
+              <span className="block font-medium text-accent-800">تعتيم صفحة المصحف بالليل</span>
+              <span className="block text-sm text-accent-600">صورة الصفحة نفسها تبقى أغمق شوية من ٩ بالليل لحد الشروق — التمييز والأزرار زي ما هي</span>
+            </span>
+            <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${mushafDim ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${mushafDim ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
             </span>
           </button>
           <button onClick={toggleElderly}

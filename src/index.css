@@ -701,6 +701,10 @@ html[data-mushaf-night="1"] .mushaf-page-bg {
     linear-gradient(180deg, #E6DBBE 0%, #D6C9A8 100%);
 }
 
+/* Item 5.14: optional real dim of the page SCAN only, 21:00 → sunrise
+   (src/lib/mushafDim.ts). The highlight and controls are untouched. */
+html[data-mushaf-dim="1"] .mushaf-scan { filter: brightness(0.8); }
+
 /* Voice assistant: each wave of choices slides up and fades in. */
 @keyframes va-wave-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 .va-wave { animation: va-wave-in .28s ease-out both; }
