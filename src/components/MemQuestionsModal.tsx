@@ -26,7 +26,8 @@ const JUZ_STARTS_G = JUZ_STARTS.map((j) => j.global);
 
 export default function MemQuestionsModal({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState<Map<string, string> | null>(null);
-  useEffect(() => { void loadQuranText().then(setText); }, []);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { void loadQuranText().then((t) => (t ? setText(t) : setFailed(true))); }, []);
   const [scope, setScope] = useState<Scope>('juz');
   const [n, setN] = useState(30);
   const [kinds, setKinds] = useState<Set<MemQ['kind']>>(new Set(QUESTION_KINDS.map((k) => k.id)));
@@ -128,6 +129,7 @@ export default function MemQuestionsModal({ onClose }: { onClose: () => void }) 
                 );
               })}
             </div>
+            {failed && <p className="text-sm text-amber-800">ما قدرناش نجيب نص المصحف (النت؟). جرّب تاني.</p>}
             {msg && <p className="text-sm text-amber-800">{msg}</p>}
             <button type="button" onClick={start} disabled={!text} className="w-full min-h-[52px] grad-emerald-door text-white font-bold rounded-xl disabled:opacity-40 polish-press">ابدأ ({arNum(ROUND)} أسئلة)</button>
           </>
