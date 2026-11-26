@@ -103,15 +103,13 @@ function Curve({ points }: { points: TestHistoryEntry[] }) {
   );
 }
 
-export default function TestHistoryPanel({ entries, showMaster, initialLevel }: {
+export default function TestHistoryPanel({ entries, initialLevel }: {
   entries: TestHistoryEntry[];
-  /** «متقن» tab only in the admin view. */
-  showMaster: boolean;
   initialLevel: HistoryLevel;
 }) {
-  const levels: HistoryLevel[] = showMaster ? ['beginner', 'advanced', 'master'] : ['beginner', 'advanced'];
+  const levels: HistoryLevel[] = ['beginner', 'advanced'];
   const [level, setLevel] = useState<HistoryLevel>(levels.includes(initialLevel) ? initialLevel : 'beginner');
-  const visible = useMemo(() => entries.filter((e) => showMaster || e.level !== 'master'), [entries, showMaster]);
+  const visible = entries;
   // W4-E: tarteel / comprehensive scores are out of 40: each kind has its own curve.
   const kinds = useMemo(() => (['tasmee', 'tarteel', 'comprehensive'] as TestKind[]).filter((k) => visible.some((e) => kindOf(e) === k)), [visible]);
   const [kind, setKind] = useState<TestKind>('tasmee');

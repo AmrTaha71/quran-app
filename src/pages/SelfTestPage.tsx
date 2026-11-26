@@ -56,7 +56,6 @@ import {
 } from 'lucide-react';
 import type { Route } from '../lib/routes';
 import { useIsAdminView } from '../lib/adminPreview';
-import { muaalemStatus, requestTajweedReview, type TajweedReview } from '../lib/muaalemHook';
 
 
 interface TestAyah {
@@ -157,25 +156,21 @@ const AYAH_END_SILENCE_MS = 4000;
 //    breath cut inside a word, which is the same for every level.
 //  - advanced «متقدم»: words + extra / repeated words (the Quran-Lab ear's
 //    extra-word check). The old 'intermediate' and 'advanced' merge here.
-//  - master «متقن»: admin-only, experimental. On the device it grades
-//    exactly like «متقدم»; harakat + tajweed come from the Muaalem server
-//    through lib/muaalemHook.ts, which is NOT connected yet (no fake notes).
-// Stored ids stay English ('beginner' | 'advanced' | 'master') so the old
-// key stays readable; migrateVerifyLevel maps old / Arabic values quietly.
-type VerifyLevel = 'beginner' | 'advanced' | 'master';
-const VERIFY_LEVEL_LABEL: Record<VerifyLevel, string> = { beginner: 'مبتدئ', advanced: 'متقدم', master: 'متقن' };
+//  - the experimental admin-only «متقن» level was removed for good (item
+//    16.8, owner decision 2026-11-26): it graded words exactly like
+//    «متقدم» and its tajweed server was never connected.
+// Stored ids stay English ('beginner' | 'advanced') so the old key stays
+// readable; migrateVerifyLevel maps old / Arabic values quietly (a stored
+// 'master' / «متقن» now reads as «متقدم»).
+type VerifyLevel = 'beginner' | 'advanced';
+const VERIFY_LEVEL_LABEL: Record<VerifyLevel, string> = { beginner: 'مبتدئ', advanced: 'متقدم' };
 function migrateVerifyLevel(v: unknown): VerifyLevel {
-  if (v === 'master' || v === 'متقن') return 'master';
+  if (v === 'master' || v === 'متقن') return 'advanced';
   if (v === 'advanced' || v === 'intermediate' || v === 'متقدم' || v === 'متوسط') return 'advanced';
   return 'beginner';
 }
 /** Strict word grading (extras count) for every level above beginner. */
 function levelIsStrict(level: VerifyLevel): boolean { return level !== 'beginner'; }
-/** The level a test actually runs at: «متقن» outside the admin view
- *  (non-admin, or admin previewing as a user) runs as «متقدم». */
-function runLevelFor(level: VerifyLevel, isAdmin: boolean): VerifyLevel {
-  return level === 'master' && !isAdmin ? 'advanced' : level;
-}
 type CorrRate = 'slow' | 'normal' | 'fast' | 'veryFast';
 const CORR_RATE_VALUE: Record<CorrRate, number> = { slow: 0.8, normal: 1.0, fast: 1.15, veryFast: 1.25 };
 // C-3: veryFast tops out at 1.25 so it stays distinct from fast even where the
@@ -1679,14 +1674,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [savedProgress, setSavedProgress] = useState<TestProgress | null>(loadProgress);
   // Verification level + recitation mode (setup choices, persisted).
   const [verifyLevel, setVerifyLevel] = useState<VerifyLevel>(() => loadTestSettings().level);
-  // W4-A: «متقن» is admin-only (hidden in the admin's user preview too).
-  // The stored choice is kept; outside the admin view it runs as «متقدم».
   const isAdminView = useIsAdminView();
-  // W4-A: «متقن» tajweed notes (Muaalem hook; not connected yet → honest note).
-  const [tajweedReview, setTajweedReview] = useState<TajweedReview | null>(null);
-  const isAdminViewRef = useRef(isAdminView);
-  isAdminViewRef.current = isAdminView;
-  const runLevel = runLevelFor(verifyLevel, isAdminView);
+  const runLevel = verifyLevel;
   // Item 2.11 (2026-11-26): developer diagnostics (build stamp, event log)
   // are hidden from regular users. Shown for the admin view, or with
   // ?debug=1 in the URL. The old 'quran-show-diag' key still works:
@@ -2279,7 +2268,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setCorrDelayMode(delayMode);
     setCorrDelay(d);
     setCorrRate(rate);
-    liveRef.current.level = runLevelFor(level, isAdminViewRef.current);
+    liveRef.current.level = level;
     liveRef.current.mode = mode;
     liveRef.current.corrDelayMode = delayMode;
     liveRef.current.corrDelay = d;
@@ -2917,15 +2906,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       endSurahName: rangeEnd ? (SURAHS.find((s) => s.no === rangeEnd.surah)?.name || '') : undefined,
       endAyah: rangeEnd?.ayah,
     };
-    // W4-A: «متقن» asks the Muaalem hook for tajweed notes. Today it answers
-    // 'unavailable' (server not connected); the done screen says so.
-    setTajweedReview(null);
-    if (liveRef.current.level === 'master') {
-      const lo = rangeStart ?? { surah, ayah: from };
-      void requestTajweedReview({ surah: lo.surah, fromAyah: lo.ayah, toAyah: rangeEnd?.ayah ?? to }, isAdminViewRef.current)
-        .then(setTajweedReview)
-        .catch(() => setTajweedReview({ status: 'error', message: 'request failed' }));
-    }
     // W4-D: score log v1 (last 100, with the level locked at the start).
     const lbl = rec.endSurahName && rec.endSurah !== rec.surah
       ? `من ${rec.surahName} ${formatAr(rec.from)} إلى ${rec.endSurahName} ${formatAr(rec.endAyah ?? 0)}`
@@ -6236,8 +6216,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <p className="text-xs font-medium text-accent-700 mb-1">مستوى التدقيق</p>
-                  <div className={`grid ${isAdminView ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
-                    {(isAdminView ? (['beginner', 'advanced', 'master'] as VerifyLevel[]) : (['beginner', 'advanced'] as VerifyLevel[])).map((lv) => (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(['beginner', 'advanced'] as VerifyLevel[]).map((lv) => (
                       <button key={lv} onClick={() => applySettings(lv, reciteMode)}
                         className={`min-h-[44px] px-1 rounded-xl font-semibold text-sm polish-press ${runLevel === lv ? 'grad-amber-door text-white' : 'bg-white border border-hairline text-accent-700'}`}>
                         {VERIFY_LEVEL_LABEL[lv]}
@@ -6261,13 +6241,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <Hint id="st-level"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {runLevel === 'beginner'
                     ? 'يوقف عند الكلمة الناقصة أو المختلفة. الحرف الغلط ما بيعدّيش في أي مستوى؛ التسامح بس في وضوح النطق. الكلمة الزائدة لا توقفه.'
-                    : runLevel === 'advanced'
-                    ? 'زي المبتدئ، وكمان يوقف عند الكلمة الزائدة أو المكررة.'
-                    : 'متقن (تجريبي للأدمن): الكلمات والزيادة زي المتقدم. الحركات والتجويد هتيجي من سيرفر Muaalem — لسه مش مربوط، فمفيش تقييم للحركات دلوقتي.'}
+                    : 'زي المبتدئ، وكمان يوقف عند الكلمة الزائدة أو المكررة.'}
                 </p></Hint>
-                {runLevel === 'master' && (
-                  <p className="col-span-2 text-xs text-amber-link leading-snug">تجريبي للأدمن — المستخدمين ما بيشوفوش «متقن».</p>
-                )}
                 <Hint id="st-mode"><p className="col-span-2 text-xs text-accent-600 leading-snug">
                   {reciteMode === 'ayah'
                     ? 'تسمّع كل آية لوحدها، وتتصحح قبل ما تنتقل للي بعدها.'
@@ -6578,7 +6553,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
 
             {lobbyDoor === 'scores' && (
-              <TestHistoryPanel entries={scoreLog} showMaster={isAdminView} initialLevel={runLevel} />
+              <TestHistoryPanel entries={scoreLog} initialLevel={runLevel} />
             )}
             {lobbyDoor === 'results' && (
               <>
@@ -7108,22 +7083,6 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
               )}
             </div>)}
-            {isAdminView && !contZeroMatch && tajweedReview && (
-              <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3" dir="rtl">
-                <p className="text-sm font-semibold text-amber-800">متقن — ملاحظات التجويد (تجريبي للأدمن)</p>
-                {tajweedReview.status === 'ok' ? (
-                  tajweedReview.notes.length === 0
-                    ? <p className="text-sm text-accent-700 mt-1">مفيش ملاحظات تجويد.</p>
-                    : <ul className="text-sm text-accent-700 mt-1 space-y-1">{tajweedReview.notes.map((n, i) => (<li key={i}>آية {n.ayah.toLocaleString('ar-EG')}: {n.rule} — {n.message}</li>))}</ul>
-                ) : (
-                  <p className="text-sm text-accent-700 mt-1 leading-relaxed">
-                    {muaalemStatus() === 'not-connected'
-                      ? 'سيرفر Muaalem لسه مش مربوط، فالحركات والتجويد ما اتقيّموش في الاختبار ده. الدرجة فوق للكلمات بس (زي المتقدم).'
-                      : 'ملاحظات التجويد ما وصلتش المرة دي. الدرجة فوق للكلمات بس.'}
-                  </p>
-                )}
-              </div>
-            )}
             {/* Diagnostics copy (item 2.11): only for the admin/debug view, or
                 on a failed run (nothing matched) so a problem can still be reported. */}
             {(showDiag || contZeroMatch) && (

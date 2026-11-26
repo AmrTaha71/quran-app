@@ -27,7 +27,7 @@ type Bundle = {
     evaluate: (m: boolean[], all: boolean, final: boolean, now?: number, lastWrong?: boolean) => { kind: 'continue' | 'correct' | 'finish'; locked?: boolean };
     summary: (locked: boolean) => { credited: number; wrong: number[]; locked: boolean; corrected: number; mistakes: number };
   };
-  currentHistoryLevel: (isAdmin: boolean) => 'beginner' | 'advanced' | 'master';
+  currentHistoryLevel: () => 'beginner' | 'advanced';
 };
 let B: Bundle;
 let ayat: { surah: number; ayah: number; text: string }[];
@@ -244,10 +244,10 @@ describe('round scoring: self-corrected mistakes do not count', () => {
     const store = new Map<string, string>();
     g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) };
     try {
-      assert.equal(B.currentHistoryLevel(false), 'beginner');
+      assert.equal(B.currentHistoryLevel(), 'beginner');
       for (const [lv, want] of [['beginner', 'beginner'], ['intermediate', 'advanced'], ['advanced', 'advanced'], ['متوسط', 'advanced'], ['متقدم', 'advanced'], ['master', 'advanced']] as const) {
         store.set('quran-test-settings', JSON.stringify({ level: lv }));
-        assert.equal(B.currentHistoryLevel(false), want, lv);
+        assert.equal(B.currentHistoryLevel(), want, lv);
       }
     } finally { delete g.localStorage; }
   });

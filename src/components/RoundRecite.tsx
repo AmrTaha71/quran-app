@@ -109,7 +109,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     finished.current = true;
     stopRec();
     onFinish({
-      total: rest.length, ...st.summary(locked), beginner: currentHistoryLevel(false) === 'beginner',
+      total: rest.length, ...st.summary(locked), beginner: currentHistoryLevel() === 'beginner',
       promptLen: effRef.current, extras: extra, ear: kindRef.current,
     });
   }

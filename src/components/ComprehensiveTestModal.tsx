@@ -72,8 +72,8 @@ function scopeSpan(id: ScopeId, n: number): { start: number; end: number; label:
 }
 
 const tajLevel = (): SkillTier => {
-  const l = currentHistoryLevel(true);
-  return l === 'master' ? 'hafiz' : l === 'advanced' ? 'veryGood' : 'good' // trial bank has no 'beginner' items yet;
+  const l = currentHistoryLevel();
+  return l === 'advanced' ? 'veryGood' : 'good'; // trial bank has no 'beginner' items yet
 };
 
 export default function ComprehensiveTestModal({ onClose }: { onClose: () => void }) {
@@ -245,7 +245,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     const ear = positions[positions.length - 1]?.result.ear ?? 'manual';
     addTestHistoryV1({
       ts: r.date,
-      level: currentHistoryLevel(isAdmin),
+      level: currentHistoryLevel(),
       score: Math.round((total / maxTotal) * 100),
       correct: total,
       attempted: maxTotal,

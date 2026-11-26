@@ -8,7 +8,6 @@ import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal, RoundDebugOverlay } from './RoundRecite';
 import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
-import { useIsAdminView } from '../lib/adminPreview';
 import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
 import { SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
@@ -58,7 +57,6 @@ type Done = { ayah: PickedAyah; result: RoundResult; surahOk: boolean | null; co
 type Phase = 'setup' | 'loading' | 'recite' | 'surah' | 'score' | 'summary';
 
 export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
-  const isAdmin = useIsAdminView();
   const [scope, setScope] = useState<Scope>('juz');
   const [num, setNum] = useState(1);
   // Juz range (2026-11-10): «من جزء» = num, «إلى جزء» = toNum (scope juz only).
@@ -162,7 +160,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     const ear = rounds[rounds.length - 1].result.ear;
     addTestHistoryV1({
       ts: new Date().toISOString(),
-      level: currentHistoryLevel(isAdmin),
+      level: currentHistoryLevel(),
       score: Math.round((final40 / 40) * 100),
       correct: final40,
       attempted: 40,

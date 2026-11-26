@@ -5,8 +5,10 @@
 // New key; the old 'quran-test-history' (20 records, no level) stays as is
 // and keeps feeding the old list and DailyReport.
 
-export type HistoryLevel = 'beginner' | 'advanced' | 'master';
-export const HISTORY_LEVEL_LABEL: Record<HistoryLevel, string> = { beginner: 'مبتدئ', advanced: 'متقدم', master: 'متقن' };
+// Item 16.8 (owner decision 2026-11-26): the experimental «متقن» level is gone. Old
+// 'master' records are migrated to 'advanced' (it graded words exactly like «متقدم»).
+export type HistoryLevel = 'beginner' | 'advanced';
+export const HISTORY_LEVEL_LABEL: Record<HistoryLevel, string> = { beginner: 'مبتدئ', advanced: 'متقدم' };
 
 export type TestHistoryEntry = {
   /** ISO time of the finish (date + time). */
@@ -36,11 +38,11 @@ export const kindOf = (e: TestHistoryEntry): TestKind => e.kind ?? 'tasmee';
 export const TEST_HISTORY_V1_KEY = 'quran-test-history-v1';
 export const TEST_HISTORY_MAX = 100;
 
-const LEVELS: HistoryLevel[] = ['beginner', 'advanced', 'master'];
+const LEVELS: string[] = ['beginner', 'advanced', 'master'];
 
 function valid(e: unknown): e is TestHistoryEntry {
   const r = e as TestHistoryEntry;
-  return !!r && typeof r.ts === 'string' && LEVELS.includes(r.level)
+  return !!r && typeof r.ts === 'string' && LEVELS.includes(r.level as string)
     && Number.isFinite(r.score) && Number.isFinite(r.correct) && Number.isFinite(r.attempted)
     && typeof r.completed === 'boolean';
 }
@@ -49,7 +51,15 @@ function valid(e: unknown): e is TestHistoryEntry {
 export function loadTestHistoryV1(): TestHistoryEntry[] {
   try {
     const arr = JSON.parse(localStorage.getItem(TEST_HISTORY_V1_KEY) || '[]');
-    return Array.isArray(arr) ? arr.filter(valid).slice(0, TEST_HISTORY_MAX) : [];
+    if (!Array.isArray(arr)) return [];
+    const list = arr.filter(valid).slice(0, TEST_HISTORY_MAX);
+    // 16.8: explicit one-way migration of legacy «متقن» records, saved back once.
+    if (list.some((e) => (e.level as string) === 'master')) {
+      const migrated = list.map((e) => ((e.level as string) === 'master' ? { ...e, level: 'advanced' as const } : e));
+      try { localStorage.setItem(TEST_HISTORY_V1_KEY, JSON.stringify(migrated)); } catch { /* quota / blocked */ }
+      return migrated;
+    }
+    return list;
   } catch { return []; }
 }
 

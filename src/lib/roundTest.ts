@@ -117,11 +117,13 @@ export function surahsOfRange(range: { start: number; end: number }): number[] {
 export const surahNameOnly = (n: number) => SURAHS.find((s) => s.no === n)?.name ?? '';
 
 /** Level the grading ran at (the tasmee' setting), for the score log. */
-export function currentHistoryLevel(isAdmin: boolean): 'beginner' | 'advanced' | 'master' {
+// Item 16.8: «متقن» is gone; a stored 'master' reads as «متقدم». `isAdmin` no longer
+// changes anything (kept so callers stay unchanged).
+export function currentHistoryLevel(): 'beginner' | 'advanced' {
   try {
     const p = JSON.parse(localStorage.getItem('quran-test-settings') || '{}') as { level?: unknown };
     const v = p.level;
-    if (v === 'master' || v === 'متقن') return isAdmin ? 'master' : 'advanced';
+    if (v === 'master' || v === 'متقن') return 'advanced';
     if (v === 'advanced' || v === 'intermediate' || v === 'متقدم' || v === 'متوسط') return 'advanced';
   } catch { /* ignore */ }
   return 'beginner';
