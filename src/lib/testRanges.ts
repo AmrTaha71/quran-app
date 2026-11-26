@@ -4,7 +4,6 @@ import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from './quranBoundaries';
 export const TOTAL_AYAHS = 6236;
 
 export type UnitKind = 'surah' | 'juz' | 'hizb' | 'quarter';
-export type EndKind = 'same' | 'juz' | 'hizb' | 'surah';
 
 export interface RangePoint { global: number; surah: number; ayah: number }
 
@@ -73,18 +72,6 @@ export function unitStartPoint(kind: UnitKind, n: number): RangePoint {
 
 export function unitEndPoint(kind: UnitKind, n: number): RangePoint {
   return globalToPoint(unitEndGlobal(kind, n));
-}
-
-// Resolve the user's end choice: 'same' = end of the start unit,
-// otherwise the end of the chosen juz/hizb/surah.
-export function resolveRange(
-  startKind: UnitKind, startNum: number, endKind: EndKind, endNum: number,
-): { start: RangePoint; end: RangePoint } {
-  const start = unitStartPoint(startKind, startNum);
-  const end = endKind === 'same'
-    ? unitEndPoint(startKind, startNum)
-    : unitEndPoint(endKind, endNum);
-  return { start, end };
 }
 
 export function rangeSummary(start: RangePoint, end: RangePoint): string {

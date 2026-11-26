@@ -39,7 +39,7 @@ export const RECITERS: Reciter[] = [
   // his islamic.network edition is blocked, and no 128 folder exists.
   { id: 'jaber', wps: 0.94, name: 'علي جابر', quality: '64', audioUrl: everyayah('Ali_Jaber_64kbps') },
   // Hani Ar-Rifai: added as a trial (2026-11-08). Folder name and licence not verified from the sandbox; check playback on device.
-  { id: 'rifai', wps: 0.89, name: 'هاني الرفاعي', quality: '192', audioUrl: everyayah('Hani_Rifai_192kbps') },
+  { id: 'rifai', wps: 0.89, name: 'هاني الرفاعي', quality: '192', unverified: true, audioUrl: everyayah('Hani_Rifai_192kbps') },
   // Added 2026-11-21 (Dr. Amr): all three have word timings for the whole Quran (public/corr-timings), so they
   // also work as correction reciters. EveryAyah folders as in CORR_RECITERS.
   { id: 'shuraym', wps: 1.24, name: 'سعود الشريم', quality: '128', audioUrl: everyayah('Saood_ash-Shuraym_128kbps') },

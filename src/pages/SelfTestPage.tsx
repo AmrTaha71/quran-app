@@ -1189,6 +1189,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const passageCount = SURAH_AYAH_COUNTS[surah - 1] || 1;
   const passageLo = Math.max(1, Math.min(from, to, passageCount));
   const passageHi = Math.min(Math.max(from, to), passageCount);
+  // Item 4.16: an end before the start is the user's slip — say so and
+  // refuse to start, never silently swap it into a range they did not pick.
+  const REVERSED_RANGE_MSG = 'النهاية قبل البداية — خلّي «إلى آية» بعد «من آية» أو نفسها';
+  const rangeReversed = Math.min(Math.max(1, from), passageCount) > Math.min(Math.max(1, to), passageCount);
   const passageRange = {
     start: globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + passageLo - 1),
     end: globalToPoint((SURAH_START_GLOBAL[surah - 1] || 1) + passageHi - 1),
@@ -2918,6 +2922,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Manual mode wrapper: single-surah ayah range -> global range.
   const startTest = async (surahNo: number = surah, fromNo: number = from, toNo: number = to, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null) => {
     const count = SURAH_AYAH_COUNTS[surahNo - 1] || 1;
+    // Item 4.16: a reversed manual range is refused with a message.
+    if (Math.min(Math.max(1, fromNo), count) > Math.min(Math.max(1, toNo), count)) { setError(REVERSED_RANGE_MSG); return; }
     const lo = Math.max(1, Math.min(fromNo, toNo, count));
     const hi = Math.min(Math.max(fromNo, toNo), count);
     const base = SURAH_START_GLOBAL[surahNo - 1] || 1;
@@ -6749,10 +6755,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <p className="text-sm text-accent-600">
                           سورة {surahName} فيها {surahCount.toLocaleString('ar-EG')} آية — النطاق المختار: {passageLo.toLocaleString('ar-EG')} إلى {passageHi.toLocaleString('ar-EG')}
                         </p>
+                        {rangeReversed && <p className="text-sm text-red-700 font-semibold" role="alert">{REVERSED_RANGE_MSG}</p>}
                         <p className="text-xs text-accent-600 leading-relaxed">اختار السورة وحدّد الآيات اللي عايز تسمّعها.</p>
                         {error && <p className="text-sm text-red-600 font-semibold">{error}</p>}
                         {perTestSettings}
-                        <button onClick={() => { const eff = takePerTestSettings(); void startTest(surah, from, to, null, eff.mode, eff); }} disabled={loading}
+                        <button onClick={() => { const eff = takePerTestSettings(); void startTest(surah, from, to, null, eff.mode, eff); }} disabled={loading || rangeReversed}
                           className="w-full py-3 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                           {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
                         </button>
