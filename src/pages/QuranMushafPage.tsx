@@ -50,7 +50,7 @@ import { BackButton } from '../components/BackButton';
 import {
   BookOpen, ChevronRight, ChevronLeft, Home, LogOut, Globe,
   ZoomIn, ZoomOut, Maximize2, X, Bookmark, Volume2, Layers, Link,
-  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, Headphones } from 'lucide-react';
+  LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, Headphones, BadgeCheck } from 'lucide-react';
 import { useUserLists } from '../components/UserLists';
 import type { Route } from '../lib/routes';
 import { silenceSharedAudio } from '../lib/sharedAudio';
@@ -5554,11 +5554,24 @@ export default function QuranMushafPage({
                           }
                           setSaveLaterMsg(shownLinks.length > 0 ? 'اتحفظت الآية مع التربيطة' : 'اتحفظت الآية');
                         };
+                        // Item 5.1: «حفظتها» writes the ayah to the memorized
+                        // list straight from the Mushaf (tap again to undo).
+                        const memorized = userLists.lists.memorized.has(v.id);
+                        const toggleMemorized = async () => {
+                          if (!session) { setSaveLaterMsg('سجّل دخولك الأول عشان تعلّم الآية محفوظة'); return; }
+                          await userLists.toggleList(v.id, 'memorized');
+                          setSaveLaterMsg(memorized ? 'اتشالت من محفوظاتك' : 'ما شاء الله — اتسجّلت في محفوظاتك');
+                        };
                         const shareLink = verseLinks[0];
                         const shareText = shareLink
                           ? `${v.ayah_text}\n\nالتربيط: ${shareLink.link_title ? `${shareLink.link_title} — ` : ''}${shareLink.link_content}`
                           : v.ayah_text;
                         return (<>
+                          <button onClick={() => { void toggleMemorized(); }}
+                            aria-pressed={memorized}
+                            className={`w-full mb-2 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 polish-press ${memorized ? 'bg-emerald-600 text-white' : 'bg-white border border-hairline-emerald text-emerald-800'}`}>
+                            <BadgeCheck className="w-4 h-4" /> {memorized ? 'محفوظة ✓' : 'حفظتها'}
+                          </button>
                           <div className="grid grid-cols-3 gap-1.5 mb-2">
                             <button onClick={() => { void toggleSaveLater(); }}
                               aria-pressed={saved}
