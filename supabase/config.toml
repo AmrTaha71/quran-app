@@ -1,14 +1,27 @@
+# verify_jwt = true makes the Supabase gateway reject a call that carries no
+# valid JWT before the function runs (item 1.10, defence in depth). Every
+# client caller already sends the user's session token. Note: the public anon
+# key is itself a valid JWT, so each function ALSO checks for a real user
+# session inside (that is the real gate; this flag is the second layer).
+
+# seed-quran authenticates inside (admin JWT or x-cron-secret, item 1.6), so
+# the gateway check stays off for manual/secret calls.
 [functions.seed-quran]
 verify_jwt = false
 
 [functions.smart-rephrase]
-verify_jwt = false
+verify_jwt = true
 
 [functions.transcribe-audio]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-voice]
-verify_jwt = false
+verify_jwt = true
 
+# pg_cron cannot mint a user JWT: x-cron-secret (CRON_SECRET) is the auth.
 [functions.adhan-push]
 verify_jwt = false
+
+# Deleting an account must always be authenticated (item 1.11).
+[functions.delete-account]
+verify_jwt = true
