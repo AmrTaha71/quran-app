@@ -29,6 +29,7 @@
 import { RIWAYAT, writeRiwayaResume } from './riwayat';
 import type { RiwayaPosition } from './riwayat';
 import { SURAHS } from './surahs';
+import { classifyAudioError } from './audioErrorKind';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
 import { registerSleepStopHandler, unregisterSleepStopHandler } from './sleepTimer';
 
@@ -121,7 +122,11 @@ export class RiwayaEngine {
     if (this.destroyed || !this.holdsAudio) return;
     this.playingFlag = false;
     // Do NOT skip anywhere on error.
-    this.callError(ERROR_MESSAGE);
+    // Item 4.18: a missing surah file is the source's fault, not the
+    // connection's — say so instead of «check your connection».
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+    this.callError(classifyAudioError(this.audio.error?.code, online) === 'missing'
+      ? 'ملف السورة دي مش موجود للرواية دي — جرّب رواية تانية' : ERROR_MESSAGE);
   };
 
   // Position captured at preemption time, when the element is

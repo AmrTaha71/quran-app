@@ -37,6 +37,7 @@
 // and fire onInterrupted; resume is a UI button the UI team shows
 // on onInterrupted.
 
+import { classifyAudioError } from './audioErrorKind';
 import { RECITERS, DEFAULT_RECITER_ID } from './reciters';
 import { SURAHS, SURAH_AYAH_COUNTS } from './surahs';
 import { getSharedAudio, acquireAudio, releaseAudio } from './sharedAudio';
@@ -56,6 +57,10 @@ export interface ListenPosition {
 export const LISTENING_WIRD_KEY = 'quran-listening-wird';
 
 const ERROR_MESSAGE = 'تعذرت التلاوة — تحقق من الاتصال وحاول تاني';
+// Item 4.18: a file the reciter's host does not have (404 / not a
+// playable file) — retrying will not help, another reciter will.
+export const LISTEN_NOT_FOUND_MESSAGE = 'المقطع ده مش موجود عند القارئ ده — جرّب قارئ تاني';
+
 
 // ------------------------------------------------------------------
 // localStorage helpers. localStorage is read from globalThis AT CALL
@@ -346,10 +351,38 @@ export class ListenEngine {
     });
   };
 
+  // Item 4.18: the clip that already had its one automatic retry.
+  private retriedSrc: string | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+
   private readonly handleAudioError = (): void => {
     if (this.destroyed || !this.holdsAudio) return;
     this.playingFlag = false;
     // Do NOT skip to the next ayah on error (contract rule 6).
+    const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+    const kind = classifyAudioError(this.audio.error?.code, online);
+    if (kind === 'missing') { this.callError(LISTEN_NOT_FOUND_MESSAGE); return; }
+    // A network drop gets ONE quiet retry of the same clip after 2 s;
+    // a second failure shows the message as before.
+    const src = this.currentSrc;
+    if (kind === 'network' && src && this.retriedSrc !== src) {
+      this.retriedSrc = src;
+      if (this.retryTimer) clearTimeout(this.retryTimer);
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        if (this.destroyed || !this.holdsAudio || this.currentSrc !== src) return;
+        try {
+          this.audio.load();
+          this.playingFlag = true;
+          const p = this.audio.play() as unknown as Promise<void> | undefined;
+          if (p && typeof p.catch === 'function') p.catch(() => { this.playingFlag = false; this.callError(ERROR_MESSAGE); });
+        } catch {
+          this.playingFlag = false;
+          this.callError(ERROR_MESSAGE);
+        }
+      }, 2000);
+      return;
+    }
     this.callError(ERROR_MESSAGE);
   };
 
@@ -713,6 +746,7 @@ export class ListenEngine {
     // handler must not fire (the page's own 'listen-ui' handler
     // still pauses whatever engine is live, if any).
     unregisterSleepStopHandler('listen-hafs');
+    if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     // Capture ownership BEFORE tearing down: the shared element
     // must only be paused / detached / released when THIS engine
     // still holds it. A preempted engine's destroy must not touch

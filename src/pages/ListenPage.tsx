@@ -67,6 +67,7 @@ import {
   clearListeningWird,
   readListeningWird,
   writeListeningWird,
+  LISTEN_NOT_FOUND_MESSAGE,
 } from '../lib/listenPlayback';
 import {
   SLEEP_TIMER_OPTIONS,
@@ -3107,7 +3108,21 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
             {journeyMode === 'tadabbur' && journeyItem?.kind === 'tafsir' && (
               <p className="text-xs text-accent-600 mt-2">{TAFSIR_ATTRIBUTION}</p>
             )}
-            {engineError && <p className="text-sm text-red-600 font-medium mt-2">{engineError}</p>}
+            {engineError && <p className="text-sm text-red-600 font-medium mt-2" role="alert">{engineError}</p>}
+            {/* Item 4.18: a way forward next to the error — try again, or
+                (for a file this reciter does not have) switch to Minshawi. */}
+            {engineError && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {!playing && (
+                  <button type="button" onClick={() => void togglePlayPause()}
+                    className="min-h-[44px] px-4 rounded-xl border border-hairline text-accent-800 font-semibold polish-press polish-focus">حاول تاني</button>
+                )}
+                {engineError === LISTEN_NOT_FOUND_MESSAGE && engineRef.current && activeReciterRef.current !== 'minshawi' && (
+                  <button type="button" onClick={() => void startPlayback(activeSurahRef.current, 'minshawi', activeModeRef.current, currentAyahRef.current)}
+                    className="min-h-[44px] px-4 rounded-xl grad-emerald-door text-white font-semibold polish-press polish-focus">جرّب المنشاوي</button>
+                )}
+              </div>
+            )}
             {/* Redirect B: interruption resume — prominent, tap-only */}
             {interrupted && (
               <div className="mt-4 bg-amber-50 border border-hairline-amber rounded-xl p-4">
