@@ -9,6 +9,7 @@
 // FINAL result. The expected ayah text is never given to the model.
 
 import { publishMicLevel } from './micLevel';
+import { unloadEarLab } from './quranLabEar';
 
 export const EAR_KEY = 'quran-ear';
 export type EarKind = 'model' | 'browser';
@@ -103,6 +104,9 @@ const EAR_LOAD_TIMEOUT_MS = 120_000;
 export function loadEar(): Promise<string> {
   if (readyBackend) return Promise.resolve(readyBackend);
   if (loadPromise) return loadPromise;
+  // 3.13: one model in memory at a time — an idle device ear (Quran-Lab)
+  // is let go before Whisper loads; it reloads from the cache when needed.
+  unloadEarLab();
   loadPromise = new Promise<string>((resolve, reject) => {
     // Item 3.2: a hung download (slow Hub, missing WASM that stalls
     // pipeline()) used to leave begin() waiting forever — no onerror, no

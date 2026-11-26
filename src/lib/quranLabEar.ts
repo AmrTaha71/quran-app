@@ -37,8 +37,11 @@ export function subscribeEarLab(cb: () => void): () => void { earSubs.add(cb); r
 /** A live session failed to load the model: use the browser ear for the
  *  rest of this tab (no error loops); the card offers a retry. */
 export function markEarLabFailed(): void { setEarState({ status: 'error' }); }
-/** Use the device ear for a test now? Only when it is on AND loaded. */
-export function earLabUsable(): boolean { return earLabOn() && earState.status === 'ready'; }
+/** Use the device ear for a test now? Only when it is on AND loaded — or it
+ *  was loaded in this tab and only unloaded to save memory (3.13): then the
+ *  next session reloads it from the cache in a few seconds. */
+export function earLabUsable(): boolean { return earLabOn() && (earState.status === 'ready' || (wasReady && earState.status !== 'error')); }
+let wasReady = false;
 /** 3.3: may a session with NO browser ear start the device ear now? Only
  *  when it is loaded/loading, already downloaded, or agreed to and on
  *  Wi-Fi. Otherwise the caller shows the download card first, so a test
@@ -104,11 +107,35 @@ function takeKeep(): { stream: MediaStream; ctx: AudioContext } | null {
 if (typeof window !== 'undefined') window.addEventListener('pagehide', closeKeep);
 // Know early whether the model is on the device (earLabMayStart, timeouts).
 if (typeof window !== 'undefined') void earModelCached();
+// 3.13: one model alive at a time. After 10 minutes with no ear session the
+// worker (and its ONNX session, ~73 MB + runtime) is let go; the Whisper
+// ear's loadEar() asks the same before it loads. A running session is
+// never unloaded.
+const IDLE_UNLOAD_MS = 10 * 60_000;
+let activeSessions = 0;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+function cancelIdleUnload() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
+function scheduleIdleUnload() {
+  cancelIdleUnload();
+  idleTimer = setTimeout(() => { idleTimer = null; unloadEarLab(); }, IDLE_UNLOAD_MS);
+}
+/** Free the device ear's memory now, unless a session is using it. */
+export function unloadEarLab(): boolean {
+  if (activeSessions > 0 || !worker || earState.status === 'loading') return false;
+  const w = worker;
+  try { w.postMessage({ type: 'unload' }); } catch { /* ignore */ }
+  // Terminate shortly after (the release runs first); terminate alone frees it too.
+  setTimeout(() => { try { w.terminate(); } catch { /* ignore */ } }, 500);
+  worker = null; ready = null; listener = null;
+  setEarState({ status: 'idle', loaded: 0, total: 0 });
+  return true;
+}
 function resetWorker() {
   try { worker?.terminate(); } catch { /* ignore */ }
   worker = null; ready = null; listener = null;
 }
 function getWorker(): Promise<Worker> {
+  cancelIdleUnload();
   if (!worker) {
     worker = new Worker(new URL('../workers/quranLab.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e) => listener?.(e.data);
@@ -129,7 +156,7 @@ function getWorker(): Promise<Worker> {
       w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error('worker-error')); };
       listener = (m) => {
         if (m.type === 'progress') { arm(); if (m.loaded != null) setEarState({ loaded: Number(m.loaded) || 0, total: Number(m.total) || 0 }); }
-        else if (m.type === 'ready') { clearTimeout(timer); listener = prev; setEarState({ status: 'ready' }); res(); }
+        else if (m.type === 'ready') { clearTimeout(timer); listener = prev; wasReady = true; setEarState({ status: 'ready' }); res(); }
         else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error(m.message)); }
       };
       w0.postMessage({ type: 'load' });
@@ -253,7 +280,10 @@ export class QuranLabRecognition {
     void this.begin();
   }
 
+  private counted = false;
   private async begin() {
+    activeSessions++; this.counted = true;
+    cancelIdleUnload();
     try {
       // W5-N2: no expected words = phoneme tap (follow-the-imam): no
       // PhonemeStream, the raw timed parts go to onparts instead.
@@ -457,6 +487,7 @@ export class QuranLabRecognition {
   private finishEnd() {
     if (this.ended) return;
     this.ended = true;
+    if (this.counted) { this.counted = false; activeSessions = Math.max(0, activeSessions - 1); if (activeSessions === 0) scheduleIdleUnload(); }
     setTimeout(() => { this.onaudioend?.(); this.onend?.(); }, 0);
   }
 }

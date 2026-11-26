@@ -7,7 +7,7 @@
 // the first download is ~100 MB — see EAR_DOWNLOAD_MB.
 //
 // Messages in:  {type:'load'} | {type:'audio', samples: Float32Array}
-//               | {type:'flush'} | {type:'reset'}
+//               | {type:'flush'} | {type:'reset'} | {type:'unload'}
 // Messages out: {type:'progress', loaded, total} | {type:'ready', backend, loadMs}
 //               | {type:'tokens', text, ids, chunkMs, chunks} | {type:'error', message}
 import * as ort from 'onnxruntime-web/webgpu';
@@ -191,6 +191,14 @@ self.onmessage = (e: MessageEvent) => {
     try {
       if (m.type === 'load') await load();
       else if (m.type === 'reset') resetStates();
+      else if (m.type === 'unload') {
+        // 3.13: give the ONNX session's memory back (idle, or the Whisper ear
+        // is about to load). The next 'load' reads the model from the cache.
+        const s0 = session;
+        session = null; spec = null; states = {}; featLen = 0; featBuf = new Float32Array(0);
+        await s0?.release();
+        post({ type: 'unloaded' });
+      }
       else if (m.type === 'audio') { appendFeats(fb.accept(m.samples)); await runChunks(false); }
       else if (m.type === 'flush') { appendFeats(fb.finish()); await runChunks(true); post({ type: 'flushed' }); resetStates(); }
     } catch (err) {
