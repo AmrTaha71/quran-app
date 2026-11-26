@@ -22,7 +22,8 @@
 //
 // SCOPE: listen + adhkar only. The Mushaf's one-shot ayah
 // playback uses its own short-lived elements, and self-test
-// corrections use their own paths; both are OUT of scope.
+// corrections use their own paths; both are OUT of scope, but both
+// call silenceSharedAudio() first so they never overlap it (4.21).
 //
 // Node-testability: the element is created LAZILY on the first
 // getSharedAudio()/acquireAudio() call, never at import time, so a
@@ -180,4 +181,33 @@ export function stopSharedAudio(): void {
     }
   }
   popAndResume();
+}
+
+/**
+ * Item 4.21: a one-shot sound outside this unit (the Mushaf's ayah
+ * popup, a self-test session and its corrections) is about to play.
+ * Pause the shared element and tell its holder, exactly as a
+ * preemption does, so two recitations never overlap — but push
+ * nothing to the resume stack and resume nothing: the user chose the
+ * new sound, and listening comes back only by their tap.
+ */
+export function silenceSharedAudio(): void {
+  if (holderOwner === null) return;
+  const prevCallback = holderCallback;
+  holderOwner = null;
+  holderCallback = null;
+  if (shared) {
+    try {
+      shared.pause();
+    } catch {
+      // Swallow.
+    }
+  }
+  if (prevCallback) {
+    try {
+      prevCallback();
+    } catch {
+      // Swallow.
+    }
+  }
 }

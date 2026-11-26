@@ -53,6 +53,7 @@ import {
   LayoutGrid, List, BookMarked, Hash, Heart, Play, Square, Repeat, Mic, Clock, Languages, ScrollText, Headphones } from 'lucide-react';
 import { useUserLists } from '../components/UserLists';
 import type { Route } from '../lib/routes';
+import { silenceSharedAudio } from '../lib/sharedAudio';
 
 
 const TOTAL_PAGES = TOTAL_MUSHAF_PAGES;
@@ -601,6 +602,7 @@ export default function QuranMushafPage({
   const playLinkAudio = (url: string) => {
     stopLinkAudio();
     setLinkAudioError('');
+    silenceSharedAudio(); // 4.21: never over the listening page
     const a = new Audio(url);
     linkAudioRef.current = a;
     a.onended = () => { if (linkAudioRef.current === a) linkAudioRef.current = null; };
@@ -624,6 +626,8 @@ export default function QuranMushafPage({
     stopRecitation();
     // S4: recitation must never overlap a playing link voice.
     stopLinkAudio();
+    // 4.21: the popup ayah stops a listening session playing elsewhere.
+    silenceSharedAudio();
     changeReciter(r.id);
     setReciteError('');
     const audio = new Audio(r.audioUrl(verse.surah_no, verse.ayah_no));

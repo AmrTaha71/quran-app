@@ -58,6 +58,7 @@ import {
 } from 'lucide-react';
 import type { Route } from '../lib/routes';
 import { useIsAdminView } from '../lib/adminPreview';
+import { silenceSharedAudio } from '../lib/sharedAudio';
 
 
 interface TestAyah {
@@ -2757,6 +2758,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     recSessionRef.current = recordingRef.current
       ? { recording: true, plan: recPlan, tags: recTags, wall: diagStartWallRef.current }
       : null;
+    // Item 4.21: a listening session left playing would talk over the
+    // reciter's corrections and into the mic — stop it (no auto-resume).
+    silenceSharedAudio();
     setSurah(startPt.surah);
     setError('');
     setTextOfflineNotice(false);
