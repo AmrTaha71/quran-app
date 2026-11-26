@@ -4894,15 +4894,15 @@ export default function QuranMushafPage({
           {!showRatelIntro && !cleanMode && (
             <div className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-wrap items-center justify-center gap-1.5 max-w-[calc(100vw-8.5rem)] md:max-w-[calc(100vw-31rem)] transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0'}`}>
               <WorshipTimer dark flash />
-              <span className="px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">صفحة {labelPage}</span>
+              <span className="px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white/90 text-xs font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">صفحة {labelPage}</span>
               {/* Juz/Hizb collapse below 420px: on a 320-360px phone the
                   timer + page + surah already fill one line, and a
                   second wrapped line would cover the page's top
                   ornament — the full set still shows on wider screens
                   and in normal view. */}
-              <span className="hidden px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">{labelJuz.name}</span>
-              <span className="hidden px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">الحزب {labelHizb.number}</span>
-              <span className="px-2 py-0.5 bg-black/30 backdrop-blur-sm text-white/90 text-[10px] font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">سورة {labelSurahName}</span>
+              <span className="hidden px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white/90 text-xs font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">{labelJuz.name}</span>
+              <span className="hidden px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white/90 text-xs font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">الحزب {labelHizb.number}</span>
+              <span className="px-2 py-0.5 bg-black/60 backdrop-blur-sm text-white/90 text-xs font-bold rounded-md ring-1 ring-white/20 whitespace-nowrap">سورة {labelSurahName}</span>
             </div>
           )}
           {/* Slow page-load indicator (STREAM S2): appears only once a

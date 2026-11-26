@@ -290,9 +290,9 @@ export default function HomeStartPage({ session, onNavigate }: {
         <div className="home-tiles mb-3">
           <HomeTile icon={<MushafIcon />} glaze="emerald" title="الحفظ" hint={showHints ? 'المصحف والتربيطات' : undefined}
             onClick={() => onNavigate('hifz')} />
-          <HomeTile icon={<EarListenIcon />} glaze="red" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
+          <HomeTile icon={<EarListenIcon />} glaze="gold" title={<><Sama3 /> لي</>} hint={showHints ? 'اقرأ وأنا أصحّح لك' : undefined}
             onClick={() => openTest(onNavigate)} />
-          <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
+          <HomeTile icon={<Award />} glaze="gold" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             onClick={() => onNavigate('quiz')} />
           <HomeTile icon={<AudioLines />} glaze="emerald" title="تتبع قراءة الإمام" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />

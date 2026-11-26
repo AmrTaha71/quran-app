@@ -133,7 +133,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
   const hijriOk = HIJRI_FMT !== null && hijriOf(now) !== null;
   const chip = (label: string, on: boolean, onClick: () => void) => (
     <button type="button" key={label} onClick={onClick}
-      className={`min-h-[36px] px-3 rounded-lg text-xs font-semibold whitespace-nowrap ${on ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>{label}</button>
+      className={`min-h-[44px] px-3 rounded-lg text-xs font-semibold whitespace-nowrap ${on ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>{label}</button>
   );
   const thisMonth: Period = { k: 'greg', y: now.getFullYear(), m: now.getMonth() + 1 };
   const same = (a: Period, b: Period) => JSON.stringify(a) === JSON.stringify(b);
@@ -154,7 +154,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
         <div className="flex gap-1.5">
           {kinds.map((k) => (
             <button key={k} type="button" onClick={() => setKind(k)}
-              className={`flex-1 min-h-[36px] rounded-lg text-xs font-semibold ${kind === k ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>{TEST_KIND_LABEL[k]}</button>
+              className={`flex-1 min-h-[44px] rounded-lg text-xs font-semibold ${kind === k ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-accent-700'}`}>{TEST_KIND_LABEL[k]}</button>
           ))}
         </div>
       )}
@@ -176,9 +176,9 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
             {hijriOk && chip('هجري', calendar === 'hijri', () => { setCalendar('hijri'); setPeriod(latestHijri(hijriOf(now)!.m, now)); })}
             {monthMode && (
               <span className="flex items-center gap-1 mr-auto">
-                <button type="button" aria-label="الشهر اللي بعده" onClick={() => setPeriod(step(period, 1))} className="min-h-[36px] min-w-[36px] rounded-lg bg-gray-100 text-accent-700">›</button>
+                <button type="button" aria-label="الشهر اللي بعده" onClick={() => setPeriod(step(period, 1))} className="min-h-[44px] min-w-[44px] rounded-lg bg-gray-100 text-accent-700">›</button>
                 <span className="text-xs font-semibold text-accent-800 min-w-[96px] text-center">{periodLabel(period)}</span>
-                <button type="button" aria-label="الشهر اللي قبله" onClick={() => setPeriod(step(period, -1))} className="min-h-[36px] min-w-[36px] rounded-lg bg-gray-100 text-accent-700">‹</button>
+                <button type="button" aria-label="الشهر اللي قبله" onClick={() => setPeriod(step(period, -1))} className="min-h-[44px] min-w-[44px] rounded-lg bg-gray-100 text-accent-700">‹</button>
               </span>
             )}
           </div>

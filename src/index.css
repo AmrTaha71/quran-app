@@ -279,6 +279,13 @@ body {
 .polish-focus:focus-visible { outline: 2px solid #047857; outline-offset: 3px; }
 /* Reduced motion: stop ALL polish movement (static elevation and
    colors stay). */
+/* Item 8.14: Tailwind's own animate-* utilities (spin, pulse, bounce,
+   ping, slide-up, arbitrary animate-[...]) stop too under reduced
+   motion; the loading spinners stay readable as static icons. */
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-"] { animation: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .polish-press, .polish-press-depth, .polish-press-depth::after,
   .polish-card, .polish-fade-up, .polish-hub-item,
@@ -756,6 +763,10 @@ html.lite-blur *, html.lite-blur *::before, html.lite-blur *::after {
 html.lite-shadows *, html.lite-shadows *::before, html.lite-shadows *::after {
   box-shadow: none !important; text-shadow: none !important;
 }
+/* Item 8.17: a documented exception to «no dim layer over the Mushaf»:
+   lite-dim is OPT-IN (Settings → lite mode → dim), chosen by the user
+   to save battery, and covers the whole app evenly. The Mushaf-only
+   night dim is the separate scan filter in mushafDim.ts (item 5.14). */
 html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.2); pointer-events: none; z-index: 2147483000; }
 
 /* W5-B (2026-11-19): mushaf word highlight. ONE variable controls the

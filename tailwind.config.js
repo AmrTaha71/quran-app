@@ -8,29 +8,8 @@ export default {
         sans: ['"Cairo"', 'system-ui', 'sans-serif'],
       },
       colors: {
-        quran: {
-          green: '#E8F5E9',
-          greenDark: '#2E7D32',
-          greenBorder: '#A5D6A7',
-          red: '#FFEBEE',
-          redDark: '#C62828',
-          redBorder: '#EF9A9A',
-          yellow: '#FFFDE7',
-          yellowDark: '#F9A825',
-          yellowBorder: '#FFF59D',
-        },
-        primary: {
-          50: '#E3F2FD',
-          100: '#BBDEFB',
-          200: '#90CAF9',
-          300: '#64B5F6',
-          400: '#42A5F5',
-          500: '#1E88E5',
-          600: '#1976D2',
-          700: '#1565C0',
-          800: '#0D47A1',
-          900: '#0A3D7C',
-        },
+        // Item 8.3: the unused 'quran' (pastel) and 'primary' (blue) scales
+        // were deleted — zero uses in src/.
         // 2026-11-12: was a blue-grey scale that clashed with the emerald
         // and gold brand. Now a green-grey that matches it. 400 and lighter
         // fail AA as text on white, so body text should use 500 or darker.

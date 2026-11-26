@@ -620,7 +620,7 @@ export default function LinkModal({
                       <Sparkles className="w-3.5 h-3.5" /> إعادة صياغة بلغة سهلة يا رنا
                     </button>
                     <button onClick={() => { setOriginalTranscript(''); setRephrasedText(linkContent.trim()); setReviewMode('keep_original'); setPhase('review'); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-smooth">
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-smooth">
                       <Mic className="w-3.5 h-3.5" /> تحويل لصوت
                     </button>
                   </div>
@@ -667,8 +667,8 @@ export default function LinkModal({
 
           {/* Phase: Generating Voice */}
           {phase === 'generating_voice' && (
-            <div className="bg-blue-50 rounded-xl p-6 border border-blue-100 flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+            <div className="bg-emerald-50 rounded-xl p-6 border border-emerald-100 flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 text-emerald-700 animate-spin" />
               <p className="text-sm font-semibold text-accent-700">جارٍ توليد الصوت...</p>
               <p className="text-xs text-accent-600">تحويل النص إلى مقطع صوتي {voiceType === 'male' ? 'بصوت رجالي' : 'بصوت نسائي'}</p>
             </div>
@@ -715,12 +715,12 @@ export default function LinkModal({
               </div>
 
               {/* Voice type selection + generate */}
-              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+              <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
                 <p className="text-xs font-semibold text-accent-600 mb-2">حوّل نسخة من النص لصوت</p>
                 <div className="flex gap-2 mb-2">
                   <button onClick={() => setVoiceType('male')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border transition-smooth ${
-                      voiceType === 'male' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-accent-600 border-hairline hover:border-blue-300'
+                      voiceType === 'male' ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-accent-600 border-hairline hover:border-emerald-300'
                     }`}>
                     <User className="w-3.5 h-3.5" /> صوت رجالي
                   </button>
@@ -732,7 +732,7 @@ export default function LinkModal({
                   </button>
                 </div>
                 <button onClick={generateVoice}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-smooth">
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold rounded-xl transition-smooth">
                   <Mic className="w-4 h-4" /> {voiceType === 'male' ? 'يلا حوّل نسخة منه لصوت رجالي' : 'حوّل نسخة منه لصوت نسائي'}
                 </button>
                 <p className="text-xs text-accent-600 text-center mt-1.5">
@@ -741,7 +741,7 @@ export default function LinkModal({
                 {/* Browser TTS fallback button */}
                 {!syntheticAudioUrl && (
                   <button onClick={() => playBrowserTTS(rephrasedText, voiceType)}
-                    className="w-full flex items-center justify-center gap-2 py-2 mt-2 bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg transition-smooth">
+                    className="w-full flex items-center justify-center gap-2 py-2 mt-2 bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-800 text-xs font-semibold rounded-lg transition-smooth">
                     <Mic className="w-3.5 h-3.5" /> استماع عبر المتصفح ({voiceType === 'male' ? 'رجالي' : 'نسائي'})
                   </button>
                 )}
@@ -749,15 +749,15 @@ export default function LinkModal({
 
               {/* Synthetic audio preview */}
               {syntheticAudioUrl && (
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-2xl p-3 border border-blue-200 animate-slide-up">
+                <div className="bg-gradient-to-br from-emerald-50 to-amber-50 rounded-2xl p-3 border border-emerald-200 animate-slide-up">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Mic className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs font-semibold text-blue-700">
+                      <Mic className="w-4 h-4 text-emerald-700" />
+                      <span className="text-xs font-semibold text-emerald-800">
                         الصوت المولّد ({voiceType === 'male' ? 'رجالي' : 'نسائي'})
                       </span>
                     </div>
-                    <button onClick={() => playAudio(syntheticAudioUrl)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-smooth">
+                    <button onClick={() => playAudio(syntheticAudioUrl)} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-smooth">
                       <Mic className="w-3.5 h-3.5" /> تشغيل
                     </button>
                   </div>
