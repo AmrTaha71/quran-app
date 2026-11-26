@@ -10,6 +10,7 @@ import { requestDayRecap } from '../lib/dailyStats';
 import { registerAligner } from '../lib/alignBridge';
 import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
+import MicLevelHint from '../components/MicLevelHint';
 import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
@@ -6780,6 +6781,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="w-3 h-3 bg-red-500 rounded-full" />
                     <p className="text-lg font-bold text-accent-700">بسمعك… كمّل من غير توقف</p>
                   </div>
+                  <MicLevelHint active={contListening} heardSomething={!!(transcript || interim) || contProgress.matched > 0} />
                   <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
                   {ayahs[contProgress.ayahIdx] && (
                     <p className="text-sm font-semibold text-emerald-700 mb-4">
@@ -7019,6 +7021,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           {micState === 'listening' ? 'بسمعك… اقرأ الآية' : 'لسه بسمعك…'}
                         </p>
                       </div>
+                      <MicLevelHint active={micState === 'listening' || micState === 'correcting'} heardSomething={!!(transcript || interim)} />
                       {/* Batch 1 live progress dots: one dot per word
                           of the current ayah — green when the live
                           alignment matched it, amber pulsing on the

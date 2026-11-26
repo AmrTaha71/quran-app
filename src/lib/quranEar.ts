@@ -8,6 +8,8 @@
 // 6s); each segment is transcribed on the device and delivered as one
 // FINAL result. The expected ayah text is never given to the model.
 
+import { publishMicLevel } from './micLevel';
+
 export const EAR_KEY = 'quran-ear';
 export type EarKind = 'model' | 'browser';
 
@@ -288,6 +290,7 @@ export class QuranModelRecognition {
     let sum = 0;
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
     const rms = Math.sqrt(sum / buf.length);
+    publishMicLevel(rms);
     const chunkMs = (buf.length / rate) * 1000;
     // Start threshold from the room noise; once speaking, a pause is a drop
     // well below the reciter's own level (AGC keeps between-word noise

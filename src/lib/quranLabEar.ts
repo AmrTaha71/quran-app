@@ -9,6 +9,7 @@
 import { buildPhonWords, PhonemeStream, type PhonWord } from './phonemeEar';
 import { expectedWordList } from './expectedWords';
 import { QURANLAB_MODEL_CACHE, QURANLAB_MODEL_URL } from './earModelCache';
+import { publishMicLevel } from './micLevel';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
 // W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
@@ -295,6 +296,7 @@ export class QuranLabRecognition {
       let sum = 0;
       for (let i = 0; i < ch.length; i += 8) sum += ch[i] * ch[i];
       const rms = Math.sqrt(sum / (ch.length / 8));
+      publishMicLevel(rms);
       if (rms > this.maxRms) this.maxRms = rms;
       if (!this.seenFrame) { this.seenFrame = true; this.mark('first-frame'); }
       if (!this.seenSound && rms > 1e-5) { this.seenSound = true; this.mark('first-signal'); }
