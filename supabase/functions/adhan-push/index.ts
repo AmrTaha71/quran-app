@@ -1,5 +1,9 @@
-// adhan-push — Edge Function (v1, NOT YET DEPLOYED — deploy + schedule
-// are coordinator steps; see the setup block at the bottom).
+// adhan-push — Edge Function. DEPLOYED (live v4, checked 2026-11-26) and
+// scheduled by pg_cron job 'adhan-push-every-minute' (runs succeeding).
+// Phase 1 (items 1.7 + 9.3): 2-minute send window + per-device dedupe
+// (last_sent_prayer) instead of the fragile exact-minute match, and a
+// LIMIT on the subscriptions load. Needs migration
+// 20261126000006_adhan_push_unsubscribe_rpc.sql applied BEFORE deploying.
 //
 // PURPOSE: send a Web Push notification at prayer time to every device
 // subscribed through the app (Settings → مواعيد الأذان → تنبيه الأذان
@@ -14,15 +18,18 @@
 //   2. Groups by distinct location (+timezone); fetches today's
 //      timings from AlAdhan once per distinct location (same method
 //      mapping as the client: Egypt → 5, Saudi Arabia → 4).
-//   3. For each subscription, compares the current HH:MM in ITS
-//      timezone with today's five prayer times; on an exact-minute
-//      match, sends a Web Push (npm:web-push, VAPID).
+//   3. For each subscription, compares the current time in ITS
+//      timezone with today's five prayer times; inside the first
+//      SEND_WINDOW_MIN minutes after a prayer time, and only if that
+//      device has not already been sent this prayer today
+//      (last_sent_prayer = "YYYY-MM-DD:Prayer"), sends a Web Push
+//      (npm:web-push, VAPID) and records it.
 //   4. Deletes subscriptions the push service reports as dead
 //      (HTTP 404/410 — uninstalled app / revoked permission).
 //
-// SAFETY: the function only ever sends inside the exact prayer
-// minute, so a stray/duplicate call outside that minute sends
-// nothing. The cron call must carry the shared secret header
+// SAFETY: the function only sends inside the short window after a
+// prayer time and at most once per device per prayer per day, so a
+// late, skipped or duplicate cron run neither misses nor repeats. The cron call must carry the shared secret header
 // `x-cron-secret` (env CRON_SECRET); without it the function refuses.
 // verify_jwt is false (config.toml) because pg_cron cannot mint a
 // user JWT — the secret header is the auth, matching the repo's other
@@ -61,8 +68,15 @@ type AdhanLocation =
   | { kind: "gps"; lat: number; lng: number; label: string }
   | { kind: "manual"; country: string; countryName: string; city: string };
 
+// A cron run can be late by up to a minute (or one run can be skipped):
+// send if now is within [prayer, prayer + SEND_WINDOW_MIN).
+const SEND_WINDOW_MIN = 2;
+// Hard cap per run (item 1.7): spam rows must not make one run unbounded.
+const MAX_SUBSCRIPTIONS_PER_RUN = 10000;
+
 interface SubscriptionRow {
   endpoint: string;
+  last_sent_prayer: string | null;
   p256dh: string;
   auth: string;
   location: AdhanLocation;
@@ -106,6 +120,12 @@ function timeInTimezone(tz: string): string {
   } catch {
     return "";
   }
+}
+
+function toMinutes(hhmm: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
 }
 
 function cleanTime(raw: string): string {
@@ -168,7 +188,8 @@ Deno.serve(async (req) => {
 
   const { data: rows, error } = await supabase
     .from("adhan_push_subscriptions")
-    .select("endpoint, p256dh, auth, location, timezone");
+    .select("endpoint, p256dh, auth, location, timezone, last_sent_prayer")
+    .limit(MAX_SUBSCRIPTIONS_PER_RUN);
   if (error) return json({ error: "subscriptions-load-failed", detail: error.message }, 500);
   const subs = (rows ?? []) as SubscriptionRow[];
 
@@ -195,10 +216,14 @@ Deno.serve(async (req) => {
       errors.push(`timings-unavailable:${group.timezone}`);
       continue;
     }
-    const now = timeInTimezone(group.timezone);
-    if (!now) continue;
-    const due = PRAYERS.find((p) => timings[p.key] === now);
-    if (!due) continue; // Not a prayer minute for this place — send nothing.
+    const nowMin = toMinutes(timeInTimezone(group.timezone));
+    if (nowMin === null) continue;
+    const due = PRAYERS.find((p) => {
+      const t = toMinutes(timings[p.key] ?? "");
+      return t !== null && nowMin >= t && nowMin - t < SEND_WINDOW_MIN;
+    });
+    if (!due) continue; // Not inside a prayer window for this place — send nothing.
+    const sentKey = `${dateKey}:${due.key}`;
     const payload = JSON.stringify({
       title: `🕌 حان الآن وقت صلاة ${due.label}`,
       body: "اضغط لفتح التطبيق وسماع الأذان",
@@ -206,6 +231,7 @@ Deno.serve(async (req) => {
       url: `/?adhan=${due.key}`,
     });
     for (const sub of group.subs) {
+      if (sub.last_sent_prayer === sentKey) continue; // already sent this prayer today
       try {
         await webpush.sendNotification(
           { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
@@ -213,6 +239,10 @@ Deno.serve(async (req) => {
           { TTL: 120, urgency: "high" },
         );
         sent++;
+        await supabase
+          .from("adhan_push_subscriptions")
+          .update({ last_sent_at: new Date().toISOString(), last_sent_prayer: sentKey })
+          .eq("endpoint", sub.endpoint);
       } catch (e) {
         const status = (e as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) {
