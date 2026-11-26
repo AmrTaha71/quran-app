@@ -13,6 +13,7 @@ import { unloadEarLab, earOnMobileData } from './quranLabEar';
 import { Downsampler, downsampleTo16k } from './resample16k';
 import { earMicConstraints } from './earMic';
 import { watchMic } from './micWatch';
+import { SLOW_BENCH_MS, SLOW_SEGMENT_MS, readSlowMark } from './earTuning';
 
 export const EAR_KEY = 'quran-ear';
 export type EarKind = 'model' | 'browser';
@@ -25,15 +26,21 @@ const EAR_READY_KEY = 'quran-ear-ready';
 // version so a faster build can re-measure every device.
 const EAR_SLOW_KEY = 'quran-ear-slow';
 const EAR_SLOW_VERSION = 'v1';
-const SLOW_BENCH_MS = 2500;
-const SLOW_SEGMENT_MS = 3000;
 let slowStreak = 0;
 
 export function earIsSlow(): boolean {
-  try { return (localStorage.getItem(EAR_SLOW_KEY) || '').startsWith(`${EAR_SLOW_VERSION}:`); } catch { return false; }
+  // 3.23: the mark now expires (SLOW_MARK_TTL_MS) so a device that got
+  // faster is measured again; an old undated mark is dated on first read.
+  try {
+    const raw = localStorage.getItem(EAR_SLOW_KEY);
+    const mark = readSlowMark(raw, Date.now(), EAR_SLOW_VERSION);
+    if (!mark) { if (raw) localStorage.removeItem(EAR_SLOW_KEY); return false; }
+    if (mark.legacy) localStorage.setItem(EAR_SLOW_KEY, `${EAR_SLOW_VERSION}:${Math.round(mark.ms)}:${mark.at}`);
+    return true;
+  } catch { return false; }
 }
 function markEarSlow(ms: number): void {
-  try { localStorage.setItem(EAR_SLOW_KEY, `${EAR_SLOW_VERSION}:${Math.round(ms)}`); } catch { /* ignore */ }
+  try { localStorage.setItem(EAR_SLOW_KEY, `${EAR_SLOW_VERSION}:${Math.round(ms)}:${Date.now()}`); } catch { /* ignore */ }
 }
 function clearEarSlow(): void {
   slowStreak = 0;

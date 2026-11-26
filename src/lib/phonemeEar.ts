@@ -15,6 +15,7 @@
 // wasl, a final madd hamza).
 
 import { IMLA_ALT } from './imlaAlt';
+import { ALIGN_BACK_WORDS, ALIGN_AHEAD_WORDS, ALIGN_LEAD_COST, ALIGN_REJECT_RATIO, ALIGN_REJECT_MIN } from './earTuning';
 
 export type PhonWord = { norm: string; skel: string };
 
@@ -134,8 +135,8 @@ type WordAl = { delL?: string; bad: number; del: number; len: number; heard: str
 /** Semi-global alignment of heard skeleton H to the words near `pointer`.
  *  owner[i] = word index of heard letter i (-1 = before the first word). */
 function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | null {
-  const lo = Math.max(0, pointer - 15);
-  const hi = Math.min(words.length, pointer + 40);
+  const lo = Math.max(0, pointer - ALIGN_BACK_WORDS);
+  const hi = Math.min(words.length, pointer + ALIGN_AHEAD_WORDS);
   if (lo >= hi || !H.length) return null;
   let E = '';
   const colWord: number[] = [];
@@ -150,7 +151,7 @@ function alignHeard(H: string, words: PhonWord[], pointer: number): Aligned | nu
   // may be elided by the reciter, so deleting them is not a lost sound.
   const artAlef = (j: number) => E[j] === 'ا' && E[j + 1] === 'ل' && (isBoundary[j] === 1 || (j > 0 && isBoundary[j - 1] === 1 && 'وبفكل'.includes(E[j - 1])));
   const artLam = (j: number) => E[j] === 'ل' && j > 0 && artAlef(j - 1);
-  const LEAD = 0.6;
+  const LEAD = ALIGN_LEAD_COST;
   const INF = 1e9;
   const d: Float32Array[] = [];
   const bt: Uint8Array[] = [];
@@ -328,7 +329,7 @@ export class PhonemeStream {
     const H = this.buf;
     if (H.length < 2) return '';
     const a = alignHeard(H, this.words, this.pointer);
-    if (!a || a.cost > Math.max(3, 0.45 * H.length)) {
+    if (!a || a.cost > Math.max(ALIGN_REJECT_MIN, ALIGN_REJECT_RATIO * H.length)) {
       // Nothing sensible: keep a short tail only, so noise cannot grow forever.
       if (H.length > 40) { this.buf = H.slice(-12); this.tbuf = this.tbuf.slice(-12); }
       if (final) { this.buf = ''; this.tbuf = []; }

@@ -1,4 +1,5 @@
 import { earMicConstraints } from './earMic.ts';
+import { MIC_CHECK_RMS_THRESHOLD } from './earTuning.ts';
 // micCheck.ts — a small, dependency-free microphone check for the
 // SelfTest lobby. Call it from a tap handler BEFORE a recitation
 // session starts: it opens the mic, measures how loud the room is for
@@ -57,7 +58,7 @@ export interface MicCheckOptions {
 // speech). 0.015 still means "somebody actually spoke", not just "the mic
 // opened". maxLevel is still reported. Estimate from signal reasoning,
 // not measured on a device.
-const DEFAULT_THRESHOLD = 0.015;
+const DEFAULT_THRESHOLD = MIC_CHECK_RMS_THRESHOLD; // earTuning.ts (not yet device-measured)
 
 const DEFAULT_SAMPLE_MS = 2500;
 const DEFAULT_TIMEOUT_MS = 20000;

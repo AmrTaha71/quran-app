@@ -2,6 +2,7 @@
 // (Apache-2.0) as ONNX (iqbalaesthetic/Basira) via transformers.js.
 // Runs in a worker so the page stays smooth. Audio never leaves the device.
 import { pipeline, env } from '@huggingface/transformers';
+import { SLOW_BENCH_MS, whisperMaxTokens } from '../lib/earTuning';
 
 env.allowLocalModels = false;
 // ORT runtime from our own origin (public/ort/), not the jsDelivr CDN, so
@@ -32,7 +33,7 @@ let benchMs = 0;
 // useless. Whisper always works on a padded 30s window, so one short run
 // is a fair measure of the device. The page uses benchMs to decide whether
 // this device can use the on-device ear at all.
-const SLOW_MS = 2500;
+const SLOW_MS = SLOW_BENCH_MS; // see earTuning.ts
 async function bench(p: Asr): Promise<number> {
   const audio = new Float32Array(16000 * 3);
   for (let i = 0; i < audio.length; i++) audio[i] = (Math.random() - 0.5) * 0.002;
@@ -93,7 +94,7 @@ self.onmessage = async (e: MessageEvent) => {
       // to the model's 448-token limit, which is the ~15s stalls in the
       // diagnostics. One pass, no chunking: segments are far below 30s.
       const sec = msg.audio.length / 16000;
-      const maxTok = Math.max(16, Math.min(110, Math.ceil(sec * 12) + 10));
+      const maxTok = whisperMaxTokens(sec); // earTuning.ts
       const out = await asr!(msg.audio, { max_new_tokens: maxTok, no_repeat_ngram_size: 4 });
       const text = Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text;
       self.postMessage({ type: 'result', id: msg.id, text: text.trim(), ms: Math.round(performance.now() - t0), backend });
