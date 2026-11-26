@@ -8,6 +8,7 @@ import EarDownloadCard from '../components/EarDownloadCard';
 import TestHistoryPanel from '../components/TestHistoryPanel';
 import { requestDayRecap } from '../lib/dailyStats';
 import { registerAligner } from '../lib/alignBridge';
+import { applyLisp } from '../lib/lispLetters';
 import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import MicLevelHint from '../components/MicLevelHint';
@@ -646,6 +647,9 @@ function openingSkip(expected: string[], spoken: string[]): number {
 }
 
 function alignWords(expected: string[], spoken: string[]): { matched: boolean[]; allMatched: boolean; positions: number[]; consumed: number[] } {
+  // Item 17.1: a word that differs only at the user's lisp letters is the word
+  // (one place for سمّع لي, continuous mode and both round tests via alignBridge).
+  spoken = applyLisp(expected, spoken);
   const matched = new Array(expected.length).fill(false);
   // E2: spoken index each expected word matched at (-1 if unmatched).
   // Recording only — the match decisions below are untouched.

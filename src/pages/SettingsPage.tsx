@@ -34,6 +34,7 @@ import Collapsible from '../components/Collapsible';
 import PageHeader from '../components/PageHeader';
 import InstallGuide from '../components/InstallGuide';
 import { loadDeviceChoice } from '../lib/deviceModel';
+import LispLettersCard from '../components/LispLettersCard';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
 import SrsReviewSettings from '../components/SrsReviewSettings';
 import DeleteAccountButton from '../components/DeleteAccountButton';
@@ -1204,6 +1205,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             </>)}
             {openDoor === 'reciters' && (<>
               <CorrRecitersPanel />
+              <LispLettersCard />
             </>)}
             {openDoor === 'audio' && (<>
         {/* Audio downloads manager (W3-S3). Top: what is on the device now,
