@@ -2,7 +2,8 @@
 // Runs the Quran-Lab zipformer on the mic or on a recorded file and shows
 // the phonemes it heard, live, with timing. Not linked from the app.
 import { useEffect, useRef, useState } from 'react';
-import { earLabOn, setEarLab } from '../lib/quranLabEar';
+import { earLabOn, setEarLab, borrowEarWorker, getEarLabState, subscribeEarLab } from '../lib/quranLabEar';
+import { speechErrorMessage } from '../lib/speechErrors';
 
 const TARGET = 16000;
 
@@ -21,12 +22,15 @@ function downsample(input: Float32Array, fromRate: number): Float32Array {
 }
 
 export default function EarLabPage() {
-  const worker = useRef<Worker | null>(null);
+  // 3.20: the shared ear worker (quranLabEar), not a second private one.
+  const worker = useRef<{ post: (m: unknown, transfer?: Transferable[]) => void; detach: () => void } | null>(null);
   const [status, setStatus] = useState('لسه ما اتحمّلش');
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
   const [text, setText] = useState('');
+  // 3.21: only the last 200 chunk times are kept; the count is separate.
   const [chunkMs, setChunkMs] = useState<number[]>([]);
+  const [chunkCount, setChunkCount] = useState(0);
   const [recording, setRecording] = useState(false);
   const [clean, setClean] = useState(false);
   const [info, setInfo] = useState('');
@@ -35,31 +39,52 @@ export default function EarLabPage() {
   const mic = useRef<{ ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; t0: number; samples: number } | null>(null);
   const runInfo = useRef({ audioSec: 0, startedAt: 0, firstTokenAt: 0 });
 
+  const onMsg = (m: { type: string; text?: string; chunkMs?: number; message?: string }) => {
+    if (m.type === 'tokens') {
+      if (!runInfo.current.firstTokenAt && m.text) runInfo.current.firstTokenAt = performance.now();
+      setText((t) => t + (m.text ?? ""));
+      setChunkMs((a) => [...a.slice(-199), m.chunkMs ?? 0]);
+      setChunkCount((n) => n + 1);
+    } else if (m.type === 'flushed') setStatus((s) => s.replace(' — بيحلل…', ''));
+    else if (m.type === 'error') setStatus(`خطأ: ${m.message}`);
+  };
+
   useEffect(() => {
-    const w = new Worker(new URL('../workers/quranLab.worker.ts', import.meta.url), { type: 'module' });
-    w.onmessage = (e) => {
-      const m = e.data;
-      if (m.type === 'progress') setProgress(Math.round((m.loaded / m.total) * 100));
-      else if (m.type === 'ready') { setReady(true); setStatus(`جاهز (${m.backend}) — التحميل ${(m.loadMs / 1000).toFixed(1)} ث`); }
-      else if (m.type === 'tokens') {
-        if (!runInfo.current.firstTokenAt && m.text) runInfo.current.firstTokenAt = performance.now();
-        setText((t) => t + m.text);
-        setChunkMs((a) => [...a, m.chunkMs]);
-      } else if (m.type === 'flushed') setStatus((s) => s.replace(' — بيحلل…', ''));
-      else if (m.type === 'error') setStatus(`خطأ: ${m.message}`);
+    const sync = () => {
+      const st = getEarLabState();
+      if (st.status === 'loading' && st.total > 0) setProgress(Math.round((st.loaded / st.total) * 100));
     };
-    worker.current = w;
-    return () => { w.terminate(); stop(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const unsub = subscribeEarLab(sync);
+    // Cleanup order (3.20): stop the mic and flush first, then let go of the
+    // shared worker — it stays alive for the tasmee' test.
+    return () => { unsub(); stop(); worker.current?.detach(); worker.current = null; };
   }, []);
 
-  const load = () => { setStatus('بيحمّل النموذج (حوالي ١٠٠ ميجا أول مرة بس)…'); worker.current?.postMessage({ type: 'load' }); };
-  const clear = () => { setText(''); setChunkMs([]); setInfo(''); runInfo.current = { audioSec: 0, startedAt: 0, firstTokenAt: 0 }; };
+  const load = () => {
+    setStatus('بيحمّل النموذج (حوالي ١٠٠ ميجا أول مرة بس)…');
+    const t0 = performance.now();
+    borrowEarWorker(onMsg).then((w) => {
+      worker.current = w;
+      setReady(true);
+      setStatus(`جاهز — ${((performance.now() - t0) / 1000).toFixed(1)} ث`);
+    }).catch((e) => setStatus(`خطأ: ${e instanceof Error ? e.message : String(e)}`));
+  };
+  const clear = () => { setText(''); setChunkMs([]); setChunkCount(0); setInfo(''); runInfo.current = { audioSec: 0, startedAt: 0, firstTokenAt: 0 }; };
 
   const start = async () => {
     clear();
-    worker.current?.postMessage({ type: 'reset' });
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: clean, noiseSuppression: clean, autoGainControl: true } });
+    worker.current?.post({ type: 'reset' });
+    // 3.12: a refused mic used to be an unhandled rejection with no message.
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: clean, noiseSuppression: clean, autoGainControl: true } });
+    } catch (err) {
+      const name = (err as { name?: string })?.name || '';
+      const m = speechErrorMessage(name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture');
+      setStatus(m?.text ?? `خطأ: ${String((err as Error)?.message || err)}`);
+      setRecording(false);
+      return;
+    }
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new Ctx();
     const src = ctx.createMediaStreamSource(stream);
@@ -69,7 +94,7 @@ export default function EarLabPage() {
     node.onaudioprocess = (ev) => {
       const s = downsample(ev.inputBuffer.getChannelData(0), rate);
       state.samples += s.length;
-      worker.current?.postMessage({ type: 'audio', samples: s }, [s.buffer]);
+      worker.current?.post({ type: 'audio', samples: s }, [s.buffer]);
     };
     src.connect(node);
     node.connect(ctx.destination);
@@ -87,7 +112,7 @@ export default function EarLabPage() {
     mic.current = null;
     setRecording(false);
     setStatus('جاهز — بيحلل…');
-    worker.current?.postMessage({ type: 'flush' });
+    worker.current?.post({ type: 'flush' });
   }
 
   const onFile = async (f: File) => {
@@ -105,9 +130,9 @@ export default function EarLabPage() {
     src.start();
     const pcm = (await off.startRendering()).getChannelData(0);
     runInfo.current = { audioSec: pcm.length / TARGET, startedAt: performance.now(), firstTokenAt: 0 };
-    worker.current?.postMessage({ type: 'reset' });
-    for (let i = 0; i < pcm.length; i += 4096) worker.current?.postMessage({ type: 'audio', samples: pcm.slice(i, i + 4096) });
-    worker.current?.postMessage({ type: 'flush' });
+    worker.current?.post({ type: 'reset' });
+    for (let i = 0; i < pcm.length; i += 4096) worker.current?.post({ type: 'audio', samples: pcm.slice(i, i + 4096) });
+    worker.current?.post({ type: 'flush' });
     setStatus(`جاهز — بيحلل… (${runInfo.current.audioSec.toFixed(1)} ث صوت)`);
   };
 
@@ -116,11 +141,11 @@ export default function EarLabPage() {
 
   useEffect(() => {
     if (!chunkMs.length) return;
-    setInfo(`مقاطع: ${chunkMs.length} · متوسط الوقت لكل نص ثانية صوت: ${avg} مللي · أقصى: ${max} مللي · ${avg < 480 ? 'أسرع من الكلام ✓' : 'أبطأ من الكلام ✗'}`);
-  }, [chunkMs, avg, max]);
+    setInfo(`مقاطع: ${chunkCount} · متوسط الوقت لكل نص ثانية صوت: ${avg} مللي · أقصى: ${max} مللي · ${avg < 480 ? 'أسرع من الكلام ✓' : 'أبطأ من الكلام ✗'}`);
+  }, [chunkMs, chunkCount, avg, max]);
 
   const copy = async () => {
-    const report = JSON.stringify({ format: 'ear-lab/v1', ua: navigator.userAgent, status, chunks: chunkMs.length, avgChunkMs: avg, maxChunkMs: max, audioSec: Number(runInfo.current.audioSec.toFixed(1)), clean, text }, null, 1);
+    const report = JSON.stringify({ format: 'ear-lab/v1', ua: navigator.userAgent, status, chunks: chunkCount, avgChunkMs: avg, maxChunkMs: max, audioSec: Number(runInfo.current.audioSec.toFixed(1)), clean, text }, null, 1);
     try { await navigator.clipboard.writeText(report); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ }
   };
 

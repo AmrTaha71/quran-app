@@ -469,6 +469,18 @@ export class QuranLabPhonemeTap extends QuranLabRecognition {
   constructor() { super([]); }
 }
 
+/** 3.20: the ear-lab page borrows THE shared worker (one model in memory,
+ *  not a second 73 MB copy). Loads it if needed; while borrowed, the
+ *  worker's messages go to `onMessage`. */
+export async function borrowEarWorker<M extends { type: string }>(onMessage: (m: M) => void): Promise<{ post: (m: unknown, transfer?: Transferable[]) => void; detach: () => void }> {
+  const w = await getWorker();
+  listener = onMessage;
+  return {
+    post: (m, transfer) => { if (worker === w) w.postMessage(m, transfer ?? []); },
+    detach: () => { if (listener === onMessage) listener = null; },
+  };
+}
+
 /** W5-N2: drop the parked mic (kept 60 s for the next tasmee' start) so a
  *  stopped follow session does not leave the mic light on. */
 export function releaseEarMic(): void { closeKeep(); }
