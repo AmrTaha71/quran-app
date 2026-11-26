@@ -31,8 +31,38 @@ Deno.serve(async (req: Request) => {
   const uid = data.user.id;
 
   // Admins cannot delete themselves here (protects the admin console).
-  const { data: adminRow } = await admin.from("admin_users").select("user_id").eq("user_id", uid).maybeSingle();
+  // Item 1.11: fail CLOSED — if the admin check itself errors (e.g. the
+  // table is missing on a fresh database) refuse, never skip the guard.
+  const { data: adminRow, error: adminErr } = await admin.from("admin_users").select("user_id").eq("user_id", uid).maybeSingle();
+  if (adminErr) return json({ error: "server not configured" }, 500);
   if (adminRow) return json({ error: "admin accounts are deleted from the dashboard" }, 403);
+
+  // Item 1.11: the user's own audio files in rana-audio (public bucket —
+  // they would stay playable forever) and their still-pending suggestions.
+  // Approved links stay, anonymous (created_by becomes NULL via the FK) —
+  // they are reviewed content the admin accepted. Decision recorded here.
+  try {
+    const { data: links } = await admin
+      .from("ayah_links")
+      .select("audio_url, synthetic_audio_url, synthetic_audio_url_female, synthetic_audio_url_male")
+      .eq("created_by", uid);
+    const marker = "/storage/v1/object/public/rana-audio/";
+    const paths = new Set<string>();
+    for (const l of links ?? []) {
+      for (const u of [l.audio_url, l.synthetic_audio_url, l.synthetic_audio_url_female, l.synthetic_audio_url_male]) {
+        if (typeof u !== "string") continue;
+        const i = u.indexOf(marker);
+        if (i < 0) continue;
+        const p = decodeURIComponent(u.slice(i + marker.length).split("?")[0]);
+        // Never touch the shared generated caches.
+        if (p && !p.startsWith("corr/") && !p.startsWith("tafsir/")) paths.add(p);
+      }
+    }
+    if (paths.size > 0) await admin.storage.from("rana-audio").remove([...paths]);
+  } catch { /* best effort: account deletion must still go through */ }
+  try {
+    await admin.from("ayah_links").delete().eq("created_by", uid).eq("status", "pending");
+  } catch { /* best effort */ }
 
   for (const t of USER_TABLES) {
     try { await admin.from(t).delete().eq("user_id", uid); } catch { /* table may not exist */ }
