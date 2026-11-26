@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Cron-Secret",
 };
 
 const surahNames: Record<number, string> = {
@@ -41,6 +41,30 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // Item 1.6 (2026-11-26): no caller in the app; manual runs only.
+    // Accept either the cron/ops secret header or an ADMIN user JWT.
+    // Fail closed: no secret configured and no admin JWT = 401.
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    const headerSecret = req.headers.get("x-cron-secret") ?? "";
+    let authorized = cronSecret !== "" && headerSecret === cronSecret;
+    if (!authorized) {
+      const jwt = (req.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "");
+      if (jwt) {
+        const { data: u } = await supabase.auth.getUser(jwt);
+        if (u?.user) {
+          const { data: adminRow, error: adminErr } = await supabase
+            .from("admin_users").select("user_id").eq("user_id", u.user.id).maybeSingle();
+          authorized = !adminErr && !!adminRow;
+        }
+      }
+    }
+    if (!authorized) {
+      return new Response(
+        JSON.stringify({ error: "unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Check if already seeded
     const { count } = await supabase
