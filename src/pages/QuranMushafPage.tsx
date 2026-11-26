@@ -4864,7 +4864,7 @@ export default function QuranMushafPage({
 
           {/* W5-N3: tiny follow status while the chrome is faded (the
               follow bar with its stop button fades with the rest after
-              5 s; any tap brings it back). Corner pill, no touch, off the
+              1.5 s idle; any tap brings it back). Corner pill, no touch, off the
               page text. */}
           {followOn && followTracking && followPos && !fsOverlaysVisible && (
             <div className="absolute z-30 pointer-events-none text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/35 text-white/90 ring-1 ring-white/20"
@@ -5443,7 +5443,7 @@ export default function QuranMushafPage({
               </div>
               </>)}
 
-              {/* Ayah popup: links, then irab, then tafsir — in that order */}
+              {/* Ayah popup (6.20): الروابط first, then the tab row: المتشابهات، الإعراب، أسباب النزول، معاني الكلمات، التفسير */}
               {/* Rendered through a portal on document.body (2026-11-21): the popup used to live inside the
                   fullscreen container (select-none, overflow-hidden, pointer capture, tap handlers), and its buttons
                   were dead on iPhone Safari. Outside that container it is a plain top-level dialog. */}
