@@ -2618,8 +2618,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         .filter((x): x is { ayah: string; words: string[] } => !!x),
     }));
     // 17.3: the page review queue learns which Madinah pages were recited
-    // (whole page, clean) and which have open mistakes.
-    try {
+    // (whole page, clean) and which have open mistakes. 2.14 (owner via
+    // coordinator 2026-11-26): self-assessed (manual) tests never feed review.
+    if (!(manualMode || manualUsedRef.current)) try {
       recordTestPages(ayahs.map((a, i) => ({ g: getGlobalAyahNumber(a.surah_no, a.ayah_no), ok: !!finalGrades[i], skip: !!liveRef.current.skipped[i] }))
         .filter((x) => !x.skip));
     } catch { /* never break the done screen */ }
