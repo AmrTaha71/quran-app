@@ -1,0 +1,23 @@
+# Items 10.1 + 10.9 (phase 1, 2026-11-26): run the gates on every push/PR.
+# Lint is reported but does not fail the job yet: the branch carries a known
+# baseline of eslint errors (see the phase reports). Make it blocking once
+# that baseline is zero.
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
+        continue-on-error: true
