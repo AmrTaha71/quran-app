@@ -60,6 +60,25 @@ export function juzStatuses(run: number): JuzMapEntry[] {
   });
 }
 
+/** Item 5.2: per-Juz status from the ayat really memorized, wherever
+ *  they are — someone who memorized Juz 30 alone sees Juz 30 gold, not
+ *  thirty «لم يبدأ». All of a Juz's ayat → memorized; some → in progress. */
+export function juzStatusesFromSet(memorized: Set<number>): JuzMapEntry[] {
+  return JUZ_STARTS.map((j) => {
+    const end = unitEndGlobal('juz', j.juz);
+    let have = 0;
+    for (let g = j.global; g <= end; g++) if (memorized.has(g)) have++;
+    const status: JuzStatus = have === end - j.global + 1 ? 'memorized' : have > 0 ? 'in-progress' : 'not-yet';
+    return {
+      juz: j.juz,
+      status,
+      startSurah: j.surah,
+      startAyah: j.ayah,
+      startSurahName: SURAHS.find((s) => s.no === j.surah)?.name ?? '',
+    };
+  });
+}
+
 export function countJuzByStatus(
   entries: JuzMapEntry[],
 ): Record<JuzStatus, number> {

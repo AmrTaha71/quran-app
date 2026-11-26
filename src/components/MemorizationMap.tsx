@@ -11,7 +11,7 @@ import { pressFeedback } from '../lib/pressFeedback';
 import { toArabicIndic } from '../lib/numerals';
 import {
   countJuzByStatus,
-  juzStatuses,
+  juzStatusesFromSet,
   type JuzStatus,
 } from '../lib/homeFeatures';
 
@@ -31,12 +31,16 @@ const STATUS_WORD: Record<JuzStatus, string> = {
 
 export default function MemorizationMap({
   run,
+  memorized,
   onJumpToAyah,
 }: {
   run: number;
+  /** Item 5.2: every memorized ayah id — the map's source of truth. */
+  memorized: Set<number>;
   onJumpToAyah: (surah: number, ayah: number) => void;
 }) {
-  const entries = juzStatuses(run);
+  const entries = juzStatusesFromSet(memorized);
+  const total = memorized.size;
   const counts = countJuzByStatus(entries);
   return (
     <div className="rounded-2xl glass-card polish-card p-4">
@@ -45,9 +49,9 @@ export default function MemorizationMap({
         خريطة حفظي
       </p>
       <p className="text-sm text-ink-2 mb-3">
-        {run > 0
-          ? `حفظت ${toArabicIndic(run)} آية من أول المصحف — ${toArabicIndic(counts.memorized)} ${counts.memorized === 1 ? 'جزء كامل' : 'أجزاء كاملة'}`
-          : 'لسه مفيش محفوظ مسجّل من أول المصحف — اضغط أي جزء تبدأ منه'}
+        {total > 0
+          ? `حفظت ${toArabicIndic(total)} آية — ${toArabicIndic(counts.memorized)} ${counts.memorized === 1 ? 'جزء كامل' : 'أجزاء كاملة'}${run > 0 ? ` (منها ${toArabicIndic(run)} متصلة من أول المصحف)` : ''}`
+          : 'لسه مفيش آيات متسجّلة محفوظة — اضغط أي جزء تبدأ منه'}
       </p>
       <div className="grid grid-cols-6 sm:grid-cols-10 gap-2">
         {entries.map((e) => (

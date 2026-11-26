@@ -586,22 +586,34 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             is 0. The full memorized list stays reachable via the
             "عرض الآيات المحفوظة" button below (the "تم الحفظ" tab was
             removed 2026-11-04; the filter is set programmatically). */}
-        {session && memorizedFromStart > 0 && (
+        {/* Item 5.2 (plan v3): the card shows EVERY memorized ayah as the
+            main number (people start from Juz 30 too), the from-start run
+            as a second line, and stays visible at 0 with a first step. */}
+        {session && (
           <div className="mb-5 glass-card rounded-2xl shadow-sm p-5">
             <div className="flex items-center gap-2 mb-1">
               <BadgeCheck className="w-5 h-5 text-emerald-700" />
               <h2 className="font-semibold text-ink">مركز الحفظ</h2>
             </div>
-            <p className="text-2xl font-bold text-ink">
-              حفظت {formatAr(memorizedFromStart)} آية من أول المصحف من {formatAr(TOTAL_VERSES)} — {formatAr(Math.round((memorizedFromStart / TOTAL_VERSES) * 100))}٪
-            </p>
-            <p className="text-sm text-ink-2 leading-relaxed mt-1">
-              تقدّمك من أول المصحف — وآياتك المحفوظة كلها تحت، ومع كل آية تربيطاتها.
-            </p>
-            <button onClick={() => { setListFilter('memorized'); setPage(0); }}
-              className="mt-3 text-sm font-semibold text-emerald-700 hover:text-emerald-800">
-              عرض الآيات المحفوظة
-            </button>
+            {lists.memorized.size > 0 ? (<>
+              <p className="text-2xl font-bold text-ink">
+                حفظت {formatAr(lists.memorized.size)} آية من {formatAr(TOTAL_VERSES)}
+              </p>
+              {memorizedFromStart > 0 && (
+                <p className="text-sm text-ink-2 mt-1">منها {formatAr(memorizedFromStart)} آية متصلة من أول المصحف — {formatAr(Math.round((memorizedFromStart / TOTAL_VERSES) * 100))}٪</p>
+              )}
+              <p className="text-sm text-ink-2 leading-relaxed mt-1">
+                آياتك المحفوظة كلها تحت، ومع كل آية تربيطاتها.
+              </p>
+              <button onClick={() => { setListFilter('memorized'); setPage(0); }}
+                className="mt-3 text-sm font-semibold text-emerald-700 hover:text-emerald-800">
+                عرض الآيات المحفوظة
+              </button>
+            </>) : (
+              <p className="text-sm text-ink-2 leading-relaxed">
+                ابدأ أول آية: افتح المصحف، دوس على الآية اللي حفظتها، واختار «حفظتها».
+              </p>
+            )}
           </div>
         )}
 

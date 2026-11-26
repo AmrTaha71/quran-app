@@ -162,7 +162,7 @@ export default function HomeHifzView({ onNavigate, onClose }: { onNavigate: (r: 
           خريطة حفظي
           <ChevronDown className={`w-4 h-4 text-white alive-chevron ${mapOpen ? 'rotate-180' : ''}`} />
         </button>
-        {mapOpen && <MemorizationMap run={memorizedRun} onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)} />}
+        {mapOpen && <MemorizationMap run={memorizedRun} memorized={lists.memorized} onJumpToAyah={(s, a) => jumpToAyah(s, a, onNavigate)} />}
       </main>
       <BottomBackBar hasBottomNav onHome={onClose} />
       <BottomNav current="home" onNavigate={onNavigate} />
