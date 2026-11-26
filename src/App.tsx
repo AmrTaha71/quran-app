@@ -19,7 +19,9 @@ import {
 import { LanguageProvider, useLang } from './lib/LanguageContext';
 import type { Session } from '@supabase/supabase-js';
 import UserAppPage from './pages/UserAppPage';
-import HomeStartPage from './pages/HomeStartPage';
+// 6.1/6.2 (owner decision §11.1–2, 2026-11-26): «الرئيسية 2» is THE home.
+// HomeStartPage (الرئيسية 1) is hidden, not deleted — no route renders it.
+import Home2Page from './pages/Home2Page';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import ListenPage from './pages/ListenPage';
@@ -65,7 +67,6 @@ const HifzPage = lazyPage(() => import('./pages/HifzPage'));
 const QuizPage = lazyPage(() => import('./pages/QuizPage'));
 const RadioPage = lazyPage(() => import('./pages/RadioPage'));
 const SharedRoomPage = lazyPage(() => import('./pages/SharedRoomPage'));
-const Home2Page = lazyPage(() => import('./pages/Home2Page'));
 import BlackScreenOverlay from './components/BlackScreenOverlay';
 import AdhkarPage from './pages/AdhkarPage';
 import AdhanScheduler from './components/AdhanScheduler';
@@ -619,6 +620,7 @@ function AppContent() {
     // renders beside it.
     page = null;
   } else if (route === 'home2') {
+    // Old #/home2 links: the same home.
     page = <Home2Page onNavigate={navigate} />;
   } else if (route === 'hifz') {
     page = <HifzPage onNavigate={navigate} />;
@@ -633,7 +635,7 @@ function AppContent() {
     // (2026-10-27: admins are users too, same account, same start
     // page; الإدارة is reached from Settings, not from the landing).
     // The landing stays only as the logged-out entry point.
-    page = <HomeStartPage session={session} onNavigate={navigate} />;
+    page = <Home2Page onNavigate={navigate} />;
   } else {
     page = <LandingPage session={session} onNavigate={navigate} />;
   }

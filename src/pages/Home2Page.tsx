@@ -1,10 +1,13 @@
-// «الرئيسية 2» (#/home2): an additional start page with three big entries
-// (حفظ / استماع / قراءة), each opening its sub-tabs. Self-contained on purpose:
-// delete this file + the 'home2' entries in routes.ts and App.tsx to remove it.
-// The current home (HomeStartPage) is untouched.
+// The home page (#/home; #/home2 kept for old links): three big entries
+// (حفظ / استماع / قراءة), each opening its sub-tabs. Owner decision
+// 2026-11-26 (§11.1–2): this is THE home; the old HomeStartPage is hidden.
+// Its extra tiles (radio, nearest mosque, qibla, big screen, grandpa page,
+// link of the day, QR) are not on the home any more: grandpa mode stays in
+// Settings, radio under استماع, the shared room joins استماع (6.2).
 import { useState } from 'react';
 import { BookOpen, Headphones, Brain } from 'lucide-react';
 import type { Route } from '../lib/routes';
+import BottomNav from '../components/BottomNav';
 
 type SectionId = 'hifz' | 'listen' | 'read';
 
@@ -32,6 +35,7 @@ const SECTIONS: {
       { label: 'استمع للقرآن', route: 'listen' },
       { label: 'الأذكار', route: 'adhkar' },
       { label: 'الراديو', route: 'radio' },
+      { label: 'الغرفة المشتركة', route: 'room' },
     ],
   },
   {
@@ -83,6 +87,7 @@ export default function Home2Page({ onNavigate }: { onNavigate: (r: Route) => vo
           );
         })}
       </div>
+      <BottomNav current="home" onNavigate={onNavigate} />
     </main>
   );
 }

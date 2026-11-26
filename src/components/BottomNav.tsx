@@ -67,9 +67,9 @@ export default function BottomNav({
   }, []);
   const chromeRef = useBottomChromeRef();
   const items = [
-    // TEMPORARY (Dr. Amr 2026-11-21): both home pages are in the bar so they can be compared; nothing removed yet.
-    { id: 'home' as const, label: 'الرئيسية 1', icon: <Home className="w-7 h-7" /> },
-    { id: 'home2' as const, label: 'الرئيسية 2', icon: <Home className="w-7 h-7" /> },
+    // 6.1 (owner decision 2026-11-26): one «الرئيسية» tab; the home route
+    // now renders Home2Page (الرئيسية 1 is hidden).
+    { id: 'home' as const, label: 'الرئيسية', icon: <Home className="w-7 h-7" /> },
     // لوحتي is a board (wird, self-test, lists, greeting), not just
     // saved items — a dashboard grid reads instantly, a bookmark does not.
     { id: 'app' as const, label: appLabel, icon: <LayoutDashboard className="w-7 h-7" /> },
@@ -77,11 +77,11 @@ export default function BottomNav({
     { id: 'follow' as const, label: 'تتبع قراءة الإمام', icon: <AudioLines className="w-7 h-7" /> },
     { id: 'settings' as const, label: 'الإعدادات', icon: <Settings className="w-7 h-7" /> },
   ];
-  // Sliding pill: one tab wide (5 equal tabs). In RTL the first tab
+  // Sliding pill: one tab wide (5 equal tabs, matches .nav-tab-pill 20%). In RTL the first tab
   // is rightmost, so the pill starts at `right: 0` and slides LEFT
   // with a negative translate; in LTR it mirrors. No tab matches
   // (e.g. SelfTest) → no pill, no active tab.
-  const activeIndex = items.findIndex((item) => item.id === current);
+  const activeIndex = items.findIndex((item) => item.id === (current === 'home2' ? 'home' : current));
   const isRtl = typeof document !== 'undefined' && document.documentElement.dir !== 'ltr';
   return (
     <nav
@@ -102,7 +102,7 @@ export default function BottomNav({
           />
         )}
         {items.map((item) => {
-          const active = item.id === current;
+          const active = item.id === (current === 'home2' ? 'home' : current);
           // Icons: one size (w-7) everywhere; inactive icons get a
           // bolder stroke (2.5) so they read solid, not faint outlines
           // next to the filled active icon.
