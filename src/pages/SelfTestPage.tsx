@@ -135,6 +135,10 @@ const normSurahSearch = (s: string) =>
 // Quiet gap after the last heard word before the reading is judged:
 // the user has paused, so the utterance is (probably) complete.
 const QUIET_GAP_MS = 1500;
+// Item 4.8: in 'ayah-end' timing a pause mid-ayah is not the end of the
+// ayah. Only this much silence (after the quiet gap) counts as "he
+// stopped" and opens the correction window for an unfinished ayah.
+const AYAH_END_SILENCE_MS = 4000;
 // Correction timing (2026-10-28, the user's words): the user picks
 // both the wait before the correction is spoken (2-10s, default 3)
 // and how fast the correct word is pronounced — according to his
@@ -2344,6 +2348,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // recites continuously. The provisional false grade is replaced
   // by a pass only if he then says every remaining word correctly.
   const postCorrRef = useRef<{ ayahId: number; index: number; resumeStartLen: number; remaining: string[]; remainingIdx: number[] } | null>(null);
+  // Item 4.8: 'ayah-end' timing defers a mid-ayah mismatch. Holds the
+  // ayah id + spoken length at the moment it was deferred; the window
+  // opens only when the ayah's last word is heard, on the explicit
+  // «خلصت، قيّمها» tap, or after AYAH_END_SILENCE_MS with no new words.
+  const ayahEndDeferRef = useRef<{ ayahId: number; len: number } | null>(null);
   // SRS step 5 (2026-11-20): the last verdict of the ayah being tested. A later
   // grade of the same ayah REPLACES it, so a word fixed before the verdict is
   // final never reaches the review table; flushSrs() records it once.
@@ -3061,7 +3070,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     }
   };
 
-  const evaluateNow = () => {
+  const evaluateNow = (force = false) => {
     const ayah = liveRef.current.ayah;
     if (!ayah) return;
     if (liveRef.current.micState !== 'listening' && liveRef.current.micState !== 'correcting') return;
@@ -3132,6 +3141,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       }
       remMissIdx = armedResume.remainingIdx.filter((_, j) => !remResult.matched[j]);
     }
+    // Item 4.8: 'ayah-end' means the correction waits for the END of
+    // the ayah. A mismatch on an unfinished ayah (its last word not
+    // heard yet) is held: keep listening, and look again after a long
+    // silence. New words reset the wait (each final reschedules the
+    // quiet timer). The explicit tap (force) always judges now.
+    if (liveRef.current.micState === 'listening' && !force && liveRef.current.corrDelayMode === 'ayah-end'
+        && !result.matched[expected.length - 1]) {
+      const prev = ayahEndDeferRef.current;
+      if (!prev || prev.ayahId !== ayah.id || prev.len !== spoken.length) {
+        ayahEndDeferRef.current = { ayahId: ayah.id, len: spoken.length };
+        diagPush('ayah-end-defer', { label: String(spoken.length) });
+        if (quietTimerRef.current) clearTimeout(quietTimerRef.current);
+        quietTimerRef.current = setTimeout(() => { evaluateNow(); }, AYAH_END_SILENCE_MS);
+        return;
+      }
+    }
+    ayahEndDeferRef.current = null;
     // Mismatch: open the correction window (still listening).
     // Record what was wrong and where the transcript stood, so the
     // window judges only the correction, not the old speech.
@@ -3278,7 +3304,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       setMicError('لسه ما سمعت حاجة — اقرأ الآية الأول وبعدين اضغط "خلصت، قيّمها"');
       return;
     }
-    evaluateNow();
+    evaluateNow(true);
   };
 
   const scheduleQuietEvaluate = () => {
@@ -3447,7 +3473,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       liveRef.current.finals = `${liveRef.current.finals} ${pendingInterim}`.trim();
       setTranscript(liveRef.current.finals);
     }
-    evaluateNow();
+    evaluateNow(true);
     if (liveRef.current.micState !== 'correcting') return;
     // FALSE-ALARM HEAL (batch 1, TIGHTENED batch 3 on reviewer
     // verdicts — ChatGPT found the hole, Claude concurred): the
@@ -3573,8 +3599,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     try {
       const ayah = liveRef.current.ayah;
       if (!ayah || liveRef.current.micState !== 'listening' || liveRef.current.mode !== 'ayah') return;
-      // 'ayah-end': corrections wait for the ayah to complete (Juhani-enabled ayahs only).
-      if (liveRef.current.corrDelayMode === 'ayah-end' && juhaniEnabledForCurrent()) return;
+      // 'ayah-end': corrections wait for the ayah to complete (item 4.8:
+      // every ayah, not only Juhani-enabled ones — the setting says so).
+      if (liveRef.current.corrDelayMode === 'ayah-end') return;
       if (corrStyleRef.current.mistake !== 'instant') return;
       const expected = expectedWordList(ayah.ayah_text);
       const spokenAll = spokenTokens(`${liveRef.current.finals} ${interimText}`.trim());
