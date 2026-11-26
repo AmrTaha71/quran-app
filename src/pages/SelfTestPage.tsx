@@ -1083,6 +1083,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [scoreLog, setScoreLog] = useState<TestHistoryEntry[]>(loadTestHistoryV1);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
+  // Item 2.10: when the page is hidden mid-test (adhan, a call, the app
+  // switcher) pause the mic and keep what was heard, instead of leaving
+  // it to the 18s watchdog. The handler is set later in the render
+  // (it needs functions declared below); the listener only calls it.
+  const onPageHiddenRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'hidden') onPageHiddenRef.current?.(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onVis);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', onVis); };
+  }, []);
   // Lobby hub (2026-11-06): null = hub of doors; otherwise the id of
   // the open door. All setup state lives here; doors only hide/show
   // the existing cards, they never change a setting.
@@ -4073,6 +4084,23 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Item 2.2: «قف» pauses instead of wiping. The mic stops, what was
   // heard stays, and the stalled panel offers كمّل / قيّم اللي اتسمع /
   // ابدأ من جديد (the explicit wipe).
+  onPageHiddenRef.current = () => {
+    if (phase !== 'testing') return;
+    if (liveRef.current.contListening) {
+      diagPush('page-hidden', { label: 'cont' });
+      stopContinuousMic();
+      setContStalled(true);
+      setMicError('اتوقفنا لما سبت الصفحة — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل');
+      return;
+    }
+    const ms = liveRef.current.micState;
+    if (ms === 'listening' || ms === 'correcting') {
+      diagPush('page-hidden', { label: 'ayah' });
+      pauseMic();
+      setMicStalled(true);
+      setMicError('اتوقفنا لما سبت الصفحة — اللي سمعته محفوظ، اضغط «كمّل»');
+    }
+  };
   const pauseMic = () => {
     diagPush('tap', { label: 'pause-mic' });
     stopRec();

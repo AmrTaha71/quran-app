@@ -118,10 +118,12 @@ export default function AdhanScheduler() {
     return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
   }, []);
 
-  if (alarm) return <FajrAlarmOverlay mode={loadFajrAlarm() === 'smart' ? 'smart' : 'simple'} onDone={() => { setAlarm(false); stopNightMode(); void cancelTodayAlarmChain(); }} />;
+  if (alarm) return <FajrAlarmOverlay mode={loadFajrAlarm() === 'smart' ? 'smart' : 'simple'} onDone={() => { setAlarm(false); stopNightMode(); void cancelTodayAlarmChain(); }} onSnooze={() => { setAlarm(false); window.setTimeout(() => setAlarm(true), 5 * 60 * 1000); }} />;
   if (!banner) return null;
   return (
-    <div className="fixed bottom-20 left-4 right-4 z-50 mx-auto max-w-md" dir="rtl">
+    // Item 2.10: sit above whatever bottom chrome is showing (nav, back bar,
+    // the listen controls) instead of a fixed bottom-20 that covered them.
+    <div className="fixed left-4 right-4 z-50 mx-auto max-w-md" style={{ bottom: 'calc(var(--bottom-chrome-h, env(safe-area-inset-bottom, 0px)) + 4rem)' }} dir="rtl">
       <div className="bg-emerald-700 text-white rounded-2xl shadow-2xl p-4">
         <p className="font-bold text-lg">🕌 حان الآن وقت صلاة {banner.label}</p>
         <p className="text-sm text-emerald-100 mt-1">تقبّل الله منا ومنكم</p>

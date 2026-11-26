@@ -6,7 +6,7 @@ import { makeChallenges, startAlarmTone, type FajrAlarmMode } from '../lib/fajrA
 // Accept Arabic-Indic (٠-٩), Persian (۰-۹) and Latin digits.
 const normDigits = (v: string) => v.replace(/[\u0660-\u0669]/g, (c) => String(c.charCodeAt(0) - 0x0660)).replace(/[\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) - 0x06F0)).replace(/\s+/g, '');
 
-export default function FajrAlarmOverlay({ mode, onDone }: { mode: FajrAlarmMode; onDone: () => void }) {
+export default function FajrAlarmOverlay({ mode, onDone, onSnooze }: { mode: FajrAlarmMode; onDone: () => void; onSnooze?: () => void }) {
   const [chs, setChs] = useState(() => makeChallenges());
   const [step, setStep] = useState(0);
   const [val, setVal] = useState('');
@@ -40,6 +40,13 @@ export default function FajrAlarmOverlay({ mode, onDone }: { mode: FajrAlarmMode
   return (
     <div className="fixed inset-0 z-[100] bg-emerald-900 text-white flex flex-col items-center justify-center p-6" dir="rtl">
       <p className="text-3xl font-bold mb-1">⏰ حان وقت الفجر</p>
+      {/* Item 2.10: a clear snooze. The alarm comes back in 5 minutes and
+          still ends only the usual way (stop / the three challenges). */}
+      {onSnooze && (
+        <button onClick={() => { stopRef.current?.(); onSnooze(); }} className="mt-3 px-6 py-2.5 bg-emerald-700 border border-emerald-400 rounded-xl text-base font-bold">
+          أجّل ٥ دقايق
+        </button>
+      )}
       {mode === 'simple' ? (
         <button onClick={() => { stopRef.current?.(); onDone(); }} className="mt-8 px-10 py-4 bg-white text-emerald-800 text-xl font-bold rounded-2xl">إيقاف المنبه</button>
       ) : (
