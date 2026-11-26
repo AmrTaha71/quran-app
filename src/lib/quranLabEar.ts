@@ -12,6 +12,7 @@ import { QURANLAB_MODEL_CACHE, QURANLAB_MODEL_URL } from './earModelCache';
 import { publishMicLevel } from './micLevel';
 import { Downsampler } from './resample16k';
 import { earMicConstraints } from './earMic';
+import { watchMic } from './micWatch';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
 // W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
@@ -348,29 +349,18 @@ export class QuranLabRecognition {
     this.node.connect(ctx.destination);
   }
 
-  /** The mic light can be on while no sound arrives (iOS audio-session
-   *  glitch, ~half of the starts; also right after a spoken correction).
-   *  2026-11-14 (b): checked fast. At 0.7 s: no audio callbacks at all, or a
-   *  dead track -> rebuild at once. At 1.8 s: still pure digital silence or a
-   *  muted track -> rebuild. Up to 2 rebuilds, then report. (Was one check at
-   *  2.2 s per round: a dead mic could cost ~6 s.) */
+  /** Dead-mic check (shared with the Whisper ear, see micWatch.ts). */
   private watch(w: Worker) {
-    const check = (final: boolean) => {
-      if (this.stopped) return;
-      const track = this.stream?.getAudioTracks()[0];
-      const noFrames = this.frames === 0;
-      const trackDead = !track || track.readyState !== 'live';
-      const dead = noFrames || trackDead || (final && (this.maxRms < 1e-6 || !!track?.muted));
-      if (!dead) { if (!final) setTimeout(() => check(true), 1100); return; }
-      this.mark(`dead-${final ? 'late' : 'early'}${noFrames ? '-noframes' : trackDead ? '-track' : '-silent'}`);
-      if (this.retries >= 2) {
-        this.onerror?.({ error: 'audio-capture', message: 'no-audio-signal' });
-        return;
-      }
-      this.retries++;
-      void this.rebuild(w);
-    };
-    setTimeout(() => check(false), 700);
+    watchMic({
+      stopped: () => this.stopped,
+      frames: () => this.frames,
+      maxRms: () => this.maxRms,
+      track: () => this.stream?.getAudioTracks()[0],
+      retries: () => this.retries,
+      mark: (l) => this.mark(l),
+      rebuild: () => { this.retries++; void this.rebuild(w); },
+      giveUp: () => this.onerror?.({ error: 'audio-capture', message: 'no-audio-signal' }),
+    });
   }
 
   private async rebuild(w: Worker) {

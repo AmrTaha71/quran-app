@@ -12,6 +12,7 @@ import { publishMicLevel } from './micLevel';
 import { unloadEarLab } from './quranLabEar';
 import { Downsampler, downsampleTo16k } from './resample16k';
 import { earMicConstraints } from './earMic';
+import { watchMic } from './micWatch';
 
 export const EAR_KEY = 'quran-ear';
 export type EarKind = 'model' | 'browser';
@@ -195,6 +196,12 @@ async function getMicStream(): Promise<MediaStream> {
   micStream = await navigator.mediaDevices.getUserMedia(earMicConstraints());
   return micStream;
 }
+/** Stop the shared stream now (a dead track must not be handed out again). */
+function dropMicStream() {
+  if (micTimer) { clearTimeout(micTimer); micTimer = null; }
+  try { micStream?.getTracks().forEach((t) => t.stop()); } catch { /* ignore */ }
+  micStream = null;
+}
 function releaseMicStreamLater() {
   if (micTimer) clearTimeout(micTimer);
   micTimer = setTimeout(() => {
@@ -241,7 +248,24 @@ export class QuranModelRecognition {
   private inflight = 0;
   private queue: Promise<void> = Promise.resolve();
 
+  private streamP: Promise<MediaStream> | null = null;
+  private frames = 0;
+  private maxRms = 0;
+  private retries = 0;
+
   start(): void {
+    // 3.15: iPad Safari only lets an AudioContext run, and shows the mic
+    // prompt, inside the tap. The model load comes after, so both are
+    // created HERE (as the Lab ear does), before any await.
+    try {
+      const AC = window.AudioContext || (window as any).webkitAudioContext;
+      this.ctx = new AC();
+      void this.ctx.resume().catch(() => {});
+    } catch { this.ctx = null; }
+    try {
+      this.streamP = getMicStream();
+      this.streamP.catch(() => {});
+    } catch { this.streamP = null; }
     void this.begin();
   }
 
@@ -252,24 +276,18 @@ export class QuranModelRecognition {
       // 3.2: a failed or timed-out model load is a network-class error
       // (as in the Lab ear), so callers take their fallback path.
       this.onerror?.({ error: 'network', message: String((err as Error)?.message || err) });
+      this.release();
       this.finishEnd();
       return;
     }
     try {
-      if (this.stopped) { this.finishEnd(); return; }
-      this.stream = await getMicStream();
       if (this.stopped) { this.release(); this.finishEnd(); return; }
-      const AC = window.AudioContext || (window as any).webkitAudioContext;
-      this.ctx = new AC();
-      if (this.ctx.state !== 'running') await this.ctx.resume().catch(() => {});
-      this.src = this.ctx.createMediaStreamSource(this.stream);
-      this.node = this.ctx.createScriptProcessor(4096, 1, 1);
-      const rate = this.ctx.sampleRate;
-      this.node.onaudioprocess = (ev) => this.onAudio(ev.inputBuffer.getChannelData(0), rate);
-      this.src.connect(this.node);
-      this.node.connect(this.ctx.destination);
+      this.stream = await (this.streamP ?? getMicStream());
+      if (this.stopped) { this.release(); this.finishEnd(); return; }
+      this.attach();
       this.onstart?.();
       this.onaudiostart?.();
+      this.watch();
     } catch (err) {
       const name = (err as { name?: string })?.name || '';
       this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture', message: String((err as Error)?.message || err) });
@@ -280,11 +298,61 @@ export class QuranModelRecognition {
 
   private dsr: Downsampler | null = null;
   private ds(rate: number): Downsampler { if (!this.dsr || this.dsr.fromRate !== rate) this.dsr = new Downsampler(rate); return this.dsr; }
+  private attach() {
+    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!this.ctx || this.ctx.state === 'closed') this.ctx = new AC();
+    const ctx = this.ctx!;
+    if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+    this.src = ctx.createMediaStreamSource(this.stream!);
+    this.node = ctx.createScriptProcessor(4096, 1, 1);
+    const rate = ctx.sampleRate;
+    this.node.onaudioprocess = (ev) => this.onAudio(ev.inputBuffer.getChannelData(0), rate);
+    this.frames = 0;
+    this.maxRms = 0;
+    this.src.connect(this.node);
+    this.node.connect(ctx.destination);
+  }
+
+  /** 3.14: the same dead-mic check as the Lab ear (micWatch.ts). The shared
+   *  mic stream was reused for 20 s even with a dead track. */
+  private watch() {
+    watchMic({
+      stopped: () => this.stopped,
+      frames: () => this.frames,
+      maxRms: () => this.maxRms,
+      track: () => this.stream?.getAudioTracks()[0],
+      retries: () => this.retries,
+      rebuild: () => { this.retries++; void this.rebuild(); },
+      giveUp: () => this.onerror?.({ error: 'audio-capture', message: 'no-audio-signal' }),
+    });
+  }
+
+  private async rebuild() {
+    try {
+      try { this.node?.disconnect(); } catch { /* ignore */ }
+      try { this.src?.disconnect(); } catch { /* ignore */ }
+      dropMicStream();
+      try { await this.ctx?.close(); } catch { /* ignore */ }
+      this.ctx = null; this.node = null; this.src = null;
+      await new Promise((r) => setTimeout(r, 120));
+      if (this.stopped) return;
+      this.stream = await getMicStream();
+      if (this.stopped) { this.release(); return; }
+      this.attach();
+      this.watch();
+    } catch (err) {
+      const name = (err as { name?: string })?.name || '';
+      this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : 'audio-capture', message: String((err as Error)?.message || err) });
+    }
+  }
+
   private onAudio(buf: Float32Array, rate: number) {
     if (this.stopped) return;
     let sum = 0;
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
     const rms = Math.sqrt(sum / buf.length);
+    this.frames++;
+    if (rms > this.maxRms) this.maxRms = rms;
     publishMicLevel(rms);
     const chunkMs = (buf.length / rate) * 1000;
     // Start threshold from the room noise; once speaking, a pause is a drop
