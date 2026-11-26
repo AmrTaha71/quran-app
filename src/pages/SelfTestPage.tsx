@@ -88,6 +88,8 @@ interface TestRecord {
 }
 
 const HISTORY_KEY = 'quran-test-history';
+// 2.12: the old «نتائجك السابقة» door is hidden (one log); flip only to bring it back.
+const SHOW_OLD_RESULTS_DOOR: boolean = false;
 const TARGET_KEY = 'quran-mushaf-target';
 
 // Feature #9 recents (2026-11-06): every SelfTest start writes one
@@ -6470,7 +6472,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="block text-base font-semibold text-ink">اختبار شامل</span>
                     <span className="block text-xs text-ink-2 mt-1">اختبار أعمق من ١٠٠ درجة على جزء أو حزب أو ربع</span>
                   </button>
-                  {history.length > 0 && (
+                  {/* 2.12: one log. The old «نتائجك السابقة» door is hidden;
+                      its older records show inside «سجل الدرجات». */}
+                  {SHOW_OLD_RESULTS_DOOR && history.length > 0 && (
                     <button onClick={() => setLobbyDoor('results')}
                       className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
                       <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
@@ -6861,7 +6865,30 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
 
             {lobbyDoor === 'scores' && (
+              <>
               <TestHistoryPanel entries={scoreLog} initialLevel={runLevel} onChange={setScoreLog} />
+              {/* 2.12: records from before the new log (old key, kept for
+                  the daily report) are listed here, not behind a second door. */}
+              {(() => {
+                const oldest = scoreLog.length ? scoreLog[scoreLog.length - 1].ts.slice(0, 10) : '9999-12-31';
+                const older = history.filter((h) => h.date < oldest);
+                if (!older.length) return null;
+                return (
+                  <details className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-4">
+                    <summary className="font-semibold text-accent-800 cursor-pointer min-h-[44px] flex items-center">نتائج أقدم ({formatAr(older.length)})</summary>
+                    <ul className="space-y-2 mt-2">
+                      {older.map((h, i) => (
+                        <li key={i} className="flex items-center justify-between text-sm gap-2">
+                          <span className="text-accent-700">{h.endSurahName && h.endSurah !== h.surah ? <>من سورة {h.surahName} آية {formatAr(h.from)} إلى سورة {h.endSurahName} آية {formatAr(h.endAyah ?? 0)}</> : <>سورة {h.surahName} — آيات {formatAr(h.from)} إلى {formatAr(h.to)}</>}</span>
+                          <span className="font-bold text-emerald-700 whitespace-nowrap">{formatAr(h.correct)}/{formatAr(h.total)}</span>
+                          <span className="text-accent-400 whitespace-nowrap">{h.date}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                );
+              })()}
+              </>
             )}
             {lobbyDoor === 'results' && (
               <>
