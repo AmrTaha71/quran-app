@@ -37,15 +37,17 @@ Deno.serve(async (req: Request) => {
   if (adminErr) return json({ error: "server not configured" }, 500);
   if (adminRow) return json({ error: "admin accounts are deleted from the dashboard" }, 403);
 
-  // Item 1.11: the user's own audio files in rana-audio (public bucket —
-  // they would stay playable forever) and their still-pending suggestions.
-  // Approved links stay, anonymous (created_by becomes NULL via the FK) —
-  // they are reviewed content the admin accepted. Decision recorded here.
+  // Item 1.11: the audio files of the user's still-pending suggestions in
+  // rana-audio (public bucket — they would stay playable forever), then the
+  // pending rows themselves. Approved links stay, anonymous (created_by
+  // becomes NULL via the FK), WITH their audio — they are reviewed content
+  // the admin accepted, so their files must not be removed.
   try {
     const { data: links } = await admin
       .from("ayah_links")
       .select("audio_url, synthetic_audio_url, synthetic_audio_url_female, synthetic_audio_url_male")
-      .eq("created_by", uid);
+      .eq("created_by", uid)
+      .eq("status", "pending");
     const marker = "/storage/v1/object/public/rana-audio/";
     const paths = new Set<string>();
     for (const l of links ?? []) {
