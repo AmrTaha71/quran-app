@@ -9,6 +9,7 @@ export function playSpan(url: string, from: number, to: number, rate = 1): SpanH
   a.preload = 'auto';
   let done = false;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let metaTimer: ReturnType<typeof setTimeout> | null = null;
   let finish: () => void = () => {};
   let fail: (e: Error) => void = () => {};
   const promise = new Promise<void>((res, rej) => { finish = res; fail = rej; });
@@ -16,6 +17,7 @@ export function playSpan(url: string, from: number, to: number, rate = 1): SpanH
     if (done) return;
     done = true;
     if (timer) clearInterval(timer);
+    if (metaTimer) clearTimeout(metaTimer);
     try { a.pause(); a.removeAttribute('src'); a.load(); } catch { /* ignore */ }
     if (err) fail(err); else finish();
   };
@@ -28,7 +30,10 @@ export function playSpan(url: string, from: number, to: number, rate = 1): SpanH
       timer = setInterval(() => { if (a.currentTime >= to) end(); }, 30);
     }).catch(() => end(new Error('play-blocked')));
   };
-  a.addEventListener('loadedmetadata', go, { once: true });
+  // 4.27: never wait forever for metadata (a stalled network left the
+  // test hanging): give up after 8 s like any other audio error.
+  metaTimer = setTimeout(() => end(new Error('metadata-timeout')), 8000);
+  a.addEventListener('loadedmetadata', () => { if (metaTimer) clearTimeout(metaTimer); metaTimer = null; go(); }, { once: true });
   a.src = url;
   return { promise, cancel: () => end() };
 }

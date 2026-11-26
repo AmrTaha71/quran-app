@@ -120,7 +120,12 @@ export async function downloadJuz(folder: string, juz: number, onProgress: (d: n
 export async function deleteJuz(folder: string, juz: number): Promise<void> {
   try {
     const cache = await caches.open(CORR_AUDIO_CACHE);
-    await Promise.all(juzAyahs(juz).map(([s, a]) => cache.delete(ayahUrl(folder, s, a))));
+    // 4.27: delete what the download stored: the stand-in reciter's file for an
+    // untimed ayah too (it used to stay behind, orphaned in the cache).
+    await Promise.all(juzAyahs(juz).flatMap(([s, a]) => {
+      const src = corrSourceFolder(folder, s, a);
+      return src === folder ? [cache.delete(ayahUrl(folder, s, a))] : [cache.delete(ayahUrl(folder, s, a)), cache.delete(ayahUrl(src, s, a))];
+    }));
   } catch { /* ignore */ }
   try {
     localStorage.removeItem(JUZ_KEY(folder, juz));
@@ -181,6 +186,15 @@ export async function deleteReciter(folder: string): Promise<void> {
     const prefix = `https://everyayah.com/data/${folder}/`;
     const keys = await cache.keys();
     await Promise.all(keys.filter((k) => k.url.startsWith(prefix)).map((k) => cache.delete(k)));
+    // 4.27: and the stand-in reciter's files this reciter's download stored.
+    const standIns: Promise<boolean>[] = [];
+    for (let j = 1; j <= 30; j++) {
+      for (const [s, a] of juzAyahs(j)) {
+        const src = corrSourceFolder(folder, s, a);
+        if (src !== folder) standIns.push(cache.delete(ayahUrl(src, s, a)));
+      }
+    }
+    await Promise.all(standIns);
   } catch { /* ignore */ }
   try {
     localStorage.removeItem(DONE_KEY(folder));

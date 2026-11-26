@@ -1991,6 +1991,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const corrWindowSourceRef = useRef<'finals' | 'interim' | ''>('');
   const quietTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const windowTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const contRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // S4 voice safety timers (see helpers below): the no-result
   // watchdog (last result timestamp + its timer) and the transient
   // safety timer (fires when onend never follows a transient error).
@@ -2037,6 +2038,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // to fire into a torn-down session.
     if (contNoMatchTimerRef.current) { clearTimeout(contNoMatchTimerRef.current); contNoMatchTimerRef.current = null; }
     if (contPromptTimerRef.current) { clearTimeout(contPromptTimerRef.current); contPromptTimerRef.current = null; }
+    if (contRetryTimerRef.current) { clearTimeout(contRetryTimerRef.current); contRetryTimerRef.current = null; }
     // Never let a spoken correction bleed into the next ayah or
     // keep playing after the user stops.
     cancelCorrectionSpeech();
@@ -4766,7 +4768,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           // guards; a second null just leaves the TTS fallback
           // (fixed below) to speak.
           fetchRetried = true;
-          setTimeout(() => {
+          // 4.27: the retry handle is kept so a stop / leaving the page cancels it.
+          if (contRetryTimerRef.current) clearTimeout(contRetryTimerRef.current);
+          contRetryTimerRef.current = setTimeout(() => {
+            contRetryTimerRef.current = null;
             if (speakGenRef.current !== gen || promptSettledRef.current || !contPromptingRef.current || promptAudioStarted) return;
             void requestCorrectionAudio(words, corrPos ? { shape: corrShape, positions: corrPos } : undefined).then((retryUrl) => {
               if (retryUrl) {
