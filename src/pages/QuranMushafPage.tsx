@@ -4129,7 +4129,7 @@ export default function QuranMushafPage({
   return (
     <div className="min-h-screen mushaf-page-bg pb-24">
       {/* Header — BOLD pass: chrome-enter on mount (chrome only, never the image) */}
-      <header className="sticky top-0 z-40 bg-gradient-to-r from-amber-50 to-stone-50/95 backdrop-blur-md border-b border-amber-200 shadow-sm mushaf-chrome-enter">
+      <header className="sticky top-0 z-40 app-header mushaf-chrome-enter">
         <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-0.5 flex items-center justify-between gap-x-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg flex items-center justify-center shadow flex-shrink-0">
