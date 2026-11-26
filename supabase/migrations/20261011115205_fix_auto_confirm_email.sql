@@ -1,3 +1,9 @@
+-- SECURITY NOTE (item 1.14, 2026-11-26): auto-confirm is deliberate — the app
+-- uses pseudo-emails (username@quran-app.user), so there is NO identity check
+-- at signup. This is acceptable ONLY because every content write (verses,
+-- links, rephrased, settings, rana-audio storage) is admin-only in RLS
+-- (see 20261126000001/2/8). Never loosen those policies while this trigger
+-- exists, or anonymous throwaway accounts could edit content.
 
 -- Ensure auto-confirm trigger exists (re-apply in case it was dropped)
 CREATE OR REPLACE FUNCTION auto_confirm_user_email()

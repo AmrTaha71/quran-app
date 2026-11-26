@@ -17,9 +17,9 @@ ALTER TABLE quran_verses ADD COLUMN IF NOT EXISTS ayah_text_clean text GENERATED
 CREATE INDEX IF NOT EXISTS idx_quran_verses_text_clean ON quran_verses USING gin (to_tsvector('simple', ayah_text_clean));
 CREATE INDEX IF NOT EXISTS idx_quran_verses_text_clean_ilike ON quran_verses (ayah_text_clean text_pattern_ops);
 
--- Verify it works
-SELECT id, surah_no, ayah_no, left(ayah_text_clean, 50) as clean_text
-FROM quran_verses
-WHERE surah_no = 1
-ORDER BY ayah_no
-LIMIT 3;
+-- Verify it works (item 1.14: kept as a comment so it does not run on every apply):
+-- SELECT id, surah_no, ayah_no, left(ayah_text_clean, 50) as clean_text
+-- FROM quran_verses
+-- WHERE surah_no = 1
+-- ORDER BY ayah_no
+-- LIMIT 3;
