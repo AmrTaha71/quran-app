@@ -172,7 +172,12 @@ async function saveSubscriptionToServer(sub: PushSubscription): Promise<boolean>
 
 async function deleteSubscriptionFromServer(endpoint: string): Promise<void> {
   try {
-    await supabase.from(SUBSCRIPTIONS_TABLE).delete().eq('endpoint', endpoint);
+    // Item 1.7: logged-out devices can no longer DELETE directly (the old
+    // anonymous policy let one request wipe every logged-out row). The RPC
+    // deletes exactly this endpoint. Until the RPC is live, fall back to the
+    // direct delete so unsubscribing keeps working in between.
+    const { error } = await supabase.rpc('unsubscribe_adhan_push', { p_endpoint: endpoint });
+    if (error) await supabase.from(SUBSCRIPTIONS_TABLE).delete().eq('endpoint', endpoint);
   } catch {
     // Best-effort: the server prunes dead endpoints on 410/404 too.
   }
