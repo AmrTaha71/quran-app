@@ -28,7 +28,7 @@ import { loadVerseIndex } from '../lib/searchIndex';
 import { buildOrderedVerses, findLock, findInterimLock, heardWords, FOLLOW_TRIGGER_WORDS, FOLLOW_LOCK_MIN_WORDS, FOLLOW_INTERIM_MIN_WORDS, type TrackedPosition, type OrderedVerse } from '../lib/imamTracker';
 import { ImamFollower, type FollowIndex, type FollowState } from '../lib/imamFollow';
 import { loadFollowIndex } from '../lib/imamFollowIndex';
-import { madinahPageOfAyah } from '../lib/madinahPageStarts';
+import { madinahPageOfAyah, MADINAH_PAGE_STARTS } from '../lib/madinahPageStarts';
 import { QuranLabPhonemeTap, releaseEarMic, earLabOn, getEarLabState, subscribeEarLab, earModelCached, preloadEarLab, markEarLabFailed } from '../lib/quranLabEar';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { MADINAH_PAPER_BOXES, MADINAH_NORMALIZED_ASPECT, coverNormForPaperBox, madinahFrameBand, MADINAH_COVER_MAX_ASPECT, MADINAH_MARK_MARGIN } from '../lib/madinahPaperBoxes';
@@ -782,8 +782,29 @@ export default function QuranMushafPage({
   const labelHizb = getHizbFromPage(labelPage);
   // The strip shows only this page's ayahs (in page order) once their
   // refs have loaded; otherwise it falls back to the full surah list.
-  const stripVerses: QuranVerse[] = pageAyahRefs
-    ? pageAyahRefs.map((r) => {
+  // Item 5.17: when the page's ayah list could not be fetched (offline,
+  // any failure) the strip used to fall back to the WHOLE surah — ayat
+  // that are not on this page. For the Madinah Mushaf the page's ayat
+  // are known locally (MADINAH_PAGE_STARTS, verified against the scans
+  // in 16.11), so the strip uses those instead.
+  const localPageRefs = (() => {
+    if (pageAyahRefs || edition.id !== 'madinah') return null;
+    const first = MADINAH_PAGE_STARTS[currentPage - 1];
+    if (!first) return null;
+    const next = MADINAH_PAGE_STARTS[currentPage] ?? 115001;
+    const refs: { surah: number; ayah: number }[] = [];
+    for (let k = first; k < next; ) {
+      const su = Math.floor(k / 1000), ay = k % 1000;
+      if (su > 114) break;
+      if (ay > (SURAH_AYAH_COUNTS[su - 1] ?? 0)) { k = (su + 1) * 1000 + 1; continue; }
+      refs.push({ surah: su, ayah: ay });
+      k++;
+    }
+    return refs;
+  })();
+  const effPageRefs = pageAyahRefs ?? localPageRefs;
+  const stripVerses: QuranVerse[] = effPageRefs
+    ? effPageRefs.map((r) => {
         const pool = r.surah === currentSurah ? surahVerses : spannedVerses;
         return pool.find((v) => v.ayah_no === r.ayah);
       }).filter((v): v is QuranVerse => Boolean(v))
