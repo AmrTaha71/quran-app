@@ -1731,6 +1731,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Item 2.7: the window's full length, so the countdown can be a bar.
   const countdownTotalRef = useRef(0);
   const [wrongIndices, setWrongIndices] = useState<number[]>([]);
+  // 15.10: «تلميح» while reciting: 1st tap = first letter of the word you
+  // are stuck on, 2nd tap = that word. Never the whole ayah. Logged in the
+  // diagnostics only, not in the score (scoring rules wait for phase 6).
+  const [hintAt, setHintAt] = useState<{ index: number; level: number }>({ index: -1, level: 0 });
   // FEAT5-B: shown while the post-correction resume is listening —
   // tells the user the words he said during the correction were not
   // heard, so he says the rest of the ayah again.
@@ -7348,6 +7352,30 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         </p>
                       </div>
                       <MicLevelHint active={micState === 'listening' || micState === 'correcting'} heardSomething={!!(transcript || interim)} />
+                      {micState === 'listening' && ayahs[index] && (() => {
+                        const exp = expectedWordList(ayahs[index].ayah_text);
+                        const al = alignWords(exp.map((w) => w.norm), spokenTokens(`${transcript} ${interim}`.trim()));
+                        const open = al.matched.findIndex((v) => !v);
+                        if (open < 0) return null;
+                        const level = hintAt.index === index ? hintAt.level : 0;
+                        const word = exp[open].orig;
+                        const letter = (/[\u0621-\u063A\u0641-\u064A\u0671]/.exec(word) || [''])[0];
+                        return (
+                          <div className="mb-3 flex flex-col items-center gap-1">
+                            {level >= 1 && (
+                              <p className="text-base text-accent-800" role="status">
+                                {level === 1 ? <>أولها حرف «<span className="font-arabic text-xl font-bold">{letter}</span>»</> : <>الكلمة: <span className="font-arabic text-xl font-bold">{word}</span></>}
+                              </p>
+                            )}
+                            {level < 2 && (
+                              <button type="button" onClick={() => { setHintAt({ index, level: level + 1 }); diagPush('tap', { label: `hint-${level + 1}` }); }}
+                                className="min-h-[44px] px-4 rounded-lg border border-amber-300 text-amber-900 font-bold text-sm polish-press">
+                                {level === 0 ? 'تلميح: أول حرف' : 'تلميح: الكلمة كلها'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       {/* Batch 1 live progress dots: one dot per word
                           of the current ayah — green when the live
                           alignment matched it, amber pulsing on the
