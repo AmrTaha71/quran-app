@@ -27,6 +27,7 @@ import DailyWird from '../components/DailyWird';
 import ReviewDueCard from '../components/ReviewDueCard';
 import SrsDueCard from '../components/SrsDueCard';
 import PageReviewCard from '../components/PageReviewCard';
+import GoalsCard from '../components/GoalsCard';
 import ShareProgressCard from '../components/ShareProgressCard';
 import { pressFeedback, installGlobalWater } from '../lib/pressFeedback';
 import VoiceSelector from '../components/VoiceSelector';
@@ -643,6 +644,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
         {/* 17.3: the page review queue over «محفوظي». */}
         <PageReviewCard onNavigate={onNavigate} />
+
+        {/* 15.6ب: daily goals and badges from real activity. */}
+        <GoalsCard />
 
         {/* Daily wird + self-test entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
