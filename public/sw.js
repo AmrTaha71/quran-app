@@ -96,7 +96,9 @@ const MAX_IMG_ENTRIES = 150;
 const PRECACHE_STATIC = [
   '/', '/index.html', '/manifest.webmanifest',
   '/brand/icon-192.png', '/brand/icon-512.png', '/icon-maskable-512.png',
-  'https://xfhjlukkvjzlmrggvowm.supabase.co/storage/v1/object/public/app-icons/apple-touch-icon.png', '/quran-icon.svg',
+  // 9.7: the apple-touch icon is the app's own file (index.html links
+  // /brand/icon-180.png); the remote storage copy is no longer precached.
+  '/brand/icon-180.png', '/quran-icon.svg',
 ];
 
 function assetPathsFromHtml(html) {
@@ -113,19 +115,43 @@ function assetPathsFromHtml(html) {
   return paths;
 }
 
-async function precacheShell() {
-  const cache = await caches.open(SHELL_CACHE);
-  await cache.addAll(PRECACHE_STATIC);
-  // Bundle JS/CSS: parse the live index.html (hashed names change
-  // every build, so they cannot be listed statically). Any failure
-  // here is non-fatal — SWR fills the bundles on first use.
+// 9.7: one file failing (a 404, a flaky request) must not drop the whole
+// precache the way the atomic cache.addAll did. Each file on its own;
+// failures are logged and left to on-demand caching.
+async function addEach(cache, paths) {
+  const failed = [];
+  await Promise.all(paths.map((p) => cache.add(p).catch(() => { failed.push(p); })));
+  if (failed.length) console.warn('[sw] precache skipped', failed);
+}
+
+// 9.5: every built JS/CSS chunk (pages load lazily now), from the list the
+// build writes; falls back to the bundles named in index.html.
+async function currentAssetPaths() {
+  try {
+    const res = await fetch('/precache-assets.json', { cache: 'no-store' });
+    if (res.ok) {
+      const j = await res.json();
+      if (Array.isArray(j.files) && j.files.length) return j.files;
+    }
+  } catch {}
   try {
     const res = await fetch('/index.html');
     if (res.ok) {
-      const html = await res.text();
-      const assets = assetPathsFromHtml(html);
-      if (assets.length > 0) await cache.addAll(assets);
+      const assets = assetPathsFromHtml(await res.text());
+      if (assets.length) return assets;
     }
+  } catch {}
+  return null;
+}
+
+async function precacheShell() {
+  const cache = await caches.open(SHELL_CACHE);
+  await addEach(cache, PRECACHE_STATIC);
+  // Bundle JS/CSS (hashed names change every build). Non-fatal: SWR fills
+  // anything missing on first use.
+  try {
+    const assets = await currentAssetPaths();
+    if (assets) await addEach(cache, assets);
   } catch {}
 }
 
@@ -142,18 +168,9 @@ async function precacheShell() {
 async function trimShellCache() {
   try {
     const keep = new Set(PRECACHE_STATIC);
-    let parsedOk = false;
-    try {
-      const res = await fetch('/index.html');
-      if (res.ok) {
-        const assets = assetPathsFromHtml(await res.text());
-        if (assets.length > 0) {
-          for (const p of assets) keep.add(p);
-          parsedOk = true;
-        }
-      }
-    } catch {}
-    if (!parsedOk) return;
+    const assets = await currentAssetPaths();
+    if (!assets) return;
+    for (const p of assets) keep.add(p);
     const cache = await caches.open(SHELL_CACHE);
     const keys = await cache.keys();
     for (const key of keys) {

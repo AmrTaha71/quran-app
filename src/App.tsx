@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { supabase } from './lib/supabase';
 import {
@@ -18,22 +18,56 @@ import {
 } from './lib/listenRecovery';
 import { LanguageProvider, useLang } from './lib/LanguageContext';
 import type { Session } from '@supabase/supabase-js';
-import AdminPage from './pages/AdminPage';
 import UserAppPage from './pages/UserAppPage';
 import HomeStartPage from './pages/HomeStartPage';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
-import QuranMushafPage from './pages/QuranMushafPage';
-import SettingsPage from './pages/SettingsPage';
-import SelfTestPage from './pages/SelfTestPage';
 import ListenPage from './pages/ListenPage';
+// 9.5 (2026-11-26): the big pages load on first visit (React.lazy) instead
+// of all in the first download. Home, landing, auth and the two audio pages
+// (kept mounted for background audio) stay in the main bundle.
+// A chunk can be missing after a new deploy (an old page asks for an old
+// hash) or fail offline: reload once to get the new index, then give up
+// quietly to the error the browser shows.
+function lazyPage<P extends object>(load: () => Promise<{ default: ComponentType<P> }>) {
+  const KEY = 'quran-chunk-reload';
+  return lazy(async () => {
+    try {
+      const m = await load();
+      try { sessionStorage.removeItem(KEY); } catch { /* ignore */ }
+      return m;
+    } catch (err) {
+      let reloading = false;
+      try {
+        if (navigator.onLine !== false && !sessionStorage.getItem(KEY)) {
+          sessionStorage.setItem(KEY, '1');
+          reloading = true;
+          window.location.reload();
+        }
+      } catch { /* ignore */ }
+      if (reloading) await new Promise<never>(() => {});
+      throw err;
+    }
+  });
+}
+function PageLoading() {
+  return (
+    <div dir="rtl" role="status" className="min-h-[60vh] flex items-center justify-center text-ink-2 text-sm">
+      بيفتح…
+    </div>
+  );
+}
+const AdminPage = lazyPage(() => import('./pages/AdminPage'));
+const QuranMushafPage = lazyPage(() => import('./pages/QuranMushafPage'));
+const SettingsPage = lazyPage(() => import('./pages/SettingsPage'));
+const SelfTestPage = lazyPage(() => import('./pages/SelfTestPage'));
+const HifzPage = lazyPage(() => import('./pages/HifzPage'));
+const QuizPage = lazyPage(() => import('./pages/QuizPage'));
+const RadioPage = lazyPage(() => import('./pages/RadioPage'));
+const SharedRoomPage = lazyPage(() => import('./pages/SharedRoomPage'));
+const Home2Page = lazyPage(() => import('./pages/Home2Page'));
 import BlackScreenOverlay from './components/BlackScreenOverlay';
 import AdhkarPage from './pages/AdhkarPage';
-import RadioPage from './pages/RadioPage';
-import SharedRoomPage from './pages/SharedRoomPage';
-import HifzPage from './pages/HifzPage';
-import Home2Page from './pages/Home2Page';
-import QuizPage from './pages/QuizPage';
 import AdhanScheduler from './components/AdhanScheduler';
 import AdhanPushManager from './components/AdhanPushManager';
 import SplashScreen from './components/SplashScreen';
@@ -550,7 +584,7 @@ function AppContent() {
     );
   }
   if (route === 'admin') {
-    return <AdminPage session={session} onNavigate={navigate} />;
+    return <Suspense fallback={<PageLoading />}><AdminPage session={session} onNavigate={navigate} /></Suspense>;
   }
   // Main app area: the two audio pages stay mounted (hidden when
   // inactive) so long-form audio can pause on leaving and resume
@@ -619,7 +653,7 @@ function AppContent() {
         </>
       ) : null}
       <div key={routeKey} className={routeEnterClass}>
-        {page}
+        <Suspense fallback={<PageLoading />}>{page}</Suspense>
       </div>
       {/* Admin-only «شوف كأدمن / كمستخدم» switch (W2-4); renders nothing for
           non-admins. Skipped where the UI is already crowded or admin. */}
