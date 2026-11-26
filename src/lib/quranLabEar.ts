@@ -39,6 +39,17 @@ export function subscribeEarLab(cb: () => void): () => void { earSubs.add(cb); r
 export function markEarLabFailed(): void { setEarState({ status: 'error' }); }
 /** Use the device ear for a test now? Only when it is on AND loaded. */
 export function earLabUsable(): boolean { return earLabOn() && earState.status === 'ready'; }
+/** 3.3: may a session with NO browser ear start the device ear now? Only
+ *  when it is loaded/loading, already downloaded, or agreed to and on
+ *  Wi-Fi. Otherwise the caller shows the download card first, so a test
+ *  never pulls ~100 MB (over mobile data) by surprise. */
+export function earLabMayStart(): boolean {
+  if (earLabUsable()) return true;
+  if (!earLabOn() || !earDownloadConsented() || earState.status === 'error') return false;
+  return earState.status === 'loading' || modelWasCached || !earOnMobileData();
+}
+/** 3.3: the message when a test needs the device ear and it is not here yet. */
+export const EAR_NEEDS_DOWNLOAD_MSG = 'أذن الجهاز محتاجة تتحمّل مرة واحدة (حوالي ١٠٠ ميجا) — حمّلها من بطاقة «أذن الجهاز»، أو قيّم يدوي';
 /** Is the model file already in the Cache API (downloaded before)? */
 export async function earModelCached(): Promise<boolean> {
   try {
@@ -91,6 +102,8 @@ function takeKeep(): { stream: MediaStream; ctx: AudioContext } | null {
   return { stream: k.stream, ctx: k.ctx };
 }
 if (typeof window !== 'undefined') window.addEventListener('pagehide', closeKeep);
+// Know early whether the model is on the device (earLabMayStart, timeouts).
+if (typeof window !== 'undefined') void earModelCached();
 function resetWorker() {
   try { worker?.terminate(); } catch { /* ignore */ }
   worker = null; ready = null; listener = null;

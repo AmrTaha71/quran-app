@@ -14,7 +14,7 @@ import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import MicLevelHint from '../components/MicLevelHint';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import { timingCoverage } from '../lib/corrCoverage';
-import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
+import { QuranLabRecognition, earLabOn, earLabUsable, earLabMayStart, EAR_NEEDS_DOWNLOAD_MSG, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
@@ -3897,12 +3897,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // W4-B: device ear by default, but only once it is loaded; until then
     // (or after a failure) the browser ear, with no error. No browser ear
     // at all (iOS home-screen app) and download already agreed: wait for it.
-    const useLabEarAyah = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+    // 3.3: no browser ear + model not here (or mobile data): no silent
+    // download inside the test — say so and point to the download card.
+    const useLabEarAyah = earLabUsable() || (!SR && earLabMayStart());
     labEarInUseRef.current = useLabEarAyah;
-    const useModelEarAyah = useLabEarAyah || getEar() === 'model' || !SR;
+    const useModelEarAyah = useLabEarAyah || getEar() === 'model';
     earKindRef.current = useLabEarAyah ? 'lab' : useModelEarAyah ? 'model' : 'browser';
     if (!SR && !useModelEarAyah) {
-      setMicError(micAbsentMessage(' — قيّم يدوي بدل كده'));
+      setMicError(earLabOn() ? EAR_NEEDS_DOWNLOAD_MSG : micAbsentMessage(' — قيّم يدوي بدل كده'));
       return;
     }
     if (liveRef.current.micState === 'listening' || liveRef.current.micState === 'correcting') return;
@@ -5673,12 +5675,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // «اللي بيسمعك»: the on-device Quran model when chosen (2026-11-08).
     // Batch 4 fallback (2026-11-10): no browser speech API -> the on-device ear, automatically.
     // 2026-11-13: the new phoneme ear (Quran-Lab), per-device flag.
-    const useLabEar = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+    const useLabEar = earLabUsable() || (!SR && earLabMayStart());
     labEarInUseRef.current = useLabEar;
-    const useModelEar = useLabEar || getEar() === 'model' || !SR;
+    const useModelEar = useLabEar || getEar() === 'model';
     earKindRef.current = useLabEar ? 'lab' : useModelEar ? 'model' : 'browser';
     if (!SR && !useModelEar) {
-      setMicError(micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
+      setMicError(earLabOn() ? EAR_NEEDS_DOWNLOAD_MSG : micAbsentMessage(' — جرّب وضع "آية آية" اليدوي بدل كده'));
       return;
     }
     if (liveRef.current.contListening) return;

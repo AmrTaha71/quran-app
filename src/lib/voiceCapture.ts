@@ -2,7 +2,7 @@
 // device ear (Quran-Lab) once it is loaded, else the browser's SpeechRecognition,
 // else none (the caller falls back to self-grading). Same choice as the tasmee'
 // test (SelfTestPage).
-import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented } from './quranLabEar';
+import { QuranLabRecognition, earLabUsable, earLabMayStart } from './quranLabEar';
 
 import type { Rec } from './speechResults';
 export { readResults } from './speechResults';
@@ -14,7 +14,7 @@ export type { Rec, RecEvent } from './speechResults';
 export function createRecognizer(expectedNorms: string[], startWord = 0): { rec: Rec; kind: 'lab' | 'browser' } | null {
   const W = window as unknown as { SpeechRecognition?: new () => Rec & Record<string, unknown>; webkitSpeechRecognition?: new () => Rec & Record<string, unknown> };
   const SR = W.SpeechRecognition || W.webkitSpeechRecognition;
-  const useLab = earLabUsable() || (!SR && earLabOn() && earDownloadConsented());
+  const useLab = earLabUsable() || (!SR && earLabMayStart());
   if (useLab) return { rec: new QuranLabRecognition(expectedNorms.map((norm) => ({ norm, ayahIdx: 0 })), startWord) as unknown as Rec, kind: 'lab' };
   if (SR) {
     const r = new SR();
