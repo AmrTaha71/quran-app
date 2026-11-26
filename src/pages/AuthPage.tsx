@@ -10,6 +10,7 @@ import {
   Globe, ArrowRight, Shield, Heart, RotateCcw,
 } from 'lucide-react';
 import type { Route } from '../lib/routes';
+import { authErrorAr } from '../lib/authErrors';
 
 type AuthMode = 'login' | 'signup' | 'recover' | 'reset';
 
@@ -197,7 +198,7 @@ export default function AuthPage({
         setError('كلمة المرور ضعيفة. استخدم ٨ أحرف على الأقل.');
         setLoading(false);
       } else {
-        setError(error.message);
+        setError(authErrorAr(error.message));
         setLoading(false);
       }
       return;
@@ -276,7 +277,7 @@ export default function AuthPage({
       if (error.message.includes('rate') || error.message.includes('limit')) {
         setError('تم تجاوز عدد المحاولات. انتظر دقيقة ثم حاول مرة أخرى.');
       } else {
-        setError(error.message);
+        setError(authErrorAr(error.message));
       }
     } else {
       setSuccess('تم إعادة إرسال رابط التأكيد — افتح إيميلك (وتأكد من مجلد السبام).');
@@ -304,7 +305,7 @@ export default function AuthPage({
       if (error.message.includes('session') || error.message.includes('Auth session')) {
         setResetLinkExpired(true);
       } else {
-        setError(error.message);
+        setError(authErrorAr(error.message));
       }
       return;
     }
@@ -342,7 +343,7 @@ export default function AuthPage({
       redirectTo: `${window.location.origin}/?recovery=1`,
     });
     if (error) {
-      setError(error.message);
+      setError(authErrorAr(error.message));
     } else {
       setSuccess('تم إرسال رابط استرجاع كلمة المرور لإيميلك — افتحه واختر كلمة سر جديدة.');
     }
@@ -440,7 +441,7 @@ export default function AuthPage({
               {success && <div className="p-2.5 bg-emerald-50 border border-hairline-emerald rounded-2xl text-xs text-emerald-700 text-center">{success}</div>}
               <button type="button" onClick={handleResendConfirmation} disabled={loading}
                 className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
-                {loading ? '...' : 'إعادة إرسال رابط التأكيد'}
+                {loading ? 'جارٍ…' : 'إعادة إرسال رابط التأكيد'}
               </button>
               <button type="button" onClick={() => { setCheckEmail(null); setSuccess(''); setError(''); setMode('login'); }}
                 className="w-full text-sm text-accent-600 hover:text-accent-700 py-2">
@@ -495,7 +496,7 @@ export default function AuthPage({
                   {error && <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-600 text-center">{error}</div>}
                   <button type="submit" disabled={loading}
                     className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
-                    {loading ? '...' : 'حفظ كلمة السر الجديدة'}
+                    {loading ? 'جارٍ…' : 'حفظ كلمة السر الجديدة'}
                   </button>
                   <button type="button" onClick={() => { onRecoveryExit?.(); setMode('login'); }}
                     className="w-full text-sm text-ink-2 hover:text-accent-700 py-2">
@@ -522,7 +523,7 @@ export default function AuthPage({
               <button type="submit" disabled={loading}
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl transition-smooth disabled:opacity-50">
                 <RotateCcw className="w-4 h-4" />
-                {loading ? '...' : t('recoverPassword')}
+                {loading ? 'جارٍ…' : t('recoverPassword')}
               </button>
               <button type="button" onClick={() => setMode('login')}
                 className="w-full text-sm text-accent-600 hover:text-accent-700 py-2">
@@ -572,7 +573,7 @@ export default function AuthPage({
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
-                {loading ? '...' : t('login')}
+                {loading ? 'جارٍ…' : t('login')}
               </button>
 
               <button type="button" onClick={() => setMode('recover')}
@@ -680,7 +681,7 @@ export default function AuthPage({
 
               <button type="submit" disabled={loading}
                 className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-xl shadow-md transition-smooth disabled:opacity-50">
-                {loading ? '...' : t('signup')}
+                {loading ? 'جارٍ…' : t('signup')}
               </button>
             </form>
           )}
