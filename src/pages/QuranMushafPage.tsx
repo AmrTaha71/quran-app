@@ -1422,12 +1422,10 @@ export default function QuranMushafPage({
     const clamped = Math.max(1, Math.min(TOTAL_PAGES, page));
     setCurrentPage(clamped);
     setSearchHighlight(null);
-    // STREAM S2: normal-view zoom never carries across a turn — a
-    // zoomed (cropped) page used to stay zoomed on the next page,
-    // hiding its edges until the user noticed and zoomed back out.
-    // ELDERLY MODE: keep the user's zoom across turns instead —
-    // resetting to 1× on every page would defeat the big-text zoom.
-    if (!elderlyMode) setZoom(1);
+    // Item 5.6: the reader's zoom now carries across page turns for the
+    // whole session (it used to snap back to 100% on every turn outside
+    // elderly mode, so a reader who needs it bigger re-zoomed each page).
+    // The «ملاءمة» button still returns to 1× in one tap.
   };
 
   // Turn the page by itself when the ayah being played is on another page.
@@ -3816,8 +3814,6 @@ export default function QuranMushafPage({
     followTurnSurahRef.current = pos.surah;
     followLockPreloadSkipRef.current = true;
     goToPage(page);
-    // goToPage is a plain function of this component (stable behaviour).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [followTracking, followOn, followPos, currentPage, rawPageWordBoxes]);
 
   // Madinah paper-box normalization — the page-turn dance fix. The
