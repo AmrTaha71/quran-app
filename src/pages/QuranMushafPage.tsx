@@ -441,10 +441,11 @@ export default function QuranMushafPage({
   // chips, side strips, verse strip) so only the page shows. Word taps
   // and swipes keep working; tapping the page margin restores controls.
   const [cleanMode, setCleanMode] = useState(false);
-  // وضع الحفظ (identity): in fullscreen, the ayah popup hides the ayah
-  // text and shows its links first, with an "أظهر الآية" reveal. This
-  // touches ONLY the popup text rendering — never page geometry, word
-  // boxes, or tap mapping. Persisted across visits like goldFrame.
+  // وضع الحفظ (identity): the ayah popup hides the ayah text and shows
+  // its links first, with an "أظهر الآية" reveal. Item 5.3: the tapped
+  // ayah's words on the page scan are covered too (a visual overlay on
+  // the same word boxes — no geometry or tap-mapping change), and the
+  // toggle is in the normal view as well. Persisted like goldFrame.
   const [hifzMode, setHifzMode] = useState(() => {
     try { return localStorage.getItem('quran-hifz-mode') === '1'; } catch { return false; }
   });
@@ -4257,6 +4258,10 @@ export default function QuranMushafPage({
                 <span className="text-xs text-accent-600 w-11 text-center font-semibold">{Math.round(zoom * 100)}%</span>
                 <button onClick={() => setZoom((z) => Math.min(3, z + 0.25))} title="تكبير الصفحة" aria-label="تكبير الصفحة"
                   className="p-1 text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth"><ZoomIn className="w-5 h-5" /></button>
+                {/* Item 5.3: وضع الحفظ in the normal view too. */}
+                <button onClick={toggleHifzMode} aria-pressed={hifzMode}
+                  title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — الآية اللي تدوس عليها تستخبى لحد ما تسمّعها'}
+                  className={`px-1.5 py-1 rounded-lg text-xs font-bold transition-smooth ${hifzMode ? 'bg-amber-200 text-amber-900' : 'text-accent-600 hover:bg-gray-100'}`}>حفظ{hifzMode ? ' ✓' : ''}</button>
                 {/* Item 5.14: night margins straight from the Mushaf (the page scan itself stays as is). */}
                 <button onClick={() => { const nv = !nightOn; setNightOn(nv); setMushafNight(nv); }}
                   title={nightOn ? 'هوامش ليلية شغالة — الصفحة نفسها زي ما هي' : 'هوامش ليلية (الصفحة نفسها زي ما هي)'} aria-label="هوامش ليلية" aria-pressed={nightOn}
@@ -5237,6 +5242,18 @@ export default function QuranMushafPage({
                         boxes={boxes.map((b) => ({ ...imageBoxToContainer(clampBoxToPaper(b)), key: b.key, wordNo: Number(b.key.split(':')[2]) || 0 }))} />
                     );
                   })()}
+                  {/* Item 5.3: وضع الحفظ really hides the ayah — its words on the
+                      page scan are covered with paper colour until «أظهر الآية».
+                      Visual only: same boxes and mapping as the highlights,
+                      pointer-events off, so taps and geometry are untouched. */}
+                  {hifzMode && !hifzRevealed && selectedVerse && pageWordBoxes && displayedPage === currentPage && (
+                    pageWordBoxes.filter((b) => b.surah === selectedVerse.surah_no && b.ayah === selectedVerse.ayah_no).map((b) => {
+                      const f = imageBoxToContainer(clampBoxToPaper(b));
+                      if (f.width <= 0 || f.height <= 0) return null;
+                      return <div key={`hifz-${b.key}`} aria-hidden="true" className="absolute pointer-events-none rounded-sm"
+                        style={{ left: `${f.left}%`, top: `${f.top}%`, width: `${f.width}%`, height: `${f.height}%`, background: '#f3ead2' }} />;
+                    })
+                  )}
                   {/* Fullscreen ayah tap zones: one transparent zone per
                       ayah from the bounding rect of its word boxes —
                       no new geometry, same clamp+norm pipeline as the
