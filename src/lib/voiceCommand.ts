@@ -1,5 +1,5 @@
-// «اؤمرني» voice command parser (follow-the-imam is now «تتبع القراءة»;
-// «الحق الإمام» stays as a synonym) (2026-11-08). Keyword + surah-name
+// «اؤمرني» voice command parser (follow-the-imam is «الحق الإمام», item 16.13;
+// «تتبع القراءة» stays as a spoken synonym) (2026-11-08). Keyword + surah-name
 // matching only: no AI, no network, no cost. Returns null when the
 // sentence is not understood, so nothing wrong ever opens.
 import { SURAHS, SURAH_AYAH_COUNTS } from './surahs';

@@ -145,7 +145,7 @@ export default function HomeStartPage({ session, onNavigate }: {
   // from-start run by the shared helper. The map and the review
   // card below both read this run; nothing here is hardcoded.
   // خريطة حفظي door: expands to the 30-Juz map below it; collapsed
-  // by default — same pattern as the الحفظ / سمّع لنفسك doors.
+  // by default — same pattern as the الحفظ / سمّع لي doors.
   const [mutOpen, setMutOpen] = useState(false);
   const [bigOpen, setBigOpen] = useState(false);
   const [qiblaOpen, setQiblaOpen] = useState(false);
@@ -294,7 +294,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             onClick={() => openTest(onNavigate)} />
           <HomeTile icon={<Award />} glaze="red" title="اختبر نفسك" hint={showHints ? 'ترتيل ومتشابهات واختبار' : undefined}
             onClick={() => onNavigate('quiz')} />
-          <HomeTile icon={<AudioLines />} glaze="emerald" title="تَتَبُّعُ القِرَاءَةِ" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
+          <HomeTile icon={<AudioLines />} glaze="emerald" title="الحق الإمام" hint={showHints ? 'المصحف يمشي مع القارئ' : undefined}
             onClick={() => onNavigate('follow')} />
         </div>
 
@@ -390,7 +390,7 @@ export default function HomeStartPage({ session, onNavigate }: {
             <ol className="text-right space-y-3 text-base text-ink-2">
               <li><span className="font-medium text-emerald-700">١.</span> افتح الآية — اضغط أي آية في المصحف</li>
               <li><span className="font-medium text-emerald-700">٢.</span> شوف تربيطها — التربيط يثبّتها في ذهنك</li>
-              <li><span className="font-medium text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لنفسك»</li>
+              <li><span className="font-medium text-emerald-700">٣.</span> سمّعها — من حفظك في «سمّع لي»</li>
             </ol>
             <button onPointerDown={pressFeedback} onClick={dismissIntro}
               className="mt-5 w-full py-3 grad-emerald-door glass-door-highlight text-white font-semibold rounded-xl polish-press polish-press-depth polish-focus">

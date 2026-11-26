@@ -44,7 +44,7 @@ type VerifyLevel = 'beginner' | 'intermediate' | 'advanced';
 const LEVELS: { id: VerifyLevel; label: string; hint: string }[] = [
   { id: 'beginner', label: 'مبتدئ', hint: 'تصحيح متساهل — ابدأ براحتك' },
   { id: 'intermediate', label: 'متوسط', hint: 'تصحيح أدق للكلمات' },
-  { id: 'advanced', label: 'متقدم', hint: 'أدق تصحيح — زي الحفظ المتقن' },
+  { id: 'advanced', label: 'متقدم', hint: 'أدق تصحيح' },
 ];
 
 const SCREENS = [
@@ -63,7 +63,7 @@ const SCREENS = [
   {
     kind: 'imam' as DemoKind,
     icon: Headphones,
-    title: 'تَتَبُّعُ القِرَاءَةِ',
+    title: 'الحق الإمام',
     line: 'افتح المصحف وهو يقرأ، والتطبيق ينوّر الكلمة اللي بيقولها الإمام وإنت تتابع بعينك.',
   },
   {

@@ -1,6 +1,6 @@
 // «عايز مين يسمّعلك؟» (2026-11-08): choose the correcting reciter and
 // download / delete each one's whole-Quran ayah files for offline
-// recitation. Shared by Settings and the first-time prompt in سمّع لنفسك.
+// recitation. Shared by Settings and the first-time prompt in سمّع لي.
 import { useRef, useState } from 'react';
 import Hint from './Hint';
 import { Download, Trash2, Check, Square } from 'lucide-react';

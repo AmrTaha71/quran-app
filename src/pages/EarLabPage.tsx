@@ -161,7 +161,7 @@ export default function EarLabPage() {
       <div className="glass-card rounded-2xl p-4 mb-4">
         <label className="flex items-center gap-3 text-base font-bold text-accent-900">
           <input type="checkbox" className="w-6 h-6 accent-emerald-600" checked={inTest} onChange={(e) => { setEarLab(e.target.checked); setInTest(e.target.checked); }} />
-          استخدم الأذن الجديدة في «اختبر نفسك» (التسميع المتواصل)
+          استخدم الأذن الجديدة في «سمّع لي» (التسميع المتواصل)
         </label>
         <p className="text-sm text-accent-700 mt-1">تجريبي، على الجهاز ده بس. شيل العلامة ترجع للأذن القديمة.</p>
       </div>

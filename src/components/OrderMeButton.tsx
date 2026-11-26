@@ -48,7 +48,7 @@ export default function OrderMeButton({ onMutashabihat, onElderly }: Props) {
         </span>
       </button>
       {!on && (
-        <Hint id="orderme-examples"><p className="text-center text-xs text-accent-600">قول: «افتح سورة الكهف» • «شغّل الملك» • «سمّع لي الشمس» • «تتبع القراءة» — أو قول اسم السورة بس وأنا أسألك</p></Hint>
+        <Hint id="orderme-examples"><p className="text-center text-xs text-accent-600">قول: «افتح سورة الكهف» • «شغّل الملك» • «سمّع لي الشمس» • «الحق الإمام» — أو قول اسم السورة بس وأنا أسألك</p></Hint>
       )}
     </div>
   );
