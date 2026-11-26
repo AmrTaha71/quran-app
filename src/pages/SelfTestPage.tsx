@@ -1298,9 +1298,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   }, [weakAyahs]);
 
   // Mic flow state (per ayah; reset on every ayah change).
+  // Item 2.1: voice tasmee' works with EITHER the browser's speech API OR
+  // the on-device ear (startMic falls back to it whenever SR is missing),
+  // so "unsupported" means no microphone API or no WebAssembly at all —
+  // not merely "no SpeechRecognition" (installed app / Chrome on iOS).
+  const [srPresent] = useState(() => {
+    try { const w = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }; return !!(w.SpeechRecognition || w.webkitSpeechRecognition); } catch { return false; }
+  });
   const [micSupported] = useState(() => {
     try {
-      return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+      if (srPresent) return true;
+      return !!navigator.mediaDevices?.getUserMedia && typeof WebAssembly === 'object';
     } catch {
       return false;
     }
@@ -1313,7 +1321,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // can never break the build when the SHA is absent.
   const [appShell] = useState(detectAppShell);
   const BUILD_SHA = typeof __BUILD_SHA__ === 'string' && __BUILD_SHA__ ? __BUILD_SHA__ : 'dev';
-  const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'}`;
+  const stampLine = `نسخة: ${BUILD_SHA} • الواجهة: ${appShell} • الميكروفون: ${micSupported ? 'present' : 'absent'} • SR: ${srPresent ? 'yes' : 'no'}`;
   // Debug stamp lines + the diagnostics log: see showDiag below (item 2.11).
   // Standing note about correction clips: stays until the user taps «فهمت».
   const CORR_NOTE_KEY = 'quran-corr-note-ack-v1';
@@ -6069,6 +6077,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           <div>
             <h1 className="text-2xl md:text-3xl font-bold font-display-ar text-accent-800"><Sama3 /> لي</h1>
             <p className="text-sm text-accent-600">{micSupported ? 'سمّع من حفظك، والبرنامج يصحح لك بالميكروفون' : 'سمّع من حفظك، وقيّم نفسك يدوي (جهازك مش بيدعم الميكروفون)'}</p>
+            {micSupported && (
+              <p className="text-xs text-accent-600">{srPresent && !(earLabUsable() || getEar() === 'model') ? 'هيسمعك المتصفح (محتاج إنترنت).' : 'هيسمعك على جهازك، من غير إنترنت بعد أول تحميل.'}</p>
+            )}
           </div>
         </div>
       </header>
