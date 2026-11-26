@@ -1676,6 +1676,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [countdown, setCountdown] = useState(() => loadTestSettings().corrDelay);
+  // Item 2.7: the window's full length, so the countdown can be a bar.
+  const countdownTotalRef = useRef(0);
   const [wrongIndices, setWrongIndices] = useState<number[]>([]);
   // FEAT5-B: shown while the post-correction resume is listening —
   // tells the user the words he said during the correction were not
@@ -3217,6 +3219,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         else diagPush('buzz-skipped', { label: 'stopped-not-wrong' });
       }
       const windowS = correctionWindowSeconds(liveRef.current.corrDelayMode, liveRef.current.corrDelay, juhaniEnabledForCurrent(), spoken.length >= expected.length);
+      countdownTotalRef.current = windowS;
       setCountdown(windowS);
       if (windowTimerRef.current) clearInterval(windowTimerRef.current);
       let left = windowS;
@@ -3585,7 +3588,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     setMicState('correcting');
     buzzOnDetection();
     const windowS = correctionWindowSeconds(liveRef.current.corrDelayMode, liveRef.current.corrDelay, juhaniEnabledForCurrent(), false);
-    setCountdown(windowS);
+    countdownTotalRef.current = windowS;
+      setCountdown(windowS);
     if (windowTimerRef.current) clearInterval(windowTimerRef.current);
     let left = windowS;
     windowTimerRef.current = setInterval(() => {
@@ -3699,6 +3703,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       liveRef.current.finals = `${liveRef.current.finals} ${pendingInterim}`.trim();
       setTranscript(liveRef.current.finals);
     }
+    // Item 2.7: never fail an ayah from a tap after silence (the other
+    // grading paths already refuse an empty transcript), and ask first —
+    // this tap records the ayah as wrong in the score, history and review.
+    if (spokenTokens(liveRef.current.finals).length === 0) { diagPush('show-mistake-empty'); return; }
+    if (!window.confirm('ده هيحسب الآية دي غلط وتتسجل في المراجعة. متأكد؟')) return;
     gradeMic(false);
   };
   // Grade exactly what was heard in a stalled session (no correction
@@ -7074,6 +7083,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           <p className="text-base font-bold text-amber-800">
                             في حاجة محتاجة تتصلح — كمّل أو صلّح، عندك {countdown.toLocaleString('ar-EG')} ثواني
                           </p>
+                          <div className="mt-2 h-2 rounded-full bg-amber-100 overflow-hidden" aria-hidden="true">
+                            <div className="h-full bg-amber-500 transition-[width] duration-1000 ease-linear" style={{ width: `${countdownTotalRef.current > 0 ? Math.max(0, Math.min(100, (countdown / countdownTotalRef.current) * 100)) : 0}%` }} />
+                          </div>
                           <button onClick={() => showMistakeNow()}
                             className="mt-1 text-sm font-semibold text-amber-link underline">
                             خلاص، وريني الغلط
