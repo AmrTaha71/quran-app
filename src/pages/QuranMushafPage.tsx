@@ -730,6 +730,12 @@ export default function QuranMushafPage({
   const tafsirCache = useRef<Record<string, string>>({});
 
   const edition = EDITIONS[selectedEdition];
+  // Item 5.11: one tap from a non-Madinah edition's warning to Madinah.
+  const switchToMadinah = () => {
+    const idx = EDITIONS.findIndex((e) => e.id === 'madinah');
+    if (idx < 0) return;
+    setSelectedEdition(idx); setImageLoading(true); setImageError(false);
+  };
   const currentSurah = getPageSurah(currentPage);
   const currentSurahName = SURAHS.find((s) => s.no === currentSurah) ? surahLabel(currentSurah) : '';
   // Facing-page peek (printed Mushaf spread, RTL): odd pages sit on the
@@ -4224,6 +4230,9 @@ export default function QuranMushafPage({
         {edition.id !== 'madinah' && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-2 mb-2 text-sm font-bold text-amber-800 leading-relaxed">
             تنبيه: في {edition.name}، الضغط على كلمات الصفحة والتمييز الدقيق داخل الصورة غير متاح — المزايا دي مبنية على صفحات مصحف المدينة فقط. القراءة وآيات السورة والروابط تحت شغالة عادي.
+            {/* Item 5.11: the warning is also the way out. */}
+            <button type="button" onClick={switchToMadinah}
+              className="block mt-2 px-3 py-1.5 rounded-lg grad-emerald-door text-white text-sm polish-press">افتح مصحف المدينة</button>
           </div>
         )}
 
@@ -4852,9 +4861,10 @@ export default function QuranMushafPage({
               are Madinah-only). Bottom-center, pointer-events-none so
               it never eats a tap; hidden in clean reading + intro. */}
           {edition.id !== 'madinah' && !showRatelIntro && !cleanMode && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/70 text-white text-xs font-bold rounded-full pointer-events-none whitespace-nowrap">
-              {edition.name}: الضغط على الكلمات والتمييز داخل الصورة متاح في مصحف المدينة فقط
-            </div>
+            <button type="button" onClick={(e) => { e.stopPropagation(); switchToMadinah(); }}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/70 text-white text-xs font-bold rounded-full whitespace-nowrap polish-press">
+              {edition.name}: الضغط على الكلمات في مصحف المدينة بس — دوس هنا تفتحه
+            </button>
           )}
 
           {/* Clean reading: hide every control, keep only the page. */}
