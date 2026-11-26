@@ -3,7 +3,7 @@
 // recitation (setting 'quran-ear'). Shares the one worker in lib/quranEar.
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Download } from 'lucide-react';
-import { loadEar, transcribe, onEarMessage, earBackend, getEar, setEar } from '../lib/quranEar';
+import { loadEar, transcribe, onEarMessage, earBackend, earRevision, getEar, setEar } from '../lib/quranEar';
 
 type Status = 'idle' | 'loading' | 'ready' | 'recording' | 'working';
 
@@ -70,7 +70,7 @@ export default function QuranAsrLab() {
         try {
           const audio = await toMono16k(new Blob(chunksRef.current, { type: rec.mimeType }));
           const r = await transcribe(audio);
-          if (r) { setText(r.text); setInfo(`التحليل خد ${(r.ms / 1000).toFixed(1)} ثانية على جهازك (${earBackend()})`); }
+          if (r) { setText(r.text); setInfo(`التحليل خد ${(r.ms / 1000).toFixed(1)} ثانية على جهازك (${earBackend()}${earRevision() ? ` · ${earRevision().slice(0, 7)}` : ''})`); }
           else setErr('ما قدرش يحلّل التسجيل');
         } catch (e) {
           setErr(String((e as Error).message || e));

@@ -16,6 +16,11 @@ if (env.backends?.onnx?.wasm) {
   env.backends.onnx.wasm.numThreads = iso ? Math.max(1, Math.min(4, cores - 1)) : 1;
 }
 const MODEL = 'iqbalaesthetic/Basira';
+// Items 3.5 / 10.2 (2026-11-26): pin the Hub commit so a silent update of
+// the model repo cannot change accuracy without a trace here. This is the
+// 'main' sha on 2026-11-26 (lastModified 2026-09-13). To move to a newer
+// model, change this hash on purpose and re-test on iPad.
+const MODEL_REVISION = '314f3d74186e1904b02d653868f6dd6870d5d744';
 
 type Asr = (audio: Float32Array, opts?: Record<string, unknown>) => Promise<{ text: string } | { text: string }[]>;
 let asr: Asr | null = null;
@@ -50,7 +55,7 @@ async function load() {
   let gpuMs = Infinity;
   if (hasGpu) {
     try {
-      gpu = (await pipeline('automatic-speech-recognition', MODEL, { device: 'webgpu', dtype: 'q4', progress_callback: progress })) as unknown as Asr;
+      gpu = (await pipeline('automatic-speech-recognition', MODEL, { device: 'webgpu', dtype: 'q4', revision: MODEL_REVISION, progress_callback: progress })) as unknown as Asr;
       await bench(gpu); // first run pays for shader compilation
       gpuMs = await bench(gpu);
     } catch { await dispose(gpu); gpu = null; gpuMs = Infinity; }
@@ -61,7 +66,7 @@ async function load() {
   let cpu: Asr | null = null;
   let cpuMs = Infinity;
   try {
-    cpu = (await pipeline('automatic-speech-recognition', MODEL, { device: 'wasm', dtype: 'q8', progress_callback: progress })) as unknown as Asr;
+    cpu = (await pipeline('automatic-speech-recognition', MODEL, { device: 'wasm', dtype: 'q8', revision: MODEL_REVISION, progress_callback: progress })) as unknown as Asr;
     await bench(cpu);
     cpuMs = await bench(cpu);
   } catch (err) {
@@ -77,7 +82,7 @@ self.onmessage = async (e: MessageEvent) => {
   try {
     if (msg.type === 'load') {
       await load();
-      self.postMessage({ type: 'ready', backend, benchMs });
+      self.postMessage({ type: 'ready', backend, benchMs, revision: MODEL_REVISION });
     } else if (msg.type === 'run') {
       await load();
       const t0 = performance.now();

@@ -62,6 +62,7 @@ export function setEar(k: EarKind): void {
 type Listener = (m: any) => void;
 let worker: Worker | null = null;
 let readyBackend = '';
+let readyRevision = '';
 let loadPromise: Promise<string> | null = null;
 const listeners = new Set<Listener>();
 const pending = new Map<number, (r: { text: string; ms: number } | null) => void>();
@@ -89,6 +90,8 @@ export function onEarMessage(l: Listener): () => void {
   return () => listeners.delete(l);
 }
 export function earBackend(): string { return readyBackend; }
+/** Hub commit of the loaded Whisper model (items 3.5 / 10.2), for diagnostics. */
+export function earRevision(): string { return readyRevision; }
 
 // 3.2: first load downloads the Whisper model from the Hub; re-armed by
 // every progress message, so this only fires when nothing moves.
@@ -120,7 +123,7 @@ export function loadEar(): Promise<string> {
     };
     const off = onEarMessage((m) => {
       if (m.type === 'progress') arm();
-      else if (m.type === 'ready') { clearTimeout(timer); readyBackend = m.backend; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
+      else if (m.type === 'ready') { clearTimeout(timer); readyBackend = m.backend; readyRevision = typeof m.revision === 'string' ? m.revision : ''; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
       else if (m.type === 'error' && m.id === undefined) { clearTimeout(timer); off(); loadPromise = null; reject(new Error(m.message)); }
     });
     arm();
