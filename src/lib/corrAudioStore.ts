@@ -30,7 +30,8 @@
 // rateMode:'playback') and the user's corrRate applies at play time
 // via audio.playbackRate (pitch-preserved). v2 entries miss by
 // version and refill gradually; hydrate deletes old-version rows.
-export const CORR_AUDIO_CACHE_VERSION = 'v3';
+// v4 (item 4.11): the server key now includes the seed-text hash.
+export const CORR_AUDIO_CACHE_VERSION = 'v4';
 
 export interface CorrAudioEntry {
   key: string;

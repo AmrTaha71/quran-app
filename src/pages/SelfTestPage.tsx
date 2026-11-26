@@ -2072,9 +2072,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // (pitch-preserved) — so one file serves all rates and a
       // rate change never regenerates. Callers WITHOUT the flag
       // (old cached tabs) keep baked-speed behavior server-side.
-      const body = pos
-        ? JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, rateMode: 'playback' })
-        : JSON.stringify({ text: correctionSpeechText(words), voice: corrGender, rateMode: 'playback' });
+      // Item 4.7: Quran words are generated ONLY from verified positions
+      // (the server rebuilds them from the seed). No positions = no
+      // generated audio: the caller falls through to the next voice in the
+      // chain, and the diagnostics count how often this happens.
+      if (!pos) { diagPush('corr-positions-missing', { label: String(words.length) }); return null; }
+      const body = JSON.stringify({ mode: 'corr', voice: corrGender, shape: pos.shape, spoken: correctionSpeechText(words), positions: pos.positions, rateMode: 'playback' });
       // 2026-11-13: generate-voice has a per-minute cap. A burst of ~20
       // prefetches returned 429 nine times in one run (iPad diag), so
       // corrections went silent. Cap concurrency at 3 and retry a 429

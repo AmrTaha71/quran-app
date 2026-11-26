@@ -190,16 +190,30 @@ function corrPromptFingerprint(engine: string, voice: "male" | "female"): string
   return h.toString(16).padStart(8, "0");
 }
 
+// Item 4.11: the shared cache key carries a hash of the seeded text the
+// audio says (the verified spoken text, rebuilt from quran_verses), so a
+// seed correction (rasm/tashkeel) gets new audio instead of the old file
+// for a year (the files are immutable).
+function seedTextHash(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
 function corrLogicalKey(
   voice: string | undefined,
   shape: "context" | "bare",
   positions: { id: number; w: number }[],
   engine: string,
+  seedText: string,
 ): string {
   const v = voice === "female" ? "female" : "male";
   const pos = positions.map((p) => `${p.id}-${p.w}`).join("_");
   const fp = corrPromptFingerprint(engine, v);
-  return `v3_${fp}_${v}_${shape}_${pos}`;
+  return `v4_${fp}_${seedTextHash(seedText)}_${v}_${shape}_${pos}`;
 }
 
 function corrCacheFileName(key: string, engine: string): string {
@@ -669,7 +683,9 @@ async function generateViaRealtime(
           return;
         }
         const transcript = transcriptDone ?? transcriptParts.join("");
-        if (transcript && normalizeForCompare(transcript) !== normalizeForCompare(text)) {
+        // Item 4.6: an EMPTY transcript is a failed check, not a pass —
+        // unverified audio must never reach the user.
+        if (!transcript || normalizeForCompare(transcript) !== normalizeForCompare(text)) {
           // Spoken words differ from the requested text: discard.
           // Lengths only in the log — never the texts themselves.
           console.warn(
@@ -1073,7 +1089,7 @@ Deno.serve(async (req: Request) => {
     // query. Lengths only — no text is ever logged.
     if (isCorrMode) {
       const primaryEngine = azureKey ? "azure" : "realtime";
-      corrKey = corrLogicalKey(voice, corrShape!, corrPositions!, primaryEngine);
+      corrKey = corrLogicalKey(voice, corrShape!, corrPositions!, primaryEngine, corrSpoken!);
       const cachedUrl = await findCorrCachedUrl(supabaseClient, corrKey, primaryEngine);
       if (cachedUrl) {
         try {
