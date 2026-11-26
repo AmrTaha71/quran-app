@@ -223,7 +223,7 @@ export default function LinkModal({
         } catch {
           // Was silently swallowed: the recording would vanish with no
           // trace. Surface it; the transcript flow below still proceeds.
-          setAudioError('تعذر رفع المقطع يا رنا — سيُحفظ النص فقط، وهتحتاجي ترفعي الملف تاني بعدين.');
+          setAudioError('تعذر رفع المقطع — سيُحفظ النص فقط، وهتحتاجي ترفعي الملف تاني بعدين.');
           if (transcriptText) {
             setOriginalTranscript(transcriptText);
             await doRephrase(transcriptText, '', 'rephrase');
@@ -582,15 +582,15 @@ export default function LinkModal({
           {phase === 'input' && (
             <div className="space-y-3">
               <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-hairline-emerald">
-                <p className="text-sm font-semibold text-accent-700 mb-3 text-center">تسجيل صوتي مباشر يا رنا</p>
-                <p className="text-xs text-accent-600 mb-4 text-center">سجلي المقطع يا رنا — سيتم تحويله لنص أثناء التسجيل</p>
+                <p className="text-sm font-semibold text-accent-700 mb-3 text-center">تسجيل صوتي مباشر</p>
+                <p className="text-xs text-accent-600 mb-4 text-center">سجلي المقطع — سيتم تحويله لنص أثناء التسجيل</p>
                 <div className="flex flex-col gap-2.5">
                   <button onClick={isRecording ? stopRecording : startRecording}
                     className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-smooth ${
                       isRecording ? 'bg-red-600 hover:bg-red-600 text-white animate-pulse' : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-md'
                     }`}>
                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isRecording ? 'وقفي التسجيل يا رنا' : 'سجلي مباشر يا رنا'}
+                    {isRecording ? 'وقفي التسجيل' : 'سجلي مباشر'}
                   </button>
                   {isRecording && liveTranscript && (
                     <div className="bg-white rounded-2xl p-3 border border-hairline-emerald animate-fade-in">
@@ -617,7 +617,7 @@ export default function LinkModal({
                   <div className="flex gap-2 mt-2">
                     <button onClick={() => { setOriginalTranscript(linkContent.trim()); doRephrase(linkContent.trim(), '', 'rephrase'); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg transition-smooth">
-                      <Sparkles className="w-3.5 h-3.5" /> إعادة صياغة بلغة سهلة يا رنا
+                      <Sparkles className="w-3.5 h-3.5" /> إعادة صياغة بلغة سهلة
                     </button>
                     <button onClick={() => { setOriginalTranscript(''); setRephrasedText(linkContent.trim()); setReviewMode('keep_original'); setPhase('review'); }}
                       className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg transition-smooth">
@@ -772,7 +772,7 @@ export default function LinkModal({
               {/* AI version history: the approve-or-re-request loop */}
               {versions.length > 1 && (
                 <div className="bg-white rounded-2xl p-3 border border-hairline">
-                  <p className="text-xs font-semibold text-accent-600 mb-2">نسخ الصياغة يا رنا — اختاري أي نسخة لعرضها، وبعدين وافقي واحفظي أو اطلبي تعديل جديد</p>
+                  <p className="text-xs font-semibold text-accent-600 mb-2">نسخ الصياغة — اختاري أي نسخة لعرضها، وبعدين وافقي واحفظي أو اطلبي تعديل جديد</p>
                   <div className="space-y-1.5">
                     {versions.map((v, i) => {
                       const isActive = v.text === rephrasedText;
@@ -812,7 +812,7 @@ export default function LinkModal({
               )}
 
               {/* Actions: Rana's own words for the written text */}
-              <p className="text-sm font-semibold text-emerald-700 text-center pt-1">النص المكتوب حلو كده يا رنا؟</p>
+              <p className="text-sm font-semibold text-emerald-700 text-center pt-1">النص المكتوب حلو كده؟</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <button onClick={handleSave}
                   className="flex-1 flex items-center justify-center gap-1.5 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition-smooth text-sm shadow-md hover:shadow-lg">
@@ -845,7 +845,7 @@ export default function LinkModal({
               <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
                 <Check className="w-8 h-8 text-emerald-600" />
               </div>
-              <p className="text-sm font-semibold text-accent-800">تم يا رنا — اتبعت التربيط للمراجعة بنجاح</p>
+              <p className="text-sm font-semibold text-accent-800">تم — اتبعت التربيط للمراجعة بنجاح</p>
               <p className="text-xs text-accent-600">سيظهر للمستخدمين بعد موافقة الإدارة</p>
             </div>
           )}

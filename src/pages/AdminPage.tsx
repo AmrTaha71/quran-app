@@ -79,6 +79,10 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   // voice buttons, so showing hundreds at once would freeze the page.
   // Rana sees 50 at a time and loads more on demand.
   const [pendingVisible, setPendingVisible] = useState(50);
+  // 16.12: which top tab is open (kept for this session).
+  const [adminTab, setAdminTab] = useState<'review' | 'verses' | 'stats'>(() => {
+    try { const t = sessionStorage.getItem('quran-admin-tab'); return t === 'verses' || t === 'stats' ? t : 'review'; } catch { return 'review'; }
+  });
   const [rephrasingId, setRephrasingId] = useState<number | null>(null);
   // S5: per-card rephrase input (was one shared string, so typing in
   // card A sent from card B). Keyed by pending-link id.
@@ -732,6 +736,18 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
             <button onClick={() => setAdminError('')} className="text-red-500 hover:bg-red-100 rounded p-1"><X className="w-4 h-4" /></button>
           </div>
         )}
+        {/* 16.12: top tabs (same look as the stats tabs): review lists /
+            verse table / statistics. Only one area shows at a time. */}
+        <div role="tablist" aria-label="أقسام لوحة الإدارة" className="flex gap-1.5 mb-4 bg-white border border-hairline rounded-xl p-1 w-fit">
+          {([['review', 'المراجعة'], ['verses', 'جدول الآيات'], ['stats', 'الإحصائيات']] as const).map(([key, label]) => (
+            <button key={key} role="tab" aria-selected={adminTab === key}
+              onClick={() => { setAdminTab(key); if (key === 'stats' && !openPanel) setOpenPanel('progress'); try { sessionStorage.setItem('quran-admin-tab', key); } catch { /* ignore */ } }}
+              className={`min-h-[44px] px-4 rounded-lg text-sm font-semibold ${adminTab === key ? 'bg-emerald-700 text-white' : 'text-accent-600 hover:bg-gray-100'}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className={adminTab === 'review' ? '' : 'hidden'}>
         {/* Review: three clear lists */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           {BUCKETS.map(({ key, title, hint, Icon, cls }) => (
@@ -747,6 +763,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           ))}
         </div>
 
+        </div>
+        <div className={adminTab === 'stats' ? '' : 'hidden'}>
         {/* Stats: ONE button; its four panels are tabs inside */}
         <div className="mb-4">
           <button onClick={() => setOpenPanel((cur) => (cur ? null : 'progress'))}
@@ -912,6 +930,8 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
           )}
         </div>
 
+        </div>
+        <div className={adminTab === 'verses' ? '' : 'hidden'}>
         {/* Toolbar — beautified */}
         <div className="bg-white rounded-2xl border border-hairline p-4 mb-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
@@ -963,7 +983,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <div key={verse.id} className={`p-4 ${bgClass} ${isRanaTarget ? 'ring-2 ring-amber-400 ring-offset-1' : ''} hover:shadow-sm transition-smooth animate-fade-in relative`}>
                     {isRanaTarget && (
                       <div className="absolute -top-2 right-4 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg animate-bounce-slow">
-                        <span className="text-xs font-semibold whitespace-nowrap">سجلي من هنا يا رنا</span>
+                        <span className="text-xs font-semibold whitespace-nowrap">سجلي من هنا</span>
                         <svg className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
@@ -1055,6 +1075,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
 
@@ -1244,20 +1265,20 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                           <p className="text-xs font-semibold text-violet-700 mb-1">صياغة مقترحة بالذكاء الاصطناعي{proposals[link.id].command ? ` (طلب: ${proposals[link.id].command})` : ''}</p>
                           <p className="text-sm text-accent-700 leading-relaxed mb-2">{proposals[link.id].text}</p>
                           <div className="flex gap-2">
-                            <button onClick={() => applyProposal(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg disabled:opacity-50">{savingIds[link.id] ? 'جارٍ الحفظ…' : 'اعتمديه يا رنا'}</button>
-                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-600 text-xs hover:bg-gray-100 rounded-lg">تجاهليه يا رنا</button>
+                            <button onClick={() => applyProposal(link.id)} disabled={!!savingIds[link.id]} className="flex items-center gap-1 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded-lg disabled:opacity-50">{savingIds[link.id] ? 'جارٍ الحفظ…' : 'اعتمديه'}</button>
+                            <button onClick={() => discardProposal(link.id)} className="px-3 py-1.5 text-accent-600 text-xs hover:bg-gray-100 rounded-lg">تجاهليه</button>
                           </div>
-                          <p className="text-xs text-accent-600 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي يا رنا — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
+                          <p className="text-xs text-accent-600 mt-1.5">النص الأصلي محفوظ زي ما هو لحد ما تعتمدي — اطلبي تعديل تاني من الحقل اللي فوق وكرري لحد ما ترضي، وبعدين اعتمدي.</p>
                         </div>
                       )}
                                             <div className="flex gap-2 mt-3">
                         <button onClick={() => approveLink(link.id)} disabled={!!savingIds[link.id]}
                           className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-semibold rounded-lg transition-smooth disabled:opacity-50">
-                          <Check className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ النشر…' : 'اقبلي وانشري يا رنا'}
+                          <Check className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ النشر…' : 'اقبلي وانشري'}
                         </button>
                         <button onClick={() => rejectLink(link.id)} disabled={!!savingIds[link.id]}
                           className="flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition-smooth disabled:opacity-50">
-                          <X className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ الرفض…' : 'ارفضيه يا رنا'}
+                          <X className="w-4 h-4" /> {savingIds[link.id] ? 'جارٍ الرفض…' : 'ارفضيه'}
                         </button>
                       </div>
                     </div>
