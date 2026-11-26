@@ -1039,15 +1039,23 @@ export default function QuranMushafPage({
             void getQuranTextCache().putRows(fetched);
             rows = fetched;
           }
+          // Item 5.18: build the trigram index in slices of 400 ayat,
+          // yielding to the browser between slices — one synchronous
+          // pass over 6236 ayat froze the popup on its first open.
           const idx = new Map<string, number[]>();
-          rows.forEach((r, i) => {
-            const words = wordsOf(r);
-            for (let j = 0; j + 2 < words.length; j++) {
-              const key = `${words[j]} ${words[j + 1]} ${words[j + 2]}`;
-              const arr = idx.get(key);
-              if (arr) arr.push(i); else idx.set(key, [i]);
+          const SLICE = 400;
+          for (let start = 0; start < rows.length; start += SLICE) {
+            const end = Math.min(rows.length, start + SLICE);
+            for (let i = start; i < end; i++) {
+              const words = wordsOf(rows[i]);
+              for (let j = 0; j + 2 < words.length; j++) {
+                const key = `${words[j]} ${words[j + 1]} ${words[j + 2]}`;
+                const arr = idx.get(key);
+                if (arr) arr.push(i); else idx.set(key, [i]);
+              }
             }
-          });
+            if (end < rows.length) await new Promise<void>((r) => setTimeout(r, 0));
+          }
           quranTextCache.current = rows;
           trigramIndex.current = idx;
           return rows;
