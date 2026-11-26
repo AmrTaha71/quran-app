@@ -549,7 +549,9 @@ export default function QuranMushafPage({
   const [suggestTitle, setSuggestTitle] = useState('');
   const [suggestType, setSuggestType] = useState<string>(LINK_TYPES[0]?.value ?? 'wajih');
   const [suggestSending, setSuggestSending] = useState(false);
-  const [suggestSent, setSuggestSent] = useState(false);
+  // Item 5.19: 'app' = stored in the review queue (confirmed); 'mail' =
+  // the user's mail app was opened (not confirmed sent).
+  const [suggestSent, setSuggestSent] = useState<false | 'app' | 'mail'>(false);
   const [suggestError, setSuggestError] = useState('');
   const [suggestGender, setSuggestGender] = useState<'male' | 'female' | null>(null);
   useEffect(() => {
@@ -576,17 +578,24 @@ export default function QuranMushafPage({
     setSuggestSending(true); setSuggestError('');
     // Signed-in users also land in the admin review queue; everyone
     // gets a ready email to the admin (no mail server secret needed).
+    // Item 5.19: a signed-in suggestion is sent inside the app and «تم»
+    // shows only after the insert is confirmed — no mail app. Without
+    // an account the mail app opens, and the screen says exactly that.
     if (session) {
-      await supabase.from('ayah_links').insert({
+      const { error } = await supabase.from('ayah_links').insert({
         verse_id: selectedVerse.id, link_content: text, link_title: suggestTitle.trim() || null,
         link_types: [suggestType], status: 'pending', created_by: session.user.id, is_ai_draft: false,
       });
+      setSuggestSending(false);
+      if (error) { setSuggestError('ما وصلش — تأكد من النت وحاول تاني'); return; }
+      setSuggestSent('app'); setSuggestText(''); setSuggestTitle('');
+      return;
     }
     setSuggestSending(false);
     const subject = `اقتراح تربيط — ${selectedVerse.surah_name} آية ${selectedVerse.ayah_no}`;
     const body = `${selectedVerse.surah_name} — آية ${selectedVerse.ayah_no}\n${selectedVerse.ayah_text}\n\n${suggestTitle.trim() ? suggestTitle.trim() + '\n' : ''}${text}`;
     window.location.href = `mailto:amrgabermousa@yahoo.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setSuggestSent(true); setSuggestText(''); setSuggestTitle('');
+    setSuggestSent('mail');
   };
   // Ayah recitation (open audio CDNs, see lib/reciters.ts),
   // with a repeat switch for memorization. Stops when the popup ayah changes.
@@ -5701,17 +5710,19 @@ export default function QuranMushafPage({
                         <div className="mb-2">
                           <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-3">
                             {suggestSent ? (
-                              <p className="text-sm font-bold text-emerald-700">تم إرسال اقتراحك للإدارة (وبريد جاهز للإرسال). جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
+                              suggestSent === 'app'
+                                ? <p className="text-sm font-bold text-emerald-700">وصل اقتراحك للإدارة للمراجعة. جزاك الله خيرًا، ونتشارك الأجر كلنا.</p>
+                                : <p className="text-sm font-bold text-amber-800">اتفتح بريدك والرسالة جاهزة — دوس «إرسال» من هناك عشان توصل. ولو سجّلت دخولك، الاقتراح بيتبعت من جوه التطبيق على طول.</p>
                             ) : (
                               <>
-                                <p className="text-sm font-semibold text-accent-700 mb-2">اقترح تربيطًا لهذه الآية — يوصل للإدارة بالبريد للمراجعة قبل النشر.</p>
+                                <p className="text-sm font-semibold text-accent-700 mb-2">{session ? 'اقترح تربيطًا لهذه الآية — بيوصل للإدارة من جوه التطبيق للمراجعة قبل النشر.' : 'اقترح تربيطًا لهذه الآية — من غير تسجيل دخول هيفتحلك بريدك تبعته منه.'}</p>
                                 <textarea value={suggestText} onChange={(e) => setSuggestText(e.target.value)} rows={3} placeholder="اكتب التربيط هنا…" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
                                 <input value={suggestTitle} onChange={(e) => setSuggestTitle(e.target.value)} placeholder="عنوان مختصر (اختياري)" className="w-full border border-gray-200 rounded-lg p-2 text-sm mb-2 bg-white" />
                                 <div className="mb-2"><DrumSelect label="نوع التربيط" value={suggestType} onChange={(v) => setSuggestType(String(v))}
                                   options={LINK_TYPES.map((t) => ({ value: t.value, label: t.label }))} /></div>
                                 {suggestError && <p className="text-xs font-bold text-red-600 mb-2">{suggestError}</p>}
                                 <button onClick={submitSuggestion} disabled={suggestSending} className="w-full py-2.5 grad-emerald-door disabled:opacity-50 text-white font-bold rounded-xl text-sm polish-press">
-                                  {suggestSending ? 'جارٍ الإرسال…' : 'إرسال الاقتراح بالبريد'}
+                                  {suggestSending ? 'جارٍ الإرسال…' : session ? 'ابعت الاقتراح' : 'افتح بريدي وابعته'}
                                 </button>
                               </>
                             )}
