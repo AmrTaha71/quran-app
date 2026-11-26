@@ -4,9 +4,11 @@ import App from './App.tsx';
 import ErrorBoundary from './components/ErrorBoundary.tsx';
 // Keep the browser's install prompt from app start (Settings → ثبّت التطبيق reads it).
 import './lib/installPrompt';
-// Every launch opens the Madinah mushaf (2026-11-11): the links, timings
-// and highlights are built on it. Another edition is chosen from the
-// settings and lasts until the app is closed.
+// Every launch opens the Madinah mushaf (2026-11-11, on purpose): the links,
+// timings and highlights are built on it. Another edition is chosen from
+// the settings and lasts until the app is closed (sessionStorage marker).
+// 6.16: kept as a deliberate rule, documented here; owner question in the
+// phase 5 report whether a chosen edition should survive a restart.
 try {
   if (!sessionStorage.getItem('mushaf-edition-reset')) {
     localStorage.setItem('quran-mushaf-edition', '0');
