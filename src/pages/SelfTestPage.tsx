@@ -6754,6 +6754,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </>
             )}
+            {/* Item 2.20: the start button stays in reach inside the doors
+                that are not themselves a range choice (settings, mic check,
+                scores, results). Back is the fixed bottom-left bar. */}
+            {(lobbyDoor === 'settings' || lobbyDoor === 'mic' || lobbyDoor === 'scores' || lobbyDoor === 'results') && (
+              <button onClick={() => { setLobbyDoor(null); void startTest(); }} disabled={loading}
+                className="w-full py-3.5 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
+                {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
+              </button>
+            )}
           </div>
         )}
 
