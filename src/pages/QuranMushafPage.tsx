@@ -479,6 +479,23 @@ export default function QuranMushafPage({
   // rules; only its timer chip joins the fade (the clean-mode page
   // pill stays).
   const [fsOverlaysVisible, setFsOverlaysVisible] = useState(true);
+  // Item 5.5: «اسحب يمين للصفحة الجاية» for the first 3 Mushaf opens,
+  // gone for good once the reader has turned a page by swiping.
+  const SWIPE_HINT_KEY = 'quran-swipe-hint-v1';
+  const [swipeHint, setSwipeHint] = useState(() => {
+    try { return Number(localStorage.getItem(SWIPE_HINT_KEY) || '0') < 3; } catch { return false; }
+  });
+  useEffect(() => {
+    if (!swipeHint) return;
+    try { localStorage.setItem(SWIPE_HINT_KEY, String(Number(localStorage.getItem(SWIPE_HINT_KEY) || '0') + 1)); } catch { /* ignore */ }
+    const t = setTimeout(() => setSwipeHint(false), 4000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const noteSwipeLearned = () => {
+    setSwipeHint(false);
+    try { localStorage.setItem(SWIPE_HINT_KEY, '3'); } catch { /* ignore */ }
+  };
   const fsOverlayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function pokeFsOverlays() {
     setFsOverlaysVisible(true);
@@ -1434,15 +1451,12 @@ export default function QuranMushafPage({
   }, [nowPlayingAyah, showFullscreen]);
 
   // Page swipe navigation (touch): attached only to the page image so
-  // swipes over the verse strip still scroll the strip. Normal view:
-  // swipe left = next page, swipe right = previous page, matching the
-  // corner buttons. Fullscreen ONLY (user bug report 2026-11-04):
-  // the mapping is inverted — swipe left = previous page, swipe
-  // right = next page — because in fullscreen the user reported
-  // getting the previous page when swiping for the next and vice
-  // versa. The branch keys on showFullscreen state, which is true
-  // exactly when the fullscreen container is the one receiving
-  // touches, so the normal-view mapping is untouched.
+  // swipes over the verse strip still scroll the strip. Item 5.5: ONE
+  // rule everywhere, the paper Mushaf's — the next page lies on the
+  // left, so the finger pulls it to the right: swipe RIGHT = next page,
+  // swipe LEFT = previous. This is the mapping Dr. Amr asked for in
+  // fullscreen (bug report 2026-11-04); the normal view used to be the
+  // opposite, and the finger-follow drag already matched it.
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   // Timestamp of the last swipe page-turn: the compatibility click that
@@ -1509,6 +1523,7 @@ export default function QuranMushafPage({
         dragRef.current.target = target;
         setWrapMove(dir * width, true);
         goToPage(target);
+        noteSwipeLearned();
         // released by the effect below once the new page is displayed (failsafe 1.8s)
         setTimeout(() => { if (dragRef.current.hold) clearWrapMove(); }, 1800);
       } else {
@@ -1523,16 +1538,10 @@ export default function QuranMushafPage({
     const dy = t.clientY - startY;
     if (Math.abs(dx) >= 60 && Math.abs(dx) >= Math.abs(dy)) {
       lastSwipeAt.current = Date.now();
-      // Fullscreen-only inversion (2026-11-04): showFullscreen is true
-      // exactly when the fullscreen container is the one receiving
-      // touches, so this branch cannot affect the normal view.
-      if (showFullscreen) {
-        if (dx < 0) goToPage(currentPage - 1);
-        else goToPage(currentPage + 1);
-      } else {
-        if (dx < 0) goToPage(currentPage + 1);
-        else goToPage(currentPage - 1);
-      }
+      // Item 5.5: same direction in fullscreen and the normal view.
+      if (dx < 0) goToPage(currentPage - 1);
+      else goToPage(currentPage + 1);
+      noteSwipeLearned();
     }
     // Taps are handled by the wrapper's onClick, NOT here: opening the
     // popup from touchend raced with the compatibility click that follows
@@ -4733,9 +4742,11 @@ export default function QuranMushafPage({
               {/* W5-E (2026-11-19, decision 9): ONE «عودة» at the PHYSICAL
                   bottom-left, lifted above the home indicator (the
                   Dynamic Island blocks the top). The old top-right
-                  عودة + X pair (same exit path) is gone. It fades with
-                  the other chrome after 5s; any tap brings it back. */}
-              <div className={`absolute z-30 mushaf-chrome-enter transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                  عودة + X pair (same exit path) is gone. Item 5.4: the
+                  other chrome fades after 1.5 s idle, but «عودة» NEVER
+                  disappears — it only dims, and stays tappable, so the
+                  way out of fullscreen is always on screen. */}
+              <div className={`absolute z-30 mushaf-chrome-enter transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-60'}`}
                 style={{ left: 'max(0.5rem, env(safe-area-inset-left))', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.4rem)' }}
                 onClick={(e) => e.stopPropagation()}>
                 <BackButton label="عودة" onBack={() => {
@@ -4750,6 +4761,12 @@ export default function QuranMushafPage({
                 } catch { /* ignore */ }
                 if (startInFollow) { stopFollow(); exitFullscreenView(); onNavigate('app'); } else { exitFullscreenView(); } }} />
               </div>
+              {swipeHint && (
+                <div className="absolute z-30 left-1/2 -translate-x-1/2 pointer-events-none px-4 py-2 rounded-full bg-black/60 text-white text-sm font-semibold ring-1 ring-white/20"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 3.5rem)' }} role="status">
+                  اسحب لليمين للصفحة الجاية
+                </div>
+              )}
               {/* 2026-11-20: opened from the Listen page → a «قفل الشاشة» pill (fades with the
                   other chrome) turns the screen black; the audio and the Mushaf underneath keep
                   going, and closing the black screen returns to this same fullscreen Mushaf. */}
