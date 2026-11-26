@@ -2,8 +2,7 @@
 // READ side only: renders localStorage 'quran-recent-activity-v1'
 // (written by the Listen / SelfTest / Adhkar pages — this file never
 // writes it). Up to 6 items, most recent first. Empty / missing /
-// corrupt → the whole row hides (returns null), never an error or an
-// empty box. Tap: listen/test → Mushaf at that ayah (existing
+// corrupt → a short empty-state line (6.15), never an error. Tap: listen/test → Mushaf at that ayah (existing
 // 'quran-mushaf-target' jump); adhkar → the Adhkar page.
 import { useEffect, useState } from 'react';
 import { Headphones, History, Mic, SunMoon } from 'lucide-react';
@@ -53,7 +52,18 @@ export default function RecentlyRow({
     };
   }, []);
 
-  if (items.length === 0) return null;
+  // 6.15: a gentle empty state instead of hiding the row.
+  if (items.length === 0) {
+    return (
+      <div className="mb-4">
+        <p className="font-bold text-ink text-base flex items-center gap-2 mb-1">
+          <History className="w-5 h-5 text-emerald-700" />
+          سمعت / سمّعت مؤخرًا
+        </p>
+        <p className="text-sm text-ink-2">ابدأ أول استماع أو تسميع — هيظهر هنا عشان ترجع له بضغطة.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-4">
