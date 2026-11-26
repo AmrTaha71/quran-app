@@ -26,6 +26,7 @@ import BottomNav from '../components/BottomNav';
 import DailyWird from '../components/DailyWird';
 import ReviewDueCard from '../components/ReviewDueCard';
 import SrsDueCard from '../components/SrsDueCard';
+import PageReviewCard from '../components/PageReviewCard';
 import ShareProgressCard from '../components/ShareProgressCard';
 import { pressFeedback, installGlobalWater } from '../lib/pressFeedback';
 import VoiceSelector from '../components/VoiceSelector';
@@ -639,6 +640,9 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
 
         {/* مراجعة الكلمات الضعيفة (SRS step 4, 2026-11-20): next to the card above. */}
         <SrsDueCard onNavigate={onNavigate} />
+
+        {/* 17.3: the page review queue over «محفوظي». */}
+        <PageReviewCard onNavigate={onNavigate} />
 
         {/* Daily wird + self-test entry */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">

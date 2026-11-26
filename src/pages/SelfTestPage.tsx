@@ -9,6 +9,7 @@ import MistakeVoiceList from '../components/MistakeVoiceList';
 import EarOfflineNotice from '../components/EarOfflineNotice';
 import { requestDayRecap } from '../lib/dailyStats';
 import { registerAligner } from '../lib/alignBridge';
+import { recordTestPages } from '../lib/pageReview';
 import { alignWords, alignWordsStrict, softWordEq, spokenTokens } from '../lib/wordAligner';
 import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
@@ -2614,6 +2615,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         .map(([i, w]) => { const a = ayahs[Number(i)]; return a ? { ayah: `${a.surah_no}:${a.ayah_no}`, words: w.slice(0, 12) } : null; })
         .filter((x): x is { ayah: string; words: string[] } => !!x),
     }));
+    // 17.3: the page review queue learns which Madinah pages were recited
+    // (whole page, clean) and which have open mistakes.
+    try {
+      recordTestPages(ayahs.map((a, i) => ({ g: getGlobalAyahNumber(a.surah_no, a.ayah_no), ok: !!finalGrades[i], skip: !!liveRef.current.skipped[i] }))
+        .filter((x) => !x.skip));
+    } catch { /* never break the done screen */ }
     const nextHistory = [rec, ...history].slice(0, 20);
     try { localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory)); } catch {}
     setHistory(nextHistory);
