@@ -20,6 +20,10 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // 3.17: the same isolation headers as vercel.json, so dev and preview run
+  // the ONNX ear multi-threaded like production (crossOriginIsolated).
+  server: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' } },
+  preview: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' } },
   optimizeDeps: {
     exclude: ['lucide-react'],
   },

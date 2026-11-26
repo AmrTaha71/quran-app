@@ -40,6 +40,11 @@ export function subscribeEarLab(cb: () => void): () => void { earSubs.add(cb); r
 /** A live session failed to load the model: use the browser ear for the
  *  rest of this tab (no error loops); the card offers a retry. */
 export function markEarLabFailed(): void { setEarState({ status: 'error' }); }
+/** 3.17: without cross-origin isolation (Capacitor app, a host without
+ *  COOP/COEP) the ONNX runtime runs on ONE thread — slower. Said on the card. */
+export function earSingleThread(): boolean {
+  return typeof globalThis !== 'undefined' && (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated !== true;
+}
 /** Use the device ear for a test now? Only when it is on AND loaded — or it
  *  was loaded in this tab and only unloaded to save memory (3.13): then the
  *  next session reloads it from the cache in a few seconds. */

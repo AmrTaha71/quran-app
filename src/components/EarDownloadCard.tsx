@@ -10,7 +10,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Download, CheckCircle2 } from 'lucide-react';
 import {
   earLabOn, earDownloadConsented, setEarDownloadConsent, earModelCached,
-  preloadEarLab, getEarLabState, subscribeEarLab, earOnMobileData,
+  preloadEarLab, getEarLabState, subscribeEarLab, earOnMobileData, earSingleThread,
 } from '../lib/quranLabEar';
 
 function startDownload(): void {
@@ -63,6 +63,7 @@ export default function EarDownloadCard() {
         <CheckCircle2 className="w-4 h-4" /> التعرف على التلاوة على جهازك جاهز — {saved === false
           ? 'بس مش محفوظ على الجهاز، هيتحمّل تاني الزيارة الجاية'
           : 'محفوظ على جهازك وبيسمعك من غير إنترنت'}
+        {earSingleThread() && ' · بيشتغل بخيط واحد هنا، فهيبقى أبطأ شوية'}
       </p>
     );
   }
