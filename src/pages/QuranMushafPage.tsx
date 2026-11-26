@@ -2890,7 +2890,15 @@ export default function QuranMushafPage({
     if (!forceWhisper) {
       const ear = followEarChoice();
       if (ear === 'lab') { startLabFollow(startGen); return; }
-      setFollowEarNote(ear);
+      // Item 4.20: the fallback ear is the browser's, which needs the
+      // internet the whole time — say it before the mic fails.
+      const browserSr = !!((window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown }).SpeechRecognition
+        || (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition);
+      const netNote = !browserSr ? ''
+        : navigator.onLine === false
+          ? ' وانت مش متصل بالإنترنت، وسماع المتصفح محتاج إنترنت — اتصل الأول أو نزّل أذن المصحف.'
+          : ' السماع دلوقتي عن طريق المتصفح ومحتاج إنترنت طول الوقت.';
+      setFollowEarNote(ear + netNote);
     } else {
       setFollowEarNote(null);
     }
