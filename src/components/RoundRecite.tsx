@@ -14,7 +14,7 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { DeadlineTimer, RoundState, roundCutMs, loadRoundCutMode } from '../lib/roundJudge';
+import { DeadlineTimer, RoundState, roundCutMs, loadRoundCutMode, ROUND_CUT_LABEL } from '../lib/roundJudge';
 import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
@@ -220,6 +220,12 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
       {phase === 'listening' && (
         <>
           <p className="text-center text-emerald-700 font-bold py-3">بيسمعك… كمّل الآية ({heard.toLocaleString('ar-EG')} من {(rest.length - st.base).toLocaleString('ar-EG')} كلمة)</p>
+          {/* Item 2.19: the round's rules, visible while reciting. */}
+          <p className="text-xs text-accent-700 text-center">
+            {st.corrLeft > 0
+              ? `باقي لك تصحيح واحد. لو غلطت ومصلّحتش، القارئ يوقفك ${ROUND_CUT_LABEL[loadRoundCutMode()]}. غلطة تانية بعد التصحيح بتقفل الموضع.`
+              : 'خلص التصحيح — غلطة تانية دلوقتي بتقفل الموضع.'}
+          </p>
           <button onClick={stopAndGrade} className={`${btn} grad-emerald-door`}>خلصت</button>
         </>
       )}

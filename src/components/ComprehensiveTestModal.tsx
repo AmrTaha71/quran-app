@@ -349,7 +349,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 <p className={`text-2xl font-bold mb-2 ${positionPerfect(showRes.result) ? 'text-emerald-700' : 'text-rose-700'}`}>{positionPerfect(showRes.result) ? '✓ صح' : '✗ غلط'}</p>
                 <RoundReveal ayah={showRes.ayah} result={showRes.result} />
                 <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}{showRes.surahOk === null ? '' : showRes.surahOk ? ' · السورة ✓' : ' · السورة ✗'}</p>
-                <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل بغلطة تانية)' : ''}</p>
+                <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل: غلطة تانية بعد التصحيح بتنهي الموضع)' : ''}</p>
                 {showRes.result.extras > 0 && <p className="text-xs text-amber-700 mb-2">طلبت «كلمتين كمان» {arNum(showRes.result.extras)} مرة — خصم {arNum(showRes.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
                 {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
                 <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">
