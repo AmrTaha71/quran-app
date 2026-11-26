@@ -12,11 +12,12 @@ import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../l
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import MicLevelHint from '../components/MicLevelHint';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
+import { timingCoverage } from '../lib/corrCoverage';
 import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
 import CorrRecitersPanel from '../components/CorrRecitersPanel';
-import { hasChosenReciter, markChosenReciter, recitersForRange, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
+import { hasChosenReciter, markChosenReciter, isDownloaded, recitersForRange, planRangeReciters, type RangeReciterPart } from '../lib/corrDownload';
 import { supabase } from '../lib/supabase';
 import { SURAHS, SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { getQuranTextCache, shouldShowOfflineNotice, isOffline } from '../lib/quranTextCache';
@@ -6303,6 +6304,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               المصحح: <b>{CORR_RECITERS.find((r) => r.folder === corrReciter)?.name || corrReciter}</b>
               {' — '}
               <button type="button" onClick={() => setAskReciter(true)} className="font-semibold text-emerald-700 underline">{firstVisitRef.current ? 'اختار قارئ تاني' : 'غيّره'}</button>
+              {/* Item 2.21: downloaded or online, and whether its word timings
+                  cover the chosen range (else it corrects with the whole ayah). */}
+              <span className="block text-xs text-accent-600 mt-0.5">
+                {isDownloaded(corrReciter) ? 'منزّل على جهازك ✓' : 'بيشتغل أونلاين (مش منزّل)'}
+                {' • '}
+                {(() => {
+                  const c = timingCoverage(corrReciter, passageRange.start.global, passageRange.end.global);
+                  return c === 'full' ? 'بيغطي نطاقك كله كلمة بكلمة' : c === 'partial' ? 'بيغطي جزء من نطاقك كلمة بكلمة، والباقي بالآية كاملة' : 'بيصحّح بالآية كاملة في النطاق ده';
+                })()}
+              </span>
             </p>
             {lobbyDoor === null && (
               <>
