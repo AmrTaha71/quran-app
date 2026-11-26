@@ -510,7 +510,6 @@ export default function QuranMushafPage({
   }, [showFullscreen]);
   const [showIndex, setShowIndex] = useState(false);
   const [indexTab, setIndexTab] = useState<IndexTab>('surah');
-  const [pageInput, setPageInput] = useState('');
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   // Natural aspect of the loaded page image (default 0.63 = Madani page).
@@ -5396,7 +5395,8 @@ export default function QuranMushafPage({
                         ))}
                       </div>
                       {showReciters && (
-                        <div className="mb-2">
+                        // Item 5.8: the list scrolls itself into view when it opens.
+                        <div className="mb-2" ref={(el) => { if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }}>
                           <p className="text-xs text-accent-600 text-center mb-1">اختر القارئ</p>
                           <div className="flex flex-wrap gap-1.5 justify-center">
                             {RECITERS.map((r) => (
@@ -5601,12 +5601,20 @@ export default function QuranMushafPage({
                               className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 polish-press ${reciting ? 'grad-amber-door text-white' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
                               {reciting ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                               {reciting ? 'إيقاف' : 'استمع للآية'}
+                              {/* Item 5.8: whose voice will play, on the button itself. */}
+                              <span className="block text-[10px] font-semibold opacity-80 leading-tight">{reciter.name}</span>
                             </button>
                             <button onClick={() => setSuggestOpen(!suggestOpen)}
                               className="py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 polish-press">
                               <Link className="w-4 h-4" /> {suggestGender === 'female' ? 'اقترحي تربيطة' : 'اقترح تربيطة'}
                             </button>
                           </div>
+                          {/* Item 5.9: repeat the ayah (the loop existed in code with no button). */}
+                          <button onClick={() => { const nv = !reciteLoop; setReciteLoop(nv); if (reciteRef.current) reciteRef.current.loop = nv; }}
+                            aria-pressed={reciteLoop}
+                            className={`w-full mb-2 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 polish-press ${reciteLoop ? 'bg-amber-600 text-white' : 'bg-white border border-hairline-amber text-accent-800'}`}>
+                            <Repeat className="w-4 h-4" /> {reciteLoop ? 'التكرار شغّال — دوس عشان توقفه' : 'كرّر الآية'}
+                          </button>
                           {saveLaterMsg && <p className="text-xs font-semibold text-center text-accent-700 mb-2">{saveLaterMsg}</p>}
                           <div className="mb-2 [&>div]:w-full [&>div>button]:w-full [&>div>button]:justify-center [&>div>button]:py-2 [&>div>button]:text-sm">
                             <ShareButton verseText={shareText} surahName={v.surah_name} ayahNo={v.ayah_no} surahNo={v.surah_no}
