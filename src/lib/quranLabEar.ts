@@ -13,6 +13,7 @@ import { publishMicLevel } from './micLevel';
 import { Downsampler } from './resample16k';
 import { earMicConstraints } from './earMic';
 import { watchMic } from './micWatch';
+import { onMobileData } from './netKind';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
 // W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
@@ -175,12 +176,7 @@ function getWorker(): Promise<Worker> {
 /** W4-P: Wi-Fi only when the browser says so. Cellular, saveData or an unknown
  *  connection (no navigator.connection, e.g. Safari; or no `type`) count as
  *  mobile data: the ~100 MB download then needs an explicit tap every time. */
-export function earOnMobileData(): boolean {
-  const c = (typeof navigator === 'undefined' ? undefined : (navigator as unknown as { connection?: { type?: string; saveData?: boolean } }).connection);
-  if (!c) return true;
-  if (c.saveData === true || c.type === 'cellular') return true;
-  return !(c.type === 'wifi' || c.type === 'ethernet');
-}
+export function earOnMobileData(): boolean { return onMobileData(); }
 /** Start loading the model ahead of time. A cached model always loads (no
  *  download). A real download starts only after an explicit confirm
  *  (`confirmed`), or on Wi-Fi after the one-time consent. Anything else is a

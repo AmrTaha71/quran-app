@@ -27,6 +27,7 @@ import { refUnitForWord } from './refWordUnits';
 import { hadrAudioUrl } from './hadr';
 import { CORR_TIMING_RUNS } from './corrTimingCoverage';
 import { getGlobalAyahNumber } from './surahs';
+import { onMobileData } from './netKind';
 
 // ------------------------------------------------------------------
 // Correction timing setting (replaces the 2-10s stepper).
@@ -213,6 +214,11 @@ export function corrSourceFolder(chosen: string, surah: number, ayah: number): s
 /** Stand-in reciters a test over these ayahs will need: load their
  *  timings before the test instead of at the first mistake. */
 export function preloadCorrStandIns(ayahs: { surah_no: number; ayah_no: number }[]): void {
+  // 9.8: on mobile data (or an unknown connection) no ahead-of-time pull of
+  // other reciters' timing files (~0.9 MB each, up to ~7 MB): the first
+  // untimed ayah loads its stand-in on demand (that one correction plays
+  // as a whole ayah). The chosen reciter's own file still loads as before.
+  if (onMobileData()) return;
   const chosen = getCorrReciter();
   const need = new Set<string>();
   for (const a of ayahs) {
