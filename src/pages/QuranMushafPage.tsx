@@ -691,7 +691,13 @@ export default function QuranMushafPage({
   }, []);
   useEffect(() => { setPopAnchor(selectedVerse ? { ...lastPointRef.current } : null); }, [selectedVerse?.id]);
   // Compact only while on the light first tab; going deeper (tafsir, irab, ...) opens the big window.
-  const popCompact = !!selectedVerse && !!popAnchor && popAnchor.y > 0 && popupTab === 'links' && !hifzMode;
+  // Item 5.10: once the reader leaves the links tab the popup grows to
+  // its large size and STAYS large until it closes — switching tabs no
+  // longer makes it jump back and forth between the two sizes.
+  const [popGrown, setPopGrown] = useState(false);
+  useEffect(() => { setPopGrown(false); }, [selectedVerse]);
+  useEffect(() => { if (popupTab !== 'links') setPopGrown(true); }, [popupTab]);
+  const popCompact = !!selectedVerse && !!popAnchor && popAnchor.y > 0 && popupTab === 'links' && !popGrown && !hifzMode;
   const popPos = (() => {
     if (!popCompact || !popAnchor || typeof window === 'undefined') return null;
     const vw = window.innerWidth, vh = window.innerHeight;
@@ -5381,11 +5387,12 @@ export default function QuranMushafPage({
                       {/* W5-D (2026-11-19): six tiles on top — تربيطات الحفظ، المتشابهات، الإعراب، أسباب النزول، معاني الكلمات، التفسير. «استمع» moved to the bottom row (middle). */}
                       <div className="grid grid-cols-3 gap-1.5 mb-2">
                         <button onClick={() => setPopupTab('links')}
-                          className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 grad-amber-door text-white polish-press ${popupTab === 'links' ? 'ring-2 ring-amber-300' : ''}`}>
+                          aria-pressed={popupTab === 'links'}
+                          className={`py-2.5 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-0.5 transition-smooth polish-press ${popupTab === 'links' ? 'grad-amber-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                           <Link className="w-4 h-4" /> تربيطات الحفظ
                         </button>
                         {([['mutashabihat','المتشابهات'],['irab','الإعراب'],['asbab','أسباب النزول'],['meanings','معاني الكلمات'],['tafsir','التفسير']] as const).map(([k,l]) => (
-                          <button key={k} onClick={() => setPopupTab(k as any)}
+                          <button key={k} onClick={() => setPopupTab(k as any)} aria-pressed={popupTab === k}
                             className={`py-2.5 rounded-xl text-xs font-bold transition-smooth polish-press flex flex-col items-center justify-center gap-0.5 ${popupTab === k ? 'grad-emerald-door text-white' : 'bg-gray-100 text-accent-600 hover:bg-gray-200'}`}>
                             {l}
                             {k === 'mutashabihat' && similarLabel && (
