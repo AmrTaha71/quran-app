@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { pressFeedback } from '../lib/pressFeedback';
 import { useBottomChromeRef } from '../lib/bottomChrome';
 import type { Route } from '../lib/routes';
+import { SK } from '../lib/storageKeys';
 
 
 // Remember the kunya label per user so each page's nav starts with the
@@ -11,7 +12,7 @@ import type { Route } from '../lib/routes';
 let navLabelCache: { uid: string; label: string } | null = null;
 function cachedNavLabel(): string {
   try {
-    const uid = localStorage.getItem('quran-uid');
+    const uid = localStorage.getItem(SK.uid);
     if (uid && navLabelCache && navLabelCache.uid === uid) return navLabelCache.label;
   } catch {
     // storage unavailable: default label

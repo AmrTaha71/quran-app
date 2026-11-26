@@ -13,6 +13,7 @@ import { JUZ_STARTS } from './quranBoundaries';
 import { containingUnit, globalToPoint, unitEndGlobal } from './testRanges';
 import { recentReviewRange, manzilReviewRange, type PageRange } from './reviewPages';
 import { SURAHS } from './surahs';
+import { SK } from './storageKeys';
 import {
   formatPages,
   WIRD_TYPE_LABEL,
@@ -188,7 +189,7 @@ export function dueReview(wird: WirdState, run: number): DueReview {
 }
 
 // --------------------------------------------------------------- recents --
-export const RECENTS_KEY = 'quran-recent-activity-v1';
+export const RECENTS_KEY = SK.recentActivity; // 10.11 registry
 
 export type RecentActivityType = 'listen' | 'test' | 'adhkar';
 
