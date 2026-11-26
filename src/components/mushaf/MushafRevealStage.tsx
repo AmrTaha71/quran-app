@@ -18,7 +18,7 @@ import DigitalRevealStage, { useDigitalPage } from './DigitalRevealStage';
 // disappears into the page; measured on page 3: the scans are RGB(255,255,230).
 const PAPER = '#ffffe6';
 
-export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAll, onlyWrong }: {
+export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAll, onlyWrong, upcoming }: {
   surah: number;
   ayah: number;
   /** revealed[i] = word i (0-based, in ayah order) was recited correctly in place. */
@@ -29,6 +29,10 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   showAll?: boolean;
   /** Item 15.2 (blind mode): on a mistake uncover ONLY the wrong words (red), the rest stays covered. */
   onlyWrong?: boolean;
+  /** 17.8: the session's ayahs still to come («surah:ayah»). Their words on
+   *  this page stay covered, so the page stays put across the session and
+   *  each word appears in its own place only once accepted. */
+  upcoming?: string[];
 }) {
   const page = madinahPageOfAyah(surah, ayah);
   const [boxes, setBoxes] = useState<Box[] | null>(null);
@@ -47,6 +51,12 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   // Every word of the tested ayah on this page (an ayah can continue on the
   // next page; only this page's part is drawn).
   const words = useMemo(() => (boxes || []).filter((b) => b.s === surah && b.a === ayah), [boxes, surah, ayah]);
+  const upcomingKey = (upcoming || []).join(',');
+  const future = useMemo(() => {
+    const set = new Set(upcomingKey ? upcomingKey.split(',') : []);
+    return (boxes || []).filter((b) => set.has(`${b.s}:${b.a}`) && !(b.s === surah && b.a === ayah));
+  }, [boxes, upcomingKey, surah, ayah]);
+  const futureSet = useMemo(() => new Set(upcomingKey ? upcomingKey.split(',') : []), [upcomingKey]);
   // Sticky reveal: a word the caller reported correct stays uncovered for the
   // rest of this ayah, even if the live alignment later re-hypothesises it
   // (interim results get revised). Reset only when the ayah changes.
@@ -67,7 +77,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
   if (digitalPage.digital && words.length > 0) {
     return (
       <DigitalRevealStage page={page} state={digitalPage} mark={(s, a, w) => {
-        if (s !== surah || a !== ayah) return undefined;
+        if (s !== surah || a !== ayah) return !showAll && futureSet.has(`${s}:${a}`) ? 'hidden' : undefined;
         const i = w - 1;
         if (onlyWrong) return wrongSet.has(i) ? 'wrong' : 'hidden';
         if (showAll) return wrongSet.has(i) ? 'wrong' : undefined;
@@ -90,6 +100,13 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
             {loaded && <p dir="rtl" className="text-base font-bold text-accent-700">ورق المدينة مش متاح للآية دي</p>}
           </div>
         )}
+        {!showAll && future.map((b) => {
+          const padX = 0.5, padTop = 1.25, padBot = 0.6;
+          return <div key={`f${b.s}:${b.a}:${b.w}`} className="absolute" style={{
+            left: `${(b.x0 / 1240) * 100 - padX}%`, top: `${(b.y0 / 1754) * 100 - padTop}%`,
+            width: `${((b.x1 - b.x0) / 1240) * 100 + padX * 2}%`, height: `${((b.y1 - b.y0) / 1754) * 100 + padTop + padBot}%`,
+            background: PAPER }} />;
+        })}
         {words.map((b) => {
           const i = b.w - 1;
           const open = onlyWrong ? wrongSet.has(i) : showAll || !!revealed[i] || stickyRef.current.open.has(i);

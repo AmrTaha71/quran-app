@@ -1735,6 +1735,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // are stuck on, 2nd tap = that word. Never the whole ayah. Logged in the
   // diagnostics only, not in the score (scoring rules wait for phase 6).
   const [hintAt, setHintAt] = useState<{ index: number; level: number }>({ index: -1, level: 0 });
+  // 17.8: the session's later ayahs stay covered on the Madinah page.
+  const upcomingKeys = useMemo(() => ayahs.slice(index + 1, index + 40).map((a) => `${a.surah_no}:${a.ayah_no}`), [ayahs, index]);
   // FEAT5-B: shown while the post-correction resume is listening —
   // tells the user the words he said during the correction were not
   // heard, so he says the rest of the ayah again.
@@ -7205,7 +7207,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
                   <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
                   {paperDrawn && (blindMode && !blindShowAll
-                    ? <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} onlyWrong />
+                    ? <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} onlyWrong upcoming={upcomingKeys} />
                     : <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={[]} wrong={wrongIndices} showAll />
                   )}
                   {blindMode && !blindShowAll && (
@@ -7389,7 +7391,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         const st = alignWordsStrict(exp.map((w) => w.norm), spokenLive);
                         return (
                           <div className="mb-4">
-                            <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={st.matched} />
+                            <MushafRevealStage surah={ayahs[index].surah_no} ayah={ayahs[index].ayah_no} revealed={st.matched} upcoming={upcomingKeys} />
                           </div>
                         );
                       })()}
