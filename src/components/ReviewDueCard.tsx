@@ -17,6 +17,7 @@ import {
   dueReview,
   TEST_RANGE_CHOICE_KEY,
   TEST_RANGE_PRESET_KEY,
+  type ReviewRange,
 } from '../lib/homeFeatures';
 
 export default function ReviewDueCard({
@@ -31,9 +32,7 @@ export default function ReviewDueCard({
   const wird = useReadOnReturn(loadWird); // 6.12: re-read on return
   const review = dueReview(wird, run);
 
-  const startReview = () => {
-    const range = review.range;
-    if (!range) return;
+  const startReview = (range: ReviewRange) => {
     try {
       sessionStorage.setItem(
         TEST_RANGE_PRESET_KEY,
@@ -113,19 +112,24 @@ export default function ReviewDueCard({
               </li>
             ))}
           </ul>
-          <p className="text-sm text-ink-2 mt-2">
-            {review.range.label}
-            <span className="block">{review.range.rangeText}</span>
+          {/* 6.13: one range per due part (recent and old), each with its start. */}
+          {review.ranges.map((r) => (
+          <div key={r.kind} className="mt-2">
+          <p className="text-sm text-ink-2">
+            {r.label}
+            <span className="block">{r.rangeText}</span>
           </p>
           <button
             type="button"
             onPointerDown={pressFeedback}
-            onClick={startReview}
+            onClick={() => startReview(r)}
             className="mt-3 w-full py-3 grad-amber-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-press-depth polish-focus"
           >
             <Play className="w-5 h-5" />
-            ابدأ المراجعة
+            {review.ranges.length > 1 ? (r.kind === 'murajaa' ? 'ابدأ مراجعة الحديث' : 'ابدأ مراجعة القديم') : 'ابدأ المراجعة'}
           </button>
+          </div>
+          ))}
         </div>
       )}
     </div>

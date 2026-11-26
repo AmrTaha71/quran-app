@@ -11,6 +11,7 @@
 
 import { JUZ_STARTS } from './quranBoundaries';
 import { containingUnit, globalToPoint, unitEndGlobal } from './testRanges';
+import { recentReviewRange, manzilReviewRange, type PageRange } from './reviewPages';
 import { SURAHS } from './surahs';
 import {
   formatPages,
@@ -126,6 +127,24 @@ export interface DueReview {
   // when review parts are configured — the card then says so kindly
   // instead of offering a start button to nowhere.
   range: ReviewRange | null;
+  // 6.13: every due review part with its own range (murajaa first).
+  ranges: ReviewRange[];
+}
+
+function toReviewRange(kind: 'murajaa' | 'manzil', r: PageRange): ReviewRange {
+  const start = globalToPoint(r.startGlobal);
+  const end = globalToPoint(r.endGlobal);
+  const pages = r.fromPage === r.toPage
+    ? `صفحة ${r.fromPage.toLocaleString('ar-EG')}`
+    : `الصفحات ${r.fromPage.toLocaleString('ar-EG')}–${r.toPage.toLocaleString('ar-EG')}`;
+  return {
+    startGlobal: r.startGlobal,
+    endGlobal: r.endGlobal,
+    kind,
+    juz: containingUnit('juz', r.startGlobal),
+    label: `${kind === 'murajaa' ? 'مراجعة الحفظ الحديث' : 'مراجعة المحفوظ القديم'} — ${pages}`,
+    rangeText: `من سورة ${surahName(start.surah)} آية ${start.ayah.toLocaleString('ar-EG')} إلى سورة ${surahName(end.surah)} آية ${end.ayah.toLocaleString('ar-EG')}`,
+  };
 }
 
 function todayStr(d = new Date()): string {
@@ -152,50 +171,20 @@ export function dueReview(wird: WirdState, run: number): DueReview {
     }));
   const hasReviewConfigured = dueParts.length > 0;
   if (doneToday || !hasReviewConfigured || run <= 0) {
-    return { doneToday, hasReviewConfigured, dueParts, range: null };
+    return { doneToday, hasReviewConfigured, dueParts, range: null, ranges: [] };
   }
 
-  // The review range is the memorized material itself — no page→ayah
-  // conversion is invented (the wird stores pages, not ayahs):
-  //  - murajaa (recent, most urgent first): the memorized portion of
-  //    the Juz holding the run boundary, from that Juz's start to the
-  //    last memorized ayah.
-  //  - manzil only (old): the oldest memorized material, Juz 1 (or
-  //    its memorized portion when the run has not finished it).
-  if ((wird.parts.murajaa || 0) > 0) {
-    const juz = containingUnit('juz', run);
-    const startGlobal = JUZ_STARTS[juz - 1].global;
-    const start = globalToPoint(startGlobal);
-    const end = globalToPoint(run);
-    return {
-      doneToday,
-      hasReviewConfigured,
-      dueParts,
-      range: {
-        startGlobal,
-        endGlobal: run,
-        kind: 'murajaa',
-        juz,
-        label: `مراجعة الحفظ الحديث — الجزء ${juz.toLocaleString('ar-EG')}`,
-        rangeText: `من سورة ${surahName(start.surah)} آية ${start.ayah.toLocaleString('ar-EG')} إلى سورة ${surahName(end.surah)} آية ${end.ayah.toLocaleString('ar-EG')}`,
-      },
-    };
-  }
-  const endGlobal = Math.min(run, unitEndGlobal('juz', 1));
-  const end = globalToPoint(endGlobal);
-  return {
-    doneToday,
-    hasReviewConfigured,
-    dueParts,
-    range: {
-      startGlobal: 1,
-      endGlobal,
-      kind: 'manzil',
-      juz: 1,
-      label: 'مراجعة المحفوظ القديم — الجزء ١',
-      rangeText: `من أول المصحف إلى سورة ${surahName(end.surah)} آية ${end.ayah.toLocaleString('ar-EG')}`,
-    },
-  };
+  // 6.13: each review part gets its own range from ITS page count
+  // (lib/reviewPages, Madinah pages): murajaa = the last N memorized
+  // pages; manzil = N pages of the older material before that, moving
+  // on each day. Both show together when both are set.
+  const ranges: ReviewRange[] = [];
+  const mur = recentReviewRange(run, wird.parts.murajaa || 0);
+  if (mur) ranges.push(toReviewRange('murajaa', mur));
+  const dayNo = Math.floor(new Date(todayStr() + 'T00:00:00').getTime() / 86400000);
+  const man = manzilReviewRange(run, wird.parts.manzil || 0, wird.parts.murajaa || 0, dayNo);
+  if (man) ranges.push(toReviewRange('manzil', man));
+  return { doneToday, hasReviewConfigured, dueParts, range: ranges[0] ?? null, ranges };
 }
 
 // --------------------------------------------------------------- recents --
