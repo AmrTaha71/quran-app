@@ -11,6 +11,7 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
@@ -22,6 +23,24 @@ import org.json.JSONObject;
 public class AlarmSoundPlugin extends Plugin {
   static final String PREFS = "alarm_sound";
 
+  /**
+   * Schedule one alarm. Shared by schedule() and BootReceiver (item 9.4):
+   * AlarmManager forgets every alarm on reboot, so the items are also kept
+   * in SharedPreferences ("items") and re-armed after BOOT_COMPLETED.
+   */
+  static void scheduleOne(Context c, AlarmManager am, JSONObject o) throws Exception {
+    int id = o.getInt("id");
+    Intent in = new Intent(c, AlarmReceiver.class);
+    in.putExtra("sound", o.optString("sound", ""));
+    in.putExtra("title", o.optString("title", ""));
+    in.putExtra("body", o.optString("body", ""));
+    in.putExtra("type", o.optString("type", "adhan"));
+    PendingIntent pi = PendingIntent.getBroadcast(c, id, in, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    // setAlarmClock: exact, Doze-exempt, shows the alarm icon.
+    PendingIntent show = PendingIntent.getActivity(c, 0, c.getPackageManager().getLaunchIntentForPackage(c.getPackageName()), PendingIntent.FLAG_IMMUTABLE);
+    am.setAlarmClock(new AlarmManager.AlarmClockInfo(o.getLong("at"), show), pi);
+  }
+
   @PluginMethod
   public void schedule(PluginCall call) {
     try {
@@ -29,22 +48,16 @@ public class AlarmSoundPlugin extends Plugin {
       JSArray items = call.getArray("items");
       AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
       SharedPreferences sp = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+      JSONArray saved;
+      try { saved = new JSONArray(sp.getString("items", "[]")); } catch (Exception e) { saved = new JSONArray(); }
       for (int i = 0; i < items.length(); i++) {
         JSONObject o = items.getJSONObject(i);
-        int id = o.getInt("id");
-        Intent in = new Intent(c, AlarmReceiver.class);
-        in.putExtra("sound", o.optString("sound", ""));
-        in.putExtra("title", o.optString("title", ""));
-        in.putExtra("body", o.optString("body", ""));
-        in.putExtra("type", o.optString("type", "adhan"));
-        PendingIntent pi = PendingIntent.getBroadcast(c, id, in, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        // setAlarmClock: exact, Doze-exempt, shows the alarm icon.
-        PendingIntent show = PendingIntent.getActivity(c, 0, c.getPackageManager().getLaunchIntentForPackage(c.getPackageName()), PendingIntent.FLAG_IMMUTABLE);
-        am.setAlarmClock(new AlarmManager.AlarmClockInfo(o.getLong("at"), show), pi);
+        scheduleOne(c, am, o);
+        saved.put(o);
       }
       StringBuilder ids = new StringBuilder(sp.getString("ids", ""));
       for (int i = 0; i < items.length(); i++) ids.append(items.getJSONObject(i).getInt("id")).append(',');
-      sp.edit().putString("ids", ids.toString()).apply();
+      sp.edit().putString("ids", ids.toString()).putString("items", saved.toString()).apply();
       call.resolve();
     } catch (Exception e) {
       call.reject(e.getMessage());
@@ -62,7 +75,7 @@ public class AlarmSoundPlugin extends Plugin {
         PendingIntent pi = PendingIntent.getBroadcast(c, Integer.parseInt(s), new Intent(c, AlarmReceiver.class), PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
         if (pi != null) { am.cancel(pi); pi.cancel(); }
       }
-      sp.edit().putString("ids", "").apply();
+      sp.edit().putString("ids", "").putString("items", "[]").apply();
       call.resolve();
     } catch (Exception e) {
       call.reject(e.getMessage());
