@@ -6429,8 +6429,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               toggle row. Recording requires a single-surah range
               (schema v1): the start buttons disable when the chosen
               range spans surahs.
+              Item 2.26: a developer tool — admin view or ?debug=1 only.
             */}
-            <div className="bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4">
+            <div className={`bg-white rounded-2xl border border-hairline-amber shadow-sm p-5 space-y-4 ${showDiag ? '' : 'hidden'}`}>
               <div className="flex items-center gap-3">
                 <input type="checkbox" checked={recording} onChange={toggleRecording} className="w-5 h-5 accent-emerald-600" />
                 <div>
