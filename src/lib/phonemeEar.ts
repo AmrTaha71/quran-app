@@ -54,14 +54,20 @@ let refNormalize: ((key: string) => string) | null = null;
 export function loadPhonemeRef(keySkel: (key: string) => string): Promise<Map<string, string>> {
   refNormalize = keySkel;
   if (!refIndex) {
-    refIndex = fetch(REF_URL).then((r) => r.json()).then((obj: Record<string, string>) => {
+    // 3.9: a failed fetch (offline for a moment, 404) must not stay cached
+    // forever: check r.ok and clear refIndex on failure so the next start retries.
+    const p: Promise<Map<string, string>> = fetch(REF_URL).then((r) => {
+      if (!r.ok) throw new Error(`phoneme-ref ${r.status}`);
+      return r.json();
+    }).then((obj: Record<string, string>) => {
       const m = new Map<string, string>();
       for (const [k, v] of Object.entries(obj)) {
         const s = keySkel(k);
         if (!m.has(s)) m.set(s, v);
       }
       return m;
-    });
+    }).catch((e) => { if (refIndex === p) refIndex = null; throw e; });
+    refIndex = p;
   }
   return refIndex;
 }
