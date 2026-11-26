@@ -101,7 +101,10 @@ const PROTECTED_ROUTES: Route[] = ['admin', 'app', 'mushaf', 'settings', 'follow
 // goes back to الرئيسية unless the page registered an internal target
 // (open Settings door, Listen detail view, SelfTest sub-view). Home,
 // landing, auth, admin and splash never show it.
-const BACK_BUTTON_ROUTES: Route[] = ['admin', 'settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room', 'home2'];
+// 6.4: quiz, hifz and radio are main pages too. (#/ear-lab is a hidden
+// diagnostics page outside this router on purpose: main.tsx mounts it.)
+// 'radio' stays out of PROTECTED_ROUTES: no login needed (owner §11.6).
+const BACK_BUTTON_ROUTES: Route[] = ['admin', 'settings', 'test', 'app', 'listen', 'adhkar', 'mushaf', 'follow', 'room', 'quiz', 'hifz', 'radio'];
 // Screen stays awake ONLY on these (W2-5): the Mushaf (mushaf/follow),
 // tasmee (test) and Listen. Mounted in the shell by route so the lock is
 // released the moment the user leaves; no other page is listed.
@@ -557,6 +560,8 @@ function AppContent() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-emerald-50 to-white">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 border-4 border-hairline-emerald border-t-emerald-600 rounded-full animate-spin" />
+          {/* 6.7: a word under the spinner when the network is slow. */}
+          <p className="text-sm text-ink-2" role="status">جارٍ فتح التطبيق…</p>
         </div>
       </div>
     );
@@ -677,9 +682,10 @@ function AppContent() {
           notifications); renders nothing, never prompts. */}
       <AdhanPushManager />
       {/* Mic beside any focused search field (voice or typing). */}
-      <VoiceSearchMic />
+      {/* 6.18: not while the mic already listens (follow, tasmee'). */}
+      {route !== 'follow' && route !== 'test' && <VoiceSearchMic />}
       {/* «اؤمرني»: continuous voice conversation, open across pages. */}
-      <VoiceAssistant onNavigate={navigate} />
+      {route !== 'follow' && route !== 'test' && <VoiceAssistant onNavigate={navigate} />}
       {/* First-run onboarding overlay (home route only; the app works
           normally behind it once finished or skipped). */}
       {showOnboarding && (route === 'home' || route === 'settings') && !!loadDeviceChoice() && (
