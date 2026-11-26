@@ -12,6 +12,7 @@ import { loadQuranText, HINT_COST, HINT_WORDS, MAX_HINTS, arNum } from '../lib/r
 import { wordsAfterClue } from '../lib/mutHint';
 import { MUT_ALL, bankInSpan, mutRangeLabel, mutSpan, type MutRange } from '../lib/mutRange';
 import RangeVoiceButton from './RangeVoiceButton';
+import { loadConfusedPairs, recordConfusedPair, removeConfusedPair, type ConfusedPair } from '../lib/confusedPairs';
 
 type Level = 'easy' | 'medium' | 'hard';
 interface BankItem { id: string; clue: string; answers: string[]; level: Level }
@@ -40,6 +41,11 @@ export function countAyat(n: number): string {
   return `${n} آية`;
 }
 
+function ayahLabel(k: string): string {
+  const [s, a] = k.split(':').map(Number);
+  return `${SURAHS[s - 1]?.name ?? s} ${arNum(a)}`;
+}
+
 export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [level, setLevel] = useState<Level | null>(null);
   const [range, setRange] = useState<MutRange>(MUT_ALL);
@@ -57,6 +63,8 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
   const [surah, setSurah] = useState(1);
   const [ayah, setAyah] = useState('1');
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  // 17.9: the ayat the user mixes up, kept on the device.
+  const [confused, setConfused] = useState<ConfusedPair[]>(() => loadConfusedPairs());
 
   const current = queue[idx];
   // W4-M: the pool is the clues with at least one ayah inside the chosen range.
@@ -114,6 +122,7 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
     if (!current.answers.includes(key)) {
       setMistakes((m) => m + 1);
       playBuzz();
+      setConfused(recordConfusedPair(current, key));
       setFeedback({ ok: false, text: 'لأ، الآية دي مش فيها الجملة دي' });
       return;
     }
@@ -176,6 +185,22 @@ export default function MutashabihatGame({ onClose }: { onClose: () => void }) {
               )}
               <RangeVoiceButton onRange={setRange} />
             </div>
+            {confused.length > 0 && (
+              <details className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <summary className="text-sm font-bold text-ink cursor-pointer">تخلط بين هاتين الآيتين ({arNum(confused.length)})</summary>
+                <ul className="mt-2 space-y-2">
+                  {confused.map((p) => (
+                    <li key={`${p.clueId}|${p.picked}`} className="rounded-lg bg-white p-2 text-sm text-ink-2 flex items-start gap-2">
+                      <div className="flex-1">
+                        <p className="font-bold text-ink font-quran">«{p.clue}»</p>
+                        <p>قلت {ayahLabel(p.picked)}، وهي في {p.answers.map(ayahLabel).join(' و')}{p.count > 1 ? ` (${arNum(p.count)} مرات)` : ''}</p>
+                      </div>
+                      <button type="button" aria-label="امسح" onClick={() => setConfused(removeConfusedPair(p.clueId, p.picked))} className="p-2 rounded-full bg-black/5"><X className="w-4 h-4" /></button>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
             {LEVELS.map((l) => (
               <button key={l.id} onClick={() => startRound(l.id)} disabled={counts[l.id] === 0}
                 className="w-full min-h-[56px] disabled:opacity-40 grad-emerald-door text-white font-bold rounded-xl text-lg polish-press">

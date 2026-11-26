@@ -19,6 +19,7 @@ export const SK = {
   errorLog: 'quran-error-log-v1',
   hifzCorpus: 'rawabit.hifzCorpus.v1',
   sessions: 'rawabit.sessions.v1',
+  confusedPairs: 'rawabit.confusedPairs.v1', // lib/confusedPairs.ts (17.9)
 } as const;
 
 /**
