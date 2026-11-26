@@ -28,6 +28,7 @@ import {
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
 import { ROUND_CORRECTIONS } from '../lib/roundJudge';
+import RoundCutPicker from './RoundCutPicker';
 import RoundRecite, { RoundReveal } from './RoundRecite';
 import MutashabihatOral, { type OralResult } from './MutashabihatOral';
 import SurahTiles from './SurahTiles';
@@ -313,6 +314,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
               <DrumSelect label="عدد المواضع" value={count} onChange={setCount}
                 options={COMP_COUNT_OPTIONS.map((n) => ({ value: n, label: `${arNum(n)} موضع (كل موضع ${arNum(positionMax(n))} درجة)` }))} />
             </div>
+            <RoundCutPicker />
             <div className="mb-3"><RangeVoiceButton allowAll={false} onRange={(r) => { if (r.scope === 'surah') { setScopeId('surah'); setNum(r.n); } else if (r.scope === 'juz') { setScopeId(r.n === 30 ? 'juz30' : 'juz'); setNum(r.n); } }} /></div>
             <p className="text-xs text-accent-600 mb-3">التسميع من ٤٠ درجة موزّعة على المواضع اللي تختارها: القارئ بيسمّعك كلمات وانت تكمّل الآية بصوتك. بعدها المتشابهات{isAdmin ? '، التجويد' : ''} والتلاوة.</p>
             {err && <p className="text-sm text-amber-700 mb-3">{err}</p>}

@@ -17,6 +17,7 @@ import { recitersForRange, planRangeReciters, downloadRange, isRangeDownloaded, 
 import { useEscapeClose } from '../lib/useEscape';
 import DrumSelect from './DrumSelect';
 import { unitPickLabel } from '../lib/testRanges';
+import RoundCutPicker from './RoundCutPicker';
 
 type Scope = 'surah' | 'juz' | 'hizb' | 'quarter';
 const SCOPE_LABEL: Record<Scope, string> = { surah: 'سورة', juz: 'جزء', hizb: 'حزب', quarter: 'ربع' };
@@ -244,6 +245,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
                 </div>
               </>
             )}
+            <RoundCutPicker />
             {canStart && (
               <div className="mb-4 space-y-2">
                 {dlDone ? (

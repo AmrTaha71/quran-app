@@ -14,7 +14,7 @@ import { alignSpoken } from '../lib/alignBridge';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
-import { DeadlineTimer, RoundState } from '../lib/roundJudge';
+import { DeadlineTimer, RoundState, roundCutMs, loadRoundCutMode } from '../lib/roundJudge';
 import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
@@ -37,9 +37,10 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const [manualWrong, setManualWrong] = useState<Set<number>>(new Set());
 
   const stRef = useRef<RoundState | null>(null);
-  if (!stRef.current) stRef.current = new RoundState(rest.length, corrections);
+  // Item 16.9: the unfixed-mistake clock follows the user's setting (10 s / 15 s / ayah end).
+  if (!stRef.current) stRef.current = new RoundState(rest.length, corrections, roundCutMs(loadRoundCutMode()));
   const st = stRef.current;
-  // Re-judges when the 10 s of the first unfixed mistake are up (only while listening).
+  // Re-judges when the clock of the unfixed mistake is up (only while listening).
   const dlRef = useRef<DeadlineTimer | null>(null);
   if (!dlRef.current) dlRef.current = new DeadlineTimer(() => { if (phaseRef.current === 'listening') evaluate(false); });
   const dl = dlRef.current;
@@ -117,14 +118,14 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     if (finished.current) return;
     // Whole ayah in, prompt part cut out after matching (see alignRest). Words the user
     // fixed himself are already right here; only what is still wrong reaches the judge, and
-    // the judge cuts in on 3 wrong words, 10 s since the first unfixed mistake, the end of the
+    // the judge cuts in on 3 wrong words, the clock of the unfixed mistake (setting), the end of the
     // ayah, or «خلصت» (never at a silence).
     const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
     const act = st.evaluate(al.matched, al.allMatched, final, Date.now(), al.lastWrong);
     if (act.kind === 'correct') { stopRec(); void playCorrection(); }
     else if (act.kind === 'finish') finishAll(act.locked);
-    else dl.sync(st.msUntilDue(Date.now())); // an unfixed mistake is waiting for its 10 s
+    else dl.sync(st.msUntilDue(Date.now())); // an unfixed mistake is waiting for its clock
   }
 
   // A start()/restart that throws used to be swallowed: log it and tell the user.
