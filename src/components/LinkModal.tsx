@@ -12,6 +12,9 @@ import {
   User, Heart,
 } from 'lucide-react';
 
+// Same limit as supabase/functions/transcribe-audio (item 1.3).
+const TRANSCRIBE_MAX_BYTES = 10 * 1024 * 1024;
+
 type Phase = 'input' | 'confirm_recording' | 'processing' | 'review' | 'generating_voice' | 'saving' | 'done';
 
 interface SpeechRecognitionResult { transcript: string; isFinal: boolean; }
@@ -278,7 +281,8 @@ export default function LinkModal({
       // Quran model only reads recitation and garbles ordinary speech. It is the fallback.
       let transcript = '';
       const clipUrl = existingUrl ?? uploadedUrl;
-      if (clipUrl) {
+      // Over 10 MB the server refuses (item 1.3): go straight to on-device.
+      if (clipUrl && audioBlob.size <= TRANSCRIBE_MAX_BYTES) {
         try {
           const er = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
             method: 'POST',
@@ -309,6 +313,11 @@ export default function LinkModal({
     if (!file) return;
     if (!file.type.startsWith('audio/') && !file.name.match(/\.(webm|mp3|wav|ogg|m4a|aac|mp4)$/i)) {
       setError('صيغة الملف غير مدعومة.');
+      return;
+    }
+    // Item 1.3: the server refuses clips over 10 MB; say so before uploading.
+    if (file.size > TRANSCRIBE_MAX_BYTES) {
+      setError('الملف أكبر من 10 ميجا. قصّريه أو ارفعي ملفاً أصغر.');
       return;
     }
     // Upload first so Rana can hear it back and approve it, like a
