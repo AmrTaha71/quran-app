@@ -540,6 +540,13 @@ export default function QuranMushafPage({
   const surahPageListPromise = useRef<Record<number, Promise<{ number: number; page_number: number }[]>>>({});
   const [verseLinks, setVerseLinks] = useState<AyahLink[]>([]);
   const [selectedVerse, setSelectedVerse] = useState<QuranVerse | null>(null);
+  // 7.5: elderly mode's short-lived «التربيطات» button (see handleVerseClick).
+  const [elderlyLinksVerse, setElderlyLinksVerse] = useState<QuranVerse | null>(null);
+  useEffect(() => {
+    if (!elderlyLinksVerse) return;
+    const t = window.setTimeout(() => setElderlyLinksVerse(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [elderlyLinksVerse]);
   // SUGGEST-A-LINK (2026-10-28, requested 2026-10-27): users propose a
   // link from the ayah popup; it lands in ayah_links as status='pending'
   // with created_by = the user (is_ai_draft=false), so the admin queue
@@ -3708,6 +3715,13 @@ export default function QuranMushafPage({
     setTimeout(() => setShowRatelIntro(false), 3000);
   };
 
+  const openVersePopup = (verse: QuranVerse) => {
+    setElderlyLinksVerse(null);
+    setSelectedVerse(verse);
+    setPopupTab('links');
+    fetchVerseLinks(verse.id);
+  };
+
   const handleVerseClick = (verse: QuranVerse) => {
     // ELDERLY MODE: one tap reads the ayah aloud immediately with the
     // saved reciter — no popup first. startRecitation stops any
@@ -3715,6 +3729,9 @@ export default function QuranMushafPage({
     // same ayah again replays it from the start.
     if (elderlyMode) {
       startRecitation(verse, reciter);
+      // 7.5: a big «التربيطات» button for a few seconds, so the elderly
+      // mode reaches the ayah window too (the tap itself still reads).
+      setElderlyLinksVerse(verse);
       return;
     }
     if (selectedVerse?.id === verse.id) {
@@ -5447,6 +5464,14 @@ export default function QuranMushafPage({
               {/* Rendered through a portal on document.body (2026-11-21): the popup used to live inside the
                   fullscreen container (select-none, overflow-hidden, pointer capture, tap handlers), and its buttons
                   were dead on iPhone Safari. Outside that container it is a plain top-level dialog. */}
+              {elderlyMode && elderlyLinksVerse && !selectedVerse && createPortal(
+                <button type="button" onClick={() => openVersePopup(elderlyLinksVerse)}
+                  className="fixed z-[1200] left-1/2 -translate-x-1/2 px-6 min-h-[56px] rounded-full grad-emerald-door text-white text-xl font-bold shadow-2xl polish-press"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 6.5rem)' }}>
+                  التربيطات والتفسير لآية {elderlyLinksVerse.ayah_no.toLocaleString('ar-EG')}
+                </button>,
+                document.body,
+              )}
               {selectedVerse && createPortal(
                 <div className={popCompact ? 'fixed inset-0 z-[105]' : 'fixed inset-0 z-[105] flex items-center justify-center p-4 bg-black/40 polish-scrim-enter'}
                   onClick={(e) => { e.stopPropagation(); setSelectedVerse(null); }}>

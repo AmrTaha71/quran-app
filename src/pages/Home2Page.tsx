@@ -8,6 +8,8 @@ import { useState } from 'react';
 import { BookOpen, Headphones, Brain } from 'lucide-react';
 import type { Route } from '../lib/routes';
 import BottomNav from '../components/BottomNav';
+import ElderlyHomeScreen from '../components/ElderlyHomeScreen';
+import { useElderlyMode } from '../lib/elderlyMode';
 
 type SectionId = 'hifz' | 'listen' | 'read';
 
@@ -51,6 +53,10 @@ const SECTIONS: {
 
 export default function Home2Page({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [open, setOpen] = useState<SectionId | null>(null);
+  // 7.5: elderly mode keeps its simplified home (it lived in the hidden
+  // HomeStartPage before 6.1).
+  const elderly = useElderlyMode();
+  if (elderly) return <ElderlyHomeScreen onNavigate={onNavigate} />;
 
   return (
     <main dir="rtl" className="min-h-screen bg-emerald-50 px-4 pt-6 pb-24">
