@@ -7,7 +7,7 @@
 // flag (step 5), then onNavigate('test').
 // Nothing due: a calm message, never an error. Gold only (grad-amber-door,
 // bg-amber-50, border-hairline-amber); no new colors.
-import { useState } from 'react';
+import { useReadOnReturn } from '../lib/useReadOnReturn';
 import { Play, Repeat } from 'lucide-react';
 import { pressFeedback } from '../lib/pressFeedback';
 import { getDueWords } from '../lib/srsStore';
@@ -15,15 +15,15 @@ import { dueWordsText, firstDueAyah, firstDueAyahText } from '../lib/srsHome';
 import { TEST_RANGE_CHOICE_KEY, TEST_RANGE_PRESET_KEY } from '../lib/homeFeatures';
 import { SRS_REVIEW_SESSION_KEY } from '../lib/srsTasmee';
 
+function readDue() { try { return getDueWords(); } catch { return []; } }
+
 export default function SrsDueCard({
   onNavigate,
 }: {
   onNavigate: (r: 'test') => void;
 }) {
-  // Read once when the page opens, like ReviewDueCard does with the wird.
-  const [due] = useState(() => {
-    try { return getDueWords(); } catch { return []; }
-  });
+  // 6.12: read when the page opens and again whenever it comes back.
+  const due = useReadOnReturn(readDue);
   const target = firstDueAyah(due);
 
   const start = () => {

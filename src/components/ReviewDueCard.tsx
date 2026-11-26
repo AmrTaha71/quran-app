@@ -8,7 +8,7 @@
 // 'quran-test-range-choice' = 'juz' flag lands on the juz door,
 // where the card names the juz to pick. Nothing due → a kind
 // "nothing due — well done" state, never an empty box or an error.
-import { useState } from 'react';
+import { useReadOnReturn } from '../lib/useReadOnReturn';
 import { BookOpen, CalendarCheck, Check, Flame, Play, Settings } from 'lucide-react';
 import { pressFeedback } from '../lib/pressFeedback';
 import { loadWird } from '../lib/wird';
@@ -28,7 +28,7 @@ export default function ReviewDueCard({
   onNavigate: (r: 'test' | 'settings' | 'mushaf') => void;
   onJumpToAyah: (surah: number, ayah: number) => void;
 }) {
-  const [wird] = useState(loadWird);
+  const wird = useReadOnReturn(loadWird); // 6.12: re-read on return
   const review = dueReview(wird, run);
 
   const startReview = () => {
