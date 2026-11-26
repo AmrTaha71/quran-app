@@ -6789,7 +6789,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               {!contListening ? (
                 <>
                   {contStalled && (
-                    <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4">
+                    <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4" role="status" aria-live="polite">
                       <p className="text-base font-bold text-amber-800">
                         الاستماع وقف — لكن اللي سمعته محفوظ، كمّل من غير ما يضيع
                       </p>
@@ -6826,7 +6826,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 <>
                   <div className="flex items-center justify-center gap-2 mb-3">
                     <span className="w-3 h-3 bg-red-500 rounded-full" />
-                    <p className="text-lg font-bold text-accent-700">بسمعك… كمّل من غير توقف</p>
+                    <p className="text-lg font-bold text-accent-700" role="status" aria-live="polite">بسمعك… كمّل من غير توقف</p>
                   </div>
                   <MicLevelHint active={contListening} heardSomething={!!(transcript || interim) || contProgress.matched > 0} />
                   <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
@@ -7013,7 +7013,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   {micState === 'idle' && (
                     <>
                       {micStalled && (
-                        <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4">
+                        <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4" role="status" aria-live="polite">
                           <p className="text-base font-bold text-amber-800">
                             الاستماع وقف — لكن اللي سمعته محفوظ ومش هيضيع
                           </p>
@@ -7065,7 +7065,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <>
                       <div className="flex items-center justify-center gap-2 mb-3">
                         <span className="w-3 h-3 bg-red-500 rounded-full" />
-                        <p className="text-lg font-bold text-accent-700">
+                        <p className="text-lg font-bold text-accent-700" role="status" aria-live="polite">
                           {micState === 'listening' ? 'بسمعك… اقرأ الآية' : 'لسه بسمعك…'}
                         </p>
                       </div>
@@ -7093,11 +7093,15 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         const al = alignWords(exp.map((w) => w.norm), spokenLive);
                         const firstOpen = al.matched.findIndex((v) => !v);
                         return (
+                          <>
                           <div className="flex gap-1.5 justify-center mb-4" dir="rtl" aria-hidden>
                             {exp.map((_, i) => (
                               <span key={i} className={`w-2.5 h-2.5 rounded-full polish-progress-dot ${al.matched[i] ? 'bg-emerald-500' : i === firstOpen ? 'bg-amber-400 is-current' : 'bg-gray-300'}`} />
                             ))}
                           </div>
+                          {/* Item 2.25: the dots as text for screen readers. */}
+                          <p className="sr-only" aria-live="polite">{`كلمة ${(al.matched.filter(Boolean).length).toLocaleString('ar-EG')} من ${exp.length.toLocaleString('ar-EG')}`}</p>
+                          </>
                         );
                       })()}
                       <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
@@ -7105,7 +7109,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         <p className="text-sm font-semibold text-emerald-700 mb-3">التصحيح خلص — كمّل باقي الآية بصوتك؛ اللي قلته أثناء التصحيح ما اتسمعش، فقولوه تاني</p>
                       )}
                       {micState === 'correcting' && (
-                        <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4 polish-correction-window">
+                        <div className="bg-amber-50 border border-hairline-amber rounded-xl px-4 py-3 mb-4 polish-correction-window" role="status" aria-live="polite">
                           <p className="text-base font-bold text-amber-800">
                             في حاجة محتاجة تتصلح — كمّل أو صلّح، عندك {countdown.toLocaleString('ar-EG')} ثواني
                           </p>
