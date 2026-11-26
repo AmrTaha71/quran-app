@@ -80,6 +80,11 @@ const KEEP_CACHES = new Set([
   AUDIO_TAFSIR_CACHE, AUDIO_JUHANI_CACHE, AUDIO_CORR_CACHE, AUDIO_ADHAN_CACHE,
   // transformers.js model cache for the on-device Quran ear (default name).
   'transformers-cache',
+  // Quran-Lab zipformer ear (~73 MB .onnx), written by
+  // src/workers/quranLab.worker.ts. Same literal as QURANLAB_MODEL_CACHE in
+  // src/lib/earModelCache.ts — without it here every deploy deleted the
+  // model and the user downloaded 73 MB again.
+  'quranlab-model-v1',
 ]);
 const MAX_IMG_ENTRIES = 150;
 
@@ -315,6 +320,17 @@ self.addEventListener('fetch', (event) => {
           return fetch(req);
         }
       })()
+    );
+    return;
+  }
+
+  // On-device model files (.onnx / .bin): cache-first from ANY cache (the
+  // worker stores the ear in 'quranlab-model-v1'), network on a miss, and
+  // never copied into SHELL_CACHE — a second 73 MB copy would only eat the
+  // storage quota and be trimmed on the next activate anyway.
+  if (url.origin === self.location.origin && (url.pathname.endsWith('.onnx') || url.pathname.endsWith('.bin'))) {
+    event.respondWith(
+      caches.match(req).then((cached) => cached || fetch(req).catch(() => new Response('', { status: 504 })))
     );
     return;
   }

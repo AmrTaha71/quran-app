@@ -27,6 +27,15 @@ export default function EarDownloadCard() {
   const [waitWifi, setWaitWifi] = useState(false);
   const [askData, setAskData] = useState(false);
   const on = earLabOn();
+  // 3.1: say whether the model is really kept on the device (Cache API), not
+  // just loaded in memory for this visit.
+  const [saved, setSaved] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (st.status !== 'ready') return;
+    let dead = false;
+    void earModelCached().then((c) => { if (!dead) setSaved(c); });
+    return () => { dead = true; };
+  }, [st.status]);
 
   // Automatic load after the one-time consent (or when an earlier ear-lab
   // visit already cached the model). On mobile data with nothing cached
@@ -51,7 +60,9 @@ export default function EarDownloadCard() {
   if (st.status === 'ready') {
     return (
       <p dir="rtl" className="flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 rounded-xl px-3 py-2">
-        <CheckCircle2 className="w-4 h-4" /> التعرف على التلاوة على جهازك جاهز — بيسمعك من غير إنترنت
+        <CheckCircle2 className="w-4 h-4" /> التعرف على التلاوة على جهازك جاهز — {saved === false
+          ? 'بس مش محفوظ على الجهاز، هيتحمّل تاني الزيارة الجاية'
+          : 'محفوظ على جهازك وبيسمعك من غير إنترنت'}
       </p>
     );
   }

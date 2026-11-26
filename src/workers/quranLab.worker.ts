@@ -10,10 +10,7 @@
 //               | {type:'tokens', text, ids, chunkMs, chunks} | {type:'error', message}
 import * as ort from 'onnxruntime-web/webgpu';
 import { OnlineFbank, FBANK_DIM } from '../lib/kaldiFbank';
-
-const BASE = '/models/quranlab/';
-const MODEL_URL = `${BASE}zipformer_p_arabic_v3.int8.onnx`;
-const MODEL_CACHE = 'quranlab-model-v1';
+import { QURANLAB_BASE as BASE, QURANLAB_MODEL_URL as MODEL_URL, QURANLAB_MODEL_CACHE as MODEL_CACHE } from '../lib/earModelCache';
 const PAD_LOG = Math.log(1e-10);
 
 type StateSpec = { name: string; type: 'float32' | 'int64'; shape: number[] };

@@ -8,6 +8,7 @@
 // the ear card in Settings); off → the old ear, exactly as before.
 import { buildPhonWords, PhonemeStream, type PhonWord } from './phonemeEar';
 import { expectedWordList } from './expectedWords';
+import { QURANLAB_MODEL_CACHE, QURANLAB_MODEL_URL } from './earModelCache';
 
 export const EAR_LAB_KEY = 'quran-ear-lab';
 // W4-B (2026-11-19, decision 6): the device ear is now the DEFAULT. The old
@@ -40,8 +41,8 @@ export function earLabUsable(): boolean { return earLabOn() && earState.status =
 /** Is the model file already in the Cache API (downloaded before)? */
 export async function earModelCached(): Promise<boolean> {
   try {
-    const cache = await caches.open('quranlab-model-v1');
-    return !!(await cache.match('/models/quranlab/zipformer_p_arabic_v3.int8.onnx'));
+    const cache = await caches.open(QURANLAB_MODEL_CACHE);
+    return !!(await cache.match(QURANLAB_MODEL_URL));
   } catch { return false; }
 }
 

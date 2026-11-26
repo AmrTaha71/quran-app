@@ -33,6 +33,7 @@ import './alive-tiles.css';
 // stylesheet above, including the alive files.
 import './elderly.css';
 import { applyElderlyMode } from './lib/elderlyMode';
+import { Capacitor } from '@capacitor/core';
 
 // Restore the saved elderly mode on launch (no extra tap after a
 // reload): applyElderlyMode() reads localStorage and sets
@@ -54,7 +55,9 @@ applyElderlyMode();
 // recitation in progress. The banner only appears on a real update:
 // on first install there is no previous controller, so it stays
 // hidden.
-if ('serviceWorker' in navigator) {
+// Native (Capacitor) builds ship their assets inside the app bundle: no
+// service worker there (3.1). The web/PWA keeps it.
+if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       const check = () => reg.update().catch(() => {});
