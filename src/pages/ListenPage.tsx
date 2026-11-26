@@ -1070,6 +1070,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     journey: ThreeMode,
     fromSaved?: ThreeModePosition,
   ) => {
+    // Item 4.30: the hub buttons are already off without tafsir clips;
+    // this also stops a saved card or a resume intent from starting a
+    // «ختمة وتفسير» that would skip every tafsir in silence.
+    if (journey === 'tadabbur' && !tafsirConfigured()) {
+      setEngineError('مقاطع التفسير لسه ما اترفعتش — ختمة التفسير مش متاحة دلوقتي.');
+      return;
+    }
     setEngineError(null);
     setInterrupted(false);
     // A fresh start supersedes any pending external-interrupt
