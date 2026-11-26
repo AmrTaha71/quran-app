@@ -2,7 +2,7 @@
 // the Juhani Phase-0 tooling (tools/juhani-align/export_words.ts) and
 // the app use ONE tokenizer. Word numbering in the Juhani timing
 // manifest is this function's output order, nothing else.
-import { normalizeArabic } from './arabicNormalize';
+import { normalizeArabic } from './arabicNormalize.ts';
 
 // Spoken tokens for comparison: the normalizer strips diacritics but
 // NOT punctuation, so a transcript "والله،" never equaled "والله".

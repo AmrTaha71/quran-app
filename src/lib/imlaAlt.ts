@@ -1,6 +1,6 @@
 // GENERATED 2026-11-10. Do not hand-edit (regenerate instead) — except the
 // IMLA_PAIR_ALT_MANUAL merge at the end of this file, which must survive a rebuild.
-import { IMLA_PAIR_ALT_MANUAL } from './imlaPairManual';
+import { IMLA_PAIR_ALT_MANUAL } from './imlaPairManual.ts';
 // The Quran text in the database is IndoPak rasm; speech recognizers
 // answer in everyday (imla'i) spelling, and the on-device model in
 // Uthmani spelling. This table lists, for each normalized IndoPak word
