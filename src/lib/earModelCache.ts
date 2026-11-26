@@ -1,3 +1,8 @@
+// 3.19: what the user downloads the first time, measured from the shipped
+// files: model 72,705,392 B + ort wasm 21,872,216 B + phoneme reference
+// ~4.6 MB ≈ 99 MB. Every «حوالي ١٠٠ ميجا» text means this number.
+export const EAR_DOWNLOAD_MB = 100;
+
 // Single source of truth for where the Quran-Lab zipformer ear (~73 MB) is
 // kept in the Cache API. Used by the worker (writes it) and quranLabEar
 // (checks it). public/sw.js cannot import this module: its KEEP_CACHES list

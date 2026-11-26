@@ -43,7 +43,8 @@ export function earLabUsable(): boolean { return earLabOn() && earState.status =
 export async function earModelCached(): Promise<boolean> {
   try {
     const cache = await caches.open(QURANLAB_MODEL_CACHE);
-    return !!(await cache.match(QURANLAB_MODEL_URL));
+    modelWasCached = !!(await cache.match(QURANLAB_MODEL_URL));
+    return modelWasCached;
   } catch { return false; }
 }
 
@@ -54,7 +55,12 @@ export const refKeySkel = (k: string) => expectedWordList(k).map((w) => softSkel
 let worker: Worker | null = null;
 let ready: Promise<void> | null = null;
 let listener: ((m: any) => void) | null = null;
+// 3.10: 40 s for a cached model; 90 s for the first, uncached load. Progress
+// and stage messages from the worker re-arm it, so a slow phone compiling
+// WASM is not killed while it still works.
 const LOAD_TIMEOUT_MS = 40000;
+const FIRST_LOAD_TIMEOUT_MS = 90000;
+let modelWasCached = false;
 
 // Surah 68 log (2026-11-14): after every correction the mic restarted from zero
 // and the first ~0.7 s of the next ayah was lost («ودّوا» never heard, «فستبصر»
@@ -104,12 +110,12 @@ function getWorker(): Promise<Worker> {
       let timer = setTimeout(() => {}, 0);
       const arm = () => {
         clearTimeout(timer);
-        timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; setEarState({ status: 'error' }); rej(new Error('model-load-timeout')); }, LOAD_TIMEOUT_MS);
+        timer = setTimeout(() => { if (worker === w0) resetWorker(); listener = prev; setEarState({ status: 'error' }); rej(new Error('model-load-timeout')); }, modelWasCached ? LOAD_TIMEOUT_MS : FIRST_LOAD_TIMEOUT_MS);
       };
       arm();
       w0.onerror = () => { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error('worker-error')); };
       listener = (m) => {
-        if (m.type === 'progress') { arm(); setEarState({ loaded: Number(m.loaded) || 0, total: Number(m.total) || 0 }); }
+        if (m.type === 'progress') { arm(); if (m.loaded != null) setEarState({ loaded: Number(m.loaded) || 0, total: Number(m.total) || 0 }); }
         else if (m.type === 'ready') { clearTimeout(timer); listener = prev; setEarState({ status: 'ready' }); res(); }
         else if (m.type === 'error') { clearTimeout(timer); if (worker === w0) resetWorker(); setEarState({ status: 'error' }); rej(new Error(m.message)); }
       };

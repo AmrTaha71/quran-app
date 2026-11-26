@@ -2,7 +2,9 @@
 // Quran-Lab zipformer ear (2026-11-13): streaming phoneme recognition in a
 // Web Worker. Audio (16 kHz mono, [-1, 1]) -> Kaldi fbank -> chunks of
 // 61 frames, shift 48 (0.48 s) -> ONNX with carried states -> greedy CTC.
-// The 73 MB model is fetched once and kept in the Cache API.
+// The model (72,705,392 bytes) is fetched once and kept in the Cache API.
+// With the ONNX runtime (.wasm ~22 MB) and the phoneme reference (~4.6 MB)
+// the first download is ~100 MB — see EAR_DOWNLOAD_MB.
 //
 // Messages in:  {type:'load'} | {type:'audio', samples: Float32Array}
 //               | {type:'flush'} | {type:'reset'}
@@ -41,7 +43,9 @@ async function fetchModel(): Promise<ArrayBuffer> {
   } catch { /* no Cache API: plain fetch */ }
   const res = await fetch(MODEL_URL);
   if (!res.ok || !res.body) throw new Error(`model ${res.status}`);
-  const total = Number(res.headers.get('content-length')) || 72705392;
+  // 3.19: no content-length -> total 0 (the card shows «جارٍ التحميل…» with
+  // no percent) instead of a hardcoded size that can go stale.
+  const total = Number(res.headers.get('content-length')) || 0;
   const reader = res.body.getReader();
   const parts: Uint8Array[] = [];
   let loaded = 0;
@@ -110,9 +114,13 @@ async function fetchJson<T>(name: string): Promise<T> {
 async function load() {
   const t0 = performance.now();
   void dropStaleModelCaches();
+  // 3.10: a stage message before each silent step re-arms the page's load
+  // timeout (JSON files, then WASM compile + session create on slow phones).
+  post({ type: 'progress', stage: 'states' });
   spec = await fetchJson<Spec>('states.json');
   tokens = await fetchJson<Record<string, string>>('tokens.json');
   const model = await fetchModel();
+  post({ type: 'progress', stage: 'session' });
   session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
   resetStates();
   post({ type: 'ready', backend: `wasm x${ort.env.wasm.numThreads}`, loadMs: Math.round(performance.now() - t0) });

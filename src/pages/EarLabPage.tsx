@@ -53,7 +53,7 @@ export default function EarLabPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const load = () => { setStatus('بيحمّل النموذج (٧٣ ميجا أول مرة بس)…'); worker.current?.postMessage({ type: 'load' }); };
+  const load = () => { setStatus('بيحمّل النموذج (حوالي ١٠٠ ميجا أول مرة بس)…'); worker.current?.postMessage({ type: 'load' }); };
   const clear = () => { setText(''); setChunkMs([]); setInfo(''); runInfo.current = { audioSec: 0, startedAt: 0, firstTokenAt: 0 }; };
 
   const start = async () => {
