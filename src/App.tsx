@@ -82,6 +82,7 @@ import ReferralSurvey, { REFERRAL_DONE_KEY } from './components/ReferralSurvey';
 import { tickStats } from './lib/dailyStats';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
+import ConfirmHost from './components/ConfirmHost';
 import BottomBackBar from './components/BottomBackBar';
 import AdminViewToggle from './components/AdminViewToggle';
 import { resetAdminView, setRealAdmin } from './lib/adminPreview';
@@ -705,6 +706,7 @@ export default function App() {
   return (
     <LanguageProvider>
       <OfflineBanner />
+      <ConfirmHost />
       <AppContent />
     </LanguageProvider>
   );

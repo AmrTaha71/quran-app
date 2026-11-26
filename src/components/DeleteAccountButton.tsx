@@ -2,14 +2,15 @@
 // through the delete-account edge function (identity from the JWT only).
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { askConfirm } from '../lib/confirmSheet';
 
 export default function DeleteAccountButton() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
 
   const run = async () => {
-    if (!window.confirm('متأكد إنك عايز تمسح حسابك؟ كل تقدّمك وإعداداتك هتتمسح، ومش هينفع ترجعها.')) return;
-    if (!window.confirm('آخر تأكيد: امسح الحساب نهائيًا؟')) return;
+    // 6.10: one clear confirm (was two native dialogs in a row).
+    if (!(await askConfirm({ text: 'تمسح حسابك نهائيًا؟\nكل تقدّمك وإعداداتك هتتمسح من السيرفر، ومش هينفع ترجعها.', confirmLabel: 'امسح حسابي نهائيًا', cancelLabel: 'لأ، سيبه', danger: true }))) return;
     setBusy(true);
     setMsg('');
     try {

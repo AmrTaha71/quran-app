@@ -49,6 +49,7 @@ import { isElderlyMode, setElderlyMode } from '../lib/elderlyMode';
 import { setBackTarget } from '../lib/backTarget';
 import { useAdminView, getAdminView } from '../lib/adminPreview';
 import type { Route } from '../lib/routes';
+import { askConfirm } from '../lib/confirmSheet';
 
 
 const EDITION_NOTES: Record<string, string> = {
@@ -612,7 +613,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [resetMsg, setResetMsg] = useState('');
   const [resetting, setResetting] = useState(false);
   const resetDefaults = async () => {
-    if (!window.confirm(
+    if (!await askConfirm(
       'استعادة الإعدادات الافتراضية؟\n\n' +
       'سيُعاد: المصحف المختار، القارئ الافتراضي، الجنس، لغة التطبيق، وأجزاء الورد اليومي.\n' +
       'سجل إنجاز الورد (الأيام والاستمرارية) محفوظ ولن يتغير.\n' +

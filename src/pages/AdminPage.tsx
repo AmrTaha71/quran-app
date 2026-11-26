@@ -20,6 +20,7 @@ import LinkModal from '../components/LinkModal';
 import FarLinkPicker from '../components/FarLinkPicker';
 import { madinahPageOfAyah } from '../lib/madinahPageStarts';
 import type { Route } from '../lib/routes';
+import { askConfirm } from '../lib/confirmSheet';
 
 
 const PAGE_SIZE = 25;
@@ -417,7 +418,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   };
 
   const deleteLink = async (linkId: number) => {
-    if (!window.confirm('حذف هذا التربيط نهائيًا؟ لا يمكن التراجع.')) return;
+    if (!(await askConfirm({ text: 'حذف هذا التربيط نهائيًا؟ لا يمكن التراجع.', confirmLabel: 'احذف', danger: true }))) return;
     if (savingIds[linkId]) return;
     setSaving(linkId, true);
     setAdminError('');
@@ -446,7 +447,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
   };
 
   const rejectLink = async (linkId: number) => {
-    if (!window.confirm('رفض هذا التربيط؟ سيختفي من قائمة المراجعة ولن يظهر للمستخدمين.')) return;
+    if (!(await askConfirm({ text: 'رفض هذا التربيط؟ سيختفي من قائمة المراجعة ولن يظهر للمستخدمين.', confirmLabel: 'ارفض', danger: true }))) return;
     if (savingIds[linkId]) return;
     setSaving(linkId, true);
     setAdminError('');

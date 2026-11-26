@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import Hint from './Hint';
 import { Download, Trash2, Check, Square } from 'lucide-react';
 import { CORR_RECITERS, getCorrReciter, setCorrReciter } from '../lib/juhaniCorr';
+import { askConfirm } from '../lib/confirmSheet';
 import {
   CORR_SIZE_MB, ALL_SIZE_MB, TOTAL_AYAHS, formatSize,
   isDownloaded, downloadedCount, downloadReciter, deleteReciter,
@@ -23,7 +24,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
   const toggleJuz = async (f: string, j: number) => {
     if (busy || juzBusy) return;
     if (isJuzDownloaded(f, j)) {
-      if (!window.confirm(`تمسح الجزء ${j} للقارئ ده من جهازك؟`)) return;
+      if (!(await askConfirm({ text: `تمسح الجزء ${j} للقارئ ده من جهازك؟`, confirmLabel: 'امسح', danger: true }))) return;
       await deleteJuz(f, j);
       force((n) => n + 1);
       return;
@@ -73,7 +74,7 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
   const stop = () => { queueAllRef.current = false; abortRef.current?.abort(); };
 
   const remove = async (f: string) => {
-    if (!window.confirm('تمسح تسجيلات القارئ ده من جهازك؟ تقدر تنزّلها تاني بعدين.')) return;
+    if (!(await askConfirm({ text: 'تمسح تسجيلات القارئ ده من جهازك؟ تقدر تنزّلها تاني بعدين.', confirmLabel: 'امسح', danger: true }))) return;
     await deleteReciter(f);
     setProg((p) => ({ ...p, [f]: 0 }));
     force((n) => n + 1);

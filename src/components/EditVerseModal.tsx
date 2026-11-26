@@ -4,6 +4,7 @@ import { normalizeDigits } from '../lib/numerals';
 import { supabase } from '../lib/supabase';
 import type { QuranVerse } from '../lib/types';
 import { X, Save, Edit3 } from 'lucide-react';
+import { askConfirm } from '../lib/confirmSheet';
 
 export default function EditVerseModal({
   verse,
@@ -56,7 +57,7 @@ export default function EditVerseModal({
       setError('لا يمكن حذف آية محمية');
       return;
     }
-    if (!confirm('هل أنت متأكد من الحذف؟')) return;
+    if (!(await askConfirm({ text: 'هل أنت متأكد من الحذف؟', confirmLabel: 'احذف', danger: true }))) return;
     const { error } = await supabase.from('quran_verses').delete().eq('id', verse.id);
     if (error) {
       setError('حدث خطأ: ' + error.message);
