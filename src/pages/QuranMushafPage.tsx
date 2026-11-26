@@ -4898,10 +4898,17 @@ export default function QuranMushafPage({
               اضغط على هامش الصفحة لإظهار الأدوات
             </div>
           )}
+          {/* Item 5.16: after the big hint fades, a small quiet one stays. */}
+          {cleanMode && !showCleanHint && !selectedVerse && (
+            <div className="absolute z-30 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-black/35 text-white/90 text-[11px] font-semibold rounded-full pointer-events-none whitespace-nowrap"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.3rem)' }}>
+              المس الهامش للأدوات
+            </div>
+          )}
 
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); setShowEditionPickerInFullscreen(true); }}
-              className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              className={`absolute top-[calc(0.25rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/30 backdrop-blur-sm hover:bg-black/50 text-white rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 ${fsOverlaysVisible || popupOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               <Layers className="w-4 h-4" /> {digitalBg ? 'المصحف الرقمي' : edition.name}
             </button>
           )}
@@ -4911,7 +4918,7 @@ export default function QuranMushafPage({
           {!showRatelIntro && !cleanMode && (
             <button onClick={(e) => { e.stopPropagation(); toggleHifzMode(); }}
               title={hifzMode ? 'وضع الحفظ شغال — اضغط لإيقافه' : 'وضع الحفظ — إخفاء نص الآية وإظهار تربيطاتها أولًا'}
-              className={`absolute top-[calc(2.6rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 backdrop-blur-sm ${hifzMode ? 'bg-amber-700/70 text-white ring-amber-300/70' : 'bg-black/30 hover:bg-black/50 text-white ring-white/20'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+              className={`absolute top-[calc(2.6rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 backdrop-blur-sm ${hifzMode ? 'bg-amber-700/70 text-white ring-amber-300/70' : 'bg-black/30 hover:bg-black/50 text-white ring-white/20'} ${fsOverlaysVisible || popupOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
               وضع الحفظ {hifzMode ? '✓' : ''}
             </button>
           )}
@@ -4921,18 +4928,18 @@ export default function QuranMushafPage({
             <>
               <button onClick={(e) => { e.stopPropagation(); toggleDigitalView(); }}
                 title={digitalView ? 'الصفحة الرقمية شغّالة — اضغط للرجوع لصورة المصحف' : 'الصفحة الرقمية — نص ملوّن بأحكام التجويد'}
-                className={`absolute top-[calc(4.95rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 backdrop-blur-sm ${digitalView ? 'bg-emerald-700/80 text-white ring-emerald-300/70' : 'bg-black/30 hover:bg-black/50 text-white ring-white/20'} ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                className={`absolute top-[calc(4.95rem_+_env(safe-area-inset-top))] left-2 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 backdrop-blur-sm ${digitalView ? 'bg-emerald-700/80 text-white ring-emerald-300/70' : 'bg-black/30 hover:bg-black/50 text-white ring-white/20'} ${fsOverlaysVisible || popupOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                 صفحة رقمية {digitalView ? '✓' : ''}
               </button>
               {digitalView && (
                 <button onClick={(e) => { e.stopPropagation(); setShowDigitalLegend((v) => !v); }}
-                  className={`absolute top-[calc(7.3rem_+_env(safe-area-inset-top))] left-2 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  className={`absolute top-[calc(7.3rem_+_env(safe-area-inset-top))] left-2 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white ${fsOverlaysVisible || popupOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   دليل الألوان
                 </button>
               )}
               {digitalView && (
                 <button onClick={(e) => { e.stopPropagation(); setShowThemePicker((v) => !v); }}
-                  className={`absolute top-[calc(9.65rem_+_env(safe-area-inset-top))] left-2 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white ${fsOverlaysVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                  className={`absolute top-[calc(9.65rem_+_env(safe-area-inset-top))] left-2 px-2.5 py-1.5 rounded-lg z-30 transition-opacity duration-300 text-xs font-semibold ring-1 ring-white/20 backdrop-blur-sm bg-black/30 hover:bg-black/50 text-white ${fsOverlaysVisible || popupOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                   لون الصفحة
                 </button>
               )}
