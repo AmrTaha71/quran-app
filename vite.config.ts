@@ -1,6 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 // https://vitejs.dev/config/
 // D1 build stamp (transcript-truth): the deployed commit short hash,
@@ -25,6 +27,18 @@ function precacheList(): Plugin {
         .map((f) => '/' + f)
         .sort();
       this.emitFile({ type: 'asset', fileName: 'precache-assets.json', source: JSON.stringify({ build: BUILD_SHA, files }) });
+    },
+    // 10.13: the built sw.js gets the build stamp in its shell cache name
+    // (quran-shell-vNN -> quran-shell-vNN-<sha>), so every deploy is a new
+    // SW with a fresh shell even if nobody bumped vNN by hand. The manual
+    // vNN stays for SW logic changes; dev/local builds stamp '-dev'.
+    writeBundle(opts) {
+      const out = join(opts.dir || 'dist', 'sw.js');
+      if (!existsSync(out)) return;
+      const src = readFileSync(out, 'utf8');
+      const stamped = src.replace(/const SHELL_CACHE = '(quran-shell-v\d+)';/, `const SHELL_CACHE = '$1-${BUILD_SHA}';`);
+      if (stamped === src) this.warn('sw.js: SHELL_CACHE line not found, build stamp not applied');
+      else writeFileSync(out, stamped);
     },
   };
 }
