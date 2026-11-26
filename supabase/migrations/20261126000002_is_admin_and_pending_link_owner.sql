@@ -24,8 +24,11 @@ CREATE OR REPLACE FUNCTION public.is_admin()
 AS $function$
   SELECT EXISTS (SELECT 1 FROM public.admin_users WHERE user_id = auth.uid());
 $function$;
-REVOKE ALL ON FUNCTION public.is_admin() FROM public, anon;
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+-- anon needs EXECUTE too: the public SELECT policies (000003) call it for
+-- anonymous readers (it simply returns false there). Without this grant
+-- every anonymous read of ayah_links would fail with "permission denied".
+REVOKE ALL ON FUNCTION public.is_admin() FROM public;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO anon, authenticated;
 
 DROP POLICY IF EXISTS admin_select_all_admins ON public.admin_users;
 CREATE POLICY admin_select_all_admins ON public.admin_users FOR SELECT
