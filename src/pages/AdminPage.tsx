@@ -996,7 +996,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                   <div key={verse.id} className={`p-4 ${bgClass} ${isRanaTarget ? 'ring-2 ring-amber-400 ring-offset-1' : ''} hover:shadow-sm transition-smooth animate-fade-in relative`}>
                     {isRanaTarget && (
                       <div className="absolute -top-2 right-4 z-20 flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-lg shadow-lg animate-bounce-slow">
-                        <span className="text-xs font-semibold whitespace-nowrap">سجلي من هنا</span>
+                        <span className="text-xs font-semibold whitespace-nowrap">سجلي من هنا يا رنا</span>
                         <svg className="w-5 h-5 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                         </svg>
@@ -1053,7 +1053,7 @@ export default function AdminPage({ session, onNavigate }: { session: Session | 
                       <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0 w-32">
                         <button onClick={() => setLinkModalVerse(verse)}
                           className="flex items-center justify-center gap-2 px-3 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow font-semibold text-sm">
-                          <Mic className="w-5 h-5" /> سجّلي تربيط
+                          <Mic className="w-5 h-5" /> سجّلي تربيط يا رنا
                         </button>
                         {verse.links_count > 0 && (
                           <button onClick={() => { if (showLinksFor === verse.id) { setShowLinksFor(null); } else { setShowLinksFor(verse.id); fetchVerseLinks(verse.id); } }}

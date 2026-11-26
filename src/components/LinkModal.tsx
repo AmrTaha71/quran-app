@@ -590,7 +590,7 @@ export default function LinkModal({
                       isRecording ? 'bg-red-600 hover:bg-red-600 text-white animate-pulse' : 'bg-emerald-700 hover:bg-emerald-800 text-white shadow-md'
                     }`}>
                     {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isRecording ? 'وقفي التسجيل' : 'سجلي مباشر'}
+                    {isRecording ? 'وقفي التسجيل' : 'سجلي مباشر يا رنا'}
                   </button>
                   {isRecording && liveTranscript && (
                     <div className="bg-white rounded-2xl p-3 border border-hairline-emerald animate-fade-in">
