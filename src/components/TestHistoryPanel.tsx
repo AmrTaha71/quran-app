@@ -119,7 +119,12 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
   const now = useMemo(() => new Date(), []);
   const inRange = useMemo(() => ofLevel.filter((e) => inPeriod(e.ts, period, now)), [ofLevel, period, now]);
   const curve = useMemo(() => [...inRange].reverse(), [inRange]);
-  const avg = inRange.length ? Math.round(inRange.reduce((a, e) => a + e.score, 0) / inRange.length) : 0;
+  // Item 16.10: the average and the count use finished tests only; an
+  // abandoned test's partial score would drag the average down unfairly.
+  // The curve still shows every test (hollow point = not finished).
+  const done = useMemo(() => inRange.filter((e) => e.completed === true), [inRange]);
+  const avg = done.length ? Math.round(done.reduce((a, e) => a + e.score, 0) / done.length) : 0;
+  const unfinished = inRange.length - done.length;
   const hijriOk = HIJRI_FMT !== null && hijriOf(now) !== null;
   const chip = (label: string, on: boolean, onClick: () => void) => (
     <button type="button" key={label} onClick={onClick}
@@ -194,7 +199,10 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
         <>
           <p className="text-xs text-accent-600">المنحنى لمستوى «{HISTORY_LEVEL_LABEL[level]}» بس، عشان المقارنة تبقى حقيقية. النقطة المفرّغة = اختبار ما كملش.</p>
           <p className="text-sm text-accent-800">
-            {periodLabel(period)}: <span className="font-bold text-emerald-700">متوسط {ar(avg)}٪</span> في {ar(inRange.length)} اختبار
+            {done.length > 0
+              ? <>{periodLabel(period)}: <span className="font-bold text-emerald-700">متوسط {ar(avg)}٪</span> في {ar(done.length)} اختبار مكتمل</>
+              : <>{periodLabel(period)}: مفيش اختبار مكتمل لسه، فمفيش متوسط.</>}
+            {unfinished > 0 && <span className="text-accent-600"> (و{ar(unfinished)} ما كملوش، مش داخلين في المتوسط)</span>}
           </p>
           <Curve points={curve} />
         </>
