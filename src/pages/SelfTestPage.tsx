@@ -14,6 +14,7 @@ import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import MicLevelHint from '../components/MicLevelHint';
 import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import { timingCoverage } from '../lib/corrCoverage';
+import WhisperLoadNote from '../components/WhisperLoadNote';
 import { QuranLabRecognition, earLabOn, earLabUsable, earLabMayStart, EAR_NEEDS_DOWNLOAD_MSG, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
@@ -7064,6 +7065,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   </div>
                 </>
               )}
+              <WhisperLoadNote />
               {micError && (
                 <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
               )}
@@ -7374,6 +7376,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       </div>
                     </>
                   )}
+                  <WhisperLoadNote />
                   {micError && (
                     <p className="text-sm text-red-600 font-semibold mt-4">{micError}</p>
                   )}

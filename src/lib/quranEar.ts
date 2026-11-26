@@ -9,7 +9,7 @@
 // FINAL result. The expected ayah text is never given to the model.
 
 import { publishMicLevel } from './micLevel';
-import { unloadEarLab } from './quranLabEar';
+import { unloadEarLab, earOnMobileData } from './quranLabEar';
 import { Downsampler, downsampleTo16k } from './resample16k';
 import { earMicConstraints } from './earMic';
 import { watchMic } from './micWatch';
@@ -99,6 +99,26 @@ export function earBackend(): string { return readyBackend; }
 /** Hub commit of the loaded Whisper model (items 3.5 / 10.2), for diagnostics. */
 export function earRevision(): string { return readyRevision; }
 
+// 3.11: load state of the Whisper model, read by WhisperLoadNote (the worker
+// sent progress per file and nobody listened).
+export type WhisperLoad = { status: 'idle' | 'loading' | 'ready' | 'error'; pct: number };
+let whisperLoad: WhisperLoad = { status: 'idle', pct: 0 };
+const whisperSubs = new Set<() => void>();
+function setWhisperLoad(next: Partial<WhisperLoad>) {
+  whisperLoad = { ...whisperLoad, ...next };
+  for (const cb of [...whisperSubs]) { try { cb(); } catch { /* ignore */ } }
+}
+export function getWhisperLoad(): WhisperLoad { return whisperLoad; }
+export function subscribeWhisperLoad(cb: () => void): () => void { whisperSubs.add(cb); return () => { whisperSubs.delete(cb); }; }
+/** 3.11: the same data rule as the device ear — a first Whisper download
+ *  (tens of MB from the Hub) starts by itself only on Wi-Fi, when it was
+ *  downloaded before, or when the user picked this ear in Settings. */
+export function whisperMayDownload(): boolean {
+  if (readyBackend) return true;
+  try { if (localStorage.getItem(EAR_READY_KEY) === '1' || localStorage.getItem(EAR_KEY) === 'model') return true; } catch { /* ignore */ }
+  return !earOnMobileData();
+}
+
 // 3.2: first load downloads the Whisper model from the Hub; re-armed by
 // every progress message, so this only fires when nothing moves.
 const EAR_LOAD_TIMEOUT_MS = 120_000;
@@ -127,13 +147,21 @@ export function loadEar(): Promise<string> {
         if (worker) { try { worker.terminate(); } catch { /* ignore */ } worker = null; }
         pending.forEach((r) => r(null));
         pending.clear();
+        setWhisperLoad({ status: 'error' });
         reject(new Error('model-load-timeout'));
       }, EAR_LOAD_TIMEOUT_MS);
     };
+    const files: Record<string, number> = {};
+    setWhisperLoad({ status: 'loading', pct: 0 });
     const off = onEarMessage((m) => {
-      if (m.type === 'progress') arm();
-      else if (m.type === 'ready') { clearTimeout(timer); readyBackend = m.backend; readyRevision = typeof m.revision === 'string' ? m.revision : ''; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
-      else if (m.type === 'error' && m.id === undefined) { clearTimeout(timer); off(); loadPromise = null; reject(new Error(m.message)); }
+      if (m.type === 'progress') {
+        arm();
+        if (m.file) files[m.file] = Number(m.progress) || 0;
+        const vals = Object.values(files);
+        setWhisperLoad({ pct: Math.round(vals.reduce((a, b) => a + b, 0) / Math.max(1, vals.length)) });
+      }
+      else if (m.type === 'ready') { clearTimeout(timer); readyBackend = m.backend; readyRevision = typeof m.revision === 'string' ? m.revision : ''; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } setWhisperLoad({ status: 'ready', pct: 100 }); off(); resolve(m.backend); }
+      else if (m.type === 'error' && m.id === undefined) { clearTimeout(timer); off(); loadPromise = null; setWhisperLoad({ status: 'error' }); reject(new Error(m.message)); }
     });
     arm();
     getWorker().postMessage({ type: 'load' });
@@ -153,6 +181,8 @@ export function transcribe(audio: Float32Array): Promise<{ text: string; ms: num
  *  Decodes it, mixes to mono, resamples to 16 kHz; the worker chunks long
  *  audio itself. Returns null when decoding or the model fails. */
 export async function transcribeBlob(blob: Blob): Promise<string | null> {
+  // 3.11: no silent first download over mobile data for a fallback.
+  if (!whisperMayDownload()) return null;
   try {
     await loadEar();
     const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
