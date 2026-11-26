@@ -11,6 +11,7 @@ import { registerAligner } from '../lib/alignBridge';
 import { addTestHistoryV1, loadTestHistoryV1, type TestHistoryEntry } from '../lib/testHistory';
 import { getEar, QuranModelRecognition, loadEar } from '../lib/quranEar';
 import MicLevelHint from '../components/MicLevelHint';
+import ComprehensiveTestModal from '../components/ComprehensiveTestModal';
 import { QuranLabRecognition, earLabOn, earLabUsable, earDownloadConsented, markEarLabFailed } from '../lib/quranLabEar';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import DrumSelect from '../components/DrumSelect';
@@ -1084,6 +1085,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // the existing cards, they never change a setting.
   type LobbyDoor = 'range' | 'settings' | 'mic' | 'results' | 'weak' | 'scores';
   const [lobbyDoor, setLobbyDoor] = useState<LobbyDoor | null>(null);
+  // Item 2.17: the comprehensive test opens from the tasmee' lobby too.
+  const [comprehensiveOpen, setComprehensiveOpen] = useState(false);
   const [surah, setSurah] = useState(2);
   const [from, setFrom] = useState(1);
   const [to, setTo] = useState(5);
@@ -6274,6 +6277,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     <span className="block text-base font-semibold text-ink">سجل الدرجات</span>
                     <span className="block text-xs text-ink-2 mt-1">{scoreLog.length > 0 ? `آخر ${formatAr(scoreLog.length)} اختبار ومنحنى تطورك` : 'درجاتك ومنحنى تطورك هيظهروا هنا'}</span>
                   </button>
+                  <button onClick={() => setComprehensiveOpen(true)}
+                    className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
+                    <span className="w-11 h-11 rounded-xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3">
+                      <Award className="w-6 h-6 text-emerald-800" />
+                    </span>
+                    <span className="block text-base font-semibold text-ink">اختبار شامل</span>
+                    <span className="block text-xs text-ink-2 mt-1">اختبار أعمق من ١٠٠ درجة على جزء أو حزب أو ربع</span>
+                  </button>
                   {history.length > 0 && (
                     <button onClick={() => setLobbyDoor('results')}
                       className="text-right p-4 glass-card rounded-2xl door-enter polish-press">
@@ -6285,6 +6296,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                     </button>
                   )}
                 </div>
+                {/* Item 2.9: say BEFORE the start that the browser ear needs the
+                    internet, instead of failing mid-test. */}
+                {typeof navigator !== 'undefined' && navigator.onLine === false && srPresent && !(earLabUsable() || getEar() === 'model') && (
+                  <div className="bg-amber-50 border border-hairline-amber rounded-2xl p-4" role="status">
+                    <p className="font-bold text-amber-800">انت مش متصل بالإنترنت</p>
+                    <p className="text-sm text-accent-700 leading-relaxed mt-1">التسميع هنا بيسمعك عن طريق المتصفح ومحتاج إنترنت. نزّل «الأذن على جهازك» من فحص الميكروفون عشان تسمّع من غير نت، أو اتصل الأول.</p>
+                  </div>
+                )}
                 <button onClick={() => void startTest()} disabled={loading}
                   className="w-full py-3.5 grad-amber-door disabled:opacity-50 text-white text-lg font-bold rounded-xl polish-press polish-focus">
                   {loading ? 'جارٍ تحميل الآيات…' : 'ابدأ التسميع'}
@@ -7457,6 +7476,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         )}
       </div>
 
+      {comprehensiveOpen && <ComprehensiveTestModal onClose={() => setComprehensiveOpen(false)} />}
       <BottomNav current="test" onNavigate={onNavigate} />
     </div>
   );
