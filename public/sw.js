@@ -36,7 +36,7 @@
    A new deploy ships a new file (new cache names on version bump), and
    skipWaiting + clients.claim make the update take effect promptly. */
 
-const SHELL_CACHE = 'quran-shell-v55';
+const SHELL_CACHE = 'quran-shell-v56';
 const IMG_CACHE = 'quran-pages-v2';
 // Full-download cache (Settings "صفحات المصحف على جهازك"): written
 // ONLY by the page's download UI, never by the fetch handler below
