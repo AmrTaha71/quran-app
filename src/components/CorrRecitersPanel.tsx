@@ -110,6 +110,8 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
                   {chosen === r.folder && <Check className="w-4 h-4" />}
                 </span>
                 <span className="font-bold text-accent-900">{r.name}</span>
+                {/* Item 4.22: a 64k correction voice is lower quality than listening. */}
+                {/_64kbps$/.test(r.folder) && <span className="text-xs text-accent-600">(جودة ٦٤ك — أقل من الاستماع)</span>}
               </button>
               <span className="text-xs text-accent-600">
                 {!open && done ? '✓ على جهازك' : !open && count > 0 ? `نزل ${pct}%` : 'بالنت'}

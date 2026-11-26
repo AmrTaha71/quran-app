@@ -24,8 +24,12 @@ const islamicNetwork = (edition: string) => (surahNo: number, ayahNo: number) =>
 
 const pad3 = (n: number) => String(n).padStart(3, '0');
 
+// Item 4.22: one host spelling across the app — the bare everyayah.com
+// that the corrections, their downloads and the service worker use
+// (sw.js matches url.hostname === 'everyayah.com'), so a clip the user
+// downloaded for corrections is the same URL the listening page plays.
 const everyayah = (folder: string) => (surahNo: number, ayahNo: number) =>
-  `https://www.everyayah.com/data/${folder}/${pad3(surahNo)}${pad3(ayahNo)}.mp3`;
+  `https://everyayah.com/data/${folder}/${pad3(surahNo)}${pad3(ayahNo)}.mp3`;
 
 export const RECITERS: Reciter[] = [
   { id: 'minshawi', wps: 0.81, name: 'المنشاوي', quality: '128', audioUrl: islamicNetwork('ar.minshawi') },

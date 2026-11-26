@@ -118,6 +118,11 @@ const key = (surah: number, ayah: number): string => `${surah}:${ayah}`;
 // (The old Juhani juz-30 correction manifest was dead code and is gone,
 // item 4.1, owner decision §11.4: Juhani is a listening voice only.)
 // ------------------------------------------------------------------
+// Item 4.22: Husary and Abdul Basit correct from their 64kbps folders
+// on purpose: only those folders have the per-word timings this list
+// relies on (listening plays them at 128/192 from other sources). The
+// reciter panel says «٦٤ ك» next to them so the lower quality is no
+// surprise. Every folder is on the bare host https://everyayah.com.
 export const CORR_RECITERS: { folder: string; name: string }[] = [
   { folder: 'Minshawy_Murattal_128kbps', name: 'المنشاوي' },
   { folder: 'Husary_64kbps', name: 'الحصري' },
