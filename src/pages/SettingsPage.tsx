@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { normalizeArabic } from '../lib/arabicNormalize';
 import DiagErrorsCard from '../components/DiagErrorsCard';
+import ReviewReminderCard from '../components/ReviewReminderCard';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
@@ -938,7 +939,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </p>
         </section>
             </>)}
-            {openDoor === 'srs' && <SrsReviewSettings />}
+            {openDoor === 'srs' && (<><SrsReviewSettings /><ReviewReminderCard /></>)}
             {openDoor === 'look' && (<>
         {/* Page look — the section the user asked for by name */}
         <section id="sec-look" className="glass-card rounded-2xl scroll-mt-36 p-5 md:p-6 lg:p-7">

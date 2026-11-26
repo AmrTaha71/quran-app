@@ -83,6 +83,7 @@ import { tickStats } from './lib/dailyStats';
 import { loadDeviceChoice, applyDeviceLayout, wireDeviceLayout } from './lib/deviceModel';
 import OfflineBanner from './components/OfflineBanner';
 import ConfirmHost from './components/ConfirmHost';
+import ReviewReminderWatcher from './components/ReviewReminderWatcher';
 import ErrorBoundary from './components/ErrorBoundary';
 import BottomBackBar from './components/BottomBackBar';
 import AdminViewToggle from './components/AdminViewToggle';
@@ -738,6 +739,8 @@ function AppContent() {
         (referralDone ? <Onboarding onDone={closeOnboarding} /> : <ReferralSurvey onDone={() => setReferralDone(true)} />)
       )}
       <DailyReportWatcher />
+      {/* 15.11: the daily review reminder (web: while open; native: planned). */}
+      <ReviewReminderWatcher />
       {/* Device picker (drums): first run per browser, or reopened from Settings. */}
       {(!loadDeviceChoice() || devicePickerOpen) && (
         <DevicePicker userId={session?.user.id} onDone={() => { setDevicePickerOpen(false); setDeviceTick((n) => n + 1); }}
