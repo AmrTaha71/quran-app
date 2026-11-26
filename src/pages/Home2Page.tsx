@@ -25,7 +25,7 @@ const SECTIONS: {
     Icon: Brain,
     tabs: [
       { label: 'الحفظ', route: 'hifz' },
-      { label: 'الاختبار', route: 'test' },
+      { label: 'سمّع لي', route: 'test' },
       { label: 'الأسئلة', route: 'quiz' },
     ],
   },
