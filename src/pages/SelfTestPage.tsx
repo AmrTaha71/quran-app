@@ -5894,6 +5894,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // one — it leaves the missed list and the score, and is reported
   // separately as "تخطيت".
   const skipAyah = () => {
+    // Item 2.13: on the last ayah the skip button ends the whole test —
+    // ask instead of ending it on a habitual tap.
+    if (index + 1 >= ayahs.length && !window.confirm('دي آخر آية — التخطي هينهي التسميع ويطلع النتيجة. تكمل؟')) return;
     const nextSkipped = [...liveRef.current.skipped];
     nextSkipped[index] = true;
     liveRef.current.skipped = nextSkipped;
@@ -6829,7 +6832,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       🔊 أعد سماع التصحيح: {contPromptHasContext && contLastPrompt.length > 0 ? (<><span className="opacity-50">{contLastPrompt[0]}</span>{' '}{contLastPrompt.slice(1).join(' ')}</>) : contLastPrompt.join(' ')}
                     </button>
                   )}
-                  {(transcript || interim) && (
+                  {/* Item 2.18: the raw engine text distracts while reciting; it shows when stopped and in results (always for diagnostics). */}
+                  {showDiag && (transcript || interim) && (
                     <p className="text-sm text-accent-600 leading-relaxed mb-4" dir="rtl">
                       ما سمعه الجهاز حرفيًا (نص خام، مختصر للعرض): {heardCapped}
                     </p>
@@ -7092,7 +7096,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           </button>
                         </div>
                       )}
-                      {(transcript || interim) && (
+                      {/* Item 2.18: the raw engine text distracts while reciting; it shows when stopped and in results (always for diagnostics). */}
+                      {showDiag && (transcript || interim) && (
                         <p className="text-sm text-accent-600 leading-relaxed mb-4" dir="rtl">
                           ما سمعه الجهاز حرفيًا (نص خام، مختصر للعرض): {heardCapped}
                         </p>
@@ -7131,7 +7136,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
               <button onClick={skipAyah}
                 className="flex items-center gap-1 px-4 py-2 text-sm font-semibold text-accent-600 hover:bg-gray-100 rounded-lg polish-press">
-                {index + 1 < ayahs.length ? (<>تخطي الآية <ChevronLeft className="w-5 h-5" /></>) : 'إنهاء التسميع'}
+                {index + 1 < ayahs.length ? (<>تخطي الآية <ChevronLeft className="w-5 h-5" /></>) : 'تخطي وإنهاء التسميع'}
               </button>
             </div>
             <p className="text-center text-sm text-accent-600">النتيجة حتى الآن: {correct} صح من {index + (currentDone ? 1 : 0)} آية</p>
@@ -7173,7 +7178,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               {/* Item 4.4: the score measures words only — say so to everyone. */}
               <p className="text-emerald-50/90 text-xs mt-1">الدرجة على صحة الكلمات فقط، وليست تقييمًا للتجويد</p>
               {totalReRecites(reRecites) > 0 && (
-                <p className="text-emerald-50/90 text-sm mt-1">أعيدت ممارسة {totalReRecites(reRecites).toLocaleString('ar-EG')} مرة — النتيجة لم تتغير</p>
+                <p className="text-emerald-50/90 text-sm mt-1">أعيدت ممارسة {totalReRecites(reRecites).toLocaleString('ar-EG')} مرة — والنتيجة محسوبة على آخر محاولة</p>
               )}
               {skippedCount > 0 && (
                 <p className="text-emerald-50/90 text-sm mt-1">تخطيت {skippedCount.toLocaleString('ar-EG')} آية — مش محسوبة في النتيجة</p>
