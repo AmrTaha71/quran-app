@@ -2716,8 +2716,8 @@ export default function QuranMushafPage({
         setFollowMicDenied(true);
       }
       let msg: string;
-      if (e?.error === 'network') {
-        // quranLabEar maps a model-load failure to 'network'.
+      if (e?.error === 'model-load' || e?.error === 'network') {
+        // quranLabEar reports a model-load failure as 'model-load' (3.8).
         markEarLabFailed();
         msg = 'أذن المصحف ما اتحمّلتش دلوقتي — اضغط «ابدأ» تاني (هيشتغل بالطريقة القديمة: يفتح على الآية بس)';
       } else {

@@ -84,7 +84,7 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
     rec.onerror = (e) => {
       const m = speechErrorMessage(e?.error);
       if (m) setMsg(m.text);
-      if (m?.fatal || (made.kind === 'lab' && e?.error === 'network')) { recRef.current = null; setListening(false); setSelfMode(true); }
+      if (m?.fatal || (made.kind === 'lab' && (e?.error === 'model-load' || e?.error === 'network'))) { recRef.current = null; setListening(false); setSelfMode(true); }
     };
     try { rec.start(); } catch { /* ignore */ }
     setListening(true);

@@ -13,6 +13,9 @@ export function speechErrorMessage(code: string | undefined): SpeechErr {
       return { text: 'المايك مشغول بتطبيق تاني (مكالمة أو تسجيل شاشة) أو مش شغال — اقفل التطبيق التاني وجرّب', fatal: true };
     case 'language-not-supported':
       return { text: 'العربية مش متاحة للتعرّف على الصوت على الجهاز ده', fatal: true };
+    case 'model-load':
+      // 3.8: the device ear (Quran-Lab) failed to load or run.
+      return { text: 'تعذّر تحميل نموذج التعرّف على جهازك — جرّب إعادة التحميل من بطاقة الأذن في الإعدادات', fatal: false };
     case 'network':
       return { text: 'التعرّف على الصوت محتاج إنترنت — جرّب من غير VPN أو غيّر الشبكة', fatal: false };
     default:

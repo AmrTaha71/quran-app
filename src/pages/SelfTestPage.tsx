@@ -4044,13 +4044,13 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // comes (the old code hung on "retrying" forever then).
       if (recRef.current !== rec) return;
       const code = e && e.error;
-      diagPush('error', { code: String(code || 'unknown') });
+      diagPush('error', { code: String(code || 'unknown'), reason: e?.message ? String(e.message).slice(0, 200) : undefined });
       const stallMessage = 'الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل» عشان تكمل من غير ما يضيع';
       if (code === 'no-speech' || code === 'aborted') {
         armTransientSafety(rec, () => tripAyahStalled(stallMessage));
         return;
       }
-      if (code === 'network' && rec instanceof QuranLabRecognition) {
+      if ((code === 'model-load' || code === 'network') && rec instanceof QuranLabRecognition) {
         // W4-B: the device ear could not load (not a network problem for
         // the user). Use the browser ear from now on; «كمّل» resumes with it.
         markEarLabFailed();
@@ -5877,12 +5877,12 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       // and its dead-end preserves (never wipes) the transcript.
       if (recRef.current !== rec) return;
       const code = e && e.error;
-      diagPush('error', { code: String(code || 'unknown') });
+      diagPush('error', { code: String(code || 'unknown'), reason: e?.message ? String(e.message).slice(0, 200) : undefined });
       if (code === 'no-speech' || code === 'aborted') {
         armTransientSafety(rec, () => tripContStalled('الاستماع وقف — اللي سمعته محفوظ، اضغط «كمّل التسميع المتصل» عشان تكمل'));
         return;
       }
-      if (code === 'network' && rec instanceof QuranLabRecognition) {
+      if ((code === 'model-load' || code === 'network') && rec instanceof QuranLabRecognition) {
         // W4-B: device ear failed to load -> browser ear on «كمّل».
         markEarLabFailed();
         tripContStalled('اللي سمعته محفوظ — اضغط «كمّل التسميع المتصل» وكمّل عادي');

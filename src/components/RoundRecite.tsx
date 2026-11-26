@@ -194,7 +194,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     sess.attach();
     rec.onerror = (e) => {
       if (sessRef.current !== sess) return;
-      if (kind === 'lab' && e?.error === 'network') {
+      if (kind === 'lab' && (e?.error === 'model-load' || e?.error === 'network')) {
         setMsg('تعذّر تحميل برنامج التعرّف على الصوت — قيّم نفسك بإيدك');
         stopRec(); kindRef.current = 'manual'; setPhase('self'); return;
       }

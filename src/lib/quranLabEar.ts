@@ -276,7 +276,9 @@ export class QuranLabRecognition {
       const name = (err as { name?: string })?.name || '';
       const msg = String((err as Error)?.message || err);
       const loadFail = /model-load-timeout|worker-error|load|fetch|network/i.test(msg) && name !== 'NotAllowedError';
-      this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : loadFail ? 'network' : 'audio-capture', message: msg });
+      // 3.8: a model that will not load is not a network problem for the
+      // user (the files are local after the first download): own code.
+      this.onerror?.({ error: name === 'NotAllowedError' ? 'not-allowed' : loadFail ? 'model-load' : 'audio-capture', message: msg });
       this.release();
       this.finishEnd();
     }
@@ -397,7 +399,7 @@ export class QuranLabRecognition {
       if (this.ps) this.emit(this.ps.finish());
       this.finishEnd();
     } else if (m.type === 'error') {
-      this.onerror?.({ error: 'network', message: m.message });
+      this.onerror?.({ error: 'model-load', message: m.message });
     }
   }
 
