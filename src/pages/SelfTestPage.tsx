@@ -134,7 +134,9 @@ const normSurahSearch = (s: string) =>
     .trim();
 // Quiet gap after the last heard word before the reading is judged:
 // the user has paused, so the utterance is (probably) complete.
-const QUIET_GAP_MS = 1500;
+// Item 2.5: 1.5s punished a breath like a forgotten word; 2.5s gives
+// room to breathe on long ayat.
+const QUIET_GAP_MS = 2500;
 // Item 4.8: in 'ayah-end' timing a pause mid-ayah is not the end of the
 // ayah. Only this much silence (after the quiet gap) counts as "he
 // stopped" and opens the correction window for an unfinished ayah.
@@ -3202,7 +3204,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       corrWindowSourceRef.current = 'finals';
       liveRef.current.micState = 'correcting';
       setMicState('correcting');
-      buzzOnDetection();
+      // Item 2.5: buzz only for a CONFIRMED mistake — a later word was
+      // matched after the missed one, so the reader went past it. A
+      // reader who simply stopped (every miss is after the last matched
+      // word: a breath, or a forgotten next word) gets the window
+      // silently; the on-screen «كمّل أو صلّح» is the hint.
+      {
+        let lastMatched = -1;
+        result.matched.forEach((m, i) => { if (m) lastMatched = i; });
+        const firstMiss = missIdx.length > 0 ? Math.min(...missIdx) : expected.length;
+        if (firstMiss < lastMatched) buzzOnDetection();
+        else diagPush('buzz-skipped', { label: 'stopped-not-wrong' });
+      }
       const windowS = correctionWindowSeconds(liveRef.current.corrDelayMode, liveRef.current.corrDelay, juhaniEnabledForCurrent(), spoken.length >= expected.length);
       setCountdown(windowS);
       if (windowTimerRef.current) clearInterval(windowTimerRef.current);
