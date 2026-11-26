@@ -1388,6 +1388,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // never asserted as a universal fact. Unknown shells keep the
   // generic wording. No iOS Settings path is written here (R8: the
   // exact recovery path is unverified, so copy stays generic).
+  const EAR_SWITCHED_MSG = 'بدّلنا لأذن المتصفح لأن نموذج الجهاز ما اشتغلش — كمّل عادي';
   const micAbsentMessage = (suffix: string): string => {
     if (appShell === 'standalone') return `في التطبيق المثبت، التسميع بالميكروفون غير متاح على هذا الجهاز — جرّب فتح التطبيق في تبويب سفاري${suffix}`;
     if (appShell === 'chrome-ios') return `في كروم على آيفون، التسميع بالميكروفون غير متاح على هذا الجهاز — جرّب سفاري${suffix}`;
@@ -4056,7 +4057,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         // W4-B: the device ear could not load (not a network problem for
         // the user). Use the browser ear from now on; «كمّل» resumes with it.
         markEarLabFailed();
-        tripAyahStalled('اللي سمعته محفوظ — اضغط «كمّل» وكمّل عادي');
+        // 3.4: switch on the spot when the browser has an ear (the next
+        // start picks it, since the device ear is now marked failed); the
+        // finals are kept (startMic(true)). No browser ear: say so plainly.
+        if (SR) {
+          stopRec();
+          clearTimers();
+          diagPush('rec-start', { label: 'lab-failed-auto-browser', ok: true });
+          setTimeout(() => { startMic(true); setMicError(EAR_SWITCHED_MSG); }, 0);
+        } else {
+          tripAyahStalled('نموذج الجهاز ما اشتغلش — اللي سمعته محفوظ، قيّم الآية يدوي');
+        }
         return;
       }
       if (code === 'network') {
@@ -5887,7 +5898,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       if ((code === 'model-load' || code === 'network') && rec instanceof QuranLabRecognition) {
         // W4-B: device ear failed to load -> browser ear on «كمّل».
         markEarLabFailed();
-        tripContStalled('اللي سمعته محفوظ — اضغط «كمّل التسميع المتصل» وكمّل عادي');
+        // 3.4: same switch as ayah mode; startContinuousMic keeps contFinals.
+        if (SR) {
+          stopContinuousMic();
+          diagPush('rec-start', { label: 'lab-failed-auto-browser', ok: true });
+          setTimeout(() => { startContinuousMic(); setMicError(EAR_SWITCHED_MSG); }, 0);
+        } else {
+          tripContStalled('نموذج الجهاز ما اشتغلش — اللي سمعته محفوظ، كمّل بوضع «آية آية» اليدوي');
+        }
         return;
       }
       if (code === 'network') {
