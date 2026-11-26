@@ -13,7 +13,7 @@
 //   - quranBoundaries JUZ/HIZB/QUARTER_STARTS (ayah-based)
 //   - madinahPageStarts (ayah -> page of the scans the app shows)
 //   - mushafEditions SURAH_START_PAGES, quranIndex JUZ/HIZB_START_PAGES
-//   - wbwManifestJuz30, juhaniManifestJuz30 (per-ayah word timings)
+//   - wbwManifestJuz30 (the juz-30 Juhani manifest was deleted, item 4.1)
 // Exit code 1 when any mismatch is found.
 import snap from './live-snapshot.json' with { type: 'json' };
 import { SURAH_AYAH_COUNTS } from '../../src/lib/surahs';
@@ -23,7 +23,6 @@ import { MADINAH_PAGE_STARTS, madinahPageOfAyah } from '../../src/lib/madinahPag
 import { SURAH_START_PAGES, TOTAL_MUSHAF_PAGES } from '../../src/lib/mushafEditions';
 import { JUZ_START_PAGES, HIZB_START_PAGES } from '../../src/lib/quranIndex';
 import { WBW_MANIFEST_JUZ30 } from '../../src/lib/wbwManifestJuz30';
-import { JUHANI_TIMINGS_JUZ30 } from '../../src/lib/juhaniManifestJuz30';
 
 const bad: string[] = [];
 const fail = (m: string) => bad.push(m);
@@ -81,21 +80,15 @@ for (const h of HIZB_START_PAGES) {
   if (jz !== h.juz) fail(`HIZB_START_PAGES hizb ${h.number}: juz ${h.juz}, ayah-based juz ${jz}`);
 }
 
-// 5. Juz-30 manifests: valid juz-30 ayat; Juhani word count = live word count.
+// 5. Juz-30 manifest: valid juz-30 ayat.
 const j30 = JUZ_STARTS[29].global;
 const words = snap.juz30Words as Record<string, number>;
 for (const k of WBW_MANIFEST_JUZ30) {
   const [s, a] = k.split(':').map(Number);
   if (!valid(s, a) || SURAH_START_GLOBAL[s - 1] + a - 1 < j30) fail(`wbw manifest: ${k} is not a juz-30 ayah`);
 }
-for (const [k, t] of Object.entries(JUHANI_TIMINGS_JUZ30)) {
-  const [s, a] = k.split(':').map(Number);
-  if (!valid(s, a) || SURAH_START_GLOBAL[s - 1] + a - 1 < j30) { fail(`juhani: ${k} is not a juz-30 ayah`); continue; }
-  if (t.length % 2 !== 0) fail(`juhani ${k}: odd timing list (${t.length})`);
-  else if (t.length / 2 !== words[k]) fail(`juhani ${k}: ${t.length / 2} timed words, live text has ${words[k]}`);
-}
 if (Object.keys(words).length !== TOTAL_AYAHS - j30 + 1) fail(`snapshot: ${Object.keys(words).length} juz-30 ayat`);
 
-console.log(`checked: 6236 ayat, ${MADINAH_PAGE_STARTS.length} pages, ${SURAH_START_PAGES.length} surah pages, ${JUZ_START_PAGES.length} juz pages, ${HIZB_START_PAGES.length} hizb pages, wbw ${WBW_MANIFEST_JUZ30.size}, juhani ${Object.keys(JUHANI_TIMINGS_JUZ30).length}`);
+console.log(`checked: 6236 ayat, ${MADINAH_PAGE_STARTS.length} pages, ${SURAH_START_PAGES.length} surah pages, ${JUZ_START_PAGES.length} juz pages, ${HIZB_START_PAGES.length} hizb pages, wbw ${WBW_MANIFEST_JUZ30.size}`);
 console.log(bad.length ? `MISMATCHES (${bad.length}):\n` + bad.join('\n') : 'no mismatches');
 process.exit(bad.length ? 1 : 0);

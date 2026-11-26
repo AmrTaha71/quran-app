@@ -85,6 +85,12 @@ export default function CorrRecitersPanel({ onChosen }: { onChosen?: () => void 
         اختار القارئ اللي يصحّحلك وإنت بتسمّع. التصحيح <b>بيشتغل بالنت مباشرة</b> ومن غير تحميل.
         ولو عايز تسمّع من غير نت، تقدر تنزّل <b>جزء أو أكتر</b> (اختياري)، وتمسحه وقت ما تحب.
       </p></Hint>
+      {/* Item 4.1: the honest coverage line — the reciters here have word
+          timings for 97–99% of the ayat; the few without them are corrected
+          with the whole ayah in the same voice. */}
+      <p className="text-xs text-accent-700">
+        التصحيح بصوت القارئ نفسه كلمة بكلمة في حوالي ٩٧–٩٩٪ من الآيات. في الآيات القليلة اللي مالهاش توقيت، بيسمّعك الآية كاملة بنفس الصوت.
+      </p>
       <p className="text-xs text-amber-800 bg-amber-50 rounded-lg px-3 py-2">
         عشان التنزيل يفضل محفوظ على الآيفون والآيباد: ثبّت التطبيق على الشاشة الرئيسية الأول (الإعدادات ← تثبيت التطبيق).
       </p>

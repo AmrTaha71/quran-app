@@ -25,7 +25,6 @@
 
 import { refUnitForWord } from './refWordUnits';
 import { hadrAudioUrl } from './hadr';
-import { JUHANI_RANGE_OK_SURAHS_JUZ30 } from './juhaniManifestJuz30';
 import { CORR_TIMING_RUNS } from './corrTimingCoverage';
 import { getGlobalAyahNumber } from './surahs';
 
@@ -106,8 +105,6 @@ export const MAX_JUHANI_SEGMENTS = 3;
  *  alignment artefact and must not be played. */
 const MIN_WINDOW_S = 0.12;
 
-const rangeOkSurahs = new Set<number>(JUHANI_RANGE_OK_SURAHS_JUZ30);
-
 const key = (surah: number, ayah: number): string => `${surah}:${ayah}`;
 
 /** Flat per-word timings [s0,e0,s1,e1,...] in seconds, or null. */
@@ -116,9 +113,8 @@ const key = (surah: number, ayah: number): string => `${surah}:${ayah}`;
 // cpfair/quran-align (CC BY 4.0), for EveryAyah per-ayah recordings,
 // whole Quran. Files: public/corr-timings/<folder>.json, map
 // "surah:ayah" -> flat [s0,e0,s1,e1,...] seconds within the AYAH file.
-// When one is active it replaces the Juhani juz-30 manifest everywhere
-// (timings, enable check, audio URL), so the rest of the correction
-// engine is unchanged.
+// (The old Juhani juz-30 correction manifest was dead code and is gone,
+// item 4.1, owner decision §11.4: Juhani is a listening voice only.)
 // ------------------------------------------------------------------
 export const CORR_RECITERS: { folder: string; name: string }[] = [
   { folder: 'Minshawy_Murattal_128kbps', name: 'المنشاوي' },
@@ -157,7 +153,9 @@ export async function loadCorrReciter(folder: string = getCorrReciter()): Promis
   loadingFolder = folder;
   try {
     const res = await fetch(`/corr-timings/${folder}.json`);
-    if (!res.ok) { if (loadingFolder === folder) activeCorr = { folder, map: {} }; return; }
+    // Item 4.3: a failed fetch must not stick. Leave activeCorr null so the
+    // next call (timingsFor retries) fetches again once the network is back.
+    if (!res.ok) return;
     const map = (await res.json()) as Record<string, number[]>;
     corrMaps.set(folder, map);
     if (loadingFolder === folder) activeCorr = { folder, map };
@@ -241,8 +239,11 @@ function timingsFor(surah: number, ayah: number): number[] | null {
     if (!m) { preloadCorrTimings([src]); return null; }
     return m[key(surah, ayah)] ?? null;
   }
-  if (activeCorr && activeCorr.folder === chosen) return activeCorr.map[key(surah, ayah)] ?? null;
-  return null;
+  // Item 4.3: read the shared map first (preloadCorrTimings fills it),
+  // then the active one; with neither, start a (re)load for next time.
+  const map = corrMaps.get(chosen) ?? (activeCorr && activeCorr.folder === chosen ? activeCorr.map : null);
+  if (!map) { void loadCorrReciter(chosen); return null; }
+  return map[key(surah, ayah)] ?? null;
 }
 
 /** Ayah-level gate: the timing row must have exactly one [start,end]
@@ -281,7 +282,6 @@ function windowShapeOk(t: number[], start: number, end: number): boolean {
  *  `wordCount` is the APP's word count for the ayah (the length of
  *  expectedWordList), so numbering parity is enforced at runtime too. */
 export function isJuhaniCorrEnabled(surah: number, ayah: number, wordCount: number): boolean {
-  if (!activeCorr && !rangeOkSurahs.has(surah)) return false;
   const t = timingsFor(surah, ayah);
   if (!t) return false;
   return timingsShapeOk(t, wordCount);

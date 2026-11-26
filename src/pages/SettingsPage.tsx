@@ -683,7 +683,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
         <Hint id="set-audio-kind"><p className="text-sm text-accent-600 mb-3">
           {isTafsir
             ? 'تفسير الميسر بصوت مجمع الملك فهد، مقطع لكل آية. الفاتحة حوالي ٢ ميجا، والبقرة حوالي ٧٠ ميجا.'
-            : 'السورة كاملة بصوت الجهني للحدر، وتخلّي تصحيح التسميع أسرع (سور جزء عم ٧٨–١١٤). البقرة حوالي ٩٦ ميجا.'}
+            : 'السورة كاملة بصوت الجهني للحدر، للاستماع والختمة. البقرة حوالي ٩٦ ميجا.'}
         </p></Hint>
         {isTafsir && !tafsirConfigured() ? (
           <p className="text-sm text-amber-link bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2">
