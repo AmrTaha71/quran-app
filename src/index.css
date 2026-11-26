@@ -803,3 +803,8 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
 @media (prefers-reduced-motion: reduce) {
   .free-banner { animation: none; }
 }
+
+/* 6.8: while the offline banner shows, the page starts below it and the
+   pages' sticky top bars stick under it instead of behind it. */
+html.offline-banner body { padding-top: var(--offline-banner-h, 0px); }
+html.offline-banner .sticky.top-0 { top: var(--offline-banner-h, 0px); }

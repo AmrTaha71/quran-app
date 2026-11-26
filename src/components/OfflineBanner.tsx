@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { WifiOff } from 'lucide-react';
 import { hasAnyFullDownload } from '../lib/pageDownload';
 
@@ -31,9 +31,24 @@ export default function OfflineBanner() {
       window.removeEventListener('offline', goOffline);
     };
   }, []);
+  // 6.8: the banner is fixed, so it pushes the page down by its own height
+  // (body padding) and moves the pages' sticky top headers under it
+  // (html.offline-banner rule in index.css) instead of covering them.
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (online) { root.classList.remove('offline-banner'); root.style.removeProperty('--offline-banner-h'); return; }
+    const el = boxRef.current;
+    const apply = () => { if (el) root.style.setProperty('--offline-banner-h', `${el.offsetHeight}px`); };
+    apply();
+    root.classList.add('offline-banner');
+    const ro = typeof ResizeObserver !== 'undefined' && el ? new ResizeObserver(apply) : null;
+    if (ro && el) ro.observe(el);
+    return () => { ro?.disconnect(); root.classList.remove('offline-banner'); root.style.removeProperty('--offline-banner-h'); };
+  }, [online, hasDownload]);
   if (online) return null;
   return (
-    <div className="fixed top-0 right-0 left-0 z-[200] bg-amber-700 text-white text-center text-sm font-semibold py-2 pt-[calc(0.5rem_+_env(safe-area-inset-top))] px-4 flex items-center justify-center gap-2 pointer-events-none">
+    <div ref={boxRef} className="fixed top-0 right-0 left-0 z-[200] bg-amber-700 text-white text-center text-sm font-semibold py-2 pt-[calc(0.5rem_+_env(safe-area-inset-top))] px-4 flex items-center justify-center gap-2 pointer-events-none">
       <WifiOff className="w-4 h-4 flex-shrink-0" />
       {hasDownload
         ? 'لا يوجد اتصال بالإنترنت — الصفحات المحمّلة على جهازك متاحة بالكامل، وأي صفحة أخرى زرتها من قبل متاحة أيضاً'
