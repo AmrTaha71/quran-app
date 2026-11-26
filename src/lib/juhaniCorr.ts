@@ -44,11 +44,13 @@ export const CORR_DELAY_MODE_LABEL: Record<CorrDelayMode, string> = {
   'ayah-end': 'في نهاية الآية',
 };
 
-export const CORR_DELAY_MODE_DEFAULT: CorrDelayMode = '1s';
+// Item 2.6 (owner decision 2026-11-26, §11.7): the user picks the
+// correction delay; the default is 3 seconds.
+export const CORR_DELAY_MODE_DEFAULT: CorrDelayMode = '3s';
 
 /** Stored value -> mode. Numeric legacy values (the old corrDelay
  *  stepper, clamped 2..10): 1-2 -> '1s', 3 -> '3s', 4+ -> '5s'.
- *  Missing / invalid -> '3s'. */
+ *  Missing / invalid -> CORR_DELAY_MODE_DEFAULT ('3s'). */
 export function migrateCorrDelayMode(raw: unknown): CorrDelayMode {
   if (raw === '1s' || raw === '3s' || raw === '5s' || raw === 'ayah-end') return raw;
   if (typeof raw === 'number' && Number.isFinite(raw)) {

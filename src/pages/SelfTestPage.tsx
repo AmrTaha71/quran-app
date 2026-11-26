@@ -245,17 +245,11 @@ function loadTestSettings(): { level: VerifyLevel; mode: ReciteMode; corrDelay: 
       }
       const mode: ReciteMode = p.mode === 'continuous' ? 'continuous' : 'ayah';
       // A stored corrDelayMode wins; otherwise migrate the legacy numeric
-      // corrDelay (1-2 -> 1s, 3 -> 3s, 4+ -> 5s; missing/invalid -> 3s).
-      let corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
-      // One-time move to the new 1-second default (2026-11-08): the
-      // user asked for corrections one second after the mistake. The
-      // user can still pick another timing afterwards.
-      try {
-        if (localStorage.getItem('quran-corr-1s-default-v1') !== '1') {
-          localStorage.setItem('quran-corr-1s-default-v1', '1');
-          if (corrDelayMode === '3s' || corrDelayMode === 'ayah-end') corrDelayMode = '1s';
-        }
-      } catch { /* storage blocked */ }
+      // corrDelay (1-2 -> 1s, 3 -> 3s, 4+ -> 5s; missing/invalid -> 3s default).
+      const corrDelayMode = migrateCorrDelayMode(p.corrDelayMode !== undefined ? p.corrDelayMode : p.corrDelay);
+      // Item 2.6 (2026-11-26): the old one-time forced move to '1s'
+      // ('quran-corr-1s-default-v1') is gone. A stored choice is kept as
+      // is; only a missing/invalid value falls back to the 3s default.
       const corrDelay = corrDelaySeconds(corrDelayMode);
       const corrRate: CorrRate = p.corrRate === 'slow' || p.corrRate === 'fast' || p.corrRate === 'veryFast' ? p.corrRate : 'normal';
       return { level, mode, corrDelay, corrDelayMode, corrRate };
@@ -6285,6 +6279,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 )}
                 <div className="col-span-2">
                   <p className="text-xs font-medium text-accent-700 mb-1">توقيت التصحيح</p>
+                  <p className="text-[11px] text-accent-600 mb-1">المهلة اللي تقدر تصلّح فيها غلطتك بنفسك قبل ما المصحح يقولك الكلمة الصح. «في نهاية الآية»: يستنى لحد ما تخلّص الآية.</p>
                   <div className="grid grid-cols-4 gap-1.5">
                     {CORR_DELAY_MODES.map((m) => (
                       <button key={m} onClick={() => applySettings(verifyLevel, reciteMode, m, corrRate)}
@@ -6296,6 +6291,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs font-medium text-accent-700 mb-1">لو غلطت في كلمة</p>
+                  <p className="text-[11px] text-accent-600 mb-1">ده بيتحكم في إنه يقاطعك وانت لسه بتقرا (خصوصًا في التسميع المتصل): على طول، ولا ينبّهك بس ويأجّل التصحيح.</p>
                   <div className="grid grid-cols-2 gap-1.5">
                     {MISTAKE_MODES.map((m) => (
                       <button key={m.id} onClick={() => setCorrStyle({ ...corrStyle, mistake: m.id })}
@@ -6308,6 +6304,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs font-medium text-accent-700 mb-1">لو سكتّ ونسيت، يقولّي الكلمة بعد</p>
+                  <p className="text-[11px] text-accent-600 mb-1">ده للنسيان مش للغلط: لو وقفت ومش فاكر الكلمة اللي بعدها، بعد قد إيه يقولهالك.</p>
                   <div className="grid grid-cols-5 gap-1.5">
                     {FORGET_SECS.map((n) => (
                       <button key={n} onClick={() => setCorrStyle({ ...corrStyle, forget: n })}
