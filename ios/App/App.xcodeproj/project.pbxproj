@@ -16,6 +16,19 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
+		6FDEBD98DB42146C3AEDECB6 /* adhan_short.wav in Resources */ = {isa = PBXBuildFile; fileRef = 4CF5F130E590D713589B8354 /* adhan_short.wav */; };
+		DFE6A0F8F54AB8FC481DABF7 /* alarm_bell.wav in Resources */ = {isa = PBXBuildFile; fileRef = 324F05147E3CBA5F3ACFE25F /* alarm_bell.wav */; };
+		44FEBBA4726885CF0C9DF8FC /* alarm_calm.wav in Resources */ = {isa = PBXBuildFile; fileRef = 6B0CCD3909316346C605DA91 /* alarm_calm.wav */; };
+		DCE755C5D8A8D759EC99FBD9 /* alarm_classic.wav in Resources */ = {isa = PBXBuildFile; fileRef = 65A92CC36BA51FF3F4B267D5 /* alarm_classic.wav */; };
+		6F012C7D08644C1D41DEE4C0 /* alarm_digital.wav in Resources */ = {isa = PBXBuildFile; fileRef = 1395B1566ED15B51B6487209 /* alarm_digital.wav */; };
+		BD2ECB4124E5D610F80935AE /* alarm_drums.wav in Resources */ = {isa = PBXBuildFile; fileRef = 900388F036408A39DE3AA3DB /* alarm_drums.wav */; };
+		C0C3E415931B398BEEFB6884 /* alarm_fall.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7F3BBD10B3C29E4321F741AF /* alarm_fall.wav */; };
+		FF4590E3DF5C8123EE068ED6 /* alarm_heart.wav in Resources */ = {isa = PBXBuildFile; fileRef = 2295BA65AA83120255A502A0 /* alarm_heart.wav */; };
+		602636196F294DC98DDFC44F /* alarm_phone.wav in Resources */ = {isa = PBXBuildFile; fileRef = B264ED3EB1C2BE6A21EA2183 /* alarm_phone.wav */; };
+		40C43151F335CAEBDDE28F1E /* alarm_rise.wav in Resources */ = {isa = PBXBuildFile; fileRef = EE53CCE1B7F89B4E74524C0B /* alarm_rise.wav */; };
+		31A4B6094734066DD915866C /* alarm_siren.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7186B9D6D5EAEF39CD230368 /* alarm_siren.wav */; };
+		E7259C5E3FCF95944BC79A50 /* alarm_trio.wav in Resources */ = {isa = PBXBuildFile; fileRef = B2BD2BF9FB2C061816027103 /* alarm_trio.wav */; };
+		058B32C7FF514CFAC52ADF70 /* alarm_whistle.wav in Resources */ = {isa = PBXBuildFile; fileRef = 47A44E2AD7EE7F70E06B4C80 /* alarm_whistle.wav */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -30,6 +43,19 @@
 		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
 		9582B6822FE993A50072D4E8 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
+		4CF5F130E590D713589B8354 /* adhan_short.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = adhan_short.wav; sourceTree = "<group>"; };
+		324F05147E3CBA5F3ACFE25F /* alarm_bell.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_bell.wav; sourceTree = "<group>"; };
+		6B0CCD3909316346C605DA91 /* alarm_calm.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_calm.wav; sourceTree = "<group>"; };
+		65A92CC36BA51FF3F4B267D5 /* alarm_classic.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_classic.wav; sourceTree = "<group>"; };
+		1395B1566ED15B51B6487209 /* alarm_digital.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_digital.wav; sourceTree = "<group>"; };
+		900388F036408A39DE3AA3DB /* alarm_drums.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_drums.wav; sourceTree = "<group>"; };
+		7F3BBD10B3C29E4321F741AF /* alarm_fall.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_fall.wav; sourceTree = "<group>"; };
+		2295BA65AA83120255A502A0 /* alarm_heart.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_heart.wav; sourceTree = "<group>"; };
+		B264ED3EB1C2BE6A21EA2183 /* alarm_phone.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_phone.wav; sourceTree = "<group>"; };
+		EE53CCE1B7F89B4E74524C0B /* alarm_rise.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_rise.wav; sourceTree = "<group>"; };
+		7186B9D6D5EAEF39CD230368 /* alarm_siren.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_siren.wav; sourceTree = "<group>"; };
+		B2BD2BF9FB2C061816027103 /* alarm_trio.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_trio.wav; sourceTree = "<group>"; };
+		47A44E2AD7EE7F70E06B4C80 /* alarm_whistle.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = alarm_whistle.wav; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,8 +99,29 @@
 				504EC3131FED79650016851F /* Info.plist */,
 				2FAD9762203C412B000D30F8 /* config.xml */,
 				50B271D01FEDC1A000F3C39B /* public */,
+				0C4804E3424B8B8CBAD9566B /* sounds */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		0C4804E3424B8B8CBAD9566B /* sounds */ = {
+			isa = PBXGroup;
+			children = (
+				4CF5F130E590D713589B8354 /* adhan_short.wav */,
+				324F05147E3CBA5F3ACFE25F /* alarm_bell.wav */,
+				6B0CCD3909316346C605DA91 /* alarm_calm.wav */,
+				65A92CC36BA51FF3F4B267D5 /* alarm_classic.wav */,
+				1395B1566ED15B51B6487209 /* alarm_digital.wav */,
+				900388F036408A39DE3AA3DB /* alarm_drums.wav */,
+				7F3BBD10B3C29E4321F741AF /* alarm_fall.wav */,
+				2295BA65AA83120255A502A0 /* alarm_heart.wav */,
+				B264ED3EB1C2BE6A21EA2183 /* alarm_phone.wav */,
+				EE53CCE1B7F89B4E74524C0B /* alarm_rise.wav */,
+				7186B9D6D5EAEF39CD230368 /* alarm_siren.wav */,
+				B2BD2BF9FB2C061816027103 /* alarm_trio.wav */,
+				47A44E2AD7EE7F70E06B4C80 /* alarm_whistle.wav */,
+			);
+			path = sounds;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -148,6 +195,19 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				6FDEBD98DB42146C3AEDECB6 /* adhan_short.wav in Resources */,
+				DFE6A0F8F54AB8FC481DABF7 /* alarm_bell.wav in Resources */,
+				44FEBBA4726885CF0C9DF8FC /* alarm_calm.wav in Resources */,
+				DCE755C5D8A8D759EC99FBD9 /* alarm_classic.wav in Resources */,
+				6F012C7D08644C1D41DEE4C0 /* alarm_digital.wav in Resources */,
+				BD2ECB4124E5D610F80935AE /* alarm_drums.wav in Resources */,
+				C0C3E415931B398BEEFB6884 /* alarm_fall.wav in Resources */,
+				FF4590E3DF5C8123EE068ED6 /* alarm_heart.wav in Resources */,
+				602636196F294DC98DDFC44F /* alarm_phone.wav in Resources */,
+				40C43151F335CAEBDDE28F1E /* alarm_rise.wav in Resources */,
+				31A4B6094734066DD915866C /* alarm_siren.wav in Resources */,
+				E7259C5E3FCF95944BC79A50 /* alarm_trio.wav in Resources */,
+				058B32C7FF514CFAC52ADF70 /* alarm_whistle.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
