@@ -1,3 +1,4 @@
+import { syncCorpusFromMemorized } from '../lib/hifzCorpus';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useEscapeClose } from '../lib/useEscape';
 import { supabase } from '../lib/supabase';
@@ -36,6 +37,8 @@ export function useUserLists() {
         difficult: new Set(data.filter((d) => d.list_type === 'difficult').map((d) => d.verse_id)),
         memorized: new Set(data.filter((d) => d.list_type === 'memorized').map((d) => d.verse_id)),
       });
+      // Item 17.2: «محفوظي» mirrors the memorized list for the round tests.
+      syncCorpusFromMemorized(data.filter((d) => d.list_type === 'memorized').map((d) => d.verse_id));
       const linkKey = (d: { verse_id: number; link_id: unknown }) => `${d.verse_id}:${d.link_id}`;
       setLinkLists({
         read_later: new Set(data.filter((d) => d.list_type === 'read_later' && d.link_id != null).map(linkKey)),

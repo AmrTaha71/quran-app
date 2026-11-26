@@ -171,10 +171,12 @@ function indexOf(text: Map<string, string>): TextIndex {
  *  user can tell which ayah it is and continue it. Never the basmala (1:1).
  *  A range with no such ayah (e.g. surah 112) falls back to the relaxed tier:
  *  any ayah of >= 4 words, half of it as the prompt. */
-export function roundCandidates(range: { start: number; end: number }, text: Map<string, string>): { tier: 'strict' | 'relaxed'; list: number[] } {
+export function roundCandidates(range: { start: number; end: number }, text: Map<string, string>, corpus: Set<number> | null = null): { tier: 'strict' | 'relaxed'; list: number[] } {
   const { words, grams } = indexOf(text);
   const strict: number[] = [], relaxed: number[] = [];
   for (let g = Math.max(2, range.start); g <= Math.min(6236, range.end); g++) {
+    // Item 17.2: with a declared «محفوظي», never an ayah outside it.
+    if (corpus && !corpus.has(g)) continue;
     const w = words[g];
     if (!w) continue;
     const n = promptLenFor(w.length);
@@ -204,8 +206,9 @@ export async function pickRoundAyah(
   folderAt: (g: number) => string,
   text: Map<string, string>,
   avoid: Set<number>,
+  corpus: Set<number> | null = null,
 ): Promise<PickedAyah | null> {
-  const { tier, list } = roundCandidates(range, text);
+  const { tier, list } = roundCandidates(range, text, corpus);
   const pool = list.filter((g) => !avoid.has(g));
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
   const words = indexOf(text).words;

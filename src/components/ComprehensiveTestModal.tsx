@@ -6,6 +6,7 @@
 //  - المتشابهات: oral (the user says the ayat).
 //  - التجويد: admin only (question bank, W4-G).  التلاوة: self-graded.
 //  «الربط والاستحضار» is out for now. Scores are computed automatically.
+import { loadHifzCorpus } from '../lib/hifzCorpus';
 import DrumPicker from './DrumReel';
 import { unitPickLabel } from '../lib/testRanges';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -129,13 +130,15 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     }
     // W4-K: only ayat whose opening words are unique in the Quran make positions, so a
     // small range may hold fewer than the chosen count: the test shrinks to what exists.
-    const cand = roundCandidates(span, text);
-    if (cand.list.length === 0) { setErr('النطاق ده ما فيهوش آيات مناسبة للتسميع. اختار نطاق أكبر.'); return; }
+    const corpus = loadHifzCorpus();
+    const cand = roundCandidates(span, text, corpus);
+    if (cand.list.length === 0) { setErr(corpus ? 'مفيش في النطاق ده آيات مناسبة من محفوظك — الأسئلة من محفوظك فقط. اختار نطاق فيه آيات علّمتها «حفظتها».' : 'النطاق ده ما فيهوش آيات مناسبة للتسميع. اختار نطاق أكبر.'); return; }
     const n = Math.min(count, cand.list.length);
     if (n < count) setCount(n);
     setNote([
       n < count ? `النطاق ده فيه ${arNum(n)} موضع مناسب بس، فالاختبار ${arNum(n)} مواضع (والدرجة برضه من ٤٠).` : '',
       cand.tier === 'relaxed' ? 'نطاق قصير: القارئ بيسمّعك أول نصف الآية تقريباً.' : '',
+      corpus ? 'الأسئلة من محفوظك فقط.' : '',
     ].filter(Boolean).join(' '));
     ctx.current = { span, folderAt, used: new Set(), pool: surahsOfRange(span) };
     setReciter(chosen);
@@ -161,7 +164,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
     setBusy(true);
     setShowRes(null);
     setAskSurah(null);
-    const picked = await pickRoundAyah({ start: c.span.start, end: c.span.end }, c.folderAt, text, c.used);
+    const picked = await pickRoundAyah({ start: c.span.start, end: c.span.end }, c.folderAt, text, c.used, loadHifzCorpus());
     setBusy(false);
     if (!picked) {
       if (first || positions.length === 0) {

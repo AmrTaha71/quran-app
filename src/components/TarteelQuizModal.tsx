@@ -3,6 +3,7 @@
 // Each round: 5 words from the reciter, the user completes the ayah by voice
 // (RoundRecite), then «في أي سورة؟» (tiles). Round = 8 (completion)
 // + 2 (surah name; skipped inside a single surah); final /40 = average of the rounds x 4, kept in the score log.
+import { loadHifzCorpus } from '../lib/hifzCorpus';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal, RoundDebugOverlay } from './RoundRecite';
@@ -123,8 +124,10 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
     if (!text) return;
     setErr('');
     setPhase('loading');
-    const picked = await pickRoundAyah({ start: range.start, end: range.end - 1 }, folderAt, text, used.current);
-    if (!picked) { setErr(rounds.length ? 'خلصت الآيات المميزة المتاحة في النطاق ده. اختار نطاق تاني لو عايز تكمّل.' : 'ما لقيناش آية مناسبة في النطاق ده (محتاجة توقيت كلمات للقارئ). غيّر النطاق أو القارئ.'); setPhase(rounds.length ? 'score' : 'setup'); return; }
+    // Item 17.2: questions from «محفوظي» only, when it is declared.
+    const corpus = loadHifzCorpus();
+    const picked = await pickRoundAyah({ start: range.start, end: range.end - 1 }, folderAt, text, used.current, corpus);
+    if (!picked) { setErr(rounds.length ? 'خلصت الآيات المميزة المتاحة في النطاق ده. اختار نطاق تاني لو عايز تكمّل.' : corpus ? 'مفيش في النطاق ده آية مناسبة من محفوظك — الأسئلة من محفوظك فقط. اختار نطاق فيه آيات علّمتها «حفظتها».' : 'ما لقيناش آية مناسبة في النطاق ده (محتاجة توقيت كلمات للقارئ). غيّر النطاق أو القارئ.'); setPhase(rounds.length ? 'score' : 'setup'); return; }
     setCur({ ayah: picked });
     setPhase('recite');
   }
@@ -190,6 +193,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
         {phase === 'setup' && (
           <div className="flex-1 flex flex-col justify-evenly gap-3">
             <p className="text-base text-accent-600 mb-2">اختار النطاق اللي عايز تتختبر فيه</p>
+            {loadHifzCorpus() && <p className="text-sm font-semibold text-emerald-800 -mt-2">الأسئلة من محفوظك فقط (الآيات اللي علّمتها «حفظتها»).</p>}
             <div className="grid grid-cols-4 gap-2 mb-4">
               {(Object.keys(SCOPE_LABEL) as Scope[]).map((k) => (
                 <button key={k} onClick={() => { setScope(k); setNum(1); setToNum(1); }}
