@@ -37,6 +37,10 @@ const surahFile =
   (surahNo: number): string =>
     `https://cdn.islamic.network/quran/audio-surah/128/${edition}/${surahNo}.mp3`;
 
+// Item 4.23: tools/audio-sources/head-check.ts HEAD-checks surah 1 and
+// 114 of every edition below. Last run: NOT YET — written 2026-11-26 in
+// a sandbox that blocks cdn.islamic.network. Run it on an open network
+// and put the date and result here.
 export const RIWAYAT: Riwaya[] = [
   {
     id: 'qaloon',
