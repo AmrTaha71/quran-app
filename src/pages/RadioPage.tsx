@@ -412,25 +412,24 @@ export default function RadioPage({ onNavigate }: { onNavigate: (r: Route) => vo
     return () => clearTimeout(timer);
   }, [blackScreen]);
 
-  // Closed by default: no player, no Media Session, no stream
-  // fetch — only the gate notice and a way home.
+  // Closed by default: no player, no Media Session, no stream fetch.
+  // 6.5 (owner decision §11.6, 2026-11-26): no licence to embed the stream,
+  // so the page opens the external site instead of a dead «قريبًا» card —
+  // the same link as the Listen hub. Back is the shell's bottom-left bar.
   if (!radioDevEnabled) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-emerald-50/40 via-white to-stone-50/30 pb-24">
-        <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-emerald-100 shadow-sm">
-          <div className="max-w-5xl mx-auto px-4 py-3">
+        <main dir="rtl" className="max-w-5xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-2xl border border-hairline-emerald shadow-sm p-5 text-center space-y-3">
+            <p className="font-bold text-accent-900 text-lg">إذاعة القرآن الكريم من القاهرة</p>
+            <p className="text-sm text-ink-2">البث على موقع الإذاعة نفسه، بيفتح في صفحة جديدة.</p>
             <button
-              onClick={() => onNavigate('home')}
-              className="px-4 py-2 bg-white border border-emerald-200 text-accent-800 font-bold rounded-xl"
+              type="button"
+              onClick={() => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener'); } catch { /* ignore */ } }}
+              className="w-full min-h-[48px] py-3 rounded-xl grad-emerald-door text-white font-bold polish-press"
             >
-              الرئيسية
+              استمع عبر الموقع الخارجي
             </button>
-          </div>
-        </header>
-        <main className="max-w-5xl mx-auto px-4 py-5">
-          <div className="bg-white rounded-2xl border border-stone-200 shadow-sm p-5 text-center opacity-60">
-            <p className="font-bold text-accent-800">إذاعة القرآن الكريم — قريبًا</p>
-            <p className="text-sm text-accent-600 mt-2">بانتظار إذن البث من الهيئة الوطنية للإعلام</p>
           </div>
         </main>
       </div>
