@@ -89,7 +89,8 @@ import {
   downloadSurah,
   estimateSurahSize,
   formatApproxSize,
-  isSurahDownloaded,
+  checkSurahDownload,
+  DOWNLOAD_DAMAGED_MESSAGE,
   resolveListenUrl,
 } from '../lib/listenOffline';
 import {
@@ -1984,8 +1985,13 @@ export default function ListenPage({ onNavigate, visible = true }: { onNavigate:
     const check = async () => {
       setOfflineChecking(true);
       try {
-        const found = await isSurahDownloaded(reciterId, surah);
-        if (!cancelled) setDownloaded(found);
+        // Item 4.19: the badge shows only when the clips are really
+        // stored; a download iOS evicted says so instead of lying.
+        const state = await checkSurahDownload(reciterId, surah);
+        if (!cancelled) {
+          setDownloaded(state === 'yes');
+          if (state === 'damaged') setOfflineError(DOWNLOAD_DAMAGED_MESSAGE);
+        }
       } catch {
         if (!cancelled) setDownloaded(false);
       } finally {

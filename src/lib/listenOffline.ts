@@ -386,12 +386,41 @@ export async function deleteDownloadedSurah(
   removeMeta(reciterId, surah);
 }
 
-/** True iff a meta entry exists for this surah+reciter. */
+/** Shown when the meta says "downloaded" but the clips are gone. */
+export const DOWNLOAD_DAMAGED_MESSAGE =
+  'التحميل ده اتمسح من الجهاز أو ناقص — نزّل السورة تاني';
+
+/**
+ * Item 4.19: the meta entry alone is not proof — iOS may evict
+ * IndexedDB under storage pressure while localStorage survives. A
+ * surah counts as downloaded only when every clip the meta promises
+ * is really stored. A confirmed shortfall drops the meta entry and
+ * returns 'damaged'; an unreadable IDB is 'no' (meta kept).
+ */
+export async function checkSurahDownload(
+  reciterId: string,
+  surah: number,
+): Promise<'yes' | 'no' | 'damaged'> {
+  const entry = readMeta().find((e) => e.surah === surah && e.reciter === reciterId);
+  if (!entry) return 'no';
+  let stored: number;
+  try {
+    const prefix = clipPrefix(reciterId, surah);
+    stored = (await listClipKeys()).filter((k) => k.startsWith(prefix)).length;
+  } catch {
+    return 'no';
+  }
+  if (stored >= entry.count) return 'yes';
+  removeMeta(reciterId, surah);
+  return 'damaged';
+}
+
+/** True iff the surah's clips are really on the device (see 4.19). */
 export async function isSurahDownloaded(
   reciterId: string,
   surah: number,
 ): Promise<boolean> {
-  return readMeta().some((e) => e.surah === surah && e.reciter === reciterId);
+  return (await checkSurahDownload(reciterId, surah)) === 'yes';
 }
 
 /**
