@@ -5281,21 +5281,27 @@ export default function QuranMushafPage({
                 </div>
               </button>
 
+              {/* Item 5.7: the wrong-lock escape stays on screen the whole
+                  time the lock holds — it used to sit inside the strip
+                  container that fades 1.5 s after each tap, so a reader
+                  stuck on the wrong ayah could not see the way out. */}
+              {followStatus === 'locked' && followPos && !followOn && (
+                <div className="absolute left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]"
+                  style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 4.5rem)' }}
+                  onClick={(e) => e.stopPropagation()}>
+                  {/* W5-E: no «سورة X — آية N» text — the mushaf page itself shows where the imam is. */}
+                  <button onClick={resumeFollowAfterWrongLock}
+                    className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0">
+                    مش دي؟ كمّل الاستماع
+                  </button>
+                  <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
+                    className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
+                </div>
+              )}
               {/* Verse selector — only the ayahs printed on this page */}
               {/* Fades out with the other fullscreen overlays (auto-hide after 3s, tap to show). */}
               <div className={`absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center pb-[calc(0.25rem_+_env(safe-area-inset-bottom))] pr-2 pl-24 transition-opacity duration-300 ${fsOverlaysVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
                 onClick={(e) => e.stopPropagation()}>
-                {followStatus === 'locked' && followPos && !followOn && (
-                  <div className="mb-2 flex items-center gap-2 bg-amber-500 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
-                    {/* W5-E: no «سورة X — آية N» text — the mushaf page itself shows where the imam is. */}
-                    <button onClick={resumeFollowAfterWrongLock}
-                      className="px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0">
-                      مش دي؟ كمّل الاستماع
-                    </button>
-                    <button onClick={stopFollow} title="إيقاف المتابعة" aria-label="إيقاف المتابعة"
-                      className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full flex-shrink-0"><Square className="w-4 h-4" /></button>
-                  </div>
-                )}
                 {followOn && (
                   <div className="mb-2 flex items-center gap-2 bg-amber-700 text-white pl-2 pr-4 py-2 rounded-full shadow-xl font-bold text-sm max-w-[95vw]">
                     <StudioMic className="w-4 h-4 flex-shrink-0" />
