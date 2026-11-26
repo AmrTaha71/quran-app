@@ -4012,6 +4012,18 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
 
   // S4: resume a stalled ayah session without wiping its transcript.
   const resumeMic = () => startMic(true);
+  // Item 2.2: «قف» pauses instead of wiping. The mic stops, what was
+  // heard stays, and the stalled panel offers كمّل / قيّم اللي اتسمع /
+  // ابدأ من جديد (the explicit wipe).
+  const pauseMic = () => {
+    diagPush('tap', { label: 'pause-mic' });
+    stopRec();
+    clearTimers();
+    liveRef.current.micState = 'idle';
+    setMicState('idle');
+    setInterim('');
+    setMicStalled(spokenTokens(liveRef.current.finals).length > 0);
+  };
 
   // ---- Continuous mode -------------------------------------------
   // One listening session over the whole range: no per-ayah stops.
@@ -5859,6 +5871,17 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const missed = ayahs.filter((_, i) => !grades[i] && !skipped[i]);
   const pct = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
   const currentDone = revealed || micState === 'done-correct' || micState === 'done-wrong';
+  // Item 2.2: a visible way out of «آية آية» that saves the place first
+  // and asks before dropping an attempt that has not been graded yet.
+  const exitTest = () => {
+    const pendingAttempt = !currentDone && spokenTokens(liveRef.current.finals).length > 0;
+    if (pendingAttempt && !window.confirm('اللي قلته في الآية دي لسه ما اتقيّمش وهيضيع. تخرج برضه؟ (مكانك في التسميع هيتحفظ)')) return;
+    diagPush('tap', { label: 'exit-test' });
+    saveProgress(makeProgress(index, liveRef.current.grades, liveRef.current.skipped));
+    resetMicState();
+    setSavedProgress(loadProgress());
+    setPhase('setup');
+  };
   // D1 raw heard line (display-capped; see capHeardLine): finals +
   // pending interim, verbatim as the engine returned them. The old
   // unbounded "سمعت:" renders are replaced by this capped line so
@@ -7032,7 +7055,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                           className="px-6 py-3 grad-emerald-door text-white text-base font-bold rounded-xl polish-press polish-focus">
                           خلصت، قيّمها
                         </button>
-                        <button onClick={() => resetMicState()}
+                        <button onClick={pauseMic}
                           className="px-5 py-3 bg-gray-100 hover:bg-gray-200 text-accent-700 text-base font-semibold rounded-xl flex items-center gap-2 polish-press">
                           <Square className="w-4 h-4" /> قف
                         </button>
@@ -7065,6 +7088,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             </div>
             <p className="text-center text-sm text-accent-600">النتيجة حتى الآن: {correct} صح من {index + (currentDone ? 1 : 0)} آية</p>
+            <button onClick={exitTest}
+              className="block mx-auto px-4 py-2 text-sm font-semibold text-accent-700 bg-white border border-hairline hover:bg-gray-50 rounded-lg polish-press">
+              إنهاء التسميع وحفظ مكاني
+            </button>
           </div>
         )}
 
