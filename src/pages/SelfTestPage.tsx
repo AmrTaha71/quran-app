@@ -1689,6 +1689,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // tells the user the words he said during the correction were not
   // heard, so he says the rest of the ayah again.
   const [postCorrHint, setPostCorrHint] = useState(false);
+  // Item 2.22: the mic is off while the reciter plays a correction;
+  // say so on screen instead of asking afterwards to repeat.
+  const [corrSpeaking, setCorrSpeaking] = useState(false);
   // SRS step 5 (2026-11-20): third+ slip of one letter pair, shown by SrsSlipNotice.
   const [srsNotices, setSrsNotices] = useState<SlipNotice[]>([]);
   const [wrongByAyah, setWrongByAyah] = useState<Record<number, string[]>>({});
@@ -1990,6 +1993,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     // Leaving the ayah / stopping the test must never play a stale window.
     try { juhaniPlayerRef.current?.stop(); } catch {}
     setCorrWindowPlaying(false);
+    setCorrSpeaking(false);
   };
   const fetchCorrectionAudio = async (words: string[], token: number, pos?: { shape: 'context' | 'bare'; positions: CorrPosition[] }): Promise<string | null> => {
     if (words.length === 0) return null;
@@ -2265,13 +2269,14 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     diagPush('corr-source', { label: 'juhani-window', reason: `mode=${liveRef.current.corrDelayMode};rate=${rate};segs=${plan.segments.length}${plan.truncated ? ';truncated' : ''};plan=${wordPlan ? 'words' : 'whole-ayah'};win=${plan.segments.map((g) => `${g.start}-${g.end}@${g.tStart.toFixed(2)}-${g.tEnd.toFixed(2)}`).join(',')};wrong=${wrongIdx.join('.')};${ayah.surah_no}:${ayah.ayah_no}` });
     const corrT0 = Date.now();
     setCorrWindowPlaying(true);
+    setCorrSpeaking(true);
     player.play({
       url: playUrlForPlan,
       segments: plan.segments,
       rate,
       onStart: () => { diagPush('tts-start', { label: 'juhani-window' }); },
-      onDone: () => { setCorrWindowPlaying(false); diagPush('tts-end', { label: 'juhani-window', reason: `totalMs=${Date.now() - corrT0}` }); try { onDone?.(); } catch {} },
-      onFail: (reason) => { setCorrWindowPlaying(false); diagPush('tts-error', { label: 'juhani-window', reason }); onFallback(); },
+      onDone: () => { setCorrWindowPlaying(false); setCorrSpeaking(false); diagPush('tts-end', { label: 'juhani-window', reason: `totalMs=${Date.now() - corrT0}` }); try { onDone?.(); } catch {} },
+      onFail: (reason) => { setCorrWindowPlaying(false); setCorrSpeaking(false); diagPush('tts-error', { label: 'juhani-window', reason }); onFallback(); },
     });
     return true;
   };
@@ -2455,6 +2460,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     if (contStallTimerRef.current) clearTimeout(contStallTimerRef.current);
     try { juhaniPlayerRef.current?.dispose(); } catch {}
     setCorrWindowPlaying(false);
+    setCorrSpeaking(false);
     // N3': the manual-copy layer (diagCopyJson fallback) is
     // imperative DOM, so it must die with the component, not
     // linger across route changes.
@@ -6965,6 +6971,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </>
               ) : micState === 'done-wrong' ? (
                 <>
+                  {corrSpeaking && (
+                    <p className="text-sm font-semibold text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-3" role="status" aria-live="polite">الميكروفون واقف لحد ما المصحح يخلّص — استنى، وبعدين كمّل</p>
+                  )}
                   <p className="text-lg font-bold text-red-600 mb-1">في جزء محتاج مراجعة:</p>
                   <p className="text-sm text-accent-600 mb-4">الآية كاملة، والكلمات اللي غلطت فيها أو نسيتها بالأحمر — وهتلاقي الآية في قائمة المراجعة آخر التسميع:</p>
                   {paperDrawn && (
@@ -7114,6 +7123,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                         );
                       })()}
                       <p className="text-xs text-accent-500 mb-3">{labEarInUseRef.current || earLabUsable() || getEar() === 'model' ? 'بيسمعك على جهازك — من غير إنترنت' : 'بيسمعك المتصفح (محتاج إنترنت)'}</p>
+                      {corrSpeaking && (
+                        <p className="text-sm font-semibold text-amber-800 bg-amber-50 border border-hairline-amber rounded-xl px-3 py-2 mb-3" role="status" aria-live="polite">الميكروفون واقف لحد ما المصحح يخلّص — استنى، وبعدين كمّل</p>
+                      )}
                       {postCorrHint && (
                         <p className="text-sm font-semibold text-emerald-700 mb-3">التصحيح خلص — كمّل باقي الآية بصوتك؛ اللي قلته أثناء التصحيح ما اتسمعش، فقولوه تاني</p>
                       )}
