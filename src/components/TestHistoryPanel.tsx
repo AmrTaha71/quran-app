@@ -118,13 +118,18 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
   const [calendar, setCalendar] = useState<'greg' | 'hijri'>('greg');
   const now = useMemo(() => new Date(), []);
   const inRange = useMemo(() => ofLevel.filter((e) => inPeriod(e.ts, period, now)), [ofLevel, period, now]);
-  const curve = useMemo(() => [...inRange].reverse(), [inRange]);
+  // Item 2.14(a): a self-assessment (graded by hand) is listed with a tag
+  // but kept out of the curve and the average — they measure the ear's
+  // verdicts, not self-grading.
+  const measured = useMemo(() => inRange.filter((e) => e.ear !== 'manual'), [inRange]);
+  const curve = useMemo(() => [...measured].reverse(), [measured]);
   // Item 16.10: the average and the count use finished tests only; an
   // abandoned test's partial score would drag the average down unfairly.
   // The curve still shows every test (hollow point = not finished).
-  const done = useMemo(() => inRange.filter((e) => e.completed === true), [inRange]);
+  const done = useMemo(() => measured.filter((e) => e.completed === true), [measured]);
   const avg = done.length ? Math.round(done.reduce((a, e) => a + e.score, 0) / done.length) : 0;
-  const unfinished = inRange.length - done.length;
+  const unfinished = measured.length - done.length;
+  const selfGraded = inRange.length - measured.length;
   const hijriOk = HIJRI_FMT !== null && hijriOf(now) !== null;
   const chip = (label: string, on: boolean, onClick: () => void) => (
     <button type="button" key={label} onClick={onClick}
@@ -203,6 +208,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
               ? <>{periodLabel(period)}: <span className="font-bold text-emerald-700">متوسط {ar(avg)}٪</span> في {ar(done.length)} اختبار مكتمل</>
               : <>{periodLabel(period)}: مفيش اختبار مكتمل لسه، فمفيش متوسط.</>}
             {unfinished > 0 && <span className="text-accent-600"> (و{ar(unfinished)} ما كملوش، مش داخلين في المتوسط)</span>}
+            {selfGraded > 0 && <span className="text-accent-600"> (و{ar(selfGraded)} تقييم ذاتي، مش داخلين في المنحنى ولا المتوسط)</span>}
           </p>
           <Curve points={curve} />
         </>
@@ -213,6 +219,7 @@ export default function TestHistoryPanel({ entries, initialLevel }: {
             <li key={i} className="py-2 flex items-center justify-between gap-2">
               <span className="text-accent-700 min-w-0 truncate">{e.label}</span>
               <span className="font-bold text-emerald-700 whitespace-nowrap">{ar(e.score)}٪</span>
+              {e.ear === 'manual' && <span className="text-xs text-amber-link whitespace-nowrap">تقييم ذاتي</span>}
               <span className={`text-xs whitespace-nowrap ${e.completed ? 'text-emerald-700' : 'text-amber-link'}`}>{e.completed ? 'كمّل' : 'ما كملش'}</span>
               <span className="text-xs text-accent-500 whitespace-nowrap">{HISTORY_LEVEL_LABEL[e.level]}</span>
               <span className="text-xs text-accent-400 whitespace-nowrap">{when(e.ts)}</span>

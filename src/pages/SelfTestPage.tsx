@@ -1077,6 +1077,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const labEarInUseRef = useRef(false);
   // W4-D: the ear of the last mic session, for the score log.
   const earKindRef = useRef<TestHistoryEntry['ear']>('manual');
+  // Item 2.14(a): any ayah graded by hand marks the whole test as a
+  // self-assessment (tagged, kept out of the progress curve/average).
+  const manualUsedRef = useRef(false);
   const [scoreLog, setScoreLog] = useState<TestHistoryEntry[]>(loadTestHistoryV1);
   // Keep the screen awake while a recitation test runs (2026-11-08).
   useWakeLock(phase === 'testing');
@@ -2623,6 +2626,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Global-range test (unit mode + resume): verse ids are sequential
   // 1..6236 in surah order, so id range = global ayah range.
   const startTestGlobal = async (startGlobal: number, endGlobal: number, restore: { index: number; grades: boolean[]; skipped: boolean[] } | null = null, forceMode?: ReciteMode, settingsOverride?: { mode: ReciteMode; corrDelayMode: CorrDelayMode; corrRate: CorrRate } | null, opts?: { explicitAyahs?: TestAyah[]; recentLabel?: string; reciterChosen?: boolean }) => {
+    manualUsedRef.current = false;
     // «تسمّع مع مين؟» (2026-11-08): reciters downloaded for this range.
     // Several -> ask; exactly one -> use it and say so; none -> keep the
     // chosen reciter (it streams online).
@@ -2904,6 +2908,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Manual v1 grading (fallback path + manual override): grades the
   // current ayah and advances, or finishes on the last one.
   const grade = (ok: boolean) => {
+    manualUsedRef.current = true;
     // Manual grading was silent while the mic path plays sounds —
     // parity: the same chime/buzzer, fired from the tap gesture so
     // autoplay policies allow it.
@@ -2972,7 +2977,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       attempted,
       completed: skippedCount === 0 && attempted === ayahs.length && ayahs.length > 0,
       mode: liveRef.current.mode,
-      ear: manualMode ? 'manual' : earKindRef.current,
+      ear: manualMode || manualUsedRef.current ? 'manual' : earKindRef.current,
       label: explicitAyahIdsRef.current ? 'آياتي الضعيفة' : lbl,
     }));
     const nextHistory = [rec, ...history].slice(0, 20);
@@ -7224,6 +7229,9 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               </p>
               {/* Item 4.4: the score measures words only — say so to everyone. */}
               <p className="text-emerald-50/90 text-xs mt-1">الدرجة على صحة الكلمات فقط، وليست تقييمًا للتجويد</p>
+              {(manualMode || manualUsedRef.current) && (
+                <p className="text-amber-100 text-xs font-bold mt-1">تقييم ذاتي — قيّمت نفسك بإيدك في آية أو أكتر، فالنتيجة دي مش داخلة في منحنى تقدّمك</p>
+              )}
               {totalReRecites(reRecites) > 0 && (
                 <p className="text-emerald-50/90 text-sm mt-1">أعيدت ممارسة {totalReRecites(reRecites).toLocaleString('ar-EG')} مرة — والنتيجة محسوبة على آخر محاولة</p>
               )}
