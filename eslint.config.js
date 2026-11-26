@@ -5,7 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // 10.26: generated native projects and the Deno edge functions are not
+  // browser TS; they are linted/checked elsewhere (or not at all).
+  { ignores: ['dist', 'android/**', 'ios/**', 'supabase/functions/**'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

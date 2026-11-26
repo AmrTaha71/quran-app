@@ -44,7 +44,7 @@ export default defineConfig({
   // the ONNX ear multi-threaded like production (crossOriginIsolated).
   server: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' } },
   preview: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'credentialless' } },
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
+  // 10.22: lucide-react is no longer excluded from dependency
+  // pre-bundling (the exclude made dev serve hundreds of icon modules one
+  // by one). Production builds are unaffected.
 });
