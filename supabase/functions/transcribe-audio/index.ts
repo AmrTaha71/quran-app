@@ -89,9 +89,9 @@ function allowedAudioUrl(raw: string, supabaseUrl: string): URL | null {
   return u;
 }
 
-async function readCapped(res: Response): Promise<Uint8Array | null> {
+async function readCapped(res: Response): Promise<Uint8Array<ArrayBuffer> | null> {
   const reader = res.body?.getReader();
-  if (!reader) return new Uint8Array();
+  if (!reader) return new Uint8Array(new ArrayBuffer(0));
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
@@ -104,7 +104,7 @@ async function readCapped(res: Response): Promise<Uint8Array | null> {
     }
     chunks.push(value);
   }
-  const out = new Uint8Array(total);
+  const out = new Uint8Array(new ArrayBuffer(total));
   let off = 0;
   for (const c of chunks) { out.set(c, off); off += c.byteLength; }
   return out;
