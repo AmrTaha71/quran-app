@@ -1063,7 +1063,11 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [corrReciter, setCorrReciterState] = useState<string>(() => getCorrReciter());
   useEffect(() => { void loadCorrReciter(corrReciter); }, [corrReciter]);
   // First visit: ask «عايز مين يسمّعلك؟» once (2026-11-08).
-  const [askReciter, setAskReciter] = useState<boolean>(() => !hasChosenReciter());
+  // Item 2.8: no blocking reciter modal on the first visit. The default
+  // reciter is used and the lobby shows a one-line «المصحح: X — غيّره»
+  // that opens the same picker on demand.
+  const [askReciter, setAskReciter] = useState<boolean>(false);
+  const firstVisitRef = useRef(!hasChosenReciter());
   const [reciterAsk, setReciterAsk] = useState<{ options: string[]; run: (f: string) => void } | null>(null);
   // 2026-11-10: range with no single reciter -> split between readers, switched per ayah.
   const [mixedPlan, setMixedPlan] = useState<RangeReciterPart[] | null>(null);
@@ -1353,7 +1357,8 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   // Standing note about correction clips: stays until the user taps «فهمت».
   const CORR_NOTE_KEY = 'quran-corr-note-ack-v1';
   const [corrNoteAck, setCorrNoteAck] = useState<boolean>(() => { try { return localStorage.getItem(CORR_NOTE_KEY) === '1'; } catch { return false; } });
-  const corrNote = corrNoteAck ? null : (
+  // Item 2.8: the note waits until after the first finished test.
+  const corrNote = corrNoteAck || scoreLog.length === 0 ? null : (
     <div className="bg-amber-50 border border-hairline-amber rounded-2xl shadow-sm p-4">
       <p className="font-bold text-amber-800 mb-1">لما المصحح يصحّح لك</p>
       <p className="text-sm text-accent-700 leading-relaxed">اسكت وسمع المصحح لحد ما يخلص، وبعدين <b>عيد الكلمتين اللي صلّحهم لك</b> وراه، وكمّل بعدها.</p>
@@ -6267,8 +6272,16 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                 </div>
               </div>
             )}
-            {/* W4-B: device ear download / status (default ear). */}
-            <EarDownloadCard />
+            {/* W4-B: device ear download / status (default ear).
+                Item 2.8: on a first visit with a working browser ear the
+                card waits until after the first test; without one it is
+                the way to listen, so it shows at once. */}
+            {(scoreLog.length > 0 || !srPresent) && <EarDownloadCard />}
+            <p className="text-sm text-accent-700 text-center">
+              المصحح: <b>{CORR_RECITERS.find((r) => r.folder === corrReciter)?.name || corrReciter}</b>
+              {' — '}
+              <button type="button" onClick={() => setAskReciter(true)} className="font-semibold text-emerald-700 underline">{firstVisitRef.current ? 'اختار قارئ تاني' : 'غيّره'}</button>
+            </p>
             {lobbyDoor === null && (
               <>
                 <div className="grid grid-cols-2 gap-3">
