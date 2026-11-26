@@ -90,15 +90,40 @@ export function onEarMessage(l: Listener): () => void {
 }
 export function earBackend(): string { return readyBackend; }
 
+// 3.2: first load downloads the Whisper model from the Hub; re-armed by
+// every progress message, so this only fires when nothing moves.
+const EAR_LOAD_TIMEOUT_MS = 120_000;
+
 /** Loads the model once (downloads the first time, then from cache). */
 export function loadEar(): Promise<string> {
   if (readyBackend) return Promise.resolve(readyBackend);
   if (loadPromise) return loadPromise;
   loadPromise = new Promise<string>((resolve, reject) => {
+    // Item 3.2: a hung download (slow Hub, missing WASM that stalls
+    // pipeline()) used to leave begin() waiting forever — no onerror, no
+    // onend, the mic tap did nothing. Same pattern as quranLabEar: a load
+    // timeout that every 'progress' message re-arms, so a slow but moving
+    // first download is never cut off.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        off();
+        loadPromise = null;
+        // The worker may be stuck inside pipeline(): drop it so the next
+        // attempt starts clean, and release any waiting transcriptions.
+        if (worker) { try { worker.terminate(); } catch { /* ignore */ } worker = null; }
+        pending.forEach((r) => r(null));
+        pending.clear();
+        reject(new Error('model-load-timeout'));
+      }, EAR_LOAD_TIMEOUT_MS);
+    };
     const off = onEarMessage((m) => {
-      if (m.type === 'ready') { readyBackend = m.backend; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
-      else if (m.type === 'error' && m.id === undefined) { off(); loadPromise = null; reject(new Error(m.message)); }
+      if (m.type === 'progress') arm();
+      else if (m.type === 'ready') { clearTimeout(timer); readyBackend = m.backend; if (typeof m.benchMs === 'number') { if (m.benchMs > SLOW_BENCH_MS) markEarSlow(m.benchMs); else clearEarSlow(); } try { localStorage.setItem(EAR_READY_KEY, '1'); } catch { /* ignore */ } off(); resolve(m.backend); }
+      else if (m.type === 'error' && m.id === undefined) { clearTimeout(timer); off(); loadPromise = null; reject(new Error(m.message)); }
     });
+    arm();
     getWorker().postMessage({ type: 'load' });
   });
   return loadPromise;
@@ -225,6 +250,14 @@ export class QuranModelRecognition {
   private async begin() {
     try {
       await loadEar();
+    } catch (err) {
+      // 3.2: a failed or timed-out model load is a network-class error
+      // (as in the Lab ear), so callers take their fallback path.
+      this.onerror?.({ error: 'network', message: String((err as Error)?.message || err) });
+      this.finishEnd();
+      return;
+    }
+    try {
       if (this.stopped) { this.finishEnd(); return; }
       this.stream = await getMicStream();
       if (this.stopped) { this.release(); this.finishEnd(); return; }
