@@ -1,6 +1,6 @@
 -- Muse P0 item 89 (rest): referral_sources write hardening.
 -- Applied to live as referral_insert_hardening (apply_migration returned success).
--- Post-apply verification was pending when this file was written: re-check pg_policies and pg_trigger.
+-- Verified on live after apply: new policy, trigger and function present; old policy gone.
 
 -- user_id must match the caller: anon rows have NULL user_id, signed-in rows have their own uid.
 -- Closes the spoofing gap (anyone could attribute a row to any user id).
