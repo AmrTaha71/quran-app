@@ -185,6 +185,13 @@ export function softWordEq(spoken: string, expected: string): boolean {
   if (spoken === expected) return true;
   const alts = IMLA_ALT[expected];
   if (alts && alts.includes(spoken)) return true;
+  // Owner rule: a madd length is never a mistake. A stretched madd is heard
+  // as a repeated ا/و/ي (اعطينااك، الكووثر); fold the run to one letter and
+  // compare again. Only repeats fold: a madd letter the word lacks stays a
+  // difference. shortcut: an expected word with a real وو (ووري) stretched
+  // further is not folded; fold to the expected run length if that shows up.
+  const folded = spoken.replace(/([اوي])\1+/g, '$1');
+  if (folded !== spoken) return softWordEq(folded, expected);
   if (spoken.length < 3) return false;
   const sp = softSkeleton(spoken);
   const cands = alts ? [expected, ...alts] : [expected];
