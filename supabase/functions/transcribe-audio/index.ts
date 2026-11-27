@@ -1,4 +1,36 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isAllowedAudioUrl } from "./allowlist.ts";
+
+// Per-user cap on the paid Whisper path (in-memory per isolate: best-effort, not global).
+// shortcut: per-isolate map, so a determined caller can spread requests across instances; upgrade to a DB counter if abuse appears.
+const RATE_LIMIT_MAX = 30;
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const callLog = new Map<string, number[]>();
+
+// Returns 0 if allowed, otherwise the seconds until the user may retry.
+function checkRateLimit(userId: string): number {
+  const now = Date.now();
+  const recent = (callLog.get(userId) ?? []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) {
+    callLog.set(userId, recent);
+    return Math.ceil((recent[0] + RATE_LIMIT_WINDOW_MS - now) / 1000);
+  }
+  recent.push(now);
+  callLog.set(userId, recent);
+  if (callLog.size > 5000) {
+    for (const [id, times] of callLog) {
+      if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) callLog.delete(id);
+    }
+  }
+  return 0;
+}
+
+function jsonError(message: string, status: number, extraHeaders: Record<string, string> = {}) {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json", ...extraHeaders } }
+  );
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,10 +66,42 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // ---- Whisper path from here on: requires a signed-in Supabase user ----
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token) {
+      return jsonError("يجب تسجيل الدخول لاستخدام التحويل الصوتي عبر الخادم", 401);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseKey) {
+      return jsonError("إعدادات الخادم غير مكتملة", 500);
+    }
+    const authClient = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: userData, error: authError } = await authClient.auth.getUser(token);
+    if (authError || !userData?.user) {
+      return jsonError("جلسة الدخول غير صالحة أو منتهية. يرجى تسجيل الدخول مرة أخرى", 401);
+    }
+
     if (!audioUrl || typeof audioUrl !== "string") {
-      return new Response(
-        JSON.stringify({ error: "رابط الملف الصوتي أو النص مطلوب" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      return jsonError("رابط الملف الصوتي أو النص مطلوب", 400);
+    }
+
+    // SSRF guard: only the app's own audio hosts, checked before any fetch.
+    if (!isAllowedAudioUrl(audioUrl, supabaseUrl)) {
+      return jsonError("مصدر الملف الصوتي غير مسموح", 400);
+    }
+
+    // Rate limit after validation, so malformed requests don't use up the quota.
+    const retryAfter = checkRateLimit(userData.user.id);
+    if (retryAfter > 0) {
+      return jsonError(
+        "تجاوزت الحد المسموح من طلبات التحويل الصوتي. حاول مرة أخرى لاحقًا",
+        429,
+        { "Retry-After": String(retryAfter) }
       );
     }
 
@@ -52,7 +116,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const audioResponse = await fetch(audioUrl);
+    // redirect: "error" so an allowed host cannot bounce the fetch to another host.
+    const audioResponse = await fetch(audioUrl, { redirect: "error" });
     if (!audioResponse.ok) {
       throw new Error(`تعذر تحميل الملف الصوتي: ${audioResponse.status}`);
     }
