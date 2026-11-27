@@ -1,6 +1,6 @@
 -- Muse P0 items 89 (partial) and 406: limit abuse and safe defaults.
--- NOT applied to live yet; owner approval required first.
--- Dry run on live (2026-11-28): 0 rows violate either constraint, 0 null ayah_links.status.
+-- Applied to live 2026-11-28 as p0_access_hardening (after rollback dry run and Opus review).
+-- Pre-check on live: 0 rows violate either constraint, 0 null ayah_links.status.
 
 -- 406: new links default to pending. Both app insert sites already set status explicitly.
 ALTER TABLE public.ayah_links ALTER COLUMN status SET DEFAULT 'pending';
