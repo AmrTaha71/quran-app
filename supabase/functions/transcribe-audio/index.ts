@@ -122,7 +122,17 @@ Deno.serve(async (req: Request) => {
       throw new Error(`تعذر تحميل الملف الصوتي: ${audioResponse.status}`);
     }
 
+    // Size cap before billing: Whisper bills by audio length, so a huge upload is a money leak.
+    // Short recitation clips are a few hundred KB; 10 MB is generous.
+    const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+    const declared = Number(audioResponse.headers.get("content-length") ?? "0");
+    if (declared > MAX_AUDIO_BYTES) {
+      return jsonError("الملف الصوتي كبير جدًا. الحد الأقصى ١٠ ميجابايت", 413);
+    }
     const audioBlob = await audioResponse.blob();
+    if (audioBlob.size > MAX_AUDIO_BYTES) {
+      return jsonError("الملف الصوتي كبير جدًا. الحد الأقصى ١٠ ميجابايت", 413);
+    }
 
     const formData = new FormData();
     // FILENAME BUG FIX (2026-10-27): the old code always named the

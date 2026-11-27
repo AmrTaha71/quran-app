@@ -12,6 +12,11 @@ export function isAllowedAudioUrl(raw: string, supabaseUrl: string): boolean {
     return false;
   }
   if (u.protocol !== "https:" || u.port !== "" || u.username !== "" || u.password !== "") return false;
-  const allowed = new Set<string>([new URL(supabaseUrl).hostname, ...EXTRA_AUDIO_HOSTS]);
-  return allowed.has(u.hostname);
+  let projectHost: string;
+  try {
+    projectHost = new URL(supabaseUrl).hostname;
+  } catch {
+    return false; // malformed SUPABASE_URL: fail closed without throwing
+  }
+  return new Set<string>([projectHost, ...EXTRA_AUDIO_HOSTS]).has(u.hostname);
 }
