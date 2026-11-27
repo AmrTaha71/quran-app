@@ -1510,15 +1510,20 @@ Deno.serve(async (req: Request) => {
     // so logging can never break the response. No text or audio
     // content is ever logged.
     try {
-      await supabaseClient.from("ai_usage_events").insert({
+      // cost_usd is NOT NULL DEFAULT 0 live: a null here made the insert fail silently,
+      // so the row (and its calls-cap count) was lost. Azure/unknown cost is logged as 0.
+      const { error: usageErr } = await supabaseClient.from("ai_usage_events").insert({
         function_name: "generate-voice",
         model: ttsModel,
-        cost_usd: ttsCost,
+        cost_usd: ttsCost ?? 0,
         user_id: userId,
         provider: ttsProvider,
         chars: text.length,
       });
-    } catch { /* ignore logging errors */ }
+      if (usageErr) console.error("ai_usage_events insert failed:", usageErr.message);
+    } catch (usageEx) {
+      console.error("ai_usage_events insert threw:", String((usageEx as Error)?.message || usageEx).slice(0, 200));
+    }
 
     // Release the reservation on the success path. On a generation
     // failure the outer catch returns 500 and releases the lock there
