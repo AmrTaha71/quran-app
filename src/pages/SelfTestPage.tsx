@@ -7063,7 +7063,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
               <Award className="w-12 h-12 mx-auto mb-2 text-amber-200" />
               <p className="text-2xl font-bold">نتيجتك: {correct} من {attempted} ({pct}٪)</p>
               <p className="text-emerald-50 mt-2 leading-relaxed">
-                {pct >= 90 ? 'ما شاء الله — حفظ متقن، ثبّت الله ما حفظت' : pct >= 60 ? 'تقدّم طيب — راجع الآيات التي أخطأت فيها ثم أعد التسميع' : 'لا بأس — التعثر أول طريق الإتقان، راجع الآيات ثم أعد المحاولة'}
+                {pct >= 90 ? 'ما شاء الله — الكلمات التي سمّعتها صحيحة، ثبّت الله ما حفظت' : pct >= 60 ? 'تقدّم طيب — راجع الآيات التي أخطأت فيها ثم أعد التسميع' : 'لا بأس — التعثر أول طريق الإتقان، راجع الآيات ثم أعد المحاولة'}
               </p>
               {totalReRecites(reRecites) > 0 && (
                 <p className="text-emerald-50/90 text-sm mt-1">أعيدت ممارسة {totalReRecites(reRecites).toLocaleString('ar-EG')} مرة — النتيجة لم تتغير</p>
