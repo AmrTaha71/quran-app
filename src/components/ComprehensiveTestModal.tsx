@@ -402,7 +402,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
           <>
             <p className="font-bold text-accent-800 mb-1">{partName('tilawa')} — {arNum(partMax('tilawa'))} درجة</p>
             <p className="text-sm text-accent-600 mb-3">اقرأ مقطع بصوتك، وبعدين قيّم نفسك. التطبيق لسه ما بيقيّم الصوت:</p>
-            {selfGradeBox('tilawa', partMax('tilawa'), ['سلامة المخارج والصفات', 'تطبيق أحكام التجويد', 'حسن الوقف والابتداء'])}
+            {selfGradeBox('tilawa', partMax('tilawa'), ['سلامة المخارج والصفات', 'حسن الوقف والابتداء'])}
           </>
         )}
 
