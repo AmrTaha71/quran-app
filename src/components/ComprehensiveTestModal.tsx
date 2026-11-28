@@ -24,7 +24,7 @@ import {
 } from '../lib/comprehensiveTest';
 import DrumSelect from './DrumSelect';
 import {
-  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, surahsOfRange, playedOnly,
+  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, greyNote, surahsOfRange, playedOnly,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
@@ -411,6 +411,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
           <div className="text-center">
             <p className="text-4xl font-bold text-emerald-700 mb-2">{arNum(saved.total)}</p>
             <p className="text-accent-600 mb-4">من {arNum(saved.max ?? maxTotal)}</p>
+            {greyNote(positions.map((p) => p.result)) && <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3 mb-4">{greyNote(positions.map((p) => p.result))}</p>}
             <div className="space-y-1 text-right mb-4">
               {parts.map((p) => (
                 <p key={p.id} className="text-sm text-accent-700">{p.name}: {arNum(saved.scores[p.id] ?? 0)} من {arNum(p.max)}</p>

@@ -73,8 +73,16 @@ function mistakeShare(r: RoundResult): number {
   if (r.beginner) return BEGINNER_MISTAKE_SHARE;
   return m === 1 ? ONE_MISTAKE_SHARE : 0;
 }
+/** Owner rule R2 (2026-11-28, final): grey (uncertain) words always get full credit. More than
+ *  GREY_NOTE_OVER in one test only shows GREY_NOTE (the score stays as earned). */
+export const GREY_NOTE_OVER = 5;
+export const GREY_NOTE = 'كان عندك أكتر من ٥ كلمات ما اتسمعتش كويس، جرّب تاني في مكان هادي بعيد عن الدوشة';
+/** Grey words over the played rounds / positions of one test. */
+export const greyUsed = (rs: readonly RoundResult[]) => rs.reduce((n, r) => n + (r.skipped ? 0 : r.uncertain?.length ?? 0), 0);
+export const greyNote = (rs: readonly RoundResult[]): string | null => (greyUsed(rs) > GREY_NOTE_OVER ? GREY_NOTE : null);
 export function tarteelRoundScore(r: RoundResult, surahOk: boolean | null): { completion: number; surah: number; total: number } {
-  const share = (r.mistakes ?? 0) > 0 ? mistakeShare(r) : r.total ? r.credited / r.total : 0;
+  const greyCredit = r.uncertain?.length ?? 0;
+  const share = (r.mistakes ?? 0) > 0 ? mistakeShare(r) : r.total ? Math.min(1, (r.credited + greyCredit) / r.total) : 0;
   const keep = Math.max(0, 1 - HINT_COST * (r.extras ?? 0));
   const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share * keep);
   const surah = surahOk ? SURAH_PART : 0;
@@ -117,7 +125,7 @@ export const positionScore = (frac: number, n: number) => r1(positionMax(n) * fr
 export function positionsFinal(fracs: number[]): number {
   return fracs.length ? r1(COMP_TOTAL * (fracs.reduce((a, b) => a + b, 0) / fracs.length)) : 0;
 }
-export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited === r.total && !r.locked && r.corrected === 0 && r.extras === 0;
+export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited + (r.uncertain?.length ?? 0) === r.total && !r.locked && r.corrected === 0 && r.extras === 0;
 
 /** 4 surah tiles (the right one + 3 others), shuffled. The others come from `pool`
  *  (the surahs of the range) when it has enough, else from the whole Quran. */

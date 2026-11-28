@@ -23,12 +23,14 @@ let J: {
   alignRest: (full: string[], start: number, text: string, align: unknown) => Al;
   alignWords: unknown;
   spokenTokens: (t: string) => string[];
+  tarteelRoundScore: (r: object, surahOk: boolean | null) => { completion: number; total: number };
+  greyNote: (rs: object[]) => string | null;
 };
 
 before(async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-'));
   const entry = path.join(dir, 'entry.ts');
-  fs.writeFileSync(entry, `export { RoundState, roundCutMs } from '${root}src/lib/roundJudge.ts'; export { alignRest } from '${root}src/lib/roundListen.ts'; export { alignWords, spokenTokens } from '${root}src/lib/wordAligner.ts';`);
+  fs.writeFileSync(entry, `export { RoundState, roundCutMs } from '${root}src/lib/roundJudge.ts'; export { alignRest } from '${root}src/lib/roundListen.ts'; export { alignWords, spokenTokens } from '${root}src/lib/wordAligner.ts'; export { tarteelRoundScore, greyNote } from '${root}src/lib/roundTest.ts';`);
   buildSync({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile: path.join(dir, 'out.mjs'), logLevel: 'error',
     define: { 'import.meta.env.VITE_SUPABASE_URL': '"http://x.test"', 'import.meta.env.VITE_SUPABASE_ANON_KEY': '"k"', 'import.meta.env.BASE_URL': '"/"', 'import.meta.env': '{}' },
@@ -185,5 +187,37 @@ describe('owner rules: what counts as a recitation mistake', () => {
     const e = J.spokenTokens('صراط الذين انعمت عليهم غير المغضوب عليهم ولا الضالين');
     const al = (J.alignWords as (a: string[], b: string[]) => Al)(e, J.spokenTokens('صراط الذين انعمت غير المغضوب عليهم ولا الضالين'));
     assert.deepEqual(al.matched, [true, true, true, false, true, true, true, true, true]);
+  });
+});
+
+// Owner rule R2 final (2026-11-28): grey words never cost points, however many;
+// more than 5 grey words in one test only shows a friendly note.
+describe('grey words and the score', () => {
+  /** One round of 10 words, `grey` of them uncertain, the rest said right. */
+  const round = (grey: number) => ({
+    total: 10, credited: 10 - grey, wrong: [], uncertain: Array.from({ length: grey }, (_, i) => i),
+    locked: false, corrected: 0, mistakes: 0, promptLen: 0, extras: 0, ear: 'lab',
+  });
+  const lost = (greys: number[]) => greys.reduce((n, g) => n + 10 - J.tarteelRoundScore(round(g), null).total, 0);
+  it('1 grey word = full credit, no note', () => {
+    assert.equal(lost([1]), 0);
+    assert.equal(J.greyNote([round(1)]), null);
+  });
+  it('5 grey words = full credit, no note', () => {
+    assert.equal(lost([2, 1, 2]), 0);
+    assert.equal(J.greyNote([round(2), round(1), round(2)]), null);
+  });
+  it('6 grey words = still full credit, and the note shows', () => {
+    assert.equal(lost([3, 3]), 0);
+    assert.equal(lost([6]), 0);
+    assert.match(J.greyNote([round(3), round(3)]) ?? '', /أكتر من ٥ كلمات/);
+  });
+  it('a repeated word is not counted', () => {
+    const e = J.spokenTokens('الحمد لله رب العالمين');
+    const al = (J.alignWords as (a: string[], b: string[]) => Al)(e, J.spokenTokens('الحمد لله لله رب العالمين'));
+    assert.equal(al.allMatched, true);
+    const st = new J.RoundState(4, 1);
+    assert.equal(st.evaluate(al.matched, true, true, 0).kind, 'finish');
+    assert.equal(st.summary(false).mistakes, 0);
   });
 });

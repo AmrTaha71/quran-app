@@ -10,7 +10,7 @@ import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal, RoundDebugOverlay } from './RoundRecite';
 import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
-import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, playedOnly, tarteelFinal, tarteelRoundScore, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, playedOnly, tarteelFinal, tarteelRoundScore, greyNote, type PickedAyah, type RoundResult } from '../lib/roundTest';
 import { SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
@@ -325,6 +325,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <p className="text-sm text-accent-600">درجتك النهائية</p>
             <p className="text-4xl font-bold text-emerald-700 my-1">{arNum(final40)}</p>
             <p className="text-accent-600 mb-3">من ٤٠ — متوسط {arNum(rounds.length)} جولة × ٤</p>
+            {greyNote(rounds.map((r) => r.result)) && <p className="text-sm text-amber-800 bg-amber-50 rounded-lg p-3 mb-3">{greyNote(rounds.map((r) => r.result))}</p>}
             <div className="space-y-1 text-right mb-4">
               {rounds.map((r, i) => (
                 <p key={i} className="text-sm text-accent-700">الجولة {arNum(i + 1)}: {surahNameOf(r.ayah.surah)} آية {arNum(r.ayah.ayah)} — {r.result.skipped ? 'اتخطّت (مش محسوبة)' : <>{arNum(r.total)} من ١٠ {r.surahOk === null ? '' : r.surahOk ? '✓' : '✗'}</>}</p>
