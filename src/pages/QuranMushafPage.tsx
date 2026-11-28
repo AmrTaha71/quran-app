@@ -1402,7 +1402,7 @@ export default function QuranMushafPage({
   const setWrapMove = (x: number, animate: boolean) => {
     const w = pageWrapRef.current;
     if (!w) return;
-    w.style.transition = animate ? 'transform 190ms ease-out' : 'none';
+    w.style.transition = animate ? 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)' : 'none';
     w.style.transform = x === 0 && !animate ? '' : `translate3d(${x}px,0,0)`;
   };
   const clearWrapMove = () => {
@@ -4957,7 +4957,7 @@ export default function QuranMushafPage({
                 // on tall portrait screens 100vw still binds, so the
                 // page stays maximal there.
                 <div ref={pageWrapRef}
-                  className={`relative touch-none will-change-transform ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
+                  className={`relative shrink-0 mx-auto touch-none will-change-transform ${edition.id === 'madinah' ? '' : 'h-screen'} w-auto max-w-[100vw] ${madinahNorm ? 'overflow-hidden' : ''}`}
                   style={edition.id === 'madinah'
                     ? (useMadinahCover
                       // 2026-11-21 (Dr. Amr): the page NEVER shrinks. It used to scale to
