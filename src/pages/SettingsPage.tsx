@@ -5,7 +5,9 @@ import ReviewReminderCard from '../components/ReviewReminderCard';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Compass, Share2, Info, BatteryCharging } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info, BatteryCharging, Mic, Award, Users, SunMoon, Radio, MapPin, Clock, QrCode } from 'lucide-react';
+import QiblaSheet from '../components/QiblaSheet';
+import { nearestMosqueUrl } from '../lib/qibla';
 import ShareSheet from '../components/ShareSheet';
 import ContactForm from '../components/ContactForm';
 import { supabase } from '../lib/supabase';
@@ -169,6 +171,23 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [goldFrame, setGoldFrame] = useState(() => {
     try { return localStorage.getItem('quran-gold-frame') === '1'; } catch { return false; }
   });
+  // Vertical page scroll (default OFF) and auto-scroll pace (minutes per juz).
+  // QuranMushafPage reads both keys; this page only stores them.
+  const [vscroll, setVscroll] = useState(() => { try { return localStorage.getItem('quran-mushaf-vscroll') === '1'; } catch { return false; } });
+  const [autoJuzMin, setAutoJuzMin] = useState(() =>
+    readStored('quran-mushaf-autoscroll-juz-min', 20, (raw) => ([20, 25, 30].includes(Number(raw)) ? Number(raw) : null)));
+  const [qiblaOpen, setQiblaOpen] = useState(false);
+  const toggleVscroll = () => {
+    const next = !vscroll;
+    setVscroll(next);
+    try { localStorage.setItem('quran-mushaf-vscroll', next ? '1' : '0'); } catch { /* ignore */ }
+    saved();
+  };
+  const pickAutoJuz = (m: number) => {
+    setAutoJuzMin(m);
+    try { localStorage.setItem('quran-mushaf-autoscroll-juz-min', String(m)); } catch { /* ignore */ }
+    saved();
+  };
   const [mushafNight, setMushafNightState] = useState(isMushafNight);
   const [mushafDim, setMushafDimState] = useState(isMushafDimOn);
   const [elderlyMode, setElderlyModeState] = useState(isElderlyMode);
@@ -693,6 +712,19 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     { id: 'account-delete', icon: Shield, title: 'حسابي', sub: 'مسح الحساب والبيانات', box: 'bg-red-50 border-red-200', fg: 'text-red-700' },
   ];
 
+  // Calm add-on tiles: each reuses an existing route/handler.
+  const addons: { title: string; icon: typeof Mic; go: () => void }[] = [
+    { title: 'سمّع لي', icon: Mic, go: () => { try { sessionStorage.removeItem('quran-test-range-choice'); } catch { /* ignore */ } onNavigate('test'); } },
+    { title: 'اختبر نفسك', icon: Award, go: () => onNavigate('quiz') },
+    { title: 'راجع مع صديقك', icon: Users, go: () => onNavigate('room') },
+    { title: 'استمع للأذكار', icon: SunMoon, go: () => onNavigate('adhkar') },
+    { title: 'القبلة', icon: Compass, go: () => setQiblaOpen(true) },
+    { title: 'أقرب مسجد', icon: MapPin, go: () => { window.open(nearestMosqueUrl(), '_blank', 'noopener'); } },
+    { title: 'إذاعة القرآن الكريم', icon: Radio, go: () => { try { window.open('https://makkahlive.net/en/radio/quran-cairo', '_blank', 'noopener,noreferrer'); } catch { /* ignore */ } } },
+    { title: 'موعد الصلاة', icon: Clock, go: () => setOpenDoor('adhan') },
+    { title: 'شارك التطبيق (QR)', icon: QrCode, go: () => setOpenDoor('share') },
+  ];
+
   // One download card per audio kind (tafsir / Juhani): surah
   // picker + estimate → confirm → progress, then the list of
   // downloaded surahs of that kind with delete. Pure render
@@ -878,7 +910,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
             )}
           </div>
         )}
-        {openDoor === null ? (
+        {openDoor === null ? (<>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
             {doors.filter((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi) && doorMatches(d, doorQuery)).map((d, i) => (
               <button key={d.id} onPointerDown={pressFeedback} onClick={() => openDoorAt(d.id)}
@@ -892,6 +924,20 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               </button>
             ))}
           </div>
+          <section id="sec-addons" className="space-y-3">
+            <h2 className="text-base md:text-lg font-semibold text-accent-800">إضافات</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {addons.map((a) => (
+                <button key={a.title} onPointerDown={pressFeedback} onClick={a.go}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-white border border-hairline text-right polish-press polish-focus">
+                  <a.icon className="w-5 h-5 text-emerald-700 flex-shrink-0" />
+                  <span className="text-sm font-medium text-accent-800">{a.title}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+          {qiblaOpen && <QiblaSheet onClose={() => setQiblaOpen(false)} />}
+        </>
         ) : (
           <div key={openDoor} className="polish-fade-up space-y-6 md:space-y-8">
             {openDoor === 'wird' && (<>
@@ -1047,6 +1093,28 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
               <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${elderlyMode ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
             </span>
           </button>
+          <button onClick={toggleVscroll}
+            className={`mt-3 w-full flex items-center justify-between p-4 rounded-xl border-2 transition-smooth ${vscroll ? 'border-amber-400 bg-amber-50' : 'border-hairline hover:border-hairline-amber'}`}>
+            <span className="text-right">
+              <span className="block font-medium text-accent-800">التمرير العمودي للصفحات</span>
+              <span className="block text-sm text-accent-600">تمرّر صفحات المصحف من فوق لتحت بدل التقليب</span>
+            </span>
+            <span className={`w-12 h-7 rounded-full p-1 transition-smooth flex-shrink-0 ${vscroll ? 'bg-amber-500' : 'bg-gray-300'}`}>
+              <span className={`block w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${vscroll ? 'ltr:translate-x-5 rtl:-translate-x-5' : ''}`} />
+            </span>
+          </button>
+          <div className="mt-3 p-4 rounded-xl border-2 border-hairline">
+            <p className="font-medium text-accent-800">سرعة التمرير التلقائي</p>
+            <p className="text-sm text-accent-600 mb-3">كم دقيقة يستغرق الجزء الواحد (٢٠ صفحة)</p>
+            <div className="grid grid-cols-3 gap-2">
+              {[20, 25, 30].map((m) => (
+                <button key={m} onClick={() => pickAutoJuz(m)}
+                  className={`py-2.5 rounded-xl border-2 font-semibold transition-smooth ${autoJuzMin === m ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-hairline text-accent-700'}`}>
+                  {m.toLocaleString('ar-EG')} دقيقة
+                </button>
+              ))}
+            </div>
+          </div>
         </section>
             </>)}
             {openDoor === 'battery' && (<>
