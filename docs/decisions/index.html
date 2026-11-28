@@ -221,7 +221,7 @@ all.forEach(s=>io.observe(s));
 // Short message (4 KB cap): counts + every answer that differs from the recommendation + notes; Claude reads the rest from the shared store.
 const brief=()=>{const done=D.filter((d,i)=>typeof st[i]?.c==='number').length;const diff=D.map((d,i)=>{const c=st[i]?.c,n=st[i]?.n?.trim();
  if(typeof c!=='number'&&!n)return '';return (typeof c==='number'&&c!==d.p)||n?`${i+1}. ${d.t}: ${typeof c==='number'?(c+1)+' — '+d.o[c][0]:'—'}${n?' | ملاحظة: '+n:''}`:''}).filter(Boolean);
- let t=`خلصنا مراجعة القرارات (${done} من ${D.length}). الباقي زي توصيتك. اقرا الإجابات كاملة من picks.\n\nاللي مختلف عن التوصية أو عليه ملاحظة:\n`+(diff.join('\n')||'ولا حاجة — كله زي التوصية.');
+ let t=`خلصنا مراجعة القرارات (${done} من ${D.length}). الباقي زي توصيتك. \n\nاللي مختلف عن التوصية أو عليه ملاحظة:\n`+(diff.join('\n')||'ولا حاجة — كله زي التوصية.');
  while(new TextEncoder().encode(t).length>4000)t=t.slice(0,-200);return t};
 document.getElementById('send').onclick=async(ev)=>{const m=document.getElementById('cmsg');
  try{const cm=window.claude&&await window.claude.use('comments');
@@ -231,13 +231,13 @@ document.getElementById('send').onclick=async(ev)=>{const m=document.getElementB
 document.getElementById('copy').onclick=async()=>{const m=document.getElementById('cmsg');try{await navigator.clipboard.writeText(result());m.textContent='اتنسخ ✓'}catch(e){m.textContent='النسخ مش متاح هنا — علّم على النص اللي تحت وانسخه بإيدك'}};
 draw();
 
-// ---- shared answers: both partners see and change the same choice, live; Claude reads them too ----
+// ---- each viewer's answers are saved in their own account (private), on any device they open it from ----
 let db=null,me=null,users=null;const nt={},busy={},again={};
 async function push(i){
  if(!db)return;
  if(busy[i]){again[i]=true;return}busy[i]=true;
  const x=st[i]||{};
- try{await db.collection('picks').doc(D[i].k).set({c:typeof x.c==='number'?x.c:null,n:x.n||'',done:!!x.done,by:me||'',t:D[i].t})}
+ try{if(!me)return;await db.collection('data/users/'+me).doc(D[i].k).set({c:typeof x.c==='number'?x.c:null,n:x.n||'',done:!!x.done,by:me||'',t:D[i].t})}
  catch(e){document.getElementById('sync').textContent='الحفظ المشترك مش متاح — اتحفظ على الجهاز ده بس'}
  busy[i]=false;if(again[i]){again[i]=false;push(i)}}
 async function who(id){if(!id||!users)return '';try{const ps=await users.profiles([id]);return ps[id]?.name||''}catch(e){return ''}}
@@ -247,7 +247,7 @@ function apply(i,v){
  document.getElementById('c'+i).value=typeof st[i].c==='number'?st[i].c:'';
  const ta=document.getElementById('n'+i);if(document.activeElement!==ta)ta.value=st[i].n;
  const m=document.getElementById('k'+i);m.textContent=st[i].done?'اتسجّل ✓':'';
- who(v.by).then(n=>{if(n&&v.by!==me)m.textContent=(st[i].done?'اتسجّل ✓ ':'')+'— '+n});}
+ }
 (async()=>{
  const C=window.claude;const sy=document.getElementById('sync');if(!C||!C.use){sy.textContent='على الجهاز ده بس';return}
  try{[db,users]=await Promise.all([C.use('db'),C.use('user')])}catch(e){}
@@ -255,7 +255,8 @@ function apply(i,v){
  try{me=users?await users.id():null}catch(e){}
  const idx=Object.fromEntries(D.map((d,i)=>[d.k,i]));
  const tm=setTimeout(()=>{sy.textContent='بيحاول يوصل للحفظ المشترك…'},10000);
- db.collection('picks').onSnapshot(snap=>{if(!snap.metadata.fromCache){clearTimeout(tm);sy.textContent='مشتركة ✓'}
+ if(!me){clearTimeout(tm);sy.textContent='على الجهاز ده بس';return}
+ db.collection('data/users/'+me).onSnapshot(snap=>{if(!snap.metadata.fromCache){clearTimeout(tm);sy.textContent='محفوظ في حسابك ✓'}
   for(const ch of snap.docChanges()){if(ch.type==='removed')continue;const i=idx[ch.doc.id];if(i!=null)apply(i,ch.doc.data()||{})}},
   ()=>{clearTimeout(tm);sy.textContent='الحفظ المشترك وقف — اتحفظ على الجهاز ده بس'});
 })();
