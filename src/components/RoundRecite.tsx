@@ -19,7 +19,7 @@ import { reciterAyahUrl } from '../lib/juhaniCorr';
 import { DeadlineTimer, RoundState, roundCutMs, loadRoundCutMode, ROUND_CUT_LABEL } from '../lib/roundJudge';
 import { mistakeBuzz, acceptChime, roundBuzzOn, roundChimeOn, setRoundBuzz, setRoundChime } from '../lib/roundFeel';
 import MushafRevealStage from './mushaf/MushafRevealStage';
-import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, WORD_HINT_COST, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
 
@@ -42,7 +42,10 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   // Item 17.5: the word the pointer is stopped on (absolute index in the
   // completed part), and whether its first-letter hint is shown.
   const [stuckAt, setStuckAt] = useState<number | null>(null);
-  const [hintShown, setHintShown] = useState(false);
+    // Owner 2026-11-28: words the hint button uncovered on the frame (index in the completed part).
+  const [hinted, setHinted] = useState<Set<number>>(new Set());
+  const hintedRef = useRef(hinted);
+  hintedRef.current = hinted; // finishAll runs from the ear's callbacks (an older render)
   const [buzz, setBuzz] = useState(roundBuzzOn);
   const [chime, setChime] = useState(roundChimeOn);
 
@@ -94,6 +97,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     if (!canMore) return;
     const from = eff, to = eff + HINT_WORDS;
     st.reset(ayah.words.length - to);
+    setHinted(new Set());
     setExtra(extra + 1);
     setMsg('');
     setPhase('prompting');
@@ -123,7 +127,7 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     if (!locked && sum.mistakes === 0) acceptChime();
     onFinish({
       total: rest.length, ...sum, beginner: currentHistoryLevel() === 'beginner',
-      promptLen: effRef.current, extras: extra, ear: kindRef.current,
+      promptLen: effRef.current, extras: extra, hintWords: hintedRef.current.size, ear: kindRef.current,
     });
   }
 
@@ -161,7 +165,6 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
       if (nowStuck !== null) mistakeBuzz();
       stuckRef.current = nowStuck;
       setStuckAt(nowStuck);
-      setHintShown(false);
     }
     if (act.kind === 'correct') { stopRec(); void playCorrection(); }
     else if (act.kind === 'finish') finishAll(act.locked);
@@ -237,7 +240,16 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   const btn = 'w-full py-3 text-white font-bold rounded-xl disabled:opacity-50';
   // 2026-11-28 (owner): recite on the Mushaf page. The prompt words are open; each word of the
   // rest opens once the judge credits it (st.got), grey ones (R2) open grey.
-  const revealed = ayah.words.map((_, i) => i < eff || !!st.got[i - eff]);
+  const revealed = ayah.words.map((_, i) => i < eff || !!st.got[i - eff] || hinted.has(i - eff));
+  // The word the user has to say next: the stopped one, else the first not yet credited or hinted.
+  let target = stuckAt ?? rest.findIndex((_, i) => !st.got[i] && !hinted.has(i));
+  if (target !== null && hinted.has(target)) target = rest.findIndex((_, i) => !st.got[i] && !hinted.has(i));
+  const hintWordsFrom = (n: number) => setHinted((h) => {
+    const next = new Set(h);
+    for (let i = target ?? -1, k = 0; i >= 0 && i < rest.length && k < n; i++) if (!st.got[i] && !next.has(i)) { next.add(i); k++; }
+    return next;
+  });
+  const pct = (c: number) => `${Math.round(c * 100).toLocaleString('ar-EG')}٪`;
   const grey = ayah.words.map((_, i) => i >= eff && st.grey.has(i - eff));
   return (
     <div className="space-y-3">
@@ -279,11 +291,15 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
               : 'خلص التصحيح — غلطة تانية دلوقتي بتقفل الموضع.'}
           </p>
           {stuckAt !== null && stuckAt < rest.length && (
-            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-center space-y-2" role="status" aria-live="polite">
-              <p className="text-sm font-bold text-amber-900">وقفت عند كلمة محتاجة تتصلّح — قولها تاني.</p>
-              {hintShown
-                ? <p className="text-sm text-accent-800">أولها حرف «<span className="font-arabic text-lg font-bold">{firstLetter(rest[stuckAt].orig)}</span>»</p>
-                : <button type="button" onClick={() => setHintShown(true)} className="min-h-[44px] px-4 rounded-lg border border-amber-300 text-amber-900 font-bold text-sm">تلميح: أول حرف</button>}
+            <p className="text-sm font-bold text-amber-900 text-center" role="status" aria-live="polite">وقفت عند كلمة محتاجة تتصلّح — قولها تاني.</p>
+          )}
+          {/* Owner 2026-11-28: hints only on a button press. A word 5%, two words 10% (the letter hint waits for letter geometry). */}
+          {target !== null && target >= 0 && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-2 text-center space-y-2">
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button type="button" onClick={() => { hintWordsFrom(1); }} className="min-h-[44px] rounded-lg border border-amber-300 text-amber-900 font-bold">كلمة<br /><span className="font-normal">خصم {pct(WORD_HINT_COST)}</span></button>
+                <button type="button" onClick={() => { hintWordsFrom(2); }} className="min-h-[44px] rounded-lg border border-amber-300 text-amber-900 font-bold">كلمتين<br /><span className="font-normal">خصم {pct(2 * WORD_HINT_COST)}</span></button>
+              </div>
             </div>
           )}
           {/* 4.25(ب): rounds do not count extra words; say so instead of hiding it. */}
@@ -312,12 +328,6 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
       <RoundDebugOverlay />
     </div>
   );
-}
-
-/** Item 17.5: the first Arabic letter of a word (diacritics and tatweel skipped). */
-function firstLetter(word: string): string {
-  const m = /[\u0621-\u063A\u0641-\u064A\u0671]/.exec(word);
-  return m ? m[0] : '';
 }
 
 /** ?debug=1 only: which ear ran and the finals it had when «خلصت» was pressed. */

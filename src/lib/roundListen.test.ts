@@ -17,7 +17,7 @@ type Bundle = {
   alignSpoken: (e: string[], s: string) => { matched: boolean[]; allMatched: boolean };
   expectedWordList: (t: string) => { orig: string; norm: string }[];
   firstMistake: (m: boolean[]) => number;
-  tarteelRoundScore: (r: { total: number; credited: number; extras?: number; mistakes?: number; beginner?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
+  tarteelRoundScore: (r: { total: number; credited: number; extras?: number; hintWords?: number; mistakes?: number; beginner?: boolean }, surahOk: boolean | null) => { completion: number; total: number };
   ROUND_CORRECTIONS: number;
   DeadlineTimer: new (run: () => void) => { sync: (ms: number | null) => void; clear: () => void };
   RoundState: new (total: number, corrections: number) => {
@@ -545,5 +545,15 @@ describe('wrong last word then «خلصت» counts as a mistake', () => {
     const { al, act } = run(0, (r) => r.join(' '));
     assert.equal(al.lastWrong, false);
     assert.deepEqual(act, { kind: 'finish', locked: false });
+  });
+});
+
+describe('hint discount (owner 2026-11-28): a word 5%, two words 10%', () => {
+  it('scores a perfect ayah 10 / 9.5 / 9 / 9 for 0 / 1 / 2 hinted words / one «كلمتين كمان»', () => {
+    const r = { total: 10, credited: 10 };
+    assert.equal(B.tarteelRoundScore({ ...r, extras: 0 }, null).total, 10);
+    assert.equal(B.tarteelRoundScore({ ...r, extras: 0, hintWords: 1 }, null).total, 9.5);
+    assert.equal(B.tarteelRoundScore({ ...r, extras: 0, hintWords: 2 }, null).total, 9);
+    assert.equal(B.tarteelRoundScore({ ...r, extras: 1 }, null).total, 9);
   });
 });

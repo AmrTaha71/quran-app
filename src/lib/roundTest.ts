@@ -26,6 +26,8 @@ export type RoundResult = {
   corrected: number;  // how many corrections the reciter gave
   promptLen: number;  // words heard before the user started (the prompt + any hints)
   extras: number;     // «اديني كلمتين كمان» requests (each costs HINT_COST of the ayah part)
+  /** Words uncovered on the Mushaf frame by the hint button while reciting (WORD_HINT_COST each). */
+  hintWords?: number;
   ear: 'lab' | 'browser' | 'manual';
   /** Mistakes that count = words the reciter corrected (+ the one that closed the position).
    *  A word the user fixed himself before the reciter spoke is not one (roundJudge.ts). */
@@ -83,7 +85,7 @@ export const greyNote = (rs: readonly RoundResult[]): string | null => (greyUsed
 export function tarteelRoundScore(r: RoundResult, surahOk: boolean | null): { completion: number; surah: number; total: number } {
   const greyCredit = r.uncertain?.length ?? 0;
   const share = (r.mistakes ?? 0) > 0 ? mistakeShare(r) : r.total ? Math.min(1, (r.credited + greyCredit) / r.total) : 0;
-  const keep = Math.max(0, 1 - HINT_COST * (r.extras ?? 0));
+  const keep = Math.max(0, 1 - hintCost(r));
   const completion = r1((surahOk === null ? AYAH_PART + SURAH_PART : AYAH_PART) * share * keep);
   const surah = surahOk ? SURAH_PART : 0;
   return { completion, surah, total: r1(completion + surah) };
@@ -103,6 +105,10 @@ export function oralFraction(found: number, total: number, surahRight: number, h
 export const HINT_COST = 0.1;
 export const HINT_WORDS = 2;
 export const MAX_HINTS = 3;
+/** Owner 2026-11-28: a hinted word costs 5% (two words 10%), the first letter is free. */
+export const WORD_HINT_COST = HINT_COST / HINT_WORDS;
+/** 0..1 taken off the ayah part for the hints of one round / position. */
+export const hintCost = (r: Pick<RoundResult, 'extras' | 'hintWords'>) => HINT_COST * (r.extras ?? 0) + WORD_HINT_COST * (r.hintWords ?? 0);
 
 /** 17.10: rounds the user skipped are left out of every average. */
 export const playedOnly = <T extends { result: RoundResult }>(rs: readonly T[]): T[] => rs.filter((r) => !r.result.skipped);
@@ -125,7 +131,7 @@ export const positionScore = (frac: number, n: number) => r1(positionMax(n) * fr
 export function positionsFinal(fracs: number[]): number {
   return fracs.length ? r1(COMP_TOTAL * (fracs.reduce((a, b) => a + b, 0) / fracs.length)) : 0;
 }
-export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited + (r.uncertain?.length ?? 0) === r.total && !r.locked && r.corrected === 0 && r.extras === 0;
+export const positionPerfect = (r: RoundResult) => r.total > 0 && r.credited + (r.uncertain?.length ?? 0) === r.total && !r.locked && r.corrected === 0 && hintCost(r) === 0;
 
 /** 4 surah tiles (the right one + 3 others), shuffled. The others come from `pool`
  *  (the surahs of the range) when it has enough, else from the whole Quran. */

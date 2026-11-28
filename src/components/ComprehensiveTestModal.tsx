@@ -24,7 +24,7 @@ import {
 } from '../lib/comprehensiveTest';
 import DrumSelect from './DrumSelect';
 import {
-  HINT_COST, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, greyNote, surahsOfRange, playedOnly,
+  hintCost, COMP_COUNT_DEFAULT, COMP_COUNT_OPTIONS, arNum, currentHistoryLevel, oralFraction, loadQuranText, pickRoundAyah, roundCandidates, positionMax, positionPerfect, positionScore, positionsFinal, roundFrac, greyNote, surahsOfRange, playedOnly,
   type PickedAyah, type RoundResult,
 } from '../lib/roundTest';
 import { pickTajweedQuestions, type TajweedQuestion } from '../lib/tajweedBank';
@@ -356,7 +356,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
                 <RoundReveal ayah={showRes.ayah} result={showRes.result} />
                 <p className="text-sm text-accent-700 mt-1">{surahLabel(showRes.ayah.surah)} — آية {arNum(showRes.ayah.ayah)}{showRes.surahOk === null ? '' : showRes.surahOk ? ' · السورة ✓' : ' · السورة ✗'}</p>
                 {showRes.result.skipped ? <p className="text-sm text-accent-800 my-3 font-bold">الموضع ده مش محسوب في الدرجة.</p> : <p className="text-sm text-accent-800 my-3 font-bold">درجة الموضع: {arNum(showRes.score)} من {arNum(positionMax(count))}{showRes.result.locked ? ' (اتقفل: غلطة تانية بعد التصحيح بتنهي الموضع)' : ''}</p>}
-                {showRes.result.extras > 0 && <p className="text-xs text-amber-700 mb-2">طلبت «كلمتين كمان» {arNum(showRes.result.extras)} مرة — خصم {arNum(showRes.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
+                {hintCost(showRes.result) > 0 && <p className="text-xs text-amber-700 mb-2">طلبت تلميح — خصم {arNum(Math.round(hintCost(showRes.result) * 100))}٪ من درجة الآية</p>}
                 {err && <p className="text-sm text-amber-700 mb-2">{err}</p>}
                 <button onClick={afterPositions} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl">
                   {positions.length >= count ? 'كمّل للمتشابهات' : 'الموضع التالي'}

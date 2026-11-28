@@ -10,7 +10,7 @@ import { ROUND_CORRECTIONS } from '../lib/roundJudge';
 import RoundRecite, { RoundReveal, RoundDebugOverlay } from './RoundRecite';
 import SurahTiles from './SurahTiles';
 import { addTestHistoryV1 } from '../lib/testHistory';
-import { HINT_COST, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, playedOnly, tarteelFinal, tarteelRoundScore, greyNote, type PickedAyah, type RoundResult } from '../lib/roundTest';
+import { hintCost, arNum, currentHistoryLevel, loadQuranText, pickRoundAyah, surahsOfRange, playedOnly, tarteelFinal, tarteelRoundScore, greyNote, type PickedAyah, type RoundResult } from '../lib/roundTest';
 import { SURAH_AYAH_COUNTS, getGlobalAyahNumber, surahLabel } from '../lib/surahs';
 import { JUZ_STARTS, HIZB_STARTS, QUARTER_STARTS } from '../lib/quranBoundaries';
 import { CORR_RECITERS } from '../lib/juhaniCorr';
@@ -308,7 +308,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
             <div className="bg-gray-50 rounded-lg p-3 border border-emerald-100 my-3 text-sm text-accent-800 space-y-1">
               <p>إكمال الآية: {arNum(lastRound.completion)} من {arNum(lastRound.surahOk === null ? 10 : 8)} ({arNum(cur.result.credited)} من {arNum(cur.result.total)} كلمة)</p>
               {lastRound.surahOk !== null && <p>السورة: {lastRound.surahOk ? '✓ صح' : '✗ غلط'} — {arNum(lastRound.surah)} من ٢</p>}
-              {cur.result.extras > 0 && <p className="text-amber-700">طلبت «كلمتين كمان» {arNum(cur.result.extras)} مرة — خصم {arNum(cur.result.extras * HINT_COST * 100)}٪ من درجة الآية</p>}
+              {hintCost(cur.result) > 0 && <p className="text-amber-700">طلبت تلميح — خصم {arNum(Math.round(hintCost(cur.result) * 100))}٪ من درجة الآية</p>}
               <p className="font-bold">درجة الجولة: {arNum(lastRound.total)} من ١٠</p>
             </div>
             )}
