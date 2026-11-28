@@ -659,25 +659,6 @@ export default function QuranMushafPage({
     return () => window.removeEventListener('pointerdown', on, true);
   }, []);
   useEffect(() => { setPopAnchor(selectedVerse ? { ...lastPointRef.current } : null); }, [selectedVerse?.id]);
-  // Compact only while on the light first tab; going deeper (tafsir, irab, ...) opens the big window.
-  // Item 5.10: once the reader leaves the links tab the popup grows to
-  // its large size and STAYS large until it closes — switching tabs no
-  // longer makes it jump back and forth between the two sizes.
-  const [popGrown, setPopGrown] = useState(false);
-  useEffect(() => { setPopGrown(false); }, [selectedVerse]);
-  useEffect(() => { if (popupTab !== 'links') setPopGrown(true); }, [popupTab]);
-  const popCompact = !!selectedVerse && !!popAnchor && popAnchor.y > 0 && popupTab === 'links' && !popGrown && !hifzMode;
-  const popPos = (() => {
-    if (!popCompact || !popAnchor || typeof window === 'undefined') return null;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const w = Math.min(vw - 24, 360);
-    const left = Math.min(Math.max(popAnchor.x - w / 2, 12), vw - w - 12);
-    const arrowX = Math.min(Math.max(popAnchor.x - left, 22), w - 22);
-    const above = popAnchor.y > vh * 0.5;
-    const edge = above ? vh - popAnchor.y + 26 : popAnchor.y + 26;
-    const maxH = Math.max(160, Math.min(vh * 0.55, (above ? popAnchor.y - 26 : vh - popAnchor.y - 26) - 12));
-    return { w, left, arrowX, above, edge, maxH };
-  })();
   useEffect(() => {
     if (!popupOpen || !roundDebugOn()) { setTapDbg([]); return; }
     const name = (el: Element | null) => (el ? `${el.tagName.toLowerCase()}.${String((el as HTMLElement).className || '').toString().split(' ').slice(0, 3).join('.')}` : 'null');
@@ -4008,6 +3989,47 @@ export default function QuranMushafPage({
     return { ...b, left, top, width: right - left, height: bottom - top };
   };
 
+  // Ayah callout (owner-approved): the ayah window is a card anchored just above or just
+  // below the tapped ayah's on-screen box (from its word boxes), never a full-page modal,
+  // and never repeating the ayah text. Falls back to the touch point, then to the centred
+  // modal when neither is known (ayah opened from a list, not from the page).
+  const [, setPopTick] = useState(0);
+  useEffect(() => {
+    if (!selectedVerse) return;
+    const bump = () => setPopTick((n) => n + 1);
+    window.addEventListener('resize', bump);
+    return () => window.removeEventListener('resize', bump);
+  }, [selectedVerse]);
+  const ayahScreenBox = (() => {
+    const wrap = pageWrapRef.current;
+    if (!selectedVerse || !pageWordBoxes || !wrap || displayedPage !== currentPage) return null;
+    const r = wrap.getBoundingClientRect();
+    const rs = pageWordBoxes.filter((b) => b.surah === selectedVerse.surah_no && b.ayah === selectedVerse.ayah_no)
+      .map((b) => imageBoxToContainer(clampBoxToPaper(b))).filter((f) => f.width > 0 && f.height > 0)
+      .map((f) => ({ l: r.left + (f.left * r.width) / 100, t: r.top + (f.top * r.height) / 100, w: (f.width * r.width) / 100, h: (f.height * r.height) / 100 }));
+    if (rs.length === 0) return null;
+    const top = Math.min(...rs.map((q) => q.t)), bottom = Math.max(...rs.map((q) => q.t + q.h));
+    // x of the line nearest the card: the first line when the card sits above, the last when below.
+    const mid = (line: typeof rs) => { const l = Math.min(...line.map((q) => q.l)), rr = Math.max(...line.map((q) => q.l + q.w)); return (l + rr) / 2; };
+    const h0 = rs.find((q) => q.t === top)?.h ?? 0;
+    return { top, bottom, xTop: mid(rs.filter((q) => q.t < top + h0 / 2)), xBottom: mid(rs.filter((q) => q.t + q.h > bottom - h0 / 2)) };
+  })();
+  const popBox = ayahScreenBox ?? (popAnchor && popAnchor.y > 0 ? { top: popAnchor.y - 12, bottom: popAnchor.y + 12, xTop: popAnchor.x, xBottom: popAnchor.x } : null);
+  const popCompact = !!selectedVerse && !!popBox;
+  const popPos = (() => {
+    if (!popCompact || !popBox || typeof window === 'undefined') return null;
+    const vw = window.innerWidth, vh = window.innerHeight, gap = 14;
+    const w = Math.min(vw - 24, 380);
+    const above = popBox.top > vh - popBox.bottom; // whichever side has more room
+    const ax = above ? popBox.xTop : popBox.xBottom;
+    const left = Math.min(Math.max(ax - w / 2, 12), vw - w - 12);
+    const arrowX = Math.min(Math.max(ax - left, 22), w - 22);
+    const edge = above ? vh - popBox.top + gap : popBox.bottom + gap;
+    const room = above ? popBox.top : vh - popBox.bottom;
+    const maxH = Math.max(140, Math.min(vh * 0.7, room - gap - 8));
+    return { w, left, arrowX, above, edge, maxH };
+  })();
+
   // STREAM S2 slide-consistent tap math: during the 300ms slide the
   // image is translated (mushaf-slide-next/prev on the IMG), but the
   // wrapper rect never moves — so the old code mapped taps through
@@ -5449,9 +5471,7 @@ export default function QuranMushafPage({
                             أظهر الآية
                           </button>
                         </div>
-                      ) : popCompact ? null : (
-                        <p className="font-arabic text-xl text-accent-800 leading-loose mb-3 text-center">{blankMarks(selectedVerse.ayah_text)}</p>
-                      )}
+                      ) : null}
                       {/* W5-D (2026-11-19): six tiles on top — تربيطات الحفظ، المتشابهات، الإعراب، أسباب النزول، معاني الكلمات، التفسير. «استمع» moved to the bottom row (middle). */}
                       <div className="grid grid-cols-3 gap-1.5 mb-2">
                         <button onClick={() => setPopupTab('links')}
