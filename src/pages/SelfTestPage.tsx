@@ -1,4 +1,5 @@
 import StudioMic from '../components/StudioMic';
+import MicIcon from '../components/icons/MicIcon';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Sama3 from '../components/Sama3';
 import Hint from '../components/Hint';
@@ -6612,7 +6613,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                   <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ من غير توقف، ولو خلصت اضغط "أنهيت التسميع"</p>
                   <button onClick={startContinuousMic}
                     className="mt-5 px-8 py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 mx-auto polish-press polish-focus">
-                    <StudioMic className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
+                    <MicIcon className="w-6 h-6" /> {transcript ? 'كمّل التسميع المتصل' : 'ابدأ التسميع المتصل'}
                   </button>
                 </>
               ) : (
@@ -6878,7 +6879,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
                       <p className="text-sm text-accent-600 mt-1">النص مخفي عمدًا — اضغط الميكروفون واقرأ بصوتك</p>
                       <button onClick={() => startMic()}
                         className="mt-5 px-8 py-3.5 grad-emerald-door text-white text-lg font-bold rounded-xl flex items-center justify-center gap-2 mx-auto polish-press polish-focus">
-                        <StudioMic className="w-6 h-6" /> سمّع الآية بصوتك
+                        <MicIcon className="w-6 h-6" /> سمّع الآية بصوتك
                       </button>
                       <button onClick={() => { manualPreferredRef.current = true; setManualMode(true); }}
                         className="mt-3 text-sm font-semibold text-accent-600 hover:text-accent-700 underline">

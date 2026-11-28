@@ -35,6 +35,7 @@ import MutashabihatOral, { type OralResult } from './MutashabihatOral';
 import SurahTiles from './SurahTiles';
 import RangeVoiceButton from './RangeVoiceButton';
 import { bankInSpan } from '../lib/mutRange';
+import MicIcon from './icons/MicIcon';
 
 type Step = 'scope' | 'positions' | 'mutashabihat' | 'tajweed' | 'tilawa' | 'done';
 type ScopeId = 'surah' | 'juz' | 'first5' | 'juz30';
@@ -321,7 +322,7 @@ export default function ComprehensiveTestModal({ onClose }: { onClose: () => voi
             <div className="mb-3"><RangeVoiceButton allowAll={false} onRange={(r) => { if (r.scope === 'surah') { setScopeId('surah'); setNum(r.n); } else if (r.scope === 'juz') { setScopeId(r.n === 30 ? 'juz30' : 'juz'); setNum(r.n); } }} /></div>
             <p className="text-xs text-accent-600 mb-3">التسميع من ٤٠ درجة موزّعة على المواضع اللي تختارها: القارئ بيسمّعك كلمات وانت تكمّل الآية بصوتك. بعدها المتشابهات{isAdmin ? '، التجويد' : ''} والتلاوة.</p>
             {err && <p className="text-sm text-amber-700 mb-3">{err}</p>}
-            <button onClick={() => void begin()} disabled={busy || !text} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
+            <button onClick={() => void begin()} disabled={busy || !text} className="w-full py-3 grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"><MicIcon className="w-6 h-6" />ابدأ</button>
 
             {history.length > 0 && (
               <div className="mt-6">

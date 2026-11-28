@@ -3,7 +3,8 @@
 // longest without a recital. One button opens the self-test on the first
 // page in the queue (same sessionStorage contract as the other cards).
 // Hidden until «محفوظي» is declared. Gold/emerald only.
-import { BookOpen, Play } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
+import MicIcon from './icons/MicIcon';
 import { useReadOnReturn } from '../lib/useReadOnReturn';
 import { pressFeedback } from '../lib/pressFeedback';
 import { loadHifzCorpus } from '../lib/hifzCorpus';
@@ -56,7 +57,7 @@ export default function PageReviewCard({ onNavigate }: { onNavigate: (r: 'test')
           </p>
           <button type="button" onPointerDown={pressFeedback} onClick={start}
             className="mt-4 w-full py-3.5 grad-emerald-door glass-door-highlight text-white font-bold rounded-xl flex items-center justify-center gap-2 text-base polish-press polish-focus">
-            <Play className="w-5 h-5" />
+            <MicIcon className="w-5 h-5" />
             سمّع صفحة {toArabicIndic(first.page)}
           </button>
         </>

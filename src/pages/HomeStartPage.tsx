@@ -1,4 +1,4 @@
-import StudioMic from '../components/StudioMic';
+import MicIcon from '../components/icons/MicIcon';
 import { MosqueIcon, MushafIcon, EarListenIcon } from '../components/HomeIcons';
 import { roomLabel } from '../lib/roomLabel';
 import Sama3 from '../components/Sama3';
@@ -235,7 +235,7 @@ export default function HomeStartPage({ session, onNavigate }: {
               className="w-full min-h-[80px] py-5 grad-emerald-door glass-door-highlight text-white font-bold rounded-2xl flex items-center justify-center gap-3 text-2xl polish-press polish-press-depth polish-focus"
             >
               <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20">
-                <StudioMic className="w-7 h-7 text-white" />
+                <MicIcon className="w-7 h-7" />
               </span>
               <Sama3 /> لي
             </button>

@@ -1,3 +1,4 @@
+import MicIcon from './icons/MicIcon';
 // Oral mutashabihat question (W4-F, reworked W4-J): the clue is shown, the user
 // SAYS the ayat that contain it, one ayah per tap, by voice (no typing, no ayah
 // numbers, and the question never names a surah). An ayah counts when most of its
@@ -190,7 +191,7 @@ export default function MutashabihatOral({ clue, answers, text, onDone }: {
         <p className="text-center text-accent-700 font-bold py-3">بنراجع…</p>
       ) : (
         <div className="grid grid-cols-2 gap-2">
-          <button onClick={begin} className="py-3 grad-emerald-door text-white font-bold rounded-xl">سمّع آية</button>
+          <button onClick={begin} className="py-3 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2"><MicIcon className="w-6 h-6" />سمّع آية</button>
           {text && left.length > 0 && hints < MAX_HINTS && (
             <button onClick={moreWords} className="col-span-2 order-last py-2 rounded-xl border border-amber-300 text-amber-800 font-bold">
               اديني كلمتين كمان <span className="text-xs font-normal">(بيخصم {(HINT_COST * 100).toLocaleString('ar-EG')}٪ من درجة الآيات)</span>

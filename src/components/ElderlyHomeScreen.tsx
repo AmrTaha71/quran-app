@@ -3,7 +3,7 @@
 // Home2Page when the mode is on. «الوضع العادي» sits at the TOP (one
 // clear tap out), not at the bottom of four look-alike buttons.
 import { BookOpen, Headphones } from 'lucide-react';
-import StudioMic from './StudioMic';
+import MicIcon from './icons/MicIcon';
 import Sama3 from './Sama3';
 import ElderlyHome from './ElderlyHome';
 import OrderMeButton from './OrderMeButton';
@@ -45,7 +45,7 @@ export default function ElderlyHomeScreen({ onNavigate }: { onNavigate: (r: Rout
             المصحف
           </button>
           <button onPointerDown={pressFeedback} onClick={() => { try { sessionStorage.removeItem('quran-test-range-choice'); } catch { /* ignore */ } onNavigate('test'); }} className={DOOR}>
-            <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20"><StudioMic className="w-7 h-7 text-white" /></span>
+            <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/20"><MicIcon className="w-7 h-7" /></span>
             <Sama3 /> لي
           </button>
         </div>

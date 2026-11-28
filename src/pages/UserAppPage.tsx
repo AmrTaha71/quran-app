@@ -2,6 +2,7 @@ import DrumSelect from '../components/DrumSelect';
 import LinkScopeNote from '../components/LinkScopeNote';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
+import MicIcon from '../components/icons/MicIcon';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Sama3 from '../components/Sama3';
 import { supabase } from '../lib/supabase';
@@ -659,7 +660,7 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
             <p className="text-sm font-semibold text-emerald-700 mb-4">اقرأ من حفظك، والقارئ يصحّح لك</p>
             <button onClick={() => onNavigate('test')}
               className="w-full py-2.5 grad-emerald-door text-white font-bold rounded-xl flex items-center justify-center gap-2 polish-press polish-focus">
-              <StudioMic className="w-5 h-5" /> ابدأ التسميع
+              <MicIcon className="w-5 h-5" /> ابدأ التسميع
             </button>
             <div className="grid grid-cols-2 gap-2 mt-4">
               <button onClick={() => onNavigate('listen')} className="py-2.5 bg-white border border-hairline-emerald text-accent-800 font-bold rounded-xl polish-press">استمع للقرآن</button>

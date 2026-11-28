@@ -1,3 +1,4 @@
+import MicIcon from './icons/MicIcon';
 // اختبار الترتيل (W4-E, 2026-11-19): «سمّعني»-style rounds. Pick a range, then
 // a reciter (the list shows only readers with word timings for the range).
 // Each round: 5 words from the reciter, the user completes the ayah by voice
@@ -278,7 +279,7 @@ export default function TarteelQuizModal({ onClose }: { onClose: () => void }) {
                 ) : 'بنحمّل نص القرآن… الزرار هيتفعّل أول ما يخلص.'}
               </p>
             )}
-            <button onClick={() => void nextRound()} disabled={!canStart} className="w-full py-4 text-lg grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50">ابدأ</button>
+            <button onClick={() => void nextRound()} disabled={!canStart} className="w-full py-4 text-lg grad-emerald-door text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"><MicIcon className="w-6 h-6" />ابدأ</button>
           </div>
         )}
 

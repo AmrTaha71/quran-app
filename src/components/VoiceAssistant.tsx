@@ -10,6 +10,7 @@ import { CORR_RECITERS, setCorrReciter } from '../lib/juhaniCorr';
 import { recitersForRange } from '../lib/corrDownload';
 import { speechErrorMessage } from '../lib/speechErrors';
 import type { Route } from '../lib/routes';
+import MicIcon from './icons/MicIcon';
 
 type Step = { k: 'root' } | { k: 'surah'; surah: number } | { k: 'reciter'; surah: number } | { k: 'recite'; surah: number };
 
@@ -301,7 +302,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
             <div key="w1" className="va-wave grid grid-cols-2 gap-2">
               <button type="button" onClick={() => go({ kind: 'mushaf', surah: step.surah })} className={`${tile} bg-emerald-600`}><span className="text-2xl">📖</span><span className="text-lg">تقراها</span><span className="text-[11px] opacity-80">المصحف</span></button>
               <button type="button" onClick={() => setStepBoth({ k: 'reciter', surah: step.surah })} className={`${tile} bg-sky-600`}><span className="text-2xl">🎧</span><span className="text-lg">تسمعها</span><span className="text-[11px] opacity-80">بصوت قارئ</span></button>
-              <button type="button" onClick={() => toRecite(step.surah)} className={`${tile} bg-amber-500`}><span className="text-2xl">🎙️</span><span className="text-lg">تسمّعها</span><span className="text-[11px] opacity-80">على الشيخ</span></button>
+              <button type="button" onClick={() => toRecite(step.surah)} className={`${tile} bg-amber-500`}><MicIcon className="w-8 h-8" /><span className="text-lg">تسمّعها</span><span className="text-[11px] opacity-80">على الشيخ</span></button>
               <button type="button" onClick={() => go({ kind: 'test', surah: step.surah })} className={`${tile} bg-violet-600`}><span className="text-2xl">🧠</span><span className="text-lg">تحفظها</span><span className="text-[11px] opacity-80">إعدادات التسميع</span></button>
             </div>
           )}
