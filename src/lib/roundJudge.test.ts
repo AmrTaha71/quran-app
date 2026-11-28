@@ -13,7 +13,7 @@ type St = {
   base: number; since: number | null; pendingIdx: number | null; corrLeft: number; mistaken: Set<number>;
   msUntilDue: (now: number) => number | null;
   reset: (total: number) => void;
-  evaluate: (m: boolean[], all: boolean, final: boolean, now?: number, lastWrong?: boolean) => { kind: string; locked?: boolean };
+  evaluate: (m: boolean[], all: boolean, final: boolean, now?: number, lastWrong?: boolean, nearMiss?: (abs: number) => boolean) => { kind: string; locked?: boolean };
   summary: (locked: boolean) => { credited: number; wrong: number[]; uncertain: number[]; selfFixed: number[]; locked: boolean; corrected: number; mistakes: number };
 };
 type Al = { matched: boolean[]; allMatched: boolean; lastWrong: boolean };
@@ -219,5 +219,23 @@ describe('grey words and the score', () => {
     const st = new J.RoundState(4, 1);
     assert.equal(st.evaluate(al.matched, true, true, 0).kind, 'finish');
     assert.equal(st.summary(false).mistakes, 0);
+  });
+});
+
+describe('R2 grey: a wrong word heard as a close letter (noise / unclear)', () => {
+  it('a near-miss word is grey: no mistake, no correction, full credit', () => {
+    const st = new J.RoundState(4, 1);
+    const act = st.evaluate(pad(4, [T, F, T, T]), true, false, 0, false, (abs) => abs === 1);
+    assert.equal(act.kind, 'finish');
+    const sum = st.summary(false);
+    assert.equal(sum.mistakes, 0);
+    assert.deepEqual(sum.wrong, []);
+    assert.deepEqual(sum.uncertain, [1]);
+    assert.equal(sum.credited, 3);
+  });
+  it('a wrong word NOT heard as a close letter still counts as a mistake', () => {
+    const st = new J.RoundState(4, 1);
+    assert.equal(st.evaluate(pad(4, [T, F, T, T]), true, false, 0, false, () => false).kind, 'correct');
+    assert.equal(st.summary(false).mistakes, 1);
   });
 });

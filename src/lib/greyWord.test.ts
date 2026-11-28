@@ -1,7 +1,7 @@
 // Run: node --test src/lib/greyWord.test.ts
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { nearMissLetter } from './greyWord.ts';
+import { nearMissLetter, heardNear } from './greyWord.ts';
 
 describe('R2 grey: one close letter heard instead of another', () => {
   it('غ heard for خ is grey, with the pair for the message', () => {
@@ -19,5 +19,12 @@ describe('R2 grey: one close letter heard instead of another', () => {
   it('same word, or different length, is not a near miss', () => {
     assert.equal(nearMissLetter('خلق', 'خلق'), null);
     assert.equal(nearMissLetter('خلق', 'خلقه'), null);
+  });
+});
+
+describe('R2 grey: any spoken token close to the expected word', () => {
+  it('heardNear finds the close letter among the spoken words', () => {
+    assert.equal(heardNear('خلق', ['قال', 'غلق']), true);
+    assert.equal(heardNear('خلق', ['قال', 'كتب']), false);
   });
 });

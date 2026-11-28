@@ -1,4 +1,16 @@
-import { prepareClip, setClipSrc, wireClip, unwireClip } from './clipLevel';
+import { prepareClip, setClipSrc, wireClip, unwireClip, FADE_START, FADE_MS } from './clipLevel';
+
+// Fallback when the Web Audio fade is not possible (no CORS check, or the audio context is
+// suspended, e.g. after the mic): ramp element.volume. Safari ignores it (shortcut: iPhone stays loud), upgrade: a fade that works there.
+function softStart(a: HTMLAudioElement): void {
+  try { a.volume = FADE_START; } catch { return; }
+  const t0 = Date.now();
+  const iv = setInterval(() => {
+    const k = Math.min(1, (Date.now() - t0) / FADE_MS);
+    try { a.volume = FADE_START + (1 - FADE_START) * k; } catch { /* ignore */ }
+    if (k >= 1) clearInterval(iv);
+  }, 30);
+}
 
 // Plays ONE span (from..to seconds) of a remote audio file and stops exactly
 // at its end. Used by the recitation tests: «5 words from the reciter» and the
@@ -35,7 +47,7 @@ export function playSpan(url: string, from: number, to: number, rate = 1): SpanH
   const go = () => {
     try { a.currentTime = Math.max(0, from); } catch { /* ignore */ }
     try { a.playbackRate = rate; } catch { /* ignore */ }
-    wireClip(a, url);
+    if (!wireClip(a, url)) softStart(a);
     a.play().then(() => {
       timer = setInterval(() => { if (a.currentTime >= to) end(); }, 30);
     }).catch(() => end(new Error('play-blocked')));

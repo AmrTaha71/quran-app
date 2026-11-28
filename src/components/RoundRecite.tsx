@@ -11,6 +11,8 @@ import { ListenSession, alignRest } from '../lib/roundListen';
 import { roundDebugOn, setRoundDebug, getRoundDebug } from '../lib/roundDebug';
 import { setExtraWordMin } from '../lib/phonemeEar';
 import { alignSpoken } from '../lib/alignBridge';
+import { spokenTokens } from '../lib/wordAligner';
+import { heardNear } from '../lib/greyWord';
 import { speechErrorMessage } from '../lib/speechErrors';
 import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
@@ -145,9 +147,12 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
     // fixed himself are already right here; only what is still wrong reaches the judge, and
     // the judge cuts in on 3 wrong words, the clock of the unfixed mistake (setting), the end of the
     // ayah, or «خلصت» (never at a silence).
-    const al = alignRest(fullNorms, effRef.current + st.base, sessRef.current?.text() ?? '', alignSpoken);
+    const text = sessRef.current?.text() ?? '';
+    const al = alignRest(fullNorms, effRef.current + st.base, text, alignSpoken);
     setHeard(al.matched.filter(Boolean).length);
-    const act = st.evaluate(al.matched, al.allMatched, final, Date.now(), al.lastWrong);
+    // R2: a wrong word heard as a close letter (noise / unclear) is grey, not a mistake.
+    const toks = spokenTokens(text);
+    const act = st.evaluate(al.matched, al.allMatched, final, Date.now(), al.lastWrong, (abs) => heardNear(fullNorms[effRef.current + abs] ?? '', toks));
     // Item 17.5: a confident mismatch (a later word already matched) stops
     // the pointer on that word; the user re-says it or asks for a hint.
     const nowStuck = act.kind === 'continue' ? st.pendingIdx : null;

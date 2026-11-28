@@ -20,3 +20,8 @@ export function nearMissLetter(expected: string, heard: string): NearMiss | null
   const pair = CONFUSABLE.some(([x, y]) => (a === x && b === y) || (a === y && b === x));
   return pair ? { expected: a, heard: b } : null;
 }
+
+/** R2: the expected word was heard as a close letter in ANY spoken token (noise / unclear). */
+export function heardNear(expected: string, spoken: readonly string[]): boolean {
+  return spoken.some((t) => nearMissLetter(expected, t) !== null);
+}

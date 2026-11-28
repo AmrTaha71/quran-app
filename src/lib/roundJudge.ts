@@ -86,6 +86,8 @@ export class RoundState {
   mistaken = new Set<number>();
   /** R3: indexes the user got wrong and then fixed himself before the reciter cut in. */
   selfFixed = new Set<number>();
+  /** R2: indexes that were heard wrong only because of noise / a close letter: grey, not a mistake. */
+  grey = new Set<number>();
   /** When the still-unfixed mistake at `pendingIdx` was first seen (null = none right now). */
   since: number | null = null;
   /** Item 16.3: absolute index (in the completed part) the clock belongs to. */
@@ -110,6 +112,7 @@ export class RoundState {
     this.pendingIdx = null;
     this.mistaken = new Set<number>();
     this.selfFixed = new Set<number>();
+    this.grey = new Set<number>();
     this.lockedAt = null;
   }
 
@@ -129,7 +132,17 @@ export class RoundState {
   }
 
   /** Judge what the user said (`matched` is relative to the current start). `final` = «خلصت». */
-  evaluate(matched: boolean[], allMatched: boolean, final: boolean, now: number = Date.now(), lastWrong = false): JudgeAction {
+  evaluate(matched0: boolean[], allMatched: boolean, final: boolean, now: number = Date.now(), lastWrong = false, nearMiss?: (abs: number) => boolean): JudgeAction {
+    let matched = matched0;
+    // R2: a wrong word the ear heard as a close letter (noise / unclear) is grey: it passes as
+    // right here (no clock, no correction) and is shown grey in summary().
+    if (nearMiss) {
+      for (let k = firstMistake(matched); k >= 0 && nearMiss(this.base + k); k = firstMistake(matched)) {
+        if (matched === matched0) matched = matched.slice();
+        matched[k] = true;
+        this.grey.add(this.base + k);
+      }
+    }
     let m = firstMistake(matched);
     // Dr. Amr 2026-11-21: the LAST word said was wrong and the user pressed «خلصت» without
     // finishing the ayah: that is a counted mistake (at the first word not matched), not just
@@ -181,9 +194,11 @@ export class RoundState {
     const wrong = [...set].sort((a, b) => a - b);
     const uncertain: number[] = [];
     if (!locked) this.got.forEach((g, i) => { if (!g && !set.has(i)) uncertain.push(i); });
+    for (const i of this.grey) if (!set.has(i) && !uncertain.includes(i)) uncertain.push(i);
+    uncertain.sort((a, b) => a - b);
     const selfFixed = [...this.selfFixed].filter((i) => !set.has(i)).sort((a, b) => a - b);
     return {
-      credited: this.got.filter(Boolean).length,
+      credited: this.got.filter((g, i) => g && !this.grey.has(i)).length,
       wrong,
       uncertain,
       selfFixed,
