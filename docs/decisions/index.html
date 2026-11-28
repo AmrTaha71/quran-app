@@ -76,9 +76,9 @@ pre{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);borde
 </head>
 <body>
 <div class="bar">
-  <h1>قرارات التطبيق — عمرو ورنا</h1>
+  <h1>القرارات</h1>
   <button id="prev" aria-label="اللي قبل">→</button>
-  <span id="pos" aria-live="polite"></span>
+  <span id="pos" aria-live="polite"></span><span id="sync" class="muted" style="color:#F0C85A"></span>
   <button id="next" aria-label="اللي بعد">←</button>
   <div class="prog"><i id="pg"></i></div>
 </div>
@@ -94,6 +94,7 @@ const BIG=(n,s)=>`<div class="big">${n}<small>${s}</small></div>`;
 const CH=(a)=>`<div>${a.map(([t,bg,fg])=>`<span class="chip" style="background:${bg};color:${fg}">${t}</span>`).join('')}</div>`;
 const G=(t)=>CH([[t,'#E3B443','#24053B']]), P=(t)=>CH([[t,'#EEE3F6','#3A065F']]);
 const I=(f)=>`<img src="img/${f}" alt="">`;
+const PAL=(top,btn,acc,bg,txt)=>`<div class="phone" style="background:${bg}"><span class="isl"></span><span style="position:absolute;top:22px;left:0;right:0;height:26px;background:${top}"></span><span style="position:absolute;top:58px;left:10px;right:10px;height:34px;border-radius:8px;background:${btn}"></span><span style="position:absolute;top:100px;left:10px;right:10px;height:26px;border-radius:8px;background:${acc};color:${txt};font:800 11px Cairo;display:grid;place-items:center">ابدأ</span><span style="position:absolute;top:134px;left:10px;width:46px;height:26px;border-radius:8px;background:${btn}"></span><span style="position:absolute;top:134px;right:10px;width:46px;height:26px;border-radius:8px;background:${btn}"></span></div>`;
 const LINES=[30,46,62,78,94,110,126,142].map(t=>`<span class="ln" style="top:${t}px"></span>`).join('');
 const MIC='<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4C0B7A" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>';
 const SMIC='<svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#4C0B7A" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="14" height="14" rx="3"/><rect x="7" y="5" width="4" height="7" rx="2"/><circle cx="17" cy="17" r="3"/><path d="M19.5 19.5 22 22"/></svg>';
@@ -105,13 +106,13 @@ const GOLD='#E3B443',GT='#24053B';
 // ---- the decisions. t title, q question, o [label, picture], p Claude's recommendation, s 1 decided / 0 open, r recommendation line.
 // shortcut: Claude edits this array as decisions are taken; one file, no build.
 const D = [
- {g:'الألوان',t:'ألوان التطبيق',q:'أنهي ألوان؟',o:[['ليل الياسمين',SW(['#3A065F','#4C0B7A','#F0C85A','#FFFCF3'])],['زمردي وذهبي (القديم)',SW(['#064e3b','#10b981','#F0C85A','#ecfdf5'])],['حبر وعنبر',SW(['#1f2a44','#334155','#d97706','#fffbeb'])],['بحر وفضة',SW(['#0c4a6e','#0ea5e9','#cbd5e1','#f8fafc'])]],p:0,s:1,r:'ليل الياسمين — مميز، واتطبق على التطبيق كله.'},
+ {g:'الألوان',t:'ألوان التطبيق',q:'أنهي ألوان؟',o:[['ليل الياسمين',PAL('#3A065F','#4C0B7A','#E3B443','#FFFCF3','#24053B')],['زمردي وذهبي (القديم)',PAL('#064e3b','#047857','#E3B443','#ecfdf5','#064e3b')],['حبر وعنبر',PAL('#1f2a44','#334155','#d97706','#fffbeb','#fff')],['بحر وفضة',PAL('#0c4a6e','#0369a1','#cbd5e1','#f8fafc','#0c4a6e')]],p:0,s:1,r:'ليل الياسمين — مميز، واتطبق على التطبيق كله.'},
  {g:'الألوان',t:'درجة البنفسجي',q:'غامق ولا فاتح؟',o:[['غامق',SW(['#24053B','#3A065F','#4C0B7A'])],['فاتح',SW(['#7F44B0','#A06FC9','#C29FDD'])]],p:0,s:1,r:'غامق.'},
  {g:'الألوان',t:'الصفحات بعد تصليح الألوان',q:'قبل ولا بعد؟',o:[['قبل (مخلوط)',I('landing_old.jpg')],['بعد (بنفسجي وذهبي)',I('landing_new.jpg')]],p:1,s:1,r:'بعد — لون واحد في كل التطبيق.'},
  {g:'الألوان',t:'الزرار الذهبي',q:'أنهي زرار؟',o:[['ذهبي غامق بكلام أبيض',I('gold_old.jpg')],['ذهبي فاتح بكلام غامق',I('gold_new.jpg')]],p:1,s:1,r:'الفاتح — أوضح.'},
  {g:'الألوان',t:'لمعة الزرار الأساسي',q:'يلمع ولا ثابت؟',o:[['لمعة بطيئة بتعدّي','<div class="shine">ابدأ</div>'],['ثابت',G('ابدأ')]],p:0,s:1,r:'يلمع — وتقف لو الموبايل عامل «تقليل الحركة».'},
  {g:'الألوان',t:'لون الكلمة الصح في النتيجة',q:'أنهي لون؟',o:[['بنفسجي',W([...OK2,['الْقُرْآنَ','bad']])],['أخضر',W([['وَلَقَدْ','gr'],['يَسَّرْنَا','gr'],['الْقُرْآنَ','bad']])]],p:0,s:0,r:'بنفسجي — زي باقي التطبيق، والغلط أحمر.'},
- {g:'الشكل',t:'اللوجو',q:'أنهي لوجو؟',o:[['الكتاب المربوط',I('logo_1.png')],['النجمة والمصحف',I('logo_2.png')],['الصفحة والصوت',I('logo_3.png')],['اللوجو الحالي',I('logo_old.png')]],p:0,s:0,r:'بيقول «تربيطات» من أول نظرة. والحالي يفضل اختيار في الإعدادات.'},
+ {g:'الشكل',t:'اللوجو',q:'أنهي لوجو؟',o:[['الكتاب المربوط',I('logo_1.png')],['الكتاب بالحلقتين',I('logo_1b.png')],['النجمة والمصحف',I('logo_2.png')],['الصفحة والصوت',I('logo_3.png')],['اللوجو الحالي',I('logo_old.png')]],p:0,s:0,r:'بيقول «تربيطات» من أول نظرة. والحالي يفضل اختيار في الإعدادات.'},
  {g:'الشكل',t:'الاسم على الأيقونة',q:'أنهي اسم؟',o:[['تربيطات آيات القرآن',G('تربيطات آيات القرآن')],['روابط الذكر الحكيم',G('روابط الذكر الحكيم')],['الاتنين',G('تربيطات آيات القرآن')+P('روابط الذكر الحكيم')]],p:0,s:1,r:'تربيطات آيات القرآن.'},
  {g:'الشكل',t:'الصفحة الرئيسية',q:'أنهي رئيسية؟',o:[['القديمة',I('home_old.jpg')],['الجديدة بالإطار',I('home_new.jpg')]],p:1,s:1,r:'الجديدة — إطار ذهبي ونجوم وآية تحت.'},
  {g:'الشكل',t:'لمسة البلاطات',q:'لما تدوس على بلاطة؟',o:[['تموّج + نقرة خفيفة',P('〰 تموّج')+P('🔈 نقرة')],['ولا حاجة',P('—')]],p:0,s:1,r:'تموّج ونقرة — وصوت النقرة يتقفل من الإعدادات.'},
@@ -145,10 +146,25 @@ const D = [
  {g:'المصحف',t:'التقليب',q:'بالعرض ولا بالطول؟',o:[['تقليب + تمرير بالطول (اختياري)',PH(LINES)+BIG('↕','')],['بكرة بالعرض بس',BIG('↔','')]],p:0,s:1,r:'تقليب سريع، وتمرير بالطول من الإعدادات.'},
  {g:'المصحف',t:'التمرير التلقائي',q:'السرعة على أساس إيه؟',o:[['الجزء كله',BIG('٢٠','دقيقة للجزء')],['كل صفحة',BIG('٦٠','ثانية للصفحة')]],p:0,s:1,r:'الجزء — ٢٠ أو ٢٥ أو ٣٠ دقيقة، ويرجع مكان ما وقفت.'},
  {g:'المصحف',t:'مدة الجزء',q:'الأساسي كام؟',o:[['٢٠',BIG('٢٠','دقيقة')],['٢٥',BIG('٢٥','دقيقة')],['٣٠',BIG('٣٠','دقيقة')]],p:0,s:1,r:'٢٠.'},
+ {g:'الشكل',t:'هيدر المصحف',q:'كام سطر؟',o:[['سطر واحد',PH(B('top:22px;left:6px;right:6px','الفاتحة · ص ١ · ⏱'))],['سطرين',PH(B('top:22px;left:6px;right:6px','الفاتحة')+B('top:44px;left:6px;right:6px','ص ١ · ⏱'))]],p:0,s:1,r:'سطر واحد — مساحة أكبر للصفحة.'},
+ {g:'الشكل',t:'الصفحة في الإطار',q:'الصفحة تتحرك جوه الإطار؟',o:[['ثابتة في النص وتملأ الإطار',PH(LINES)],['تتحرك يمين وشمال',PH(LINES.replace(/left:10px/g,'left:30px'))]],p:0,s:1,r:'ثابتة — والتقليب سريع (حوالي خُمس ثانية).'},
+ {g:'الشكل',t:'لون البلاطة حوالين الميدالية',q:'أنهي لون؟',o:[['ذهبي دافي',SW(['#FAF0CF','#F5E09E'])],['كريمي',SW(['#FFFCF3','#F4F1EA'])]],p:0,s:1,r:'ذهبي دافي — أوضح.'},
+ {g:'الشكل',t:'شكل الأزرار',q:'كام شكل؟',o:[['شكل أو اتنين بس',G('مستطيل')+G('دايرة')],['أشكال كتير',G('مثلث')+G('دايرة')+G('نجمة')+G('مستطيل')]],p:0,s:1,r:'شكل أو اتنين — هادي ومرتب.'},
+ {g:'التسميع',t:'حرف مختلف مش قريب (ونتم / وانتم)',q:'كلمة فيها حرف غلط واضح؟',o:[['غلط',W([['وَنْتُمْ','bad']])],['رمادي',W([['وَنْتُمْ','grey']])]],p:0,s:1,r:'غلط — الرمادي للحرف القريب بس (غ/خ، ز/ذ…).'},
+ {g:'الأمان',t:'صوتك لما يتحوّل لكلام',q:'من أنهي مواقع يتحمّل الصوت؟',o:[['٣ مواقع معروفة بس',P('مخزن التطبيق')+P('islamic.network')+P('qurancdn')],['أي لينك',P('🌐 أي لينك')]],p:0,s:1,r:'٣ مواقع بس — أأمن.'},
+ {g:'الأمان',t:'حد تحويل الصوت لكلام',q:'كام مرة في الساعة؟',o:[['٣٠ مرة',BIG('٣٠','في الساعة · ملف لحد ١٠ ميجا')],['مفيش حد',BIG('∞','')]],p:0,s:1,r:'٣٠ — يمنع الاستهلاك الزيادة.'},
+ {g:'الأمان',t:'التربيطة الجديدة',q:'لما حد يقترح تربيطة؟',o:[['تستنى مراجعة',CH([['⏳ مستنية مراجعة','#FAF0CF','#4F3B12']])],['تنزل على طول',CH([['✓ منشورة','#e7f6ec','#155d33']])]],p:0,s:1,r:'تستنى مراجعة.'},
+ {g:'طريقة الشغل',t:'المستخدمين دلوقتي',q:'مين بيستخدم التطبيق؟',o:[['الفريق بس (تجربة)',BIG('👥','الفريق')],['ناس حقيقيين',BIG('🌍','')]],p:0,s:1,r:'الفريق بس — نقدر نجرّب براحتنا.'},
+ {g:'طريقة الشغل',t:'قبل أي تعديل كبير',q:'كلود يعمل إيه الأول؟',o:[['خطة قصيرة ويستنى موافقة',P('📝 خطة')+P('✓ موافقة')+P('⚙️ شغل')],['يشتغل على طول',P('⚙️ شغل')]],p:0,s:1,r:'خطة الأول — وكل سؤال معاه توصية بالعربي.'},
+ {g:'طريقة الشغل',t:'النشر',q:'التعديل يوصل للناس إمتى؟',o:[['رابط تجربة الأول، والنشر بأمر عمرو',P('🧪 رابط تجربة')+P('✓ عمرو يوافق')+P('🚀 نشر')],['ينزل على طول',P('🚀 نشر')]],p:0,s:1,r:'رابط تجربة الأول.'},
+ {g:'محتاج قرار',t:'زخرفة صفحة المصحف الرقمي',q:'عاجباك؟',o:[['عاجباني كده',I('mushaf_digital.jpg')],['نغيّرها',BIG('✎','نعمل اختيارات تانية')]],p:0,s:0,r:'كده — بس قولوا لو عايزين اختيارات.'},
+ {g:'محتاج قرار',t:'اسم التطبيق في كل مكان',q:'الاسم الرسمي؟',o:[['تربيطات آيات القرآن',G('تربيطات آيات القرآن')],['روابط الذكر الحكيم',G('روابط الذكر الحكيم')]],p:0,s:0,r:'تربيطات آيات القرآن — زي الأيقونة.'},
  {g:'محتاج قرار',t:'التمرير بالطول',q:'يبقى شغال من الأول؟',o:[['مقفول (تقليب صفحات)',BIG('⇆','')],['شغال',BIG('↕','')]],p:0,s:0,r:'مقفول — التقليب أقرب لمصحف حقيقي، واللي عايز الطول يفتحه من الإعدادات.'},
  {g:'محتاج قرار',t:'المايك على «ابدأ» في الاختبارات',q:'نحطه؟',o:[['لأ',G('ابدأ')],['أيوه',MIC+G('ابدأ')]],p:0,s:0,r:'لأ — المايك بيفتح في الخطوة اللي بعدها.'},
  {g:'محتاج قرار',t:'آية بتكمّل على الصفحة اللي بعدها',q:'في التسميع على الإطار؟',o:[['صفحة واحدة',BIG('١','صفحة')],['الصفحتين',BIG('٢','صفحة')]],p:0,s:0,r:'صفحة واحدة دلوقتي — نادرة.'},
 ];
+// Stable id per question (from its title), so the shared answers survive reordering.
+D.forEach(d=>{let h=5381;for(const ch of d.t)h=(h*33+ch.codePointAt(0))>>>0;d.k='q'+h.toString(36)});
 const KEY='quran-decisions-v3';
 let st={}; try{st=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
@@ -183,18 +199,18 @@ const all=[...deck.children], N=all.length;
 const result=()=>'مراجعة قرارات التطبيق (عمرو ورنا):\n\n'+D.map((d,i)=>{const c=st[i]?.c;const has=typeof c==='number';const n=st[i]?.n?.trim();
  return `${i+1}. ${d.t}: ${has?(c+1)+' — '+d.o[c][0]+(c===d.p?' (زي التوصية)':' (غير التوصية)'):'— ما اتختارش —'}${n?'\n   ملاحظة: '+n:''}`}).join('\n');
 const draw=()=>{document.getElementById('out').textContent=result()};
-const pick=(i,j)=>{st[i]=st[i]||{n:''};st[i].c=j;st[i].done=false;save();draw();
+const pick=(i,j)=>{st[i]=st[i]||{n:''};st[i].c=j;st[i].done=false;save();draw();push(i);
  document.querySelectorAll(`.opt[data-i="${i}"]`).forEach(b=>{const on=+b.dataset.j===j;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
  document.getElementById('c'+i).value=j==null?'':j;document.getElementById('k'+i).textContent=''};
 let cur=0;
 const go=k=>{cur=Math.max(0,Math.min(N-1,k));all[cur].scrollIntoView({block:'nearest',inline:'start'});window.scrollTo({top:0})};
 deck.addEventListener('change',e=>{const x=e.target;if(x.dataset.c==null)return;pick(+x.dataset.c,x.value===''?null:+x.value)});
-deck.addEventListener('input',e=>{const x=e.target;if(x.dataset.n==null)return;const i=+x.dataset.n;st[i]=st[i]||{n:''};st[i].n=x.value;save();draw()});
+deck.addEventListener('input',e=>{const x=e.target;if(x.dataset.n==null)return;const i=+x.dataset.n;st[i]=st[i]||{n:''};st[i].n=x.value;save();draw();clearTimeout(nt[i]);nt[i]=setTimeout(()=>push(i),900)});
 deck.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){e.preventDefault();go(+a.dataset.go);return}
  const o=e.target.closest('.opt[data-i]');if(o){pick(+o.dataset.i,+o.dataset.j);return}
  const k=e.target.closest('[data-ok]');if(k){const i=+k.dataset.ok,m=document.getElementById('k'+i);
   if(typeof st[i]?.c!=='number'){m.textContent='اختار رقم الأول';return}
-  st[i].done=true;save();draw();m.textContent='اتسجّل ✓';setTimeout(()=>go(i+2),350)}});
+  st[i].done=true;save();draw();push(i);m.textContent='اتسجّل ✓';setTimeout(()=>go(i+2),350)}});
 document.getElementById('prev').onclick=()=>go(cur-1);
 document.getElementById('next').onclick=()=>go(cur+1);
 document.addEventListener('keydown',e=>{if(/TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='ArrowLeft')go(cur+1);if(e.key==='ArrowRight')go(cur-1)});
@@ -204,6 +220,35 @@ const io=new IntersectionObserver(es=>{for(const x of es)if(x.isIntersecting&&x.
 all.forEach(s=>io.observe(s));
 document.getElementById('copy').onclick=async()=>{const m=document.getElementById('cmsg');try{await navigator.clipboard.writeText(result());m.textContent='اتنسخ ✓'}catch(e){m.textContent='النسخ مش متاح هنا — علّم على النص اللي تحت وانسخه بإيدك'}};
 draw();
+
+// ---- shared answers: both partners see and change the same choice, live; Claude reads them too ----
+let db=null,me=null,users=null;const nt={},busy={},again={};
+async function push(i){
+ if(!db)return;
+ if(busy[i]){again[i]=true;return}busy[i]=true;
+ const x=st[i]||{};
+ try{await db.collection('picks').doc(D[i].k).set({c:typeof x.c==='number'?x.c:null,n:x.n||'',done:!!x.done,by:me||'',t:D[i].t})}
+ catch(e){document.getElementById('sync').textContent='الحفظ المشترك مش متاح — اتحفظ على الجهاز ده بس'}
+ busy[i]=false;if(again[i]){again[i]=false;push(i)}}
+async function who(id){if(!id||!users)return '';try{const ps=await users.profiles([id]);return ps[id]?.name||''}catch(e){return ''}}
+function apply(i,v){
+ st[i]={c:typeof v.c==='number'?v.c:undefined,n:String(v.n||''),done:!!v.done};save();draw();
+ document.querySelectorAll(`.opt[data-i="${i}"]`).forEach(b=>{const on=+b.dataset.j===st[i].c;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
+ document.getElementById('c'+i).value=typeof st[i].c==='number'?st[i].c:'';
+ const ta=document.getElementById('n'+i);if(document.activeElement!==ta)ta.value=st[i].n;
+ const m=document.getElementById('k'+i);m.textContent=st[i].done?'اتسجّل ✓':'';
+ who(v.by).then(n=>{if(n&&v.by!==me)m.textContent=(st[i].done?'اتسجّل ✓ ':'')+'— '+n});}
+(async()=>{
+ const C=window.claude;const sy=document.getElementById('sync');if(!C||!C.use){sy.textContent='على الجهاز ده بس';return}
+ try{[db,users]=await Promise.all([C.use('db'),C.use('user')])}catch(e){}
+ if(!db){sy.textContent='على الجهاز ده بس';return}
+ try{me=users?await users.id():null}catch(e){}
+ const idx=Object.fromEntries(D.map((d,i)=>[d.k,i]));
+ const tm=setTimeout(()=>{sy.textContent='بيحاول يوصل للحفظ المشترك…'},10000);
+ db.collection('picks').onSnapshot(snap=>{if(!snap.metadata.fromCache){clearTimeout(tm);sy.textContent='مشتركة ✓'}
+  for(const ch of snap.docChanges()){if(ch.type==='removed')continue;const i=idx[ch.doc.id];if(i!=null)apply(i,ch.doc.data()||{})}},
+  ()=>{clearTimeout(tm);sy.textContent='الحفظ المشترك وقف — اتحفظ على الجهاز ده بس'});
+})();
 }
 </script>
 </body>
