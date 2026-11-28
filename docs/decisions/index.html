@@ -191,8 +191,8 @@ const slides=D.map((d,i)=>`<section class="slide"><div class="frame">
  <details ${st[i]?.n?'open':''}><summary>ملاحظة</summary><textarea id="n${i}" data-n="${i}" aria-label="ملاحظة">${esc(st[i]?.n||'')}</textarea></details>
 </div></section>`).join('');
 const end=`<section class="slide"><div class="frame">
- <h2>النتيجة</h2><p class="q">«انسخ النتيجة» والزقوها في الشات مع كلود.</p>
- <p><button class="btn" id="copy">انسخ النتيجة</button> <span id="cmsg" class="muted" aria-live="polite"></span></p>
+ <h2>خلصنا؟ ابعتوها لكلود</h2><p class="q">لما تتفقوا على كل حاجة، دوسوا «ابعت لكلود» — توصله على طول ويبدأ ينفّذ.</p>
+ <p><button class="btn" id="send">ابعت لكلود ✓</button> <button class="btn" id="copy" style="background:#EEE3F6">انسخ النتيجة</button> <span id="cmsg" class="muted" aria-live="polite"></span></p>
  <pre id="out"></pre></div></section>`;
 deck.innerHTML=cover+slides+end;
 const all=[...deck.children], N=all.length;
@@ -218,6 +218,16 @@ const io=new IntersectionObserver(es=>{for(const x of es)if(x.isIntersecting&&x.
  document.getElementById('pos').textContent=cur===0?'الفهرس':cur===N-1?'النتيجة':`${ar(cur)} / ${ar(D.length)}`;
  document.getElementById('pg').style.width=(cur/(N-1)*100)+'%'}},{root:deck,threshold:[.6]});
 all.forEach(s=>io.observe(s));
+// Short message (4 KB cap): counts + every answer that differs from the recommendation + notes; Claude reads the rest from the shared store.
+const brief=()=>{const done=D.filter((d,i)=>typeof st[i]?.c==='number').length;const diff=D.map((d,i)=>{const c=st[i]?.c,n=st[i]?.n?.trim();
+ if(typeof c!=='number'&&!n)return '';return (typeof c==='number'&&c!==d.p)||n?`${i+1}. ${d.t}: ${typeof c==='number'?(c+1)+' — '+d.o[c][0]:'—'}${n?' | ملاحظة: '+n:''}`:''}).filter(Boolean);
+ let t=`خلصنا مراجعة القرارات (${done} من ${D.length}). الباقي زي توصيتك. اقرا الإجابات كاملة من picks.\n\nاللي مختلف عن التوصية أو عليه ملاحظة:\n`+(diff.join('\n')||'ولا حاجة — كله زي التوصية.');
+ while(new TextEncoder().encode(t).length>4000)t=t.slice(0,-200);return t};
+document.getElementById('send').onclick=async(ev)=>{const m=document.getElementById('cmsg');
+ try{const cm=window.claude&&await window.claude.use('comments');
+  if(!cm||(await cm.canSendToClaude())!=='available'){m.textContent='الإرسال المباشر مش متاح هنا — دوسوا «انسخ النتيجة» والزقوها في الشات';return}
+  const anchor=await cm.anchorFor(ev.currentTarget);await cm.sendToClaude({anchor,text:brief()});m.textContent='وصلت لكلود ✓'}
+ catch(e){m.textContent=e&&e.code==='consent_required'?'محتاج توافق إن الصفحة تبعت باسمك — دوس تاني ووافق':'ما وصلتش — دوسوا «انسخ النتيجة» والزقوها في الشات'}};
 document.getElementById('copy').onclick=async()=>{const m=document.getElementById('cmsg');try{await navigator.clipboard.writeText(result());m.textContent='اتنسخ ✓'}catch(e){m.textContent='النسخ مش متاح هنا — علّم على النص اللي تحت وانسخه بإيدك'}};
 draw();
 
