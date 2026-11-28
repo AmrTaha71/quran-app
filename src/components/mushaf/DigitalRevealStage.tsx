@@ -30,8 +30,8 @@ export function useDigitalPage(page: number | null | undefined): DigitalPageStat
 export default function DigitalRevealStage({ page, state, mark }: {
   page: number;
   state: DigitalPageState;
-  /** 'hidden' = word not drawn yet, 'wrong' = drawn red, undefined = drawn normally. */
-  mark: (surah: number, ayah: number, wordNo: number) => 'hidden' | 'wrong' | undefined;
+  /** 'hidden' = word not drawn yet, 'wrong' = drawn red, 'grey' = drawn grey (R2), undefined = drawn normally. */
+  mark: (surah: number, ayah: number, wordNo: number) => 'hidden' | 'wrong' | 'grey' | undefined;
 }) {
   const theme = useMemo(() => ({ ...themeById(loadThemeId()) }), []);
   const boxes = useMemo<DigitalBox[]>(() => state.boxes.map((b) => ({

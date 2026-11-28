@@ -237,8 +237,8 @@ function Furniture({ boxes, tajweed, theme, size, compact }: { boxes: DigitalBox
 }
 
 export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page, wordMark }: { boxes: DigitalBox[]; tajweed: TajweedMap; theme?: MushafTheme; page?: number;
-  /** Tasmee' reveal: 'hidden' = word not drawn (its box and the ayah medallion stay), 'wrong' = drawn in red. */
-  wordMark?: (b: DigitalBox) => 'hidden' | 'wrong' | undefined }) {
+  /** Tasmee' reveal: 'hidden' = word not drawn (its box and the ayah medallion stay), 'wrong' = drawn in red, 'grey' = drawn grey (R2: not heard clearly). */
+  wordMark?: (b: DigitalBox) => 'hidden' | 'wrong' | 'grey' | undefined }) {
   const root = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
@@ -287,7 +287,7 @@ export default function DigitalPageLayer({ boxes: rawBoxes, tajweed, theme, page
         if (!word || b.width <= 0 || b.height <= 0) return null;
         const mark = wordMark?.(b);
         if (mark === 'hidden') return null;
-        return <Word key={b.key} word={word} box={b} theme={theme} uniform={theme ? uni : null} tint={mark === 'wrong' ? '#dc2626' : undefined} wPx={(b.width / 100) * size.w} hPx={(b.height / 100) * size.h} />;
+        return <Word key={b.key} word={word} box={b} theme={theme} uniform={theme ? uni : null} tint={mark === 'wrong' ? '#dc2626' : mark === 'grey' ? '#9ca3af' : undefined} wPx={(b.width / 100) * size.w} hPx={(b.height / 100) * size.h} />;
       })}
     </div>
   );

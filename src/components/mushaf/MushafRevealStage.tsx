@@ -18,13 +18,15 @@ import DigitalRevealStage, { useDigitalPage } from './DigitalRevealStage';
 // disappears into the page; measured on page 3: the scans are RGB(255,255,230).
 const PAPER = '#ffffe6';
 
-export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAll, onlyWrong, upcoming }: {
+export default function MushafRevealStage({ surah, ayah, revealed, wrong, grey, showAll, onlyWrong, upcoming }: {
   surah: number;
   ayah: number;
   /** revealed[i] = word i (0-based, in ayah order) was recited correctly in place. */
   revealed: boolean[];
   /** 0-based word indices to paint red once the ayah is finished. */
   wrong?: number[];
+  /** R2: grey[i] = word i was heard unclearly (noise / close letter): uncovered in grey, not a mistake. */
+  grey?: boolean[];
   /** Done screens: uncover the whole ayah (wrong words get a red wash). */
   showAll?: boolean;
   /** Item 15.2 (blind mode): on a mistake uncover ONLY the wrong words (red), the rest stays covered. */
@@ -80,7 +82,9 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
         if (s !== surah || a !== ayah) return !showAll && futureSet.has(`${s}:${a}`) ? 'hidden' : undefined;
         const i = w - 1;
         if (onlyWrong) return wrongSet.has(i) ? 'wrong' : 'hidden';
-        if (showAll) return wrongSet.has(i) ? 'wrong' : undefined;
+        if (wrongSet.has(i) && showAll) return 'wrong';
+        if (grey?.[i]) return 'grey';
+        if (showAll) return undefined;
         return revealed[i] || stickyRef.current.open.has(i) ? undefined : 'hidden';
       }} />
     );
@@ -109,8 +113,11 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
         })}
         {words.map((b) => {
           const i = b.w - 1;
-          const open = onlyWrong ? wrongSet.has(i) : showAll || !!revealed[i] || stickyRef.current.open.has(i);
+          const isGrey = !onlyWrong && !!grey?.[i];
+          const open = onlyWrong ? wrongSet.has(i) : showAll || isGrey || !!revealed[i] || stickyRef.current.open.has(i);
           const isWrong = (showAll || onlyWrong) && wrongSet.has(i);
+          // Scan page: the word ink can't be recoloured, so a grey word gets a grey wash.
+          const wash = isWrong ? 'rgba(220,38,38,0.22)' : isGrey ? 'rgba(156,163,175,0.45)' : 'transparent';
           // Pad: tashkeel and word tails reach a little past the measured box.
           const padX = 0.5, padTop = 1.25, padBot = 0.6;
           const style: React.CSSProperties = {
@@ -126,7 +133,7 @@ export default function MushafRevealStage({ surah, ayah, revealed, wrong, showAl
           // flash on the word that just opened, and a red wash for wrong words.
           return (
             <div key={`${b.s}:${b.a}:${b.w}`} className={`absolute rounded ${isWrong ? '' : 'mushaf-reveal-pop'}`}
-              style={{ ...style, background: isWrong ? 'rgba(220,38,38,0.22)' : 'transparent', pointerEvents: 'none' }} />
+              style={{ ...style, background: wash, pointerEvents: 'none' }} />
           );
         })}
       </div>
