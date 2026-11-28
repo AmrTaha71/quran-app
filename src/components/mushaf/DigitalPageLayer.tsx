@@ -5,8 +5,8 @@
 // Ayah-end medallions and ornaments are not in the boxes, so they stay from the scan.
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { digitalWordsOf, type TajweedMap, type DigitalWord } from '../../lib/tajweedWords';
-import { ruleColor, TAJWEED_INK } from '../../lib/tajweedColors';
-import { adaptRuleColor, type MushafTheme } from '../../lib/mushafThemes';
+import { TAJWEED_INK } from '../../lib/tajweedColors';
+import type { MushafTheme } from '../../lib/mushafThemes';
 import { SURAHS } from '../../lib/surahs';
 
 export type DigitalBox = { key: string; surah: number; ayah: number; wordNo: number; left: number; top: number; width: number; height: number };
@@ -41,7 +41,7 @@ function Word({ word, wPx, hPx, box, theme, uniform, tint }: { word: DigitalWord
         ? { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` }
         : { left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%`, background: PAPER, boxShadow: `0 0 0 1.5px ${PAPER}` }}>
       <span ref={inner} dir="rtl" style={{ fontFamily: FONT, fontSize: fit.size, lineHeight: 1, whiteSpace: 'nowrap', color: theme ? theme.ink : TAJWEED_INK, ...(theme ? { WebkitTextStroke: '0.014em currentColor', textRendering: 'geometricPrecision' as const, WebkitFontSmoothing: 'antialiased' as const } : {}), transform: `scaleX(${fit.k})`, transformOrigin: 'center' }}>
-        {word.segs.map((s, i) => <span key={i} style={tint ? { color: tint } : s.rule ? { color: adaptRuleColor(ruleColor(s.rule), !!theme?.dark) } : undefined}>{s.text}</span>)}
+        {word.segs.map((s, i) => <span key={i} style={tint ? { color: tint } : undefined}>{s.text}</span>)}
       </span>
     </div>
   );
