@@ -4,147 +4,192 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>قرارات تربيطات آيات القرآن</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Amiri:wght@700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Amiri:wght@700&family=Noto+Naskh+Arabic:wght@500;700&display=swap" rel="stylesheet">
 <style>
-/* VOICE: calm, clear, for two partners reviewing decisions together on Monday.
-   IDEA: a framed Mushaf-style booklet; each page is one decision with tick boxes.
-   PICTURE: the decision card itself (choices as big tickable tiles), the first slide is the full table.
-   COLOUR and TYPE: the app's Jasmine Night — deep purple, gold, cream; Cairo for text, Amiri for titles.
-   LAYOUT: one decision per slide in a native side scroller; a sticky bar with prev/next and progress. */
+/* VOICE: a quick multiple-choice review for two partners; pictures first, almost no prose.
+   IDEA: a framed booklet like the app's Mushaf page; each page = one question, pictures as answers.
+   PICTURE: every answer is a picture (real screenshot, logo, or a small drawn sample) with a number and a tick box.
+   COLOUR and TYPE: the app's Jasmine Night — deep purple, gold, cream; Cairo text, Amiri titles.
+   LAYOUT: one question per slide in a native side scroller; recommendation under the answers; dropdown + «تم» to go on. */
 :root{color-scheme:light;--bg:#FFFCF3;--ink:#24053B;--soft:#5E4A6D;--p:#3A065F;--p2:#4C0B7A;--g:#C9A227;--g2:#F0C85A;--card:#fff;--line:#E3DCE8}
 :root[data-theme=dark]{color-scheme:dark;--bg:#1a0730;--ink:#F8F1DE;--soft:#C6B9CF;--card:#24053B;--line:#3C2D46}
 *{box-sizing:border-box;min-width:0}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Cairo,system-ui,sans-serif;overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Cairo,system-ui,sans-serif;overflow-x:clip}
 .bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:10px max(4vw,12px);background:var(--p);color:#F8F1DE;flex-wrap:wrap}
 .bar h1{font:700 20px/1.2 Amiri,serif;margin:0;flex:1}
 .bar button{min-height:44px;min-width:44px;padding:0 14px;border-radius:12px;border:1px solid var(--g2);background:transparent;color:var(--g2);font:600 15px Cairo;cursor:pointer}
-.bar button:focus-visible,.opt:focus-within,textarea:focus-visible,.toc a:focus-visible{outline:3px solid var(--g2);outline-offset:2px}
+button:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--g2);outline-offset:2px}
 .prog{height:4px;background:#ffffff22;flex-basis:100%;border-radius:4px;overflow:hidden}.prog i{display:block;height:100%;background:var(--g2);transition:width .25s}
 .deck{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;scrollbar-width:none}
 .deck::-webkit-scrollbar{display:none}
-.slide{flex:0 0 100%;scroll-snap-align:start;padding:clamp(16px,3vw,40px) max(4vw,14px) 40px}
-.frame{max-width:860px;margin:0 auto;background:var(--card);border-radius:24px;padding:clamp(18px,3vw,36px);box-shadow:0 0 0 2px var(--g),0 0 0 7px var(--card),0 0 0 8px var(--g),0 14px 40px rgba(36,5,59,.15);position:relative}
-.frame::before,.frame::after{content:"";position:absolute;width:18px;height:18px;background:var(--g2);clip-path:polygon(50% 0,64% 22%,90% 10%,78% 36%,100% 50%,78% 64%,90% 90%,64% 78%,50% 100%,36% 78%,10% 90%,22% 64%,0 50%,22% 36%,10% 10%,36% 22%);top:-9px;right:-9px}
-.frame::after{right:auto;left:-9px}
+.slide{flex:0 0 100%;scroll-snap-align:start;padding:clamp(14px,3vw,36px) max(4vw,12px) 40px}
+.frame{max-width:980px;margin:0 auto;background:var(--card);border-radius:24px;padding:clamp(16px,3vw,32px);box-shadow:0 0 0 2px var(--g),0 0 0 7px var(--card),0 0 0 8px var(--g),0 14px 40px rgba(36,5,59,.15)}
 .num{display:inline-block;background:var(--p);color:var(--g2);border-radius:999px;padding:2px 14px;font-weight:800;font-size:14px}
 .tag{display:inline-block;border-radius:999px;padding:2px 12px;font-size:13px;font-weight:700;margin-inline-start:6px}
 .done{background:#e7f6ec;color:#155d33}.open{background:#fff1d6;color:#7a4b00}
-h2{font:700 clamp(26px,4vw,38px)/1.15 Amiri,serif;margin:10px 0 6px;color:var(--p);text-wrap:balance}
+h2{font:700 clamp(26px,4vw,38px)/1.15 Amiri,serif;margin:8px 0 4px;color:var(--p);text-wrap:balance}
 :root[data-theme=dark] h2{color:var(--g2)}
-.q{font-size:18px;color:var(--soft);margin:0 0 16px}
-.opts{display:grid;gap:10px}
-.opt{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--line);border-radius:16px;padding:14px;cursor:pointer;background:var(--bg)}
-.opt{font:inherit;color:inherit;text-align:start;width:100%}.n{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--g2);font-weight:800}
-.go{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}.go label{font-weight:800}
-select{min-height:48px;font:600 16px Cairo;border-radius:12px;border:2px solid var(--g);padding:0 10px;background:var(--bg);color:var(--ink);flex:1;min-width:180px}.ok{color:#155d33;font-weight:800}
-.opt b{display:block;font-size:17px}.opt small{display:block;color:var(--soft);font-size:14px}
-.opt.ours{border-color:var(--g)}
-.pick{display:inline-block;background:var(--g2);color:#24053B;font-size:12px;font-weight:800;border-radius:8px;padding:0 8px;margin-inline-start:6px}
-.opt.on{background:#f3eaff;border-color:var(--p2)}
+.q{font-size:18px;color:var(--soft);margin:0 0 14px}
+.opts{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr))}
+.opt{position:relative;display:flex;flex-direction:column;gap:8px;border:2px solid var(--line);border-radius:18px;padding:10px;cursor:pointer;background:var(--bg);font:inherit;color:inherit;text-align:center}
+.opt.on{border-color:var(--p2);background:#f3eaff;box-shadow:0 0 0 3px #c29fdd}
 :root[data-theme=dark] .opt.on{background:#3a1460}
-.why{margin:14px 0 0;font-size:15px;color:var(--soft)}
-label.note{display:block;margin-top:14px;font-weight:700}
-textarea{width:100%;min-height:70px;margin-top:6px;border-radius:12px;border:1px solid var(--line);padding:10px;font:16px Cairo;background:var(--bg);color:var(--ink)}
+.pic{height:190px;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:#fff;border:1px solid var(--line);padding:6px}
+.pic{position:relative}.pic img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);object-fit:contain}
+.cap{display:flex;align-items:center;gap:8px;justify-content:center;font-weight:800;font-size:16px}
+.n{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--g2);font-weight:800;font-size:15px}
+.tick{flex:none;width:28px;height:28px;border-radius:8px;border:2px solid var(--g);display:grid;place-items:center;color:#fff;font-weight:900}
+.opt.on .tick{background:var(--p2);border-color:var(--p2)}.opt.on .tick::after{content:"✓"}
+.mark{position:absolute;top:8px;inset-inline-start:8px;z-index:1;background:var(--g2);color:#24053B;font-size:12px;font-weight:800;border-radius:8px;padding:0 8px}
+.rec{margin-top:16px;padding:12px 14px;border-radius:14px;background:#FAF0CF;color:#4F3B12;font-weight:600}
+.rec b{color:#24053B}
+:root[data-theme=dark] .rec{background:#4F3B12;color:#FAF0CF}:root[data-theme=dark] .rec b{color:#F0C85A}
+.go{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px}
+.go label{font-weight:800}
+select{min-height:48px;font:600 16px Cairo;border-radius:12px;border:2px solid var(--g);padding:0 10px;background:var(--bg);color:var(--ink);flex:1;min-width:170px}
+.btn{min-height:48px;padding:0 22px;border-radius:14px;border:0;background:linear-gradient(#F6D980,#D9AE3C);color:#24053B;font:800 17px Cairo;cursor:pointer}
+.ok{color:#155d33;font-weight:800}
+details{margin-top:10px}summary{cursor:pointer;color:var(--soft);font-size:14px;min-height:32px}
+textarea{width:100%;min-height:64px;margin-top:6px;border-radius:12px;border:1px solid var(--line);padding:10px;font:16px Cairo;background:var(--bg);color:var(--ink)}
 table{width:100%;border-collapse:collapse;font-size:15px}
 th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:start;vertical-align:top}
 th{color:var(--soft);font-weight:600;font-size:13px}
-.toc a{color:inherit;text-decoration:none;font-weight:700}
-.big{font-size:18px}
-.btn{min-height:48px;padding:0 22px;border-radius:14px;border:0;background:linear-gradient(#F0C85A,#C9A227);color:#24053B;font:800 17px Cairo;cursor:pointer}
+td a{color:inherit;font-weight:700}
 pre{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;max-height:340px;overflow:auto;font:14px/1.6 Cairo}
 .muted{color:var(--soft);font-size:14px}
-@media(max-width:600px){table{font-size:13px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:6em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:5.5em;margin-inline-start:-6em;color:var(--soft);font-size:12px}}
-@media(prefers-reduced-motion:reduce){.deck{scroll-behavior:auto}.prog i{transition:none}}
+.m{font:700 20px/1.9 "Noto Naskh Arabic",serif;padding:4px;color:#24053B}
+.w{padding:0 3px;border-radius:6px}.ok-w{color:#4C0B7A}.bad{color:#be123c;background:#ffe4e6}.grey{color:#9ca3af}.hid{background:#ffffe6;color:transparent;border:1px dashed #e5d9a8}.gr{color:#047857}
+.chip{display:inline-block;margin:3px;padding:5px 10px;border-radius:10px;font:700 14px Cairo}
+.sw{display:flex;gap:6px;justify-content:center}.sw i{width:38px;height:90px;border-radius:10px;display:block}
+.phone{width:120px;height:170px;border-radius:18px;border:3px solid #24053B;position:relative;background:#FFFCF3;overflow:hidden}
+.phone .isl{position:absolute;top:5px;left:50%;transform:translateX(-50%);width:44px;height:12px;border-radius:8px;background:#24053B}
+.phone .b{position:absolute;padding:3px 8px;border-radius:8px;background:#4C0B7A;color:#F0C85A;font:800 11px Cairo}
+.phone .pop{position:absolute;left:8px;right:8px;border-radius:8px;background:#fff;border:2px solid #C9A227;font:700 10px Cairo;color:#3A065F;padding:4px}
+.phone .ln{position:absolute;left:10px;right:10px;height:6px;border-radius:3px;background:#C6B9CF}
+.big{font:800 50px/1 Cairo;color:#4C0B7A;direction:ltr;unicode-bidi:isolate}
+.big small{display:block;font-size:14px;color:#5E4A6D;font-weight:600;margin-top:6px}
+.shine{width:150px;height:46px;border-radius:12px;background:linear-gradient(110deg,#D9AE3C 30%,#FFF3C4 45%,#D9AE3C 60%);background-size:250% 100%;animation:sh 2.6s linear infinite;display:grid;place-items:center;font:800 15px Cairo;color:#24053B}
+@keyframes sh{from{background-position:120% 0}to{background-position:-120% 0}}
+@media(max-width:600px){.pic{height:140px}.cap{font-size:14px}.big{font-size:40px}table{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.deck{scroll-behavior:auto}.prog i{transition:none}.shine{animation:none}}
 </style>
 </head>
 <body>
 <div class="bar">
-  <h1>قرارات التطبيق — للمراجعة مع رنا</h1>
-  <button id="prev" aria-label="القرار اللي قبل">→</button>
+  <h1>قرارات التطبيق — عمرو ورنا</h1>
+  <button id="prev" aria-label="اللي قبل">→</button>
   <span id="pos" aria-live="polite"></span>
-  <button id="next" aria-label="القرار اللي بعد">←</button>
+  <button id="next" aria-label="اللي بعد">←</button>
   <div class="prog"><i id="pg"></i></div>
 </div>
 <main class="deck" id="deck"></main>
 <script>
 {
-// shortcut: decisions live in this array; Claude updates it as new ones are taken.
+// ---- small drawn samples, for choices that have no screenshot ----
+const W=(a)=>`<div class="m">${a.map(([t,c])=>`<span class="w ${c}">${t}</span>`).join(' ')}</div>`;
+const SW=(c)=>`<div class="sw">${c.map(x=>`<i style="background:${x}"></i>`).join('')}</div>`;
+const PH=(inner)=>`<div class="phone"><span class="isl"></span>${inner}</div>`;
+const B=(pos,label)=>`<span class="b" style="${pos}">${label}</span>`;
+const BIG=(n,s)=>`<div class="big">${n}<small>${s}</small></div>`;
+const CH=(a)=>`<div>${a.map(([t,bg,fg])=>`<span class="chip" style="background:${bg};color:${fg}">${t}</span>`).join('')}</div>`;
+const G=(t)=>CH([[t,'#E3B443','#24053B']]), P=(t)=>CH([[t,'#EEE3F6','#3A065F']]);
+const I=(f)=>`<img src="img/${f}" alt="">`;
+const LINES=[30,46,62,78,94,110,126,142].map(t=>`<span class="ln" style="top:${t}px"></span>`).join('');
+const MIC='<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#4C0B7A" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>';
+const SMIC='<svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#4C0B7A" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="14" height="14" rx="3"/><rect x="7" y="5" width="4" height="7" rx="2"/><circle cx="17" cy="17" r="3"/><path d="M19.5 19.5 22 22"/></svg>';
+const CD='<svg width="80" height="80" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#E3B443"/><circle cx="12" cy="12" r="7" fill="none" stroke="#fff8"/><circle cx="12" cy="12" r="2.5" fill="#fff"/></svg>';
+const HEAD='<svg width="70" height="70" viewBox="0 0 24 24" fill="none" stroke="#4C0B7A" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><rect x="2" y="14" width="5" height="7" rx="2"/><rect x="17" y="14" width="5" height="7" rx="2"/></svg>';
+const OK2=[['وَلَقَدْ','ok-w'],['يَسَّرْنَا','ok-w']];
+const GOLD='#E3B443',GT='#24053B';
+
+// ---- the decisions. t title, q question, o [label, picture], p Claude's recommendation, s 1 decided / 0 open, r recommendation line.
+// shortcut: Claude edits this array as decisions are taken; one file, no build.
 const D = [
- {g:'الشكل',t:'ألوان التطبيق',q:'التطبيق كله يبقى بأنهي ألوان؟',o:[['ليل الياسمين','بنفسجي غامق + ذهبي + كريمي. الزرار الأساسي ذهبي بكلام غامق.'],['الأخضر القديم','أخضر زمردي + ذهبي.']],p:0,s:1},
- {g:'الشكل',t:'اللوجو',q:'نختار أنهي لوجو للتطبيق؟ (اللوجو القديم يفضل اختيار في الإعدادات)',o:[['الكتاب المربوط','مصحف مفتوح وفي نصّه حلقة سلسلة = «التربيطات». (اقتراح كلود)'],['النجمة والمصحف','ربع الحزب بخط رفيع والمصحف جوّه.'],['الصفحة والصوت','صفحة بشريط علامة وموجة صوت.'],['نفضل على اللوجو الحالي','المصحف الذهبي على الرحل.']],p:0,s:0},
- {g:'الشكل',t:'الصفحة الرئيسية',q:'الرئيسية شكلها إيه؟',o:[['٣ أبواب في إطار مزخرف','حفظ / استماع / قراءة، بإطار ذهبي ونجوم في الأركان وآية تحت.'],['٣ بلاطات بس','من غير إطار ولا زخرفة.']],p:0,s:1},
- {g:'الشكل',t:'اسم «سمّع لي»',q:'زرار التسميع تحت «حفظ» في الرئيسية اسمه إيه؟',o:[['سمّع لي','اسم واضح للتسميع.'],['الاختبار','الاسم القديم، كان صعب يتلاقى.']],p:0,s:1},
- {g:'الشكل',t:'زرار الرجوع والرئيسية',q:'زراير الرجوع والرئيسية تبقى فين في كل صفحة؟',o:[['تحت على الشمال','عشان الجزء اللي فوق في الآيفون (الجزيرة) بيغطيها، وما تغطيش الكلام.'],['فوق','زي أغلب التطبيقات.']],p:0,s:1},
- {g:'الشكل',t:'الشريط اللي تحت',q:'الشريط اللي تحت فيه إيه؟',o:[['٥ أبواب، ولوحتي والإدارة في الإعدادات','الرئيسية، المصحف، تتبع الإمام، الإعدادات… ولوحتي والإدارة يتفتحوا من الإعدادات.'],['لوحتي وزرار الإدارة في الشريط','زي ما كانوا قبل كده.']],p:0,s:1},
- {g:'الأيقونات',t:'أيقونة المايك',q:'أيقونة المايك تتحط فين؟',o:[['على كل زرار بيفتح التسميع بس','زي «ابدأ التسميع» و«سمّع لي» و«سمّع آية». وتحتها ٣ أعمدة صوت بتتحرك لما الزرار يتداس.'],['على كل زرار فيه صوت','حتى لو مش تسميع.']],p:0,s:1},
- {g:'الأيقونات',t:'زرار «حفظ» من غير مايك',q:'زرار «حفظ» عليه مايك؟',o:[['لأ','لأنه بيفتح صفحة فيها اختيارات، مش تسميع على طول.'],['أيوه','']],p:0,s:1},
- {g:'الأيقونات',t:'أيقونة البحث بالصوت',q:'البحث بالصوت له علامة مختلفة؟',o:[['أيوه، مايك في مربع + عدسة','عشان ما يتلخبطش مع التسميع.'],['نفس أيقونة المايك','']],p:0,s:1},
- {g:'الأيقونات',t:'أيقونة السماع',q:'أيقونة الاستماع للقرآن شكلها إيه؟',o:[['أسطوانة CD لامعة بتلف','بتلف وأنت بتسمع.'],['سماعة عادية','']],p:0,s:1},
- {g:'التسميع',t:'التجويد والمد',q:'التجويد والمد بيتحسبوا في التسميع؟',o:[['لأ، مش بيتحسبوا','التطبيق بيقارن الكلمات بس ومش بيقدر يحكم على التجويد. التجويد في الاختبار النظري بس.'],['أيوه بيتحسبوا','']],p:0,s:1},
- {g:'التسميع',t:'ألوان التجويد في المصحف',q:'ألوان التجويد تظهر فين؟',o:[['في «مصحف التجويد» بس','المصحف الرقمي العادي كلامه أسود. ومفيش أي علامة تجويد في باقي التطبيق.'],['في كل المصاحف','']],p:0,s:1},
- {g:'التسميع',t:'الكلمة الرمادي',q:'لو التطبيق ما سمعش الكلمة كويس (دوشة، كحة، أو حرف قريب زي غ/خ)؟',o:[['تبقى رمادي، مش غلط','وتظهر سبب الرمادي، زي «سمعت غين مكان الخاء».'],['تتحسب غلط','']],p:0,s:1},
- {g:'التسميع',t:'الرمادي والدرجة',q:'الكلمات الرمادي بتأثر على الدرجة؟',o:[['لأ، تاخد درجة كاملة','ولو أكتر من ٥ كلمات رمادي في الاختبار تظهر رسالة: «جرّب تاني في مكان هادي بعيد عن الدوشة».'],['تخصم بعد ٥ كلمات','']],p:0,s:1},
- {g:'التسميع',t:'صححتها بنفسك',q:'لو غلط في كلمة وصلّحها بنفسه قبل ما الشيخ يدخل؟',o:[['مش غلط','وتظهر «صححتها بنفسك».'],['تتحسب غلط','']],p:0,s:1},
- {g:'التسميع',t:'إعادة كلمات للنفس',q:'لو رجع ١ لـ ٨ كلمات عشان ياخد نفسه؟',o:[['مش غلط أبدًا',''],['تتحسب','']],p:0,s:1},
- {g:'التسميع',t:'الغلطة اللي ما اتصلحتش',q:'الغلط اللي ما اتصلحش بيعمل إيه في الدرجة؟',o:[['غلطة واحدة = نص درجة الآية، والتانية = صفر','والمبتدئ ياخد نص الدرجة مهما غلط.'],['أي غلطة = صفر','']],p:0,s:1},
- {g:'التسميع',t:'التسميع على صفحة المصحف',q:'شاشة التسميع شكلها إيه؟',o:[['صفحة المصحف بإطارها والكلمات مغطاة','كل كلمة تتكشف لما تتقال صح، والرمادي يتكشف رمادي، والميداليات بين الآيات ظاهرة.'],['نص عادي','']],p:0,s:1},
- {g:'التسميع',t:'الغلط يوقف',q:'لما يغلط بيحصل إيه؟',o:[['التسميع يقف والشيخ يصحح الكلمة','زي الوضع الحالي، وبعدين يكمّل.'],['يكمّل ويتعلّم في الآخر','']],p:0,s:1},
- {g:'التسميع',t:'التلميح',q:'التلميح بيشتغل إزاي؟',o:[['بضغطة زرار بس','كلمة = خصم ٥٪، كلمتين = خصم ١٠٪. الكلمة تتكشف على الإطار.'],['يظهر لوحده بعد وقت','']],p:0,s:1},
- {g:'التسميع',t:'تلميح أول حرف',q:'تلميح «أول حرف» (مجاني)؟',o:[['مؤجّل','لحد ما نعرف مكان كل حرف على صفحة المصحف.'],['يرجع دلوقتي كنص تحت الصفحة','']],p:0,s:1},
- {g:'الصوت',t:'بداية صوت الشيخ',q:'صوت الشيخ (والتصحيح) يبدأ إزاي؟',o:[['يبدأ بهدوء ويعلى (ثلث ثانية)','من غير ما نوحّد مستوى الصوت بين القرّاء.'],['يبدأ على طول','']],p:0,s:1},
- {g:'الصوت',t:'صوت النقر',q:'صوت لما تدوس على الزراير؟',o:[['فيه مفتاح في الإعدادات','وساكت لوحده في شاشات التسميع.'],['مفيش صوت نقر','']],p:0,s:1},
- {g:'الصوت',t:'الصوت ما يخرجش من الجهاز',q:'صوتك وأنت بتسمّع بيروح فين؟',o:[['بيتحلل على الموبايل بس','ما بيتبعتش لأي سيرفر.'],['بيتبعت لسيرفر للتحليل','']],p:0,s:1},
- {g:'المصحف',t:'صفحة المصحف والتقليب',q:'الصفحة والتقليب؟',o:[['الصفحة تملأ الإطار، والتقليب سريع (~٠.٢ ثانية)',''],['تقليب أبطأ','']],p:0,s:1},
- {g:'المصحف',t:'التمرير الرأسي والتلقائي',q:'القراءة بالتمرير؟',o:[['فيه تمرير رأسي وتمرير تلقائي','مدة الجزء ٢٠ أو ٢٥ أو ٣٠ دقيقة (الأساسي ٢٠)، ويرجع من مكان ما وقفت.'],['تقليب صفحات بس','']],p:0,s:1},
- {g:'المصحف',t:'نافذة الآية',q:'لما تدوس على آية؟',o:[['نافذة صغيرة بسهم فوق أو تحت الآية','من غير ما تكرر نص الآية. ولو المكان ضيق تفتح في النص.'],['نافذة كبيرة في نص الشاشة دايمًا','']],p:0,s:1},
- {g:'الشكل',t:'الزراير الذهبي',q:'الزرار الذهبي شكله إيه؟',o:[['ذهبي فاتح لامع بكلام غامق','زي قرار ليل الياسمين.'],['ذهبي غامق (بني) بكلام أبيض','الشكل القديم.']],p:0,s:1},
- {g:'المصحف',t:'المصحف يفتح على إيه',q:'لما تفتح المصحف أول مرة يظهر أنهي شكل؟',o:[['الصفحة الرقمية','بألوان التطبيق ونص واضح. ولو اخترت الصورة مرة تفضل عليها.'],['صورة مصحف المدينة المطبوع','بإطارها الأخضر والأصفر الأصلي (ما ينفعش تتغير ألوانها).']],p:0,s:1},
- {g:'محتاج قرار',t:'لون الكلمة الصح في نتيجة التسميع',q:'بعد تصليح الألوان، الكلمة الصح بقت بنفسجي بدل أخضر. نسيبها؟',o:[['بنفسجي','زي باقي التطبيق، والغلط أحمر. (اقتراح كلود)'],['أخضر للصح بس','استثناء واحد عشان الصح يبان أوضح.']],p:0,s:0},
- {g:'محتاج قرار',t:'المايك على «ابدأ» في الاختبارات',q:'زرار «ابدأ» في الاختبار الترتيبي والشامل عليه مايك؟',o:[['لأ','لأن المايك بيفتح في الخطوة اللي بعدها. (اقتراح كلود)'],['أيوه','']],p:0,s:0},
- {g:'محتاج قرار',t:'نشر حماية تحويل الصوت لكلام',q:'ننشر النسخة الجديدة من خدمة تحويل الصوت (فيها تسجيل دخول وحد ١٠ ميجا)؟',o:[['أيوه ننشرها','أأمن. (اقتراح كلود)'],['نستنى','']],p:0,s:0},
- {g:'محتاج قرار',t:'آية بتكمّل على الصفحة اللي بعدها',q:'في التسميع على الإطار، لو الآية بتكمّل في الصفحة اللي بعدها؟',o:[['نسيبها دلوقتي','الجزء التاني بيتحكم بالصوت بس من غير ما يبان. (اقتراح كلود)'],['نعرض الصفحتين','']],p:0,s:0},
+ {g:'الألوان',t:'ألوان التطبيق',q:'أنهي ألوان؟',o:[['ليل الياسمين',SW(['#3A065F','#4C0B7A','#F0C85A','#FFFCF3'])],['زمردي وذهبي (القديم)',SW(['#064e3b','#10b981','#F0C85A','#ecfdf5'])],['حبر وعنبر',SW(['#1f2a44','#334155','#d97706','#fffbeb'])],['بحر وفضة',SW(['#0c4a6e','#0ea5e9','#cbd5e1','#f8fafc'])]],p:0,s:1,r:'ليل الياسمين — مميز، واتطبق على التطبيق كله.'},
+ {g:'الألوان',t:'درجة البنفسجي',q:'غامق ولا فاتح؟',o:[['غامق',SW(['#24053B','#3A065F','#4C0B7A'])],['فاتح',SW(['#7F44B0','#A06FC9','#C29FDD'])]],p:0,s:1,r:'غامق.'},
+ {g:'الألوان',t:'الصفحات بعد تصليح الألوان',q:'قبل ولا بعد؟',o:[['قبل (مخلوط)',I('landing_old.jpg')],['بعد (بنفسجي وذهبي)',I('landing_new.jpg')]],p:1,s:1,r:'بعد — لون واحد في كل التطبيق.'},
+ {g:'الألوان',t:'الزرار الذهبي',q:'أنهي زرار؟',o:[['ذهبي غامق بكلام أبيض',I('gold_old.jpg')],['ذهبي فاتح بكلام غامق',I('gold_new.jpg')]],p:1,s:1,r:'الفاتح — أوضح.'},
+ {g:'الألوان',t:'لمعة الزرار الأساسي',q:'يلمع ولا ثابت؟',o:[['لمعة بطيئة بتعدّي','<div class="shine">ابدأ</div>'],['ثابت',G('ابدأ')]],p:0,s:1,r:'يلمع — وتقف لو الموبايل عامل «تقليل الحركة».'},
+ {g:'الألوان',t:'لون الكلمة الصح في النتيجة',q:'أنهي لون؟',o:[['بنفسجي',W([...OK2,['الْقُرْآنَ','bad']])],['أخضر',W([['وَلَقَدْ','gr'],['يَسَّرْنَا','gr'],['الْقُرْآنَ','bad']])]],p:0,s:0,r:'بنفسجي — زي باقي التطبيق، والغلط أحمر.'},
+ {g:'الشكل',t:'اللوجو',q:'أنهي لوجو؟',o:[['الكتاب المربوط',I('logo_1.png')],['النجمة والمصحف',I('logo_2.png')],['الصفحة والصوت',I('logo_3.png')],['اللوجو الحالي',I('logo_old.png')]],p:0,s:0,r:'بيقول «تربيطات» من أول نظرة. والحالي يفضل اختيار في الإعدادات.'},
+ {g:'الشكل',t:'الاسم على الأيقونة',q:'أنهي اسم؟',o:[['تربيطات آيات القرآن',G('تربيطات آيات القرآن')],['روابط الذكر الحكيم',G('روابط الذكر الحكيم')],['الاتنين',G('تربيطات آيات القرآن')+P('روابط الذكر الحكيم')]],p:0,s:1,r:'تربيطات آيات القرآن.'},
+ {g:'الشكل',t:'الصفحة الرئيسية',q:'أنهي رئيسية؟',o:[['القديمة',I('home_old.jpg')],['الجديدة بالإطار',I('home_new.jpg')]],p:1,s:1,r:'الجديدة — إطار ذهبي ونجوم وآية تحت.'},
+ {g:'الشكل',t:'لمسة البلاطات',q:'لما تدوس على بلاطة؟',o:[['تموّج + نقرة خفيفة',P('〰 تموّج')+P('🔈 نقرة')],['ولا حاجة',P('—')]],p:0,s:1,r:'تموّج ونقرة — وصوت النقرة يتقفل من الإعدادات.'},
+ {g:'الشكل',t:'زرار الرجوع',q:'فين؟',o:[['تحت على الشمال',PH(B('bottom:10px;left:8px','رجوع'))],['فوق',PH(B('top:22px;left:8px','رجوع'))]],p:0,s:1,r:'تحت — جزيرة الآيفون بتغطي اللي فوق.'},
+ {g:'الشكل',t:'لوحتي والإدارة',q:'يتفتحوا منين؟',o:[['من الإعدادات',P('الإعدادات ← لوحتي')+P('الإعدادات ← الإدارة')],['من الشريط اللي تحت',G('الرئيسية')+G('لوحتي')+G('الإدارة')+G('المصحف')]],p:0,s:1,r:'من الإعدادات — الشريط يفضل خفيف.'},
+ {g:'الشكل',t:'اسم زرار التسميع',q:'تحت «حفظ»؟',o:[['سمّع لي',G('سمّع لي')],['الاختبار',G('الاختبار')]],p:0,s:1,r:'«سمّع لي».'},
+ {g:'الشكل',t:'لغة التطبيق',q:'إنجليزي دلوقتي؟',o:[['عربي بس دلوقتي',BIG('ع','الإنجليزي بعدين من الإعدادات')],['عربي + إنجليزي',BIG('ع / E','')]],p:0,s:1,r:'عربي بس دلوقتي.'},
+ {g:'الأيقونات',t:'أيقونة المايك',q:'على أنهي زراير؟',o:[['التسميع بس',MIC+P('سمّع لي')],['كل زرار فيه صوت',MIC+P('سمّع لي')+P('استمع')]],p:0,s:1,r:'التسميع بس — و«حفظ» من غير مايك.'},
+ {g:'الأيقونات',t:'أيقونة البحث بالصوت',q:'أنهي؟',o:[['مايك في مربع + عدسة',SMIC],['نفس مايك التسميع',MIC]],p:0,s:1,r:'المختلفة.'},
+ {g:'الأيقونات',t:'أيقونة الاستماع',q:'أنهي؟',o:[['أسطوانة لامعة بتلف',CD],['سماعة',HEAD]],p:0,s:1,r:'الأسطوانة.'},
+ {g:'التسميع',t:'شاشة التسميع',q:'بتسمّع على إيه؟',o:[['صفحة المصحف والكلمات مغطاة',W([...OK2,['الْقُرْآنَ','hid'],['لِلذِّكْرِ','hid']])],['نص عادي',W([['وَلَقَدْ يَسَّرْنَا الْقُرْآنَ لِلذِّكْرِ','']])]],p:0,s:1,r:'صفحة المصحف — كل كلمة تتكشف لما تقولها صح.'},
+ {g:'التسميع',t:'لما يغلط',q:'بيحصل إيه؟',o:[['يقف والشيخ يصحح',CH([['⏸ وقف','#ffe4e6','#be123c']])+P('🔊 الشيخ يصحح')],['يكمّل ويتعلّم في الآخر',P('▶ يكمّل')]],p:0,s:1,r:'يقف والشيخ يصحح.'},
+ {g:'التسميع',t:'الكلمة اللي ما اتسمعتش كويس',q:'دوشة أو كحة؟',o:[['رمادي — مش غلط',W([...OK2,['الْقُرْآنَ','grey']])],['أحمر — غلط',W([...OK2,['الْقُرْآنَ','bad']])]],p:0,s:1,r:'رمادي.'},
+ {g:'التسميع',t:'الحرف القريب (غ/خ، ز/ذ…)',q:'لو قال حرف قريب؟',o:[['رمادي دايمًا',W([['سمعت غين مكان الخاء','grey']])],['رمادي بس لو الصوت مش واضح',W([['غلط','bad'],['أو','ok-w'],['رمادي','grey']])],['غلط',W([['غلط','bad']])]],p:0,s:1,r:'رمادي دايمًا — ويظهر السبب، والمستخدم ما يخرجش زعلان.'},
+ {g:'التسميع',t:'الرمادي والدرجة',q:'يخصم؟',o:[['لأ، درجة كاملة',BIG('١٠/١٠','٣ كلمات رمادي')],['يخصم',BIG('٨/١٠','٣ كلمات رمادي')]],p:0,s:1,r:'لأ.'},
+ {g:'التسميع',t:'رسالة «جرّب في مكان هادي»',q:'بعد كام كلمة رمادي؟',o:[['بعد ٥',BIG('٥+','')],['بعد ٣',BIG('٣+','')],['بعد ١',BIG('١+','')],['ما تظهرش',BIG('✕','')]],p:0,s:1,r:'بعد ٥ — ده المتطبق.'},
+ {g:'التسميع',t:'صلّحها بنفسه',q:'غلط وصلّح قبل الشيخ؟',o:[['مش غلط',W([['يَسَّرْنَا','ok-w'],['صححتها بنفسك ✓','ok-w']])],['غلط',W([['يَسَّرْنَا','bad']])]],p:0,s:1,r:'مش غلط.'},
+ {g:'التسميع',t:'رجع كلمات ياخد نفسه',q:'لحد كام كلمة؟',o:[['لحد ٨',BIG('١–٨','')],['لحد ٣',BIG('١–٣','')],['ولا كلمة',BIG('٠','')]],p:0,s:1,r:'لحد ٨ — مش غلط أبدًا.'},
+ {g:'التسميع',t:'الغلطة اللي ما اتصلحتش',q:'الدرجة؟',o:[['غلطة = نص، اتنين = صفر',BIG('٤/٨','غلطة واحدة')],['غلطة = صفر',BIG('٠/٨','غلطة واحدة')]],p:0,s:1,r:'غلطة = نص درجة الآية.'},
+ {g:'التسميع',t:'حرف المد (ونحر / وانحر)',q:'زيادة أو نقص ا/و/ي؟',o:[['مقبول',W([['وَنْحَرْ','ok-w'],['=','ok-w'],['وَانْحَرْ','ok-w']])],['غلط',W([['وَنْحَرْ','bad']])]],p:0,s:1,r:'مقبول — نفس الصوت. أي حرف تاني مختلف يفضل غلط.'},
+ {g:'التسميع',t:'التجويد والمد',q:'بيتحسبوا؟',o:[['لأ',BIG('✕','التجويد في النظري بس')],['أيوه',BIG('✓','')]],p:0,s:1,r:'لأ — ولا المد بيوقف القارئ.'},
+ {g:'التسميع',t:'التلميح',q:'إزاي؟',o:[['بزرار',G('كلمة −٥٪')+G('كلمتين −١٠٪')],['يظهر لوحده بعد وقت',P('⏱ بعد دقيقة')]],p:0,s:1,r:'بزرار — كلمة ٥٪ وكلمتين ١٠٪.'},
+ {g:'التسميع',t:'تلميح أول حرف',q:'دلوقتي؟',o:[['مؤجل',BIG('⏳','')],['دلوقتي',G('أولها «و» — مجانًا')]],p:0,s:1,r:'مؤجل لحد ما نعرف مكان الحروف على الصفحة.'},
+ {g:'الصوت',t:'بداية صوت الشيخ والتصحيح',q:'يبدأ إزاي؟',o:[['بهدوء ويعلى',BIG('◢','ثلث ثانية')],['على طول',BIG('▮','')]],p:0,s:1,r:'بهدوء — ما يخضّش.'},
+ {g:'الصوت',t:'مستوى صوت القرّاء',q:'نوحّده؟',o:[['لأ، تلاشي بس',BIG('◢','')],['نوحّد كل القرّاء',BIG('▬','')]],p:0,s:1,r:'لأ — تلاشي بس.'},
+ {g:'الصوت',t:'صوت النقر',q:'فيه مفتاح؟',o:[['مفتاح في الإعدادات',P('صوت النقر ⏻')],['مفيش صوت',P('—')]],p:0,s:1,r:'مفتاح — وساكت في التسميع.'},
+ {g:'الصوت',t:'صوتك وأنت بتسمّع',q:'بيروح فين؟',o:[['الموبايل بس',BIG('📱','')],['سيرفر',BIG('☁️','')]],p:0,s:1,r:'الموبايل بس.'},
+ {g:'المصحف',t:'المصحف يفتح على',q:'أول ما يتفتح؟',o:[['الصفحة الرقمية',I('mushaf_digital.jpg')],['صورة مصحف المدينة',I('mushaf_scan.jpg')]],p:0,s:1,r:'الرقمية — واللي اختار الصورة تفضل عنده.'},
+ {g:'المصحف',t:'ألوان التجويد',q:'فين؟',o:[['مصحف التجويد بس',G('مصحف التجويد')],['كل المصاحف',P('كل المصاحف')]],p:0,s:1,r:'مصحف التجويد بس — والرقمي أسود.'},
+ {g:'المصحف',t:'نافذة الآية',q:'لما تدوس على آية؟',o:[['صغيرة بسهم جنب الآية',PH(LINES+'<span class="pop" style="top:70px">▲ تربيطات · المتشابهات</span>')],['كبيرة تغطي الشاشة',PH(LINES+'<span class="pop" style="top:30px;bottom:10px;background:#fffd">الآية + الأزرار</span>')]],p:0,s:1,r:'صغيرة بسهم — ومن غير ما تكرر نص الآية.'},
+ {g:'المصحف',t:'التقليب',q:'بالعرض ولا بالطول؟',o:[['تقليب + تمرير بالطول (اختياري)',PH(LINES)+BIG('↕','')],['بكرة بالعرض بس',BIG('↔','')]],p:0,s:1,r:'تقليب سريع، وتمرير بالطول من الإعدادات.'},
+ {g:'المصحف',t:'التمرير التلقائي',q:'السرعة على أساس إيه؟',o:[['الجزء كله',BIG('٢٠','دقيقة للجزء')],['كل صفحة',BIG('٦٠','ثانية للصفحة')]],p:0,s:1,r:'الجزء — ٢٠ أو ٢٥ أو ٣٠ دقيقة، ويرجع مكان ما وقفت.'},
+ {g:'المصحف',t:'مدة الجزء',q:'الأساسي كام؟',o:[['٢٠',BIG('٢٠','دقيقة')],['٢٥',BIG('٢٥','دقيقة')],['٣٠',BIG('٣٠','دقيقة')]],p:0,s:1,r:'٢٠.'},
+ {g:'محتاج قرار',t:'التمرير بالطول',q:'يبقى شغال من الأول؟',o:[['مقفول (تقليب صفحات)',BIG('⇆','')],['شغال',BIG('↕','')]],p:0,s:0,r:'مقفول — التقليب أقرب لمصحف حقيقي، واللي عايز الطول يفتحه من الإعدادات.'},
+ {g:'محتاج قرار',t:'المايك على «ابدأ» في الاختبارات',q:'نحطه؟',o:[['لأ',G('ابدأ')],['أيوه',MIC+G('ابدأ')]],p:0,s:0,r:'لأ — المايك بيفتح في الخطوة اللي بعدها.'},
+ {g:'محتاج قرار',t:'آية بتكمّل على الصفحة اللي بعدها',q:'في التسميع على الإطار؟',o:[['صفحة واحدة',BIG('١','صفحة')],['الصفحتين',BIG('٢','صفحة')]],p:0,s:0,r:'صفحة واحدة دلوقتي — نادرة.'},
 ];
-const KEY='quran-decisions-v2';
+const KEY='quran-decisions-v3';
 let st={}; try{st=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ar=n=>n.toLocaleString('ar-EG');
 const deck=document.getElementById('deck');
-const groups=[...new Set(D.map(d=>d.g))];
-const cover=`<section class="slide" id="s0"><div class="frame">
- <span class="num">${ar(D.length)} قرار</span>
- <h2>كل اللي اتفقنا عليه، في مكان واحد</h2>
- <p class="q">كل صفحة فيها قرار واحد. اختاروا رقم الاختيار من القايمة (أو دوسوا عليه)، واكتبوا ملاحظة لو فيه، ودوسوا «تم ✓» تروحوا للقرار اللي بعده. في الآخر دوسوا «انسخ النتيجة» وابعتوها لكلود.</p>
- <p class="muted">المعلَّم بـ «اخترناه» هو اللي عمرو اختاره مع كلود. اللي مكتوب عليه «محتاج قرار» لسه مفتوح.</p>
- <table class="stack toc"><thead><tr><th>#</th><th>القرار</th><th>اللي اخترناه</th><th>الحالة</th></tr></thead><tbody>
- ${D.map((d,i)=>`<tr><td data-l="#">${ar(i+1)}</td><td data-l="القرار"><a href="#" data-go="${i+1}">${esc(d.t)}</a></td><td data-l="اخترناه">${esc(d.o[d.p][0])}</td><td data-l="الحالة"><span class="tag ${d.s?'done':'open'}">${d.s?'متقرر':'محتاج قرار'}</span></td></tr>`).join('')}
+const cover=`<section class="slide"><div class="frame">
+ <span class="num">${ar(D.length)} سؤال</span>
+ <h2>اختاروا رقم في كل صفحة</h2>
+ <p class="q">دوسوا على الصورة اللي توافقوا عليها، وبعدين «تم ✓». في الآخر «انسخ النتيجة» وابعتوها لكلود.</p>
+ <table><thead><tr><th>#</th><th>السؤال</th><th>توصية كلود</th><th></th></tr></thead><tbody>
+ ${D.map((d,i)=>`<tr><td>${ar(i+1)}</td><td><a href="#" data-go="${i+1}">${esc(d.t)}</a></td><td>${ar(d.p+1)} — ${esc(d.o[d.p][0])}</td><td><span class="tag ${d.s?'done':'open'}">${d.s?'متقرر':'مفتوح'}</span></td></tr>`).join('')}
  </tbody></table></div></section>`;
-const slides=D.map((d,i)=>`<section class="slide" id="s${i+1}"><div class="frame">
- <span class="num">${ar(i+1)} من ${ar(D.length)} · ${esc(d.g)}</span><span class="tag ${d.s?'done':'open'}">${d.s?'متقرر':'محتاج قرار'}</span>
+const slides=D.map((d,i)=>`<section class="slide"><div class="frame">
+ <span class="num">${ar(i+1)} / ${ar(D.length)} · ${esc(d.g)}</span><span class="tag ${d.s?'done':'open'}">${d.s?'متقرر':'مفتوح'}</span>
  <h2>${esc(d.t)}</h2><p class="q">${esc(d.q)}</p>
- <div class="opts">${d.o.map((o,j)=>`<button type="button" class="opt ${j===d.p?'ours':''} ${st[i]?.c===j?'on':''}" data-i="${i}" data-j="${j}"><span class="n">${ar(j+1)}</span><span><b>${esc(o[0])}${j===d.p?'<span class="pick">'+(d.s?'اخترناه':'اقتراح')+'</span>':''}</b>${o[1]?`<small>${esc(o[1])}</small>`:''}</span></button>`).join('')}</div>
- <label class="note" for="n${i}">ملاحظة (اختياري)</label><textarea id="n${i}" data-n="${i}" placeholder="مثلًا: موافقين بس نغيّر…">${esc(st[i]?.n||'')}</textarea>
+ <div class="opts">${d.o.map((o,j)=>`<button type="button" class="opt ${st[i]?.c===j?'on':''}" data-i="${i}" data-j="${j}" aria-pressed="${st[i]?.c===j}">
+   ${j===d.p?'<span class="mark">توصية</span>':''}<div class="pic">${o[1]}</div>
+   <div class="cap"><span class="n">${ar(j+1)}</span><span>${esc(o[0])}</span><span class="tick" aria-hidden="true"></span></div></button>`).join('')}</div>
+ <div class="rec"><b>توصية كلود:</b> ${ar(d.p+1)} — ${esc(d.r)}</div>
  <div class="go"><label for="c${i}">اختيارنا:</label>
   <select id="c${i}" data-c="${i}"><option value="">— اختار —</option>${d.o.map((o,j)=>`<option value="${j}" ${st[i]?.c===j?'selected':''}>${ar(j+1)} — ${esc(o[0])}</option>`).join('')}</select>
   <button type="button" class="btn" data-ok="${i}">تم ✓</button><span class="ok" id="k${i}">${st[i]?.done?'اتسجّل ✓':''}</span></div>
+ <details ${st[i]?.n?'open':''}><summary>ملاحظة</summary><textarea id="n${i}" data-n="${i}" aria-label="ملاحظة">${esc(st[i]?.n||'')}</textarea></details>
 </div></section>`).join('');
-const end=`<section class="slide" id="s${D.length+1}"><div class="frame">
- <h2>النتيجة</h2><p class="q">دوس «انسخ النتيجة» والزقها في الشات مع كلود، وهو هيراجعها ويعدّل التطبيق.</p>
+const end=`<section class="slide"><div class="frame">
+ <h2>النتيجة</h2><p class="q">«انسخ النتيجة» والزقوها في الشات مع كلود.</p>
  <p><button class="btn" id="copy">انسخ النتيجة</button> <span id="cmsg" class="muted" aria-live="polite"></span></p>
  <pre id="out"></pre></div></section>`;
 deck.innerHTML=cover+slides+end;
 const all=[...deck.children], N=all.length;
 const result=()=>'مراجعة قرارات التطبيق (عمرو ورنا):\n\n'+D.map((d,i)=>{const c=st[i]?.c;const has=typeof c==='number';const n=st[i]?.n?.trim();
- return `${i+1}. ${d.t}: ${has?(c+1)+' — '+d.o[c][0]+(c===d.p?' (موافقين)':' (تغيير)'):'— ما اتختارش —'}${n?'\n   ملاحظة: '+n:''}`}).join('\n');
+ return `${i+1}. ${d.t}: ${has?(c+1)+' — '+d.o[c][0]+(c===d.p?' (زي التوصية)':' (غير التوصية)'):'— ما اتختارش —'}${n?'\n   ملاحظة: '+n:''}`}).join('\n');
 const draw=()=>{document.getElementById('out').textContent=result()};
 const pick=(i,j)=>{st[i]=st[i]||{n:''};st[i].c=j;st[i].done=false;save();draw();
- document.querySelectorAll(`.opt[data-i="${i}"]`).forEach(b=>b.classList.toggle('on',+b.dataset.j===j));
+ document.querySelectorAll(`.opt[data-i="${i}"]`).forEach(b=>{const on=+b.dataset.j===j;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
  document.getElementById('c'+i).value=j==null?'':j;document.getElementById('k'+i).textContent=''};
-deck.addEventListener('change',e=>{const x=e.target;if(x.dataset.c==null)return;pick(+x.dataset.c,x.value===''?null:+x.value)});
-deck.addEventListener('input',e=>{const x=e.target;if(x.dataset.n==null)return;const i=+x.dataset.n;st[i]=st[i]||{n:''};st[i].n=x.value;save();draw()});
 let cur=0;
 const go=k=>{cur=Math.max(0,Math.min(N-1,k));all[cur].scrollIntoView({block:'nearest',inline:'start'});window.scrollTo({top:0})};
+deck.addEventListener('change',e=>{const x=e.target;if(x.dataset.c==null)return;pick(+x.dataset.c,x.value===''?null:+x.value)});
+deck.addEventListener('input',e=>{const x=e.target;if(x.dataset.n==null)return;const i=+x.dataset.n;st[i]=st[i]||{n:''};st[i].n=x.value;save();draw()});
 deck.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){e.preventDefault();go(+a.dataset.go);return}
  const o=e.target.closest('.opt[data-i]');if(o){pick(+o.dataset.i,+o.dataset.j);return}
  const k=e.target.closest('[data-ok]');if(k){const i=+k.dataset.ok,m=document.getElementById('k'+i);
@@ -152,7 +197,7 @@ deck.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){e.
   st[i].done=true;save();draw();m.textContent='اتسجّل ✓';setTimeout(()=>go(i+2),350)}});
 document.getElementById('prev').onclick=()=>go(cur-1);
 document.getElementById('next').onclick=()=>go(cur+1);
-document.addEventListener('keydown',e=>{if(e.target.tagName==='TEXTAREA')return;if(e.key==='ArrowLeft')go(cur+1);if(e.key==='ArrowRight')go(cur-1)});
+document.addEventListener('keydown',e=>{if(/TEXTAREA|SELECT/.test(e.target.tagName))return;if(e.key==='ArrowLeft')go(cur+1);if(e.key==='ArrowRight')go(cur-1)});
 const io=new IntersectionObserver(es=>{for(const x of es)if(x.isIntersecting&&x.intersectionRatio>.6){cur=all.indexOf(x.target);
  document.getElementById('pos').textContent=cur===0?'الفهرس':cur===N-1?'النتيجة':`${ar(cur)} / ${ar(D.length)}`;
  document.getElementById('pg').style.width=(cur/(N-1)*100)+'%'}},{root:deck,threshold:[.6]});
