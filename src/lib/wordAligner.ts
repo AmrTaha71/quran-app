@@ -192,9 +192,21 @@ export function softWordEq(spoken: string, expected: string): boolean {
   // further is not folded; fold to the expected run length if that shows up.
   const folded = spoken.replace(/([اوي])\1+/g, '$1');
   if (folded !== spoken) return softWordEq(folded, expected);
+  const cands = alts ? [expected, ...alts] : [expected];
+  // Owner rule (2026-11-28): a madd letter added or dropped is not a mistake,
+  // and a dropped hamzat wasl after و/ف is the same sound. Consonants must match:
+  //   * final ا dropped (إن for إنا), but not after ه: ها/ه is her/him (فيه≠فيها);
+  //   * final ي added (فصلي for فصل: the end kasra heard long);
+  //   * the ا of a leading وا/فا dropped (ونحر for وانحر).
+  // shortcut: hamzat qat' is lost in norm (وأنتم = وانتم), so ونتم passes too;
+  // a bare leading ا (اكبر/كبر, امر/مر) is not dropped for that reason.
+  for (const c of cands) {
+    if (spoken.length >= 2 && !spoken.endsWith('ه') && c === spoken + 'ا') return true;
+    if (c.length >= 2 && spoken === c + 'ي') return true;
+    if (/^[وف]ا./.test(c) && spoken === c[0] + c.slice(2)) return true;
+  }
   if (spoken.length < 3) return false;
   const sp = softSkeleton(spoken);
-  const cands = alts ? [expected, ...alts] : [expected];
   for (const c of cands) {
     if (sp === softSkeleton(c)) return true;
     if (c.length >= 5 && c.endsWith('اها') && spoken === c.slice(0, -2)) return true;

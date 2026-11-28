@@ -33,8 +33,32 @@ describe('madd length is not a mistake', () => {
     assert.equal(softWordEq('فيهاا', 'فيه'), false);
     assert.equal(softWordEq('الدنياا', 'الدين'), false);
     assert.equal(softWordEq('الذيين', 'الدين'), false);
-    assert.equal(passes('إن أعطيناك الكوثر'), false);
     assert.equal(passes('إنا أعطيناكم الكوثر'), false);
     assert.equal(passes('إنا أعطيناك الكافرون'), false);
+  });
+  it('a madd letter added or dropped, or a dropped hamzat wasl, is the word', () => {
+    assert.ok(softWordEq('ان', 'انا'));
+    assert.ok(softWordEq('فصلي', 'فصل'));
+    assert.ok(softWordEq('ونحر', 'وانحر'));
+    assert.ok(softWordEq('فنحر', 'فانحر'));
+    assert.ok(softWordEq('اعطينك', 'اعطيناك'));
+    assert.ok(softWordEq('فصليي', 'فصل'));
+    assert.ok(passes('إن أعطيناك الكوثر'));
+    const kawthar2 = expectedWordList('فَصَلِّ لِرَبِّكَ وَٱنْحَرْ').map((w) => w.norm);
+    const r = alignWordsStrict(kawthar2, spokenTokens('فصلي لربك ونحر'));
+    assert.ok(r.allMatched && r.extras.length === 0);
+  });
+  it('a different consonant or a missing consonant is still wrong', () => {
+    assert.equal(softWordEq('اعطينا', 'اعطيناك'), false);
+    assert.equal(softWordEq('اعطيناك', 'اعطينا'), false);
+    assert.equal(softWordEq('الدين', 'الذين'), false);
+    assert.equal(softWordEq('فيها', 'فيه'), false);
+    assert.equal(softWordEq('فيه', 'فيها'), false);
+    assert.equal(softWordEq('فل', 'فصل'), false);
+    assert.equal(softWordEq('نحر', 'وانحر'), false);
+    assert.equal(softWordEq('وانح', 'وانحر'), false);
+    assert.equal(softWordEq('كبر', 'اكبر'), false);
+    assert.equal(softWordEq('فصلو', 'فصل'), false);
+    assert.equal(softWordEq('قالوا', 'قال'), false);
   });
 });
