@@ -315,13 +315,13 @@ function spawnWater(host: HTMLElement, clientX: number, clientY: number): void {
     // flight. A rapid tapper never accumulates lingering DOM nodes.
     if (layer.childElementCount > 14) return;
     const dark = hostIsDark(host);
-    const washColor = dark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(36, 5, 59, 0.18)';
-    const dropColor = dark ? 'rgba(255, 255, 255, 0.90)' : 'rgba(36, 5, 59, 0.55)';
-    const ringColor = dark ? 'rgba(255, 255, 255, 0.80)' : 'rgba(36, 5, 59, 0.50)';
+    const washColor = dark ? 'rgba(244, 237, 228, 0.30)' : 'rgba(74, 47, 102, 0.22)';
+    const dropColor = dark ? 'rgba(244, 237, 228, 0.90)' : 'rgba(74, 47, 102, 0.55)';
+    const ringColor = dark ? 'rgba(244, 237, 228, 0.80)' : 'rgba(74, 47, 102, 0.50)';
     const maxDim = Math.max(rect.width, rect.height);
     // The wash is the widest element (2.6x) so the wave visibly
     // reaches — and dissolves past — the button's edges.
-    spawnRippleNode(layer, 'alive-ripple-wash', maxDim * 2.6, x, y, 'background', washColor, 750, 0);
+    spawnRippleNode(layer, 'alive-ripple-wash', maxDim * 2.6, x, y, 'background', washColor, 400, 0);
     // The drop core: small, bright, fast — the impact itself.
     spawnRippleNode(
       layer,
@@ -331,15 +331,15 @@ function spawnWater(host: HTMLElement, clientX: number, clientY: number): void {
       y,
       'background',
       dropColor,
-      320,
+      240,
       0,
     );
     // Three rings, each chasing the previous one by 120ms.
     const ringSize = maxDim * 2.2;
     [
-      { durationMs: 700, delayMs: 0 },
-      { durationMs: 850, delayMs: 120 },
-      { durationMs: 1000, delayMs: 240 },
+      { durationMs: 400, delayMs: 0 },
+      { durationMs: 400, delayMs: 60 },
+      { durationMs: 400, delayMs: 120 },
     ].forEach(({ durationMs, delayMs }) => {
       spawnRippleNode(
         layer,
@@ -411,6 +411,8 @@ export function installGlobalWater(): void {
         const stamped = (el as HTMLElement).dataset?.waterAt;
         if (stamped && Date.now() - Number(stamped) < 100) return;
         spawnWater(el, e.clientX, e.clientY);
+        // Tiles + 3D buttons click too (same setting + suppression as pressFeedback).
+        if (el.matches('.home-tile, .btn-3d, .btn-3d-amber') && isTapSoundEnabled() && !tapSoundSuppressed()) playTapSound();
       } catch {
         // ignore
       }
