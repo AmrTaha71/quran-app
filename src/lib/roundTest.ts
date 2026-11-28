@@ -17,7 +17,11 @@ export const PROMPT_WORDS = 5;
 export type RoundResult = {
   total: number;      // words to complete
   credited: number;   // words said right
-  wrong: number[];    // indexes (in the completed part) not credited
+  wrong: number[];    // indexes (in the completed part) counted as mistakes (red)
+  /** R2: indexes never judged (not heard, not corrected): grey, not a mistake. */
+  uncertain?: number[];
+  /** R3: indexes the user got wrong and fixed himself: «صححتها بنفسك», not counted. */
+  selfFixed?: number[];
   locked: boolean;    // a 2nd mistake closed the position
   corrected: number;  // how many corrections the reciter gave
   promptLen: number;  // words heard before the user started (the prompt + any hints)

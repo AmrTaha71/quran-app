@@ -14,17 +14,21 @@ type St = {
   msUntilDue: (now: number) => number | null;
   reset: (total: number) => void;
   evaluate: (m: boolean[], all: boolean, final: boolean, now?: number, lastWrong?: boolean) => { kind: string; locked?: boolean };
-  summary: (locked: boolean) => { credited: number; wrong: number[]; locked: boolean; corrected: number; mistakes: number };
+  summary: (locked: boolean) => { credited: number; wrong: number[]; uncertain: number[]; selfFixed: number[]; locked: boolean; corrected: number; mistakes: number };
 };
+type Al = { matched: boolean[]; allMatched: boolean; lastWrong: boolean };
 let J: {
   RoundState: new (total: number, corrections: number, mistakeMs?: number | null) => St;
   roundCutMs: (m: string) => number | null;
+  alignRest: (full: string[], start: number, text: string, align: unknown) => Al;
+  alignWords: unknown;
+  spokenTokens: (t: string) => string[];
 };
 
 before(async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-'));
   const entry = path.join(dir, 'entry.ts');
-  fs.writeFileSync(entry, `export { RoundState, roundCutMs } from '${root}src/lib/roundJudge.ts';`);
+  fs.writeFileSync(entry, `export { RoundState, roundCutMs } from '${root}src/lib/roundJudge.ts'; export { alignRest } from '${root}src/lib/roundListen.ts'; export { alignWords, spokenTokens } from '${root}src/lib/wordAligner.ts';`);
   buildSync({
     entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile: path.join(dir, 'out.mjs'), logLevel: 'error',
     define: { 'import.meta.env.VITE_SUPABASE_URL': '"http://x.test"', 'import.meta.env.VITE_SUPABASE_ANON_KEY': '"k"', 'import.meta.env.BASE_URL': '"/"', 'import.meta.env': '{}' },
@@ -116,5 +120,70 @@ describe('16.9 cut-in clock is a setting', () => {
     assert.equal(st.msUntilDue(60_000), null);
     assert.equal(st.evaluate(pad(8, [T, F, T]), false, false, 600_000).kind, 'continue');
     assert.equal(st.evaluate(pad(8, [T, F, T, T, T, T, T, T]), false, false, 600_001).kind, 'correct');
+  });
+});
+
+// Owner rules R1-R5 (2026-11-28), run through the real aligner like RoundRecite does.
+describe('owner rules: what counts as a recitation mistake', () => {
+  const AYAH = 'الحمد لله رب العالمين الرحمن الرحيم مالك يوم الدين';
+  /** Feed the spoken text frame by frame (as the ear grows it), then «خلصت». */
+  function recite(frames: string[]) {
+    const full = J.spokenTokens(AYAH);
+    const st = new J.RoundState(full.length, 1);
+    const align = (e: string[], text: string) => (J.alignWords as (a: string[], b: string[]) => Al)(e, J.spokenTokens(text));
+    let t = 0, act = { kind: 'continue' } as { kind: string; locked?: boolean };
+    for (const [n, f] of frames.entries()) {
+      const al = J.alignRest(full, 0, f, align);
+      act = st.evaluate(al.matched, al.allMatched, n === frames.length - 1, t += 500, al.lastWrong);
+      if (act.kind !== 'continue') break;
+    }
+    return { act, sum: st.summary(act.kind === 'finish' && !!act.locked) };
+  }
+  it('(a) wrong word then fixed by himself before the reciter: not counted, shown as self-fixed', () => {
+    const { act, sum } = recite(['الحمد لله رب العالمين الرحيم', 'الحمد لله رب العالمين الرحيم الرحمن الرحيم مالك يوم الدين']);
+    assert.equal(act.kind, 'finish');
+    assert.equal(sum.mistakes, 0);
+    assert.deepEqual(sum.wrong, []);
+    assert.deepEqual(sum.selfFixed, [4]);
+    assert.equal(sum.credited, 9);
+  });
+  it('(b) wrong word never fixed: counted', () => {
+    const { act, sum } = recite(['الحمد لله رب العالمين الرحيم مالك يوم الدين']);
+    assert.equal(act.kind, 'correct');
+    assert.deepEqual([...sum.wrong], [4]);
+    assert.equal(sum.corrected, 1);
+  });
+  it('(c) words the ear never heard: grey (uncertain), not a mistake', () => {
+    const { act, sum } = recite(['الحمد لله رب العالمين الرحمن']);
+    assert.equal(act.kind, 'finish');
+    assert.equal(sum.mistakes, 0);
+    assert.deepEqual(sum.wrong, []);
+    assert.deepEqual(sum.uncertain, [5, 6, 7, 8]);
+  });
+  it('(d) a madd-only difference is the same word: not counted', () => {
+    const { sum } = recite(['الحمد لله رب العاالمين الرحماان الرحيم مالك يووم الدين']);
+    assert.equal(sum.mistakes, 0);
+    assert.equal(sum.credited, 9);
+  });
+  for (const [n, said] of [
+    [2, 'الحمد لله رب العالمين رب العالمين الرحمن الرحيم مالك يوم الدين'],
+    [3, 'الحمد لله رب العالمين الرحمن لله رب العالمين الرحمن الرحيم مالك يوم الدين'],
+    [4, 'الحمد لله رب العالمين الرحمن الرحيم رب العالمين الرحمن الرحيم مالك يوم الدين'],
+  ] as const) {
+    it(`(e) breath restart: repeating ${n} words then going on is never a mistake`, () => {
+      const words = said.split(' ');
+      const frames = words.map((_, k) => words.slice(0, k + 1).join(' ')); // every partial frame too
+      const { act, sum } = recite(frames);
+      assert.equal(act.kind, 'finish');
+      assert.equal(sum.mistakes, 0);
+      assert.deepEqual(sum.wrong, []);
+      assert.deepEqual(sum.selfFixed, []);
+      assert.equal(sum.credited, 9);
+    });
+  }
+  it('a skipped word is still a skip (1:7: the first «عليهم» skipped is not credited by the second)', () => {
+    const e = J.spokenTokens('صراط الذين انعمت عليهم غير المغضوب عليهم ولا الضالين');
+    const al = (J.alignWords as (a: string[], b: string[]) => Al)(e, J.spokenTokens('صراط الذين انعمت غير المغضوب عليهم ولا الضالين'));
+    assert.deepEqual(al.matched, [true, true, true, false, true, true, true, true, true]);
   });
 });

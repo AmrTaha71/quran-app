@@ -325,16 +325,24 @@ export function RoundDebugOverlay() {
   );
 }
 
-/** The ayah after a position: the prompt words grey, right words green, wrong red. */
+/** The ayah after a position: the prompt words faded, right words green, wrong red,
+ *  uncertain grey (R2, not counted), fixed by the user «صححتها بنفسك» (R3, not counted). */
 export function RoundReveal({ ayah, result }: { ayah: PickedAyah; result: RoundResult }) {
   const wrong = new Set(result.wrong);
+  const unsure = new Set(result.uncertain ?? []);
+  const fixed = new Set(result.selfFixed ?? []);
   return (
-    <p className="font-arabic text-xl leading-loose">
-      {ayah.words.map((w, i) => {
-        const j = i - result.promptLen;
-        const cls = j < 0 ? 'text-accent-400' : wrong.has(j) ? 'text-rose-700 font-bold' : 'text-emerald-700';
-        return <span key={i} className={`${cls} mx-0.5`}>{w.orig}</span>;
-      })}
-    </p>
+    <>
+      <p className="font-arabic text-xl leading-loose">
+        {ayah.words.map((w, i) => {
+          const j = i - result.promptLen;
+          const cls = j < 0 ? 'text-accent-400' : wrong.has(j) ? 'text-rose-700 font-bold'
+            : unsure.has(j) ? 'text-gray-400' : fixed.has(j) ? 'text-emerald-700 underline decoration-dotted' : 'text-emerald-700';
+          return <span key={i} className={`${cls} mx-0.5`} title={j >= 0 && fixed.has(j) ? 'صححتها بنفسك' : undefined}>{w.orig}</span>;
+        })}
+      </p>
+      {fixed.size > 0 && <p className="text-sm text-emerald-700">المنقّط: صححتها بنفسك (مش محسوبة غلط)</p>}
+      {unsure.size > 0 && <p className="text-sm text-gray-500">الرمادي: مسمعتهاش بوضوح (مش محسوبة غلط)</p>}
+    </>
   );
 }

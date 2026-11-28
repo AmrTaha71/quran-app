@@ -226,6 +226,9 @@ export function softWordEq(spoken: string, expected: string): boolean {
 // reciter has moved on: this expected word was skipped.
 function skippedAhead(expected: string[], i: number, spoken: string[], j: number, found: number): boolean {
   if (found <= j) return false;
+  // Owner rule R3 (2026-11-28): he said a later word, went back and said this one, then went
+  // on with the next one («الرحيم الرحمن الرحيم»): a self-correction, not a skip.
+  if (i + 1 < expected.length && found + 1 < spoken.length && softWordEq(spoken[found + 1], expected[i + 1])) return false;
   for (let t = i + 1; t <= i + 3 && t < expected.length; t++) {
     if (softWordEq(spoken[j], expected[t]) && !softWordEq(spoken[j], expected[i])) return true;
   }

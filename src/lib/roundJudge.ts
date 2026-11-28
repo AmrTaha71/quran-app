@@ -16,6 +16,14 @@
 // The clock starts the first time a wrong word can be seen as wrong (a later word matched)
 // and is dropped if the user fixes it before anything above holds. A silence by itself judges
 // nothing (the old 1.8 s quiet rule and the «cut in at the last word only» rule are gone).
+//
+// Owner rules for recitation grading (2026-11-28, final):
+//   R1 no tajweed / madd grading here (a madd length is the same word: softWordEq).
+//   R2 a word the app never judged (not heard, not corrected) is «uncertain»: grey, not a mistake.
+//   R3/R4 a wrong word the user fixes himself before the reciter cuts in is not counted; it is
+//      kept in `selfFixed` and shown as «صححتها بنفسك». Only an unfixed word is counted.
+//   R5 a breath restart (repeating the last 1-8 words, then going on) is never a mistake:
+//      the aligner ignores the repeated copy (wordAligner.breathRepeats).
 import { firstMistake } from './roundTest';
 
 /** The reciter corrects the first counted mistake once, in BOTH tests (tarteel and comprehensive):
@@ -76,6 +84,8 @@ export class RoundState {
   got: boolean[];
   /** Indexes (in the completed part) the reciter corrected. */
   mistaken = new Set<number>();
+  /** R3: indexes the user got wrong and then fixed himself before the reciter cut in. */
+  selfFixed = new Set<number>();
   /** When the still-unfixed mistake at `pendingIdx` was first seen (null = none right now). */
   since: number | null = null;
   /** Item 16.3: absolute index (in the completed part) the clock belongs to. */
@@ -99,6 +109,7 @@ export class RoundState {
     this.since = null;
     this.pendingIdx = null;
     this.mistaken = new Set<number>();
+    this.selfFixed = new Set<number>();
     this.lockedAt = null;
   }
 
@@ -129,6 +140,7 @@ export class RoundState {
     if (this.pendingIdx !== null) {
       const rel = this.pendingIdx - this.base;
       const fixed = rel >= 0 && rel < matched.length && matched[rel];
+      if (fixed) this.selfFixed.add(this.pendingIdx);
       if (fixed || (m >= 0 && this.base + m !== this.pendingIdx)) { this.since = null; this.pendingIdx = null; }
     }
     if (m >= 0 && this.pendingIdx === null) { this.since = now; this.pendingIdx = this.base + m; }
@@ -162,21 +174,19 @@ export class RoundState {
   summary(locked: boolean) {
     // Item 16.5: locked -> the shown mistakes are exactly the corrected words plus the one that
     // closed the position; the tail the user never said is neither credited nor a mistake.
-    // Not locked -> words not credited, plus every corrected word (16.4 may credit it later,
-    // but the reciter still had to correct it).
-    let wrong: number[];
-    if (locked) {
-      const set = new Set<number>(this.mistaken);
-      if (this.lockedAt !== null) set.add(this.lockedAt);
-      wrong = [...set].sort((a, b) => a - b);
-    } else {
-      const set = new Set<number>(this.mistaken);
-      this.got.forEach((g, i) => { if (!g) set.add(i); });
-      wrong = [...set].sort((a, b) => a - b);
-    }
+    // Not locked -> every corrected word (16.4 may credit it later, but the reciter still had
+    // to correct it). R2: a word neither credited nor corrected was never judged: uncertain.
+    const set = new Set<number>(this.mistaken);
+    if (locked && this.lockedAt !== null) set.add(this.lockedAt);
+    const wrong = [...set].sort((a, b) => a - b);
+    const uncertain: number[] = [];
+    if (!locked) this.got.forEach((g, i) => { if (!g && !set.has(i)) uncertain.push(i); });
+    const selfFixed = [...this.selfFixed].filter((i) => !set.has(i)).sort((a, b) => a - b);
     return {
       credited: this.got.filter(Boolean).length,
       wrong,
+      uncertain,
+      selfFixed,
       locked,
       corrected: this.mistaken.size,
       mistakes: this.mistaken.size + (locked ? 1 : 0),
