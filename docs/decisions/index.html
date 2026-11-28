@@ -35,12 +35,14 @@ h2{font:700 clamp(26px,4vw,38px)/1.15 Amiri,serif;margin:10px 0 6px;color:var(--
 .q{font-size:18px;color:var(--soft);margin:0 0 16px}
 .opts{display:grid;gap:10px}
 .opt{display:flex;gap:12px;align-items:flex-start;border:2px solid var(--line);border-radius:16px;padding:14px;cursor:pointer;background:var(--bg)}
-.opt input{width:26px;height:26px;margin-top:2px;accent-color:var(--p);flex:none}
+.opt{font:inherit;color:inherit;text-align:start;width:100%}.n{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--p);color:var(--g2);font-weight:800}
+.go{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)}.go label{font-weight:800}
+select{min-height:48px;font:600 16px Cairo;border-radius:12px;border:2px solid var(--g);padding:0 10px;background:var(--bg);color:var(--ink);flex:1;min-width:180px}.ok{color:#155d33;font-weight:800}
 .opt b{display:block;font-size:17px}.opt small{display:block;color:var(--soft);font-size:14px}
 .opt.ours{border-color:var(--g)}
 .pick{display:inline-block;background:var(--g2);color:#24053B;font-size:12px;font-weight:800;border-radius:8px;padding:0 8px;margin-inline-start:6px}
-.opt:has(input:checked){background:#f3eaff;border-color:var(--p2)}
-:root[data-theme=dark] .opt:has(input:checked){background:#3a1460}
+.opt.on{background:#f3eaff;border-color:var(--p2)}
+:root[data-theme=dark] .opt.on{background:#3a1460}
 .why{margin:14px 0 0;font-size:15px;color:var(--soft)}
 label.note{display:block;margin-top:14px;font-weight:700}
 textarea{width:100%;min-height:70px;margin-top:6px;border-radius:12px;border:1px solid var(--line);padding:10px;font:16px Cairo;background:var(--bg);color:var(--ink)}
@@ -70,7 +72,7 @@ pre{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);borde
 // shortcut: decisions live in this array; Claude updates it as new ones are taken.
 const D = [
  {g:'الشكل',t:'ألوان التطبيق',q:'التطبيق كله يبقى بأنهي ألوان؟',o:[['ليل الياسمين','بنفسجي غامق + ذهبي + كريمي. الزرار الأساسي ذهبي بكلام غامق.'],['الأخضر القديم','أخضر زمردي + ذهبي.']],p:0,s:1},
- {g:'الشكل',t:'اللوجو',q:'نختار أنهي لوجو للتطبيق؟ (اللوجو القديم يفضل اختيار في الإعدادات)',o:[['١ — الكتاب المربوط','مصحف مفتوح وفي نصّه حلقة سلسلة = «التربيطات». (اقتراح كلود)'],['٢ — النجمة والمصحف','ربع الحزب بخط رفيع والمصحف جوّه.'],['٣ — الصفحة والصوت','صفحة بشريط علامة وموجة صوت.'],['نفضل على اللوجو الحالي','المصحف الذهبي على الرحل.']],p:0,s:0},
+ {g:'الشكل',t:'اللوجو',q:'نختار أنهي لوجو للتطبيق؟ (اللوجو القديم يفضل اختيار في الإعدادات)',o:[['الكتاب المربوط','مصحف مفتوح وفي نصّه حلقة سلسلة = «التربيطات». (اقتراح كلود)'],['النجمة والمصحف','ربع الحزب بخط رفيع والمصحف جوّه.'],['الصفحة والصوت','صفحة بشريط علامة وموجة صوت.'],['نفضل على اللوجو الحالي','المصحف الذهبي على الرحل.']],p:0,s:0},
  {g:'الشكل',t:'الصفحة الرئيسية',q:'الرئيسية شكلها إيه؟',o:[['٣ أبواب في إطار مزخرف','حفظ / استماع / قراءة، بإطار ذهبي ونجوم في الأركان وآية تحت.'],['٣ بلاطات بس','من غير إطار ولا زخرفة.']],p:0,s:1},
  {g:'الشكل',t:'اسم «سمّع لي»',q:'زرار التسميع تحت «حفظ» في الرئيسية اسمه إيه؟',o:[['سمّع لي','اسم واضح للتسميع.'],['الاختبار','الاسم القديم، كان صعب يتلاقى.']],p:0,s:1},
  {g:'الشكل',t:'زرار الرجوع والرئيسية',q:'زراير الرجوع والرئيسية تبقى فين في كل صفحة؟',o:[['تحت على الشمال','عشان الجزء اللي فوق في الآيفون (الجزيرة) بيغطيها، وما تغطيش الكلام.'],['فوق','زي أغلب التطبيقات.']],p:0,s:1},
@@ -96,11 +98,14 @@ const D = [
  {g:'المصحف',t:'صفحة المصحف والتقليب',q:'الصفحة والتقليب؟',o:[['الصفحة تملأ الإطار، والتقليب سريع (~٠.٢ ثانية)',''],['تقليب أبطأ','']],p:0,s:1},
  {g:'المصحف',t:'التمرير الرأسي والتلقائي',q:'القراءة بالتمرير؟',o:[['فيه تمرير رأسي وتمرير تلقائي','مدة الجزء ٢٠ أو ٢٥ أو ٣٠ دقيقة (الأساسي ٢٠)، ويرجع من مكان ما وقفت.'],['تقليب صفحات بس','']],p:0,s:1},
  {g:'المصحف',t:'نافذة الآية',q:'لما تدوس على آية؟',o:[['نافذة صغيرة بسهم فوق أو تحت الآية','من غير ما تكرر نص الآية. ولو المكان ضيق تفتح في النص.'],['نافذة كبيرة في نص الشاشة دايمًا','']],p:0,s:1},
+ {g:'الشكل',t:'الزراير الذهبي',q:'الزرار الذهبي شكله إيه؟',o:[['ذهبي فاتح لامع بكلام غامق','زي قرار ليل الياسمين.'],['ذهبي غامق (بني) بكلام أبيض','الشكل القديم.']],p:0,s:1},
+ {g:'المصحف',t:'المصحف يفتح على إيه',q:'لما تفتح المصحف أول مرة يظهر أنهي شكل؟',o:[['الصفحة الرقمية','بألوان التطبيق ونص واضح. ولو اخترت الصورة مرة تفضل عليها.'],['صورة مصحف المدينة المطبوع','بإطارها الأخضر والأصفر الأصلي (ما ينفعش تتغير ألوانها).']],p:0,s:1},
+ {g:'محتاج قرار',t:'لون الكلمة الصح في نتيجة التسميع',q:'بعد تصليح الألوان، الكلمة الصح بقت بنفسجي بدل أخضر. نسيبها؟',o:[['بنفسجي','زي باقي التطبيق، والغلط أحمر. (اقتراح كلود)'],['أخضر للصح بس','استثناء واحد عشان الصح يبان أوضح.']],p:0,s:0},
  {g:'محتاج قرار',t:'المايك على «ابدأ» في الاختبارات',q:'زرار «ابدأ» في الاختبار الترتيبي والشامل عليه مايك؟',o:[['لأ','لأن المايك بيفتح في الخطوة اللي بعدها. (اقتراح كلود)'],['أيوه','']],p:0,s:0},
  {g:'محتاج قرار',t:'نشر حماية تحويل الصوت لكلام',q:'ننشر النسخة الجديدة من خدمة تحويل الصوت (فيها تسجيل دخول وحد ١٠ ميجا)؟',o:[['أيوه ننشرها','أأمن. (اقتراح كلود)'],['نستنى','']],p:0,s:0},
  {g:'محتاج قرار',t:'آية بتكمّل على الصفحة اللي بعدها',q:'في التسميع على الإطار، لو الآية بتكمّل في الصفحة اللي بعدها؟',o:[['نسيبها دلوقتي','الجزء التاني بيتحكم بالصوت بس من غير ما يبان. (اقتراح كلود)'],['نعرض الصفحتين','']],p:0,s:0},
 ];
-const KEY='quran-decisions-v1';
+const KEY='quran-decisions-v2';
 let st={}; try{st=JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){}
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){}};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -110,7 +115,7 @@ const groups=[...new Set(D.map(d=>d.g))];
 const cover=`<section class="slide" id="s0"><div class="frame">
  <span class="num">${ar(D.length)} قرار</span>
  <h2>كل اللي اتفقنا عليه، في مكان واحد</h2>
- <p class="q">كل صفحة فيها قرار واحد. علّم ✓ على الاختيار اللي توافقوا عليه، واكتبوا ملاحظة لو فيه. في الآخر دوس «انسخ النتيجة» وابعتها لكلود.</p>
+ <p class="q">كل صفحة فيها قرار واحد. اختاروا رقم الاختيار من القايمة (أو دوسوا عليه)، واكتبوا ملاحظة لو فيه، ودوسوا «تم ✓» تروحوا للقرار اللي بعده. في الآخر دوسوا «انسخ النتيجة» وابعتوها لكلود.</p>
  <p class="muted">المعلَّم بـ «اخترناه» هو اللي عمرو اختاره مع كلود. اللي مكتوب عليه «محتاج قرار» لسه مفتوح.</p>
  <table class="stack toc"><thead><tr><th>#</th><th>القرار</th><th>اللي اخترناه</th><th>الحالة</th></tr></thead><tbody>
  ${D.map((d,i)=>`<tr><td data-l="#">${ar(i+1)}</td><td data-l="القرار"><a href="#" data-go="${i+1}">${esc(d.t)}</a></td><td data-l="اخترناه">${esc(d.o[d.p][0])}</td><td data-l="الحالة"><span class="tag ${d.s?'done':'open'}">${d.s?'متقرر':'محتاج قرار'}</span></td></tr>`).join('')}
@@ -118,8 +123,11 @@ const cover=`<section class="slide" id="s0"><div class="frame">
 const slides=D.map((d,i)=>`<section class="slide" id="s${i+1}"><div class="frame">
  <span class="num">${ar(i+1)} من ${ar(D.length)} · ${esc(d.g)}</span><span class="tag ${d.s?'done':'open'}">${d.s?'متقرر':'محتاج قرار'}</span>
  <h2>${esc(d.t)}</h2><p class="q">${esc(d.q)}</p>
- <div class="opts">${d.o.map((o,j)=>`<label class="opt ${j===d.p?'ours':''}"><input type="checkbox" data-i="${i}" data-j="${j}" ${(st[i]?.c||[]).includes(j)?'checked':''}><span><b>${esc(o[0])}${j===d.p?'<span class="pick">'+(d.s?'اخترناه':'اقتراح')+'</span>':''}</b>${o[1]?`<small>${esc(o[1])}</small>`:''}</span></label>`).join('')}</div>
+ <div class="opts">${d.o.map((o,j)=>`<button type="button" class="opt ${j===d.p?'ours':''} ${st[i]?.c===j?'on':''}" data-i="${i}" data-j="${j}"><span class="n">${ar(j+1)}</span><span><b>${esc(o[0])}${j===d.p?'<span class="pick">'+(d.s?'اخترناه':'اقتراح')+'</span>':''}</b>${o[1]?`<small>${esc(o[1])}</small>`:''}</span></button>`).join('')}</div>
  <label class="note" for="n${i}">ملاحظة (اختياري)</label><textarea id="n${i}" data-n="${i}" placeholder="مثلًا: موافقين بس نغيّر…">${esc(st[i]?.n||'')}</textarea>
+ <div class="go"><label for="c${i}">اختيارنا:</label>
+  <select id="c${i}" data-c="${i}"><option value="">— اختار —</option>${d.o.map((o,j)=>`<option value="${j}" ${st[i]?.c===j?'selected':''}>${ar(j+1)} — ${esc(o[0])}</option>`).join('')}</select>
+  <button type="button" class="btn" data-ok="${i}">تم ✓</button><span class="ok" id="k${i}">${st[i]?.done?'اتسجّل ✓':''}</span></div>
 </div></section>`).join('');
 const end=`<section class="slide" id="s${D.length+1}"><div class="frame">
  <h2>النتيجة</h2><p class="q">دوس «انسخ النتيجة» والزقها في الشات مع كلود، وهو هيراجعها ويعدّل التطبيق.</p>
@@ -127,15 +135,21 @@ const end=`<section class="slide" id="s${D.length+1}"><div class="frame">
  <pre id="out"></pre></div></section>`;
 deck.innerHTML=cover+slides+end;
 const all=[...deck.children], N=all.length;
-const result=()=>'مراجعة قرارات التطبيق (عمرو ورنا):\n\n'+D.map((d,i)=>{const c=(st[i]?.c||[]).map(j=>d.o[j][0]);const n=st[i]?.n?.trim();
- return `${i+1}. ${d.t}: ${c.length?c.join(' + '):'— ما اتعلّمش —'}${c.length===1&&st[i].c[0]===d.p?' (موافقين)':c.length?' (تغيير)':''}${n?'\n   ملاحظة: '+n:''}`}).join('\n');
+const result=()=>'مراجعة قرارات التطبيق (عمرو ورنا):\n\n'+D.map((d,i)=>{const c=st[i]?.c;const has=typeof c==='number';const n=st[i]?.n?.trim();
+ return `${i+1}. ${d.t}: ${has?(c+1)+' — '+d.o[c][0]+(c===d.p?' (موافقين)':' (تغيير)'):'— ما اتختارش —'}${n?'\n   ملاحظة: '+n:''}`}).join('\n');
 const draw=()=>{document.getElementById('out').textContent=result()};
-deck.addEventListener('change',e=>{const x=e.target;if(x.dataset.i==null)return;const i=+x.dataset.i,j=+x.dataset.j;st[i]=st[i]||{c:[],n:''};
- st[i].c=x.checked?[...new Set([...st[i].c,j])]:st[i].c.filter(k=>k!==j);save();draw()});
-deck.addEventListener('input',e=>{const x=e.target;if(x.dataset.n==null)return;const i=+x.dataset.n;st[i]=st[i]||{c:[],n:''};st[i].n=x.value;save();draw()});
+const pick=(i,j)=>{st[i]=st[i]||{n:''};st[i].c=j;st[i].done=false;save();draw();
+ document.querySelectorAll(`.opt[data-i="${i}"]`).forEach(b=>b.classList.toggle('on',+b.dataset.j===j));
+ document.getElementById('c'+i).value=j==null?'':j;document.getElementById('k'+i).textContent=''};
+deck.addEventListener('change',e=>{const x=e.target;if(x.dataset.c==null)return;pick(+x.dataset.c,x.value===''?null:+x.value)});
+deck.addEventListener('input',e=>{const x=e.target;if(x.dataset.n==null)return;const i=+x.dataset.n;st[i]=st[i]||{n:''};st[i].n=x.value;save();draw()});
 let cur=0;
 const go=k=>{cur=Math.max(0,Math.min(N-1,k));all[cur].scrollIntoView({block:'nearest',inline:'start'});window.scrollTo({top:0})};
-deck.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){e.preventDefault();go(+a.dataset.go)}});
+deck.addEventListener('click',e=>{const a=e.target.closest('[data-go]');if(a){e.preventDefault();go(+a.dataset.go);return}
+ const o=e.target.closest('.opt[data-i]');if(o){pick(+o.dataset.i,+o.dataset.j);return}
+ const k=e.target.closest('[data-ok]');if(k){const i=+k.dataset.ok,m=document.getElementById('k'+i);
+  if(typeof st[i]?.c!=='number'){m.textContent='اختار رقم الأول';return}
+  st[i].done=true;save();draw();m.textContent='اتسجّل ✓';setTimeout(()=>go(i+2),350)}});
 document.getElementById('prev').onclick=()=>go(cur-1);
 document.getElementById('next').onclick=()=>go(cur+1);
 document.addEventListener('keydown',e=>{if(e.target.tagName==='TEXTAREA')return;if(e.key==='ArrowLeft')go(cur+1);if(e.key==='ArrowRight')go(cur-1)});
