@@ -119,7 +119,7 @@ type IndexTab = 'surah' | 'juz' | 'hizb';
 const FOLLOW_HELP_KEY = 'quran-follow-help-seen';
 
 const VS_POS_KEY = 'quran-mushaf-autoscroll-pos';
-const readVscroll = () => { try { return localStorage.getItem('quran-mushaf-vscroll') === 'on'; } catch { return false; } };
+const readVscroll = () => { try { return localStorage.getItem('quran-mushaf-vscroll') === '1'; } catch { return false; } };
 // Vertical scroll mode: pages stacked, each 50% of the viewport. Optional timed
 // auto-scroll: juzMin minutes per juz (20 pages) => juzMin*3 seconds per page, constant.
 function VScrollReader({ page, imageUrl, bg, onPage }: { page: number; imageUrl: (n: number) => string; bg: string; onPage: (n: number) => void }) {
@@ -129,8 +129,8 @@ function VScrollReader({ page, imageUrl, bg, onPage }: { page: number; imageUrl:
   const curRef = useRef(page);
   const anim = useRef<{ stop: () => void } | null>(null);
   const H = () => (ref.current ? ref.current.clientHeight / 2 : 0);
-  const savePos = () => {
-    const el = ref.current; const h = H();
+  const savePos = (elArg?: HTMLDivElement | null) => {
+    const el = elArg ?? ref.current; const h = el ? el.clientHeight / 2 : 0;
     if (!el || !h) return;
     const pg = Math.max(1, Math.min(TOTAL_PAGES, Math.floor(el.scrollTop / h) + 1));
     try { localStorage.setItem(VS_POS_KEY, JSON.stringify({ page: pg, offset: el.scrollTop / h - (pg - 1) })); } catch { /* ignore */ }
@@ -144,16 +144,18 @@ function VScrollReader({ page, imageUrl, bg, onPage }: { page: number; imageUrl:
       if (sv && sv.page === page && sv.offset >= 0 && sv.offset < 1) off = sv.offset;
     } catch { /* ignore */ }
     el.scrollTop = (page - 1 + off) * H();
-    return () => savePos();
+    return () => savePos(el);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // The index / audio moved the page from outside: jump there.
   useEffect(() => {
     if (page === curRef.current || !ref.current) return;
     curRef.current = page; setCur(page);
+    setPlaying(false);
     ref.current.scrollTop = (page - 1) * H();
   }, [page]);
   const idle = useRef<number | undefined>(undefined);
+  useEffect(() => () => { window.clearTimeout(idle.current); anim.current?.stop(); }, []);
   const onScroll = () => {
     const el = ref.current; if (!el) return;
     const p = Math.max(1, Math.min(TOTAL_PAGES, Math.round(el.scrollTop / H()) + 1));
@@ -172,7 +174,7 @@ function VScrollReader({ page, imageUrl, bg, onPage }: { page: number; imageUrl:
     const el = ref.current; if (!el) return;
     let juz = 20;
     try { const v = Number(localStorage.getItem('quran-mushaf-autoscroll-juz-min')); if (v === 25 || v === 30) juz = v; } catch { /* ignore */ }
-    let pos = el.scrollTop; let last = performance.now(); let raf = 0; let wl: { release: () => Promise<void> } | null = null;
+    let pos = el.scrollTop; let last = performance.now(); let raf = 0; let wl: { release: () => Promise<void> } | null = null; let stopped = false;
     const tick = (now: number) => {
       pos += (H() / (juz * 3)) * ((now - last) / 1000); last = now;
       el.scrollTop = pos;
@@ -180,8 +182,8 @@ function VScrollReader({ page, imageUrl, bg, onPage }: { page: number; imageUrl:
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    try { (navigator as unknown as { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen').then((l) => { wl = l; }).catch(() => {}); } catch { /* ignore */ }
-    return () => { cancelAnimationFrame(raf); void wl?.release().catch(() => {}); };
+    try { (navigator as unknown as { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen').then((l) => { if (stopped) void l.release().catch(() => {}); else wl = l; }).catch(() => {}); } catch { /* ignore */ }
+    return () => { stopped = true; cancelAnimationFrame(raf); void wl?.release().catch(() => {}); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
   return (
