@@ -5,6 +5,7 @@ import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { animate } from 'motion';
 import { roundDebugOn } from '../lib/roundDebug';
 import { transcribeBlob } from '../lib/quranEar';
 import { AyahSimilar, AyahAsbab } from '../components/AyahSimilarAsbab';
@@ -116,6 +117,93 @@ function formatTypes(types: string[]): string {
 type IndexTab = 'surah' | 'juz' | 'hizb';
 
 const FOLLOW_HELP_KEY = 'quran-follow-help-seen';
+
+const VS_POS_KEY = 'quran-mushaf-autoscroll-pos';
+const readVscroll = () => { try { return localStorage.getItem('quran-mushaf-vscroll') === 'on'; } catch { return false; } };
+// Vertical scroll mode: pages stacked, each 50% of the viewport. Optional timed
+// auto-scroll: juzMin minutes per juz (20 pages) => juzMin*3 seconds per page, constant.
+function VScrollReader({ page, imageUrl, bg, onPage }: { page: number; imageUrl: (n: number) => string; bg: string; onPage: (n: number) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [cur, setCur] = useState(page);
+  const [playing, setPlaying] = useState(false);
+  const curRef = useRef(page);
+  const anim = useRef<{ stop: () => void } | null>(null);
+  const H = () => (ref.current ? ref.current.clientHeight / 2 : 0);
+  const savePos = () => {
+    const el = ref.current; const h = H();
+    if (!el || !h) return;
+    const pg = Math.max(1, Math.min(TOTAL_PAGES, Math.floor(el.scrollTop / h) + 1));
+    try { localStorage.setItem(VS_POS_KEY, JSON.stringify({ page: pg, offset: el.scrollTop / h - (pg - 1) })); } catch { /* ignore */ }
+  };
+  const pause = () => { anim.current?.stop(); setPlaying((p) => { if (p) savePos(); return false; }); };
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    let off = 0;
+    try {
+      const sv = JSON.parse(localStorage.getItem(VS_POS_KEY) || 'null');
+      if (sv && sv.page === page && sv.offset >= 0 && sv.offset < 1) off = sv.offset;
+    } catch { /* ignore */ }
+    el.scrollTop = (page - 1 + off) * H();
+    return () => savePos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // The index / audio moved the page from outside: jump there.
+  useEffect(() => {
+    if (page === curRef.current || !ref.current) return;
+    curRef.current = page; setCur(page);
+    ref.current.scrollTop = (page - 1) * H();
+  }, [page]);
+  const idle = useRef<number | undefined>(undefined);
+  const onScroll = () => {
+    const el = ref.current; if (!el) return;
+    const p = Math.max(1, Math.min(TOTAL_PAGES, Math.round(el.scrollTop / H()) + 1));
+    if (p !== curRef.current) { curRef.current = p; setCur(p); onPage(p); }
+    if (playing || anim.current) return;
+    window.clearTimeout(idle.current);
+    // Gentle reel-like snap to the nearest page once the finger and momentum stop.
+    idle.current = window.setTimeout(() => {
+      const t = (p - 1) * H();
+      if (Math.abs(el.scrollTop - t) < 1) return;
+      anim.current = animate(el.scrollTop, t, { duration: 0.38, ease: [0.22, 1, 0.36, 1], onUpdate: (v) => { el.scrollTop = v; }, onComplete: () => { anim.current = null; } });
+    }, 160);
+  };
+  useEffect(() => {
+    if (!playing) return;
+    const el = ref.current; if (!el) return;
+    let juz = 20;
+    try { const v = Number(localStorage.getItem('quran-mushaf-autoscroll-juz-min')); if (v === 25 || v === 30) juz = v; } catch { /* ignore */ }
+    let pos = el.scrollTop; let last = performance.now(); let raf = 0; let wl: { release: () => Promise<void> } | null = null;
+    const tick = (now: number) => {
+      pos += (H() / (juz * 3)) * ((now - last) / 1000); last = now;
+      el.scrollTop = pos;
+      if (pos >= el.scrollHeight - el.clientHeight - 1) { setPlaying(false); savePos(); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    try { (navigator as unknown as { wakeLock?: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen').then((l) => { wl = l; }).catch(() => {}); } catch { /* ignore */ }
+    return () => { cancelAnimationFrame(raf); void wl?.release().catch(() => {}); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing]);
+  return (
+    <div className="absolute inset-0 z-[21]" style={{ background: bg }} onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} className="absolute inset-0 overflow-y-auto overscroll-contain" onScroll={onScroll}
+        onTouchStart={() => { anim.current?.stop(); anim.current = null; pause(); }} onWheel={pause}>
+        {Array.from({ length: TOTAL_PAGES }, (_, i) => (
+          <div key={i} style={{ height: '50%' }} className="flex items-center justify-center">
+            {Math.abs(i + 1 - cur) <= 2 && <img src={imageUrl(i + 1)} alt={`صفحة ${i + 1}`} draggable={false} className="h-full max-w-full object-contain" />}
+          </div>
+        ))}
+        <div style={{ height: '50%' }} />
+      </div>
+      <button aria-label={playing ? 'إيقاف التمرير التلقائي' : 'تشغيل التمرير التلقائي'}
+        onTouchStart={(e) => e.stopPropagation()}
+        onClick={() => { if (playing) pause(); else { anim.current?.stop(); anim.current = null; setPlaying(true); } }}
+        className="absolute z-10 right-3 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] w-14 h-14 rounded-full bg-emerald-700 text-white shadow-lg flex items-center justify-center">
+        {playing ? <Square className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+      </button>
+    </div>
+  );
+}
 
 export default function QuranMushafPage({
   session,
@@ -4920,6 +5008,9 @@ export default function QuranMushafPage({
 
           {!showRatelIntro && !showEditionPickerInFullscreen && (
             <>
+              {readVscroll() && edition.id === 'madinah' && (
+                <VScrollReader page={currentPage} imageUrl={edition.imageUrl} bg={standalonePage ? mushafTheme.bg : '#f8f1de'} onPage={goToPage} />
+              )}
               {!imageError ? (
                 // Wrapper owns size, zoom and touch. Fullscreen fill +
                 // no-dance: vh (the large viewport, stable when Safari's
