@@ -78,17 +78,14 @@
   position: absolute;
   inset: 2px 2px 46% 2px;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
-.tile-medal svg { position: relative; width: 1.9rem; height: 1.9rem; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.35)); }
+.tile-medal svg { position: relative; width: 1.9rem; height: 1.9rem; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.18)); }
 .home-tile-small .tile-medal svg { width: 1.45rem; height: 1.45rem; }
 
 .tile-medal-emerald { background: linear-gradient(160deg, #12996A 0%, #0B7448 40%, #074A30 100%); }
 .tile-medal-gold { background: linear-gradient(160deg, #D9A62B 0%, #B27C14 42%, #7E4F0B 100%); }
-.tile-medal-red { background: linear-gradient(160deg, #E0524A 0%, #B3261E 45%, #7A130E 100%); }
-.tile-medal-night { background: linear-gradient(160deg, #2C6A78 0%, #174652 45%, #0B2B36 100%); }
-.tile-medal-plain { background: linear-gradient(160deg, #6F8279 0%, #4C5F56 45%, #2E3D36 100%); }
 
 .home-tile:active .tile-medal { transform: translateY(2px) scale(0.95); }
 
