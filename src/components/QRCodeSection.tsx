@@ -50,11 +50,12 @@ export default function QRCodeSection() {
           <span className="text-lg">حمّل التطبيق</span>
         </button>
         <button onClick={() => setShareOpen(true)}
-          className="flex items-center justify-center gap-3 px-4 py-4 grad-amber-door glass-door-highlight text-white font-bold rounded-2xl shadow-lg polish-press">
+          style={{ backgroundImage: 'linear-gradient(160deg, #D9A62B, #B27C14)', color: '#1c2b26' }}
+          className="flex items-center justify-center gap-3 px-4 py-4 glass-door-highlight font-bold rounded-2xl shadow-lg polish-press">
           <Share2 className="w-6 h-6 shrink-0" />
           <span className="text-right leading-tight">
             <span className="block text-lg">شاركنا الأجر</span>
-            <span className="block text-xs font-medium text-white/90">شارك التطبيق مع غيرك</span>
+            <span className="block text-xs font-medium">شارك التطبيق مع غيرك</span>
           </span>
         </button>
       </div>

@@ -163,7 +163,8 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
           </button>
           <button
             onClick={() => onNavigate('mushaf')}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:py-3.5 bg-amber-600 hover:bg-amber-700 text-white text-base font-bold rounded-xl shadow-lg transition-smooth"
+            style={{ backgroundImage: 'linear-gradient(160deg, #D9A62B, #B27C14)', color: '#1c2b26' }}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:py-3.5 text-base font-bold rounded-xl shadow-lg transition-smooth"
           >
             <BookMarked className="w-5 h-5 shrink-0" />
             {c.mushaf}
