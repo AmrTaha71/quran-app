@@ -41,14 +41,15 @@
    These selectors match index.css exactly; this file is later,
    so these values win. */
 @keyframes alive-vt-out {
-  to { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 0; transform: translateY(-4px); }
 }
 @keyframes alive-vt-in {
-  from { opacity: 0; transform: translateY(26px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-::view-transition-old(root) { animation: 220ms var(--alive-ease-out) both alive-vt-out; }
-::view-transition-new(root) { animation: 400ms var(--alive-spring) both alive-vt-in; }
+/* Route change ~170ms total (old and new overlap): 90ms out, 170ms in, no spring. */
+::view-transition-old(root) { animation: 90ms var(--alive-ease-out) both alive-vt-out; }
+::view-transition-new(root) { animation: 170ms var(--alive-ease-out) both alive-vt-in; }
 
 /* Fallback route entrance (browsers without View Transitions, and
    any non-VT navigation): the same glide, as a mount-only
@@ -59,10 +60,10 @@
    html.vt-active still suppresses this (index.css), so the two
    never double-play. */
 @keyframes route-enter-strong {
-  from { opacity: 0; transform: translateY(26px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-.route-enter-strong { animation: route-enter-strong 380ms var(--alive-spring) backwards; }
+.route-enter-strong { animation: route-enter-strong 170ms var(--alive-ease-out) backwards; }
 
 /* ---------- 2. DOOR-TO-DOOR (the other headline) ----------
    Home's expandable doors (الحفظ / سمّع لنفسك): the expanded
