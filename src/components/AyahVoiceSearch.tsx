@@ -2,9 +2,9 @@
 // piece of an ayah they remember; the device ear (or the browser ear when
 // the device ear is not here) turns it into letters, findAyahCandidates
 // looks for it in the whole Mushaf, and the best places open in the Mushaf.
+import SearchMicIcon from './icons/SearchMicIcon';
 import { useEffect, useRef, useState } from 'react';
 import { X, BookOpen } from 'lucide-react';
-import StudioMic from './StudioMic';
 import { useEscapeClose } from '../lib/useEscape';
 import { loadFollowIndex } from '../lib/imamFollowIndex';
 import { followSkel, textWordSkel, type FollowIndex } from '../lib/imamFollow';
@@ -110,7 +110,7 @@ export default function AyahVoiceSearch({ onClose }: { onClose: () => void }) {
 
         <button type="button" onClick={phase === 'listening' ? stop : start}
           className={`w-full py-4 rounded-2xl font-bold text-base flex items-center justify-center gap-2 polish-press ${phase === 'listening' ? 'bg-red-600 text-white animate-pulse' : 'grad-emerald-door text-white'}`}>
-          <StudioMic className="w-6 h-6" />
+          <SearchMicIcon className="w-6 h-6" />
           {phase === 'listening' ? 'خلاص' : phase === 'done' ? 'سمّع تاني' : 'ابدأ'}
         </button>
 

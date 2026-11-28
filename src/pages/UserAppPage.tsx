@@ -1,4 +1,5 @@
 import DrumSelect from '../components/DrumSelect';
+import SearchMicIcon from '../components/icons/SearchMicIcon';
 import LinkScopeNote from '../components/LinkScopeNote';
 import { blankMarks } from '../lib/arabicNormalize';
 import StudioMic from '../components/StudioMic';
@@ -721,13 +722,13 @@ export default function UserAppPage({ session, onNavigate }: { session: import('
                     onPointerDown={pressFeedback}
                     title={isListening ? 'إيقاف الاستماع' : 'بحث صوتي'}
                     className={`absolute left-2 top-1/2 -translate-y-1/2 p-2.5 rounded-full transition-smooth shadow-sm ${isListening ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}>
-                    <StudioMic className="w-5 h-5" />
+                    <SearchMicIcon className="w-5 h-5" />
                   </button>
                 </div>
                 {/* 15.7: find an ayah by reciting a piece of it. */}
                 <button type="button" onClick={() => setAyahVoiceOpen(true)}
                   className="mt-2 w-full min-h-[44px] px-3 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-sm font-bold flex items-center justify-center gap-2 polish-press">
-                  <StudioMic className="w-5 h-5" /> سمّع جزء من آية ونقولك هي فين
+                  <SearchMicIcon className="w-5 h-5" /> سمّع جزء من آية ونقولك هي فين
                 </button>
                 {ayahVoiceOpen && <AyahVoiceSearch onClose={() => setAyahVoiceOpen(false)} />}
                 {searchHint && (

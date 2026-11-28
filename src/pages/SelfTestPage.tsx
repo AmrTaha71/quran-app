@@ -1,4 +1,5 @@
 import StudioMic from '../components/StudioMic';
+import SearchMicIcon from '../components/icons/SearchMicIcon';
 import MicIcon from '../components/icons/MicIcon';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import Sama3 from '../components/Sama3';
@@ -5741,7 +5742,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
         <button type="button" onClick={(e) => { e.preventDefault(); surahVoiceSearch(); }}
           aria-label="ابحث بالصوت"
           className={`absolute left-1.5 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center rounded-xl ${surahVoiceOn ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-700 text-white shadow'}`}>
-          <StudioMic className="w-6 h-6" />
+          <SearchMicIcon className="w-6 h-6" />
         </button>
       </div>
       {surahSearch.trim() !== '' && (
