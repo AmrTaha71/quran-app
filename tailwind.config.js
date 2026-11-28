@@ -1,3 +1,12 @@
+const PURPLE = {
+  50: '#F7F2FB', 100: '#EEE3F6', 200: '#DCC6EC', 300: '#C29FDD', 400: '#A06FC9', 500: '#7F44B0',
+  600: '#652A93', 700: '#4C0B7A', 800: '#3A065F', 900: '#2A0446', 950: '#1A022C',
+};
+const GOLD = {
+  50: '#FDF9EC', 100: '#FAF0CF', 200: '#F5E09E', 300: '#F0C85A', 400: '#E3B443', 500: '#C9A227',
+  600: '#A6821C', 700: '#86651A', 800: '#6B5017', 900: '#4F3B12', 950: '#2E220A',
+};
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
@@ -8,6 +17,10 @@ export default {
         sans: ['"Cairo"', 'system-ui', 'sans-serif'],
       },
       colors: {
+        // 2026-11-28 (owner: «ده عك»): ~900 emerald/teal/blue classes still drew Tailwind's green and blue.
+        // Jasmine Night in one place: those scales are the app purple, amber is the app gold.
+        emerald: PURPLE, teal: PURPLE, cyan: PURPLE, sky: PURPLE, blue: PURPLE,
+        amber: GOLD,
         // Item 8.3: the unused 'quran' (pastel) and 'primary' (blue) scales
         // were deleted — zero uses in src/.
         // 2026-11-12: was a blue-grey scale that clashed with the emerald

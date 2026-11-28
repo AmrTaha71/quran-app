@@ -343,7 +343,7 @@ html { -webkit-text-size-adjust: 100%; }
   --visual-gold: #B58A38;
   --visual-gold-hairline: rgba(181, 138, 56, 0.45);
   --visual-grad-emerald: linear-gradient(160deg, #4D0F7A 0%, #310B4D 100%);
-  --visual-grad-amber: linear-gradient(160deg, #A85E0F 0%, #7C4410 100%);
+  --visual-grad-amber: linear-gradient(160deg, #F6D980 0%, #D9AE3C 55%, #B8901F 100%);
   --visual-grad-teal: linear-gradient(160deg, #4B0F76 0%, #3E115E 100%);
   --visual-grad-cream: linear-gradient(180deg, #FFFEF9 0%, #F7F2E3 100%);
   --visual-grad-glass: linear-gradient(180deg, rgba(255, 254,247, 0.78) 0%, rgba(247, 242, 227, 0.66) 100%);
@@ -364,7 +364,7 @@ html { -webkit-text-size-adjust: 100%; }
 }
 /* Luminous door gradients (white text verified AA on both stops). */
 .grad-emerald-door { background-color: #310B4D; background-image: var(--visual-grad-emerald); }
-.grad-amber-door { background-color: #7C4410; background-image: var(--visual-grad-amber); }
+.grad-amber-door { color: #24053B !important; background-color: #D9AE3C; background-image: var(--visual-grad-amber); }
 .grad-teal-door { background-color: #3E115E; background-image: var(--visual-grad-teal); }
 /* Static light inner edge for gradient doors (not a moving sheen). */
 .glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.10), 0 10px 24px -12px rgba(26, 9, 39, 0.45); }
@@ -449,7 +449,7 @@ html { -webkit-text-size-adjust: 100%; }
   --bold-door-amber-deep: #5E3208;
   --bold-door-teal-deep: #280B3D;
   --bold-grad-emerald: linear-gradient(160deg, #4D0F7A 0%, #26083B 100%);
-  --bold-grad-amber: linear-gradient(160deg, #A85E0F 0%, #5E3208 100%);
+  --bold-grad-amber: linear-gradient(160deg, #F6D980 0%, #D9AE3C 55%, #B8901F 100%);
   --bold-grad-teal: linear-gradient(160deg, #4B0F76 0%, #280B3D 100%);
 }
 /* New page background: glows + dot texture + deeper cream foot.
@@ -482,7 +482,7 @@ body { background-color: #F3EDD9; }
 }
 /* Deeper door gradients (tops unchanged, bottoms deepened). */
 .grad-emerald-door { background-color: #26083B; background-image: var(--bold-grad-emerald); }
-.grad-amber-door { background-color: #5E3208; background-image: var(--bold-grad-amber); }
+.grad-amber-door { color: #24053B !important; background-color: #D9AE3C; background-image: var(--bold-grad-amber); }
 .grad-teal-door { background-color: #280B3D; background-image: var(--bold-grad-teal); }
 /* Stronger door light + shadow so doors read luminous, not flat. */
 .glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 16px 32px -14px rgba(26, 9, 39, 0.55); }
@@ -607,7 +607,7 @@ body { background-color: #F3EDD9; }
   --chic-teal-top: #4D0E7A;
   --chic-teal-deep: #26073C;
   --chic-grad-emerald: linear-gradient(160deg, #4C0C7A 0%, #24053B 100%);
-  --chic-grad-amber: linear-gradient(160deg, #9E5608 0%, #4A2703 100%);
+  --chic-grad-amber: linear-gradient(160deg, #F6D980 0%, #D9AE3C 55%, #B8901F 100%);
   --chic-grad-teal: linear-gradient(160deg, #4D0E7A 0%, #26073C 100%);
 }
 /* Rich sand ground with presence (later rule wins over .page-bg). */
@@ -638,7 +638,7 @@ body { background-color: #E9DCC0; }
 }
 /* Deeper, more saturated door gradients (white text pairs above). */
 .grad-emerald-door { background-color: #24053B; background-image: var(--chic-grad-emerald); }
-.grad-amber-door { background-color: #4A2703; background-image: var(--chic-grad-amber); }
+.grad-amber-door { color: #24053B !important; background-color: #D9AE3C; background-image: var(--chic-grad-amber); }
 .grad-teal-door { background-color: #26073C; background-image: var(--chic-grad-teal); }
 /* Stronger door light + shadow so doors read luminous, not flat. */
 .glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.50), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 18px 36px -14px rgba(26, 9, 39, 0.60); }

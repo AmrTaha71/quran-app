@@ -62,8 +62,9 @@
 .grad-amber-door {
   /* 2026-11-06: lifted one step toward true gold — the old stops read as
      dark brown/chocolate on the iPad. Same hue family, no new colour. */
-  background-color: #9A6510;
+  /* 2026-11-28 (owner): true Jasmine Night gold, dark text (no brown). */
+  background-color: #D9AE3C;
   background-image:
-    radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(160deg, #C9921C 0%, #B27C14 32%, #9A6510 58%, #7E4F0B 82%, #613B07 100%);
+    radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(160deg, #F6D980 0%, #E6BF55 40%, #D2A53A 75%, #B8901F 100%);
 }
