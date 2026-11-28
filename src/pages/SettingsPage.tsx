@@ -5,7 +5,7 @@ import ReviewReminderCard from '../components/ReviewReminderCard';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Headphones, Compass, Share2, Info, BatteryCharging, Mic, Award, Users, SunMoon, Radio, MapPin, Clock, QrCode } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Compass, Share2, Info, BatteryCharging, Mic, Award, Users, SunMoon, Radio, MapPin, Clock, QrCode } from 'lucide-react';
 import QiblaSheet from '../components/QiblaSheet';
 import { nearestMosqueUrl } from '../lib/qibla';
 import ShareSheet from '../components/ShareSheet';
