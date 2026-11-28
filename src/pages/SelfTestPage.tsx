@@ -1,3 +1,4 @@
+import { prepareClip, setClipSrc, wireClip, unwireClip } from '../lib/clipLevel';
 import StudioMic from '../components/StudioMic';
 import SearchMicIcon from '../components/icons/SearchMicIcon';
 import MicIcon from '../components/icons/MicIcon';
@@ -1590,6 +1591,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
   const [ayahAudioFailed, setAyahAudioFailed] = useState(false);
   const stopCorrAudio = () => {
     try { corrAudioRef.current?.pause(); } catch {}
+    if (corrAudioRef.current) unwireClip(corrAudioRef.current);
     corrAudioRef.current = null;
     // Leaving the ayah / stopping the test must never play a stale window.
     try { juhaniPlayerRef.current?.stop(); } catch {}
@@ -1783,7 +1785,10 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
     stopCorrAudio();
     const rate = CORR_RATE_VALUE[liveRef.current.corrRate];
     if (audioUrl) {
-      const a = new Audio(audioUrl);
+      const a = new Audio();
+      // Fade-in via Web Audio when the clip's CORS is verified; else plain,
+      // exactly as before. The CORS check is awaited for at most 400 ms.
+      let corsMode = false;
       // v13: the file is neutral-speed; the user's corrRate applies
       // here, pitch-preserved (browser TTS below keeps u.rate).
       // v14 (Claude review): Safari resets playbackRate when the src
@@ -1799,17 +1804,30 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
       corrAudioRef.current = a;
       a.onplaying = () => { diagPush('tts-start', { label: 'audio-correction', playbackRate: a.playbackRate, corrRate: liveRef.current.corrRate }); };
       a.onended = () => { diagPush('tts-end', { label: 'audio-correction' }); try { onDone?.(); } catch {} };
-      a.onerror = () => { diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed, onDone); };
+      a.onerror = () => {
+        if (corsMode) { corsMode = false; a.removeAttribute('crossorigin'); a.src = audioUrl; a.play().catch(() => {}); return; }
+        diagPush('tts-error', { label: 'audio-correction' }); speakCorrection(words, rate, onFailed, onDone);
+      };
       // DIAG (2026-11-04, logging only): a refused play() used to
       // fall back to TTS silently — the rejection (e.g.
       // NotAllowedError) is the prime suspect for random silence,
       // so both the accept and the reject are now logged. Acceptance
       // pairs with the tts-start (onplaying) event; accepted but
       // never started is the iOS timer-gating corner.
-      a.play().then(
-        () => { diagPush('tts-play-accepted', { label: 'audio-correction', reason: 'server-audio' }); },
-        (err) => { diagPush('tts-play-rejected', { label: 'audio-correction', code: err?.name || 'error', reason: 'server-audio' }); speakCorrection(words, rate, onFailed, onDone); },
-      );
+      const startPlay = () => {
+        if (corrAudioRef.current !== a) return;
+        wireClip(a, audioUrl);
+        a.play().then(
+          () => { diagPush('tts-play-accepted', { label: 'audio-correction', reason: 'server-audio' }); },
+          (err) => { diagPush('tts-play-rejected', { label: 'audio-correction', code: err?.name || 'error', reason: 'server-audio' }); speakCorrection(words, rate, onFailed, onDone); },
+        );
+      };
+      Promise.race([prepareClip(audioUrl), new Promise<boolean>((r) => setTimeout(() => r(false), 400))]).then(() => {
+        if (corrAudioRef.current !== a) return;
+        setClipSrc(a, audioUrl);
+        corsMode = a.crossOrigin === 'anonymous';
+        startPlay();
+      });
     } else speakCorrection(words, rate, onFailed, onDone);
   };
   // Ayah-mode replay with the R5 visible fallback: the button is the

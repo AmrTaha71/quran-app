@@ -1,3 +1,5 @@
+import { prepareClip, setClipSrc, wireClip, unwireClip } from './clipLevel';
+
 // Plays ONE span (from..to seconds) of a remote audio file and stops exactly
 // at its end. Used by the recitation tests: «5 words from the reciter» and the
 // one-word correction. Safari ignores currentTime until metadata is loaded, so
@@ -19,13 +21,21 @@ export function playSpan(url: string, from: number, to: number, rate = 1): SpanH
     if (timer) clearInterval(timer);
     if (metaTimer) clearTimeout(metaTimer);
     try { a.pause(); a.removeAttribute('src'); a.load(); } catch { /* ignore */ }
+    unwireClip(a);
     if (err) fail(err); else finish();
   };
-  a.onerror = () => end(new Error('audio-error'));
+  let cors = false;
+  a.onerror = () => {
+    // CORS-mode load failed: retry once as a plain element, as before.
+    if (cors && !done) { cors = false; a.removeAttribute('crossorigin'); a.addEventListener('loadedmetadata', onMeta, { once: true }); a.src = url; return; }
+    end(new Error('audio-error'));
+  };
   a.onended = () => end();
+  const onMeta = () => { if (metaTimer) clearTimeout(metaTimer); metaTimer = null; go(); };
   const go = () => {
     try { a.currentTime = Math.max(0, from); } catch { /* ignore */ }
     try { a.playbackRate = rate; } catch { /* ignore */ }
+    wireClip(a, url);
     a.play().then(() => {
       timer = setInterval(() => { if (a.currentTime >= to) end(); }, 30);
     }).catch(() => end(new Error('play-blocked')));
@@ -33,7 +43,13 @@ export function playSpan(url: string, from: number, to: number, rate = 1): SpanH
   // 4.27: never wait forever for metadata (a stalled network left the
   // test hanging): give up after 8 s like any other audio error.
   metaTimer = setTimeout(() => end(new Error('metadata-timeout')), 8000);
-  a.addEventListener('loadedmetadata', () => { if (metaTimer) clearTimeout(metaTimer); metaTimer = null; go(); }, { once: true });
-  a.src = url;
+  a.addEventListener('loadedmetadata', onMeta, { once: true });
+  // Wait briefly for the CORS check so the fade-in can be used; never longer.
+  Promise.race([prepareClip(url), new Promise<boolean>((r) => setTimeout(() => r(false), 500))]).then(() => {
+    if (done) return;
+    cors = true;
+    setClipSrc(a, url);
+    if (a.crossOrigin !== 'anonymous') cors = false;
+  });
   return { promise, cancel: () => end() };
 }

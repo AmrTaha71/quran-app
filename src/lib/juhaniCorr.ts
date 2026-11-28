@@ -28,6 +28,7 @@ import { hadrAudioUrl } from './hadr';
 import { CORR_TIMING_RUNS } from './corrTimingCoverage';
 import { getGlobalAyahNumber } from './surahs';
 import { onMobileData } from './netKind';
+import { prepareClip, setClipSrc, wireClip, unwireClip, isWired, clipReady } from './clipLevel';
 
 // ------------------------------------------------------------------
 // Correction timing setting (replaces the 2-10s stepper).
@@ -500,6 +501,19 @@ export function createJuhaniPlayer(): JuhaniPlayer {
     return el;
   };
 
+  // Load url into the element. A fade-wired element is silent for any clip
+  // without verified CORS, so it is replaced by a fresh one in that case.
+  const loadSrc = (a: HTMLAudioElement, url: string): HTMLAudioElement => {
+    if (isWired(a) && !clipReady(url)) {
+      unwireClip(a);
+      try { a.pause(); a.removeAttribute('src'); a.load(); } catch { /* ignore */ }
+      el = null;
+      a = ensure();
+    }
+    setClipSrc(a, url);
+    return a;
+  };
+
   const clearTimers = () => {
     if (poll) { clearInterval(poll); poll = null; }
     timers.forEach((t) => clearTimeout(t));
@@ -539,9 +553,10 @@ export function createJuhaniPlayer(): JuhaniPlayer {
   const prewarm = (url: string, warmTime?: number) => {
     try {
       if (busy) return;
-      const a = ensure();
+      let a = ensure();
+      void prepareClip(url);
       if (a.src !== url) {
-        a.src = url;
+        a = loadSrc(a, url);
         a.preload = 'auto';
         a.load();
       }
@@ -591,7 +606,7 @@ export function createJuhaniPlayer(): JuhaniPlayer {
     stop();
     const my = ++token;
     busy = true;
-    const a = ensure();
+    let a = ensure();
     a.muted = false;
     const segs = args.segments;
     let i = 0;
@@ -633,6 +648,7 @@ export function createJuhaniPlayer(): JuhaniPlayer {
         if (!alive()) return;
         applyRate(a, args.rate);
         a.onplaying = () => { applyRate(a, args.rate); };
+        if (i === 0) wireClip(a, args.url);
         const pr = a.play();
         const onPlayStarted = () => {
           if (!alive()) return;
@@ -670,7 +686,7 @@ export function createJuhaniPlayer(): JuhaniPlayer {
       // this same file: load() again throws the fetched bytes away and
       // the correction starts later, not sooner.
       const sameSrc = a.src === args.url;
-      if (!sameSrc) a.src = args.url;
+      if (!sameSrc) a = loadSrc(a, args.url);
       a.preload = 'auto';
       if (!sameSrc || a.error || a.networkState === 3 /* NETWORK_NO_SOURCE */) a.load();
     };
@@ -680,6 +696,7 @@ export function createJuhaniPlayer(): JuhaniPlayer {
   const dispose = () => {
     stop();
     if (el) {
+      unwireClip(el);
       try { el.removeAttribute('src'); el.load(); } catch { /* ignore */ }
       el = null;
     }
