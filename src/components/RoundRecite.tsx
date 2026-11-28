@@ -18,6 +18,7 @@ import { playSpan, type SpanHandle } from '../lib/spanPlayer';
 import { reciterAyahUrl } from '../lib/juhaniCorr';
 import { DeadlineTimer, RoundState, roundCutMs, loadRoundCutMode, ROUND_CUT_LABEL } from '../lib/roundJudge';
 import { mistakeBuzz, acceptChime, roundBuzzOn, roundChimeOn, setRoundBuzz, setRoundChime } from '../lib/roundFeel';
+import MushafRevealStage from './mushaf/MushafRevealStage';
 import { currentHistoryLevel, HINT_COST, HINT_WORDS, MAX_HINTS, type PickedAyah, type RoundResult } from '../lib/roundTest';
 
 type Phase = 'idle' | 'prompting' | 'ready' | 'listening' | 'grading' | 'correcting' | 'afterCorr' | 'self';
@@ -234,8 +235,13 @@ export default function RoundRecite({ ayah, corrections, onFinish }: {
   }
 
   const btn = 'w-full py-3 text-white font-bold rounded-xl disabled:opacity-50';
+  // 2026-11-28 (owner): recite on the Mushaf page. The prompt words are open; each word of the
+  // rest opens once the judge credits it (st.got), grey ones (R2) open grey.
+  const revealed = ayah.words.map((_, i) => i < eff || !!st.got[i - eff]);
+  const grey = ayah.words.map((_, i) => i >= eff && st.grey.has(i - eff));
   return (
     <div className="space-y-3">
+      {phase !== 'self' && <MushafRevealStage surah={ayah.surah} ayah={ayah.ayah} revealed={revealed} grey={grey} />}
       {phase === 'idle' && (
         <>
           <p className="text-sm text-accent-700">هتسمع أول {eff.toLocaleString('ar-EG')} كلمات من آية بصوت القارئ، وبعدين كمّل الآية بصوتك.</p>
