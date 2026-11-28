@@ -821,3 +821,15 @@ html.offline-banner .sticky.top-0 { top: var(--offline-banner-h, 0px); }
   button:active .voice-bar { animation: voice-bar 0.55s ease-in-out infinite alternate; }
 }
 @keyframes voice-bar { from { transform: scaleY(0.35); } to { transform: scaleY(1.9); } }
+
+/* ui-modern (2026-11-28, owner pick pending: icons style 1): iPhone-like badge, white glyph on a
+   glossy purple squircle. Variants: gold (share), danger (delete account), small (addons). */
+.icon-badge {
+  flex: none; width: 2.5rem; height: 2.5rem; border-radius: 0.8rem;
+  display: grid; place-items: center; color: #fff;
+  background: linear-gradient(145deg, #6B2AA0 0%, #3A065F 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 10px rgba(58, 6, 95, 0.25);
+}
+.icon-badge-gold { color: #24053B; background: linear-gradient(145deg, #F6D980 0%, #C9A227 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 10px rgba(134, 101, 26, 0.25); }
+.icon-badge-danger { background: linear-gradient(145deg, #e11d48 0%, #9f1239 100%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 10px rgba(159, 18, 57, 0.25); }
+.icon-badge-sm { width: 2rem; height: 2rem; border-radius: 0.65rem; }

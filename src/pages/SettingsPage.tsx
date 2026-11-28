@@ -5,7 +5,7 @@ import ReviewReminderCard from '../components/ReviewReminderCard';
 import DrumSelect from '../components/DrumSelect';
 import { resetHints } from '../lib/hints';
 import Hint from '../components/Hint';
-import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Compass, Share2, Info, BatteryCharging, Mic, Award, Users, SunMoon, Radio, MapPin, Clock, QrCode } from 'lucide-react';
+import { Settings, BookOpen, Volume2, Globe, RotateCcw, Check, Sparkles, CalendarDays, Shield, Lock, Eye, EyeOff, Download, Smartphone, Bell, Activity, Compass, Share2, Info, BatteryCharging, Mic, Award, Users, SunMoon, Radio, MapPin, Clock, QrCode, ChevronLeft } from 'lucide-react';
 import QiblaSheet from '../components/QiblaSheet';
 import { nearestMosqueUrl } from '../lib/qibla';
 import ShareSheet from '../components/ShareSheet';
@@ -103,6 +103,14 @@ function doorMatches(d: { title: string; sub: string; keys?: string }, q: string
   const hay = normalizeArabic(`${d.title} ${d.sub} ${d.keys ?? ''}`);
   return n.split(/\s+/).every((w) => hay.includes(w));
 }
+
+// ui-modern: the settings hub as grouped lists. A door missing here lands in the last group.
+const DOOR_GROUPS: [string, string[]][] = [
+  ['القرآن والحفظ', ['wird', 'srs', 'look', 'download']],
+  ['الصوت والتنبيهات', ['voice', 'adhan', 'battery']],
+  ['الجهاز والتطبيق', ['device', 'pwa', 'lang', 'onboarding']],
+  ['الحساب والتواصل', ['pass', 'share', 'about', 'reset', 'diag', 'account-delete']],
+];
 
 export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const { lang, setLang } = useLang();
@@ -911,26 +919,39 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
           </div>
         )}
         {openDoor === null ? (<>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
-            {doors.filter((d) => d.id !== 'admin' && (d.id !== 'diag' || showAdminUi) && doorMatches(d, doorQuery)).map((d, i) => (
-              <button key={d.id} onPointerDown={pressFeedback} onClick={() => openDoorAt(d.id)}
-                style={{ animationDelay: `${Math.min(i, 6) * 40}ms` }}
-                className="text-right p-4 sm:p-5 md:p-6 lg:p-7 glass-card rounded-2xl door-enter polish-press">
-                <span className="w-11 h-11 sm:w-12 sm:h-12 md:w-16 md:h-16 lg:w-20 lg:h-20 rounded-xl md:rounded-2xl border border-[rgba(134,101,26,0.40)] bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mb-3 md:mb-4">
-                  <d.icon className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 text-emerald-800" />
-                </span>
-                <span className="block text-sm sm:text-base md:text-lg lg:text-xl font-semibold text-ink">{d.title}</span>
-                {d.sub && <span className="block text-xs sm:text-sm lg:text-base text-ink-2 mt-1 md:mt-2">{d.sub}</span>}
-              </button>
-            ))}
-          </div>
+          {/* Owner 2026-11-28 (ui-modern): grouped list like the phone's own settings — badge, title, line, chevron. */}
+          {DOOR_GROUPS.map(([gTitle, ids], gi) => {
+            const list = doors.filter((d) => (ids.includes(d.id) || (gi === DOOR_GROUPS.length - 1 && !DOOR_GROUPS.some(([, x]) => x.includes(d.id))))
+              && d.id !== 'admin' && (d.id !== 'diag' || showAdminUi) && doorMatches(d, doorQuery));
+            if (!list.length) return null;
+            return (
+              <section key={gTitle} className="door-enter" style={{ animationDelay: `${gi * 60}ms` }}>
+                <h2 className="text-xs font-extrabold text-amber-800 px-2 mb-1.5">{gTitle}</h2>
+                <div className="rounded-2xl bg-white shadow-sm ring-1 ring-[rgba(201,162,39,0.35)] divide-y divide-accent-100 overflow-hidden">
+                  {list.map((d) => (
+                    <button key={d.id} onPointerDown={pressFeedback} onClick={() => openDoorAt(d.id)}
+                      className="w-full flex items-center gap-3 px-3.5 py-3 text-right polish-press active:bg-emerald-50">
+                      <span className={`icon-badge ${d.fg.includes('red') ? 'icon-badge-danger' : d.fg.includes('amber') ? 'icon-badge-gold' : ''}`}>
+                        <d.icon className="w-5 h-5" />
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[15px] font-bold text-ink">{d.title}</span>
+                        {d.sub && <span className="block text-xs text-ink-2 truncate">{d.sub}</span>}
+                      </span>
+                      <ChevronLeft className="w-5 h-5 text-amber-500 flex-shrink-0" aria-hidden="true" />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
           <section id="sec-addons" className="space-y-3">
             <h2 className="text-base md:text-lg font-semibold text-accent-800">إضافات</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {addons.map((a) => (
                 <button key={a.title} onPointerDown={pressFeedback} onClick={a.go}
-                  className="flex items-center gap-3 p-3 rounded-xl bg-white border border-hairline text-right polish-press polish-focus">
-                  <a.icon className="w-5 h-5 text-emerald-700 flex-shrink-0" />
+                  className="flex items-center gap-3 p-3 rounded-xl bg-white ring-1 ring-[rgba(201,162,39,0.35)] text-right polish-press polish-focus">
+                  <span className="icon-badge icon-badge-sm"><a.icon className="w-4 h-4" /></span>
                   <span className="text-sm font-medium text-accent-800">{a.title}</span>
                 </button>
               ))}

@@ -176,9 +176,9 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
             const Icon = ICONS[i];
             return (
               <div key={i} className="bg-white/85 backdrop-blur rounded-2xl px-1.5 py-2 border border-hairline-emerald shadow-sm flex flex-col items-center gap-1">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
-                  <Icon className="w-5 h-5 text-emerald-700" />
-                </div>
+                <span className="icon-badge icon-badge-sm sm:w-10 sm:h-10">
+                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                </span>
                 <p className="font-bold text-accent-800 text-xs sm:text-sm leading-tight">{title}</p>
               </div>
             );
