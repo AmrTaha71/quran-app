@@ -10,9 +10,9 @@
       <stop offset="100%" stop-color="#c9932b"/>
     </linearGradient>
     <radialGradient id="e" cx="50%" cy="42%" r="72%">
-      <stop offset="0%" stop-color="#13946e"/>
-      <stop offset="55%" stop-color="#065f46"/>
-      <stop offset="100%" stop-color="#033b2a"/>
+      <stop offset="0%" stop-color="#5E1394"/>
+      <stop offset="55%" stop-color="#3A065F"/>
+      <stop offset="100%" stop-color="#24033B"/>
     </radialGradient>
   </defs>
   <circle cx="120" cy="120" r="118" fill="url(#e)"/>
@@ -22,7 +22,7 @@
     <rect x="95" y="63" width="50" height="50"/>
     <polygon points="120,52.6 155.4,88 120,123.4 84.6,88"/>
   </g>
-  <polygon points="120,79 129,88 120,97 111,88" fill="#065f46"/>
+  <polygon points="120,79 129,88 120,97 111,88" fill="#3A065F"/>
   <g fill="url(#g)">
     <path d="M120 120 Q82 116 45 104 L45 188 L120 188 Z"/>
     <path d="M120 120 Q158 116 195 104 L195 188 L120 188 Z"/>
