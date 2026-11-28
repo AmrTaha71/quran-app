@@ -4110,7 +4110,7 @@ export default function QuranMushafPage({
     <div className="min-h-screen mushaf-page-bg pb-24">
       {/* Header — BOLD pass: chrome-enter on mount (chrome only, never the image) */}
       <header className="sticky top-0 z-40 app-header mushaf-chrome-enter">
-        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-0.5 flex items-center justify-between gap-x-2">
+        <div className="max-w-6xl xl:max-w-7xl mx-auto px-2 py-0 flex flex-nowrap items-center justify-between gap-x-2 min-h-0">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-7 h-7 bg-gradient-to-br from-amber-500 to-amber-700 rounded-lg flex items-center justify-center shadow flex-shrink-0">
               <BookOpen className="w-4 h-4 text-white" />
@@ -4146,7 +4146,7 @@ export default function QuranMushafPage({
             )}
             <button onClick={() => onNavigate('app')}
               className="flex items-center gap-1.5 px-2 py-1 text-sm text-emerald-700 hover:bg-emerald-50 rounded-lg transition-smooth font-semibold">
-              <Bookmark className="w-4 h-4" /> لوحتي
+              <Bookmark className="w-4 h-4" /> <span className="hidden sm:inline">لوحتي</span>
             </button>
             <button onClick={() => onNavigate('home')} aria-label="الرئيسية"
               className="flex items-center gap-1.5 px-2 py-1 text-sm text-accent-600 hover:bg-gray-100 rounded-lg transition-smooth">
@@ -4165,7 +4165,7 @@ export default function QuranMushafPage({
             niyyah line moved into the header row above; the header
             subtitle (descriptive text, not a control) was dropped. */}
         <div className="bg-white rounded-xl border border-gray-200 p-1 mb-1 shadow-sm">
-          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 [&_button]:text-[11px] [&_.drum-compact]:text-xs">
+          <div className="flex flex-nowrap overflow-x-auto items-center gap-x-1 [&_button]:whitespace-nowrap [&_button]:shrink-0 [&_button]:text-[11px] [&_.drum-compact]:text-xs">
             <button onClick={() => { setShowIndex(true); setIndexTab('juz'); }}
               className="flex items-center gap-1 px-1.5 py-0.5 bg-white hover:bg-amber-50 text-amber-800 rounded-lg text-[11px] font-semibold transition-smooth border border-amber-300 shadow-sm">
               <LayoutGrid className="w-3.5 h-3.5" /> {currentJuz.name}

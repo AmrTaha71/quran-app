@@ -48,9 +48,9 @@ export function WorshipTimer({ dark, flash }: { dark?: boolean; flash?: boolean 
     return () => window.clearInterval(id);
   }, []);
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-opacity duration-700 ${vis ? 'opacity-100' : 'opacity-0'} ${dark ? 'bg-black/60 text-white ring-1 ring-white/40' : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'}`} title="وقتك في التعبّد بحفظ كتاب الله">
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap transition-opacity duration-700 ${vis ? 'opacity-100' : 'opacity-0'} ${dark ? 'bg-black/60 text-white ring-1 ring-white/40' : 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'}`} title="وقتك في التعبّد بحفظ كتاب الله">
       <Clock className="w-4 h-4" />
-      بقالك {formatWorship(total)} بتتعبد بقراءة القرآن الكريم
+      بقالك {formatWorship(total)}<span className="hidden sm:inline"> بتتعبد بقراءة القرآن الكريم</span>
     </span>
   );
 }
