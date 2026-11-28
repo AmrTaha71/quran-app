@@ -66,4 +66,9 @@ describe('madd length is not a mistake', () => {
     assert.equal(softWordEq('مني', 'من'), false);
     assert.equal(softWordEq('اني', 'ان'), false);
   });
+
+  it('وأنتم: the alif is a real hamza, so ونتم is wrong and وانتم is right', () => {
+    assert.equal(softWordEq('ونتم', 'وانتم'), false);
+    assert.equal(softWordEq('وانتم', 'وانتم'), true);
+  });
 });

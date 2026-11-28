@@ -181,6 +181,9 @@ function muqattaatMatchAt(expected: string[], i: number, spoken: string[], j: nu
 //      a different ending is a different word.
 // Same measurement after the change: 24 ayahs (all multi-word joins).
 const softSkeleton = (w: string) => w.replace(/ة/g, 'ه').replace(/(?<=.)ا(?=.)/g, '').replace(/يي+/g, 'ي').replace(/لل+/g, 'ل');
+// shortcut: normalized forms whose و/ف + ا is a real hamza (وأنتم, وأن, وإن), not a
+// dropped hamzat wasl. Normalizing erases the hamza, so this list is the only way to tell.
+const HAMZA_QAT_ALIF = new Set(['وانتم', 'فانتم', 'وانتن', 'فانتن', 'وانت', 'فانت', 'وانا', 'فانا', 'وان', 'فان']);
 export function softWordEq(spoken: string, expected: string): boolean {
   if (spoken === expected) return true;
   const alts = IMLA_ALT[expected];
@@ -204,12 +207,12 @@ export function softWordEq(spoken: string, expected: string): boolean {
     if (spoken.length >= 2 && !spoken.endsWith('ه') && c === spoken + 'ا') return true;
     // Length >= 3: on 2-letter words an added ي makes a different word (من→مني, ان→اني).
     if (c.length >= 3 && spoken === c + 'ي') return true;
-    if (/^[وف]ا./.test(c) && spoken === c[0] + c.slice(2)) return true;
+    if (/^[وف]ا./.test(c) && !HAMZA_QAT_ALIF.has(c) && spoken === c[0] + c.slice(2)) return true;
   }
   if (spoken.length < 3) return false;
   const sp = softSkeleton(spoken);
   for (const c of cands) {
-    if (sp === softSkeleton(c)) return true;
+    if (sp === softSkeleton(c) && !HAMZA_QAT_ALIF.has(c)) return true;
     if (c.length >= 5 && c.endsWith('اها') && spoken === c.slice(0, -2)) return true;
   }
   return false;
