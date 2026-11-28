@@ -17,8 +17,8 @@ import { formatAr } from '../lib/numerals';
 import { APP_URL } from '../lib/shareLinks';
 import { pressFeedback } from '../lib/pressFeedback';
 
-const EMERALD_TOP = '#073B27';
-const EMERALD_BOTTOM = '#0E7A52';
+const EMERALD_TOP = '#25073B';
+const EMERALD_BOTTOM = '#4D0E7A';
 const GOLD = '#D4AF37';
 const GOLD_LIGHT = '#F0C85A';
 

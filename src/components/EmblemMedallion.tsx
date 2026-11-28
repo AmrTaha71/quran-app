@@ -54,7 +54,7 @@ export default function EmblemMedallion({
         <polygon points="120,52.6 155.4,88 120,123.4 84.6,88" />
       </g>
       {/* Jewel heart: small emerald diamond at the star's center. */}
-      <polygon points="120,79 129,88 120,97 111,88" fill="#065f46" />
+      <polygon points="120,79 129,88 120,97 111,88" fill="#3A065F" />
       {/* Open Mushaf: bold gold cover, cream pages, gold spine.
           Center (120,146), width 150, height 84. Top edges are
           bezier curves that curl down toward the spine (the star's
@@ -82,12 +82,12 @@ export default function EmblemMedallion({
             <stop offset="100%" stopColor="#c9932b" />
           </linearGradient>
           <radialGradient id={emeraldId} cx="50%" cy="42%" r="72%">
-            <stop offset="0%" stopColor="#13946e" />
-            <stop offset="55%" stopColor="#065f46" />
-            <stop offset="100%" stopColor="#033b2a" />
+            <stop offset="0%" stopColor="#5E1394" />
+            <stop offset="55%" stopColor="#3A065F" />
+            <stop offset="100%" stopColor="#24033B" />
           </radialGradient>
         </defs>
-        <rect x="0" y="0" width="240" height="300" rx="28" fill="#04402e" />
+        <rect x="0" y="0" width="240" height="300" rx="28" fill="#270440" />
         {medallion}
         <line x1="84" y1="256" x2="156" y2="256" stroke="#f0c85a" strokeWidth="2" />
         <rect x="116.5" y="252.5" width="7" height="7" fill="#f0c85a" transform="rotate(45 120 256)" />
@@ -107,9 +107,9 @@ export default function EmblemMedallion({
           <stop offset="100%" stopColor="#c9932b" />
         </linearGradient>
         <radialGradient id={emeraldId} cx="50%" cy="42%" r="72%">
-          <stop offset="0%" stopColor="#13946e" />
-          <stop offset="55%" stopColor="#065f46" />
-          <stop offset="100%" stopColor="#033b2a" />
+          <stop offset="0%" stopColor="#5E1394" />
+          <stop offset="55%" stopColor="#3A065F" />
+          <stop offset="100%" stopColor="#24033B" />
         </radialGradient>
       </defs>
       {medallion}

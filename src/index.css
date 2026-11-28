@@ -39,11 +39,11 @@ select.text-xs {
    a real ring on :focus-visible (same specificity as the utility, later in
    this file, so it wins); the plain rule covers everything else. */
 :focus-visible {
-  outline: 2px solid #047857;
+  outline: 2px solid #480478;
   outline-offset: 2px;
 }
 .focus\:outline-none:focus-visible {
-  outline: 2px solid #047857;
+  outline: 2px solid #480478;
   outline-offset: 2px;
 }
 
@@ -52,7 +52,7 @@ body {
   /* Warm paper canvas (theme system): the old cold slate #f8fafc
      fought the cream/gold emblem. Ink is warm, not slate-blue. */
   background-color: #fffdf7;
-  color: #1c2b26;
+  color: #251C2B;
   /* Responsive default: readable on a phone, roomier on a large screen.
      Individual controls can still override this (e.g. the Mushaf zoom). */
   font-size: clamp(1.02rem, 2vw + 0.6rem, 1.15rem);
@@ -163,9 +163,9 @@ body {
    single shadow ink 28,43,38 + gold-brown hero stack; no parallax, no
    sheen, no breathing halo, no button recolor this push. */
 :root {
-  --polish-emerald: #065f46;
-  --polish-emerald-mid: #047857;
-  --polish-emerald-deep: #064e3b;
+  --polish-emerald: #3A065F;
+  --polish-emerald-mid: #480478;
+  --polish-emerald-deep: #30064E;
   --polish-gold: #c69a42;
   --polish-gold-light: #e4c77f;
   --polish-hairline: rgba(82, 67, 43, 0.11);
@@ -173,26 +173,26 @@ body {
   --polish-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
   --polish-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --polish-ease-physical: cubic-bezier(0.25, 0.8, 0.25, 1);
-  --polish-sh1: 0 1px 1px rgba(28, 43, 38, 0.04), 0 2px 6px rgba(28, 43, 38, 0.05), 0 8px 20px -8px rgba(28, 43, 38, 0.07);
-  --polish-sh2: 0 1px 2px rgba(28, 43, 38, 0.05), 0 4px 10px rgba(28, 43, 38, 0.06), 0 14px 28px -10px rgba(28, 43, 38, 0.11);
-  --polish-sh3: 0 -1px 0 rgba(28, 43, 38, 0.06), 0 -8px 24px -8px rgba(28, 43, 38, 0.08);
-  --polish-sh4: 0 2px 4px rgba(28, 43, 38, 0.06), 0 12px 24px -4px rgba(28, 43, 38, 0.12), 0 32px 64px -12px rgba(28, 43, 38, 0.22);
+  --polish-sh1: 0 1px 1px rgba(37, 28, 43, 0.04), 0 2px 6px rgba(37, 28, 43, 0.05), 0 8px 20px -8px rgba(37, 28, 43, 0.07);
+  --polish-sh2: 0 1px 2px rgba(37, 28, 43, 0.05), 0 4px 10px rgba(37, 28, 43, 0.06), 0 14px 28px -10px rgba(37, 28, 43, 0.11);
+  --polish-sh3: 0 -1px 0 rgba(37, 28, 43, 0.06), 0 -8px 24px -8px rgba(37, 28, 43, 0.08);
+  --polish-sh4: 0 2px 4px rgba(37, 28, 43, 0.06), 0 12px 24px -4px rgba(37, 28, 43, 0.12), 0 32px 64px -12px rgba(37, 28, 43, 0.22);
   --polish-sh-hero: 0 3px 5px rgba(67, 46, 14, 0.12), 0 12px 28px rgba(67, 46, 14, 0.18), 0 28px 58px rgba(67, 46, 14, 0.12);
   /* Type/color Phase 1 tokens (reconciled reviews, 2026-10-31).
      Neutral hairline stays --polish-hairline (reused, not duplicated). */
   --page-bg: #FDFDFB;
-  --page-wash: linear-gradient(180deg, rgba(23, 107, 80, 0.008) 0%, #FFFFFF 45%, rgba(82, 67, 43, 0.006) 100%);
+  --page-wash: linear-gradient(180deg, rgba(72, 23, 107, 0.008) 0%, #FFFFFF 45%, rgba(82, 67, 43, 0.006) 100%);
   --header-bg: #FFFFFF;
   --card-bg: #FFFFFF;
   --surface-raised: #FFFEFA;
-  --ink: #1c2b26;
+  --ink: #251C2B;
   --ink-2: #4b5a53;
   --ink-3: #5f6e66;
-  --emerald-primary: #176B50;
-  --emerald-active: #245E49;
+  --emerald-primary: #48176B;
+  --emerald-active: #46245E;
   --gold-accent: #B58A38;
   --amber-link: #85551B;
-  --hairline-emerald: rgba(6, 95, 70, 0.18);
+  --hairline-emerald: rgba(58, 6, 95, 0.18);
   --hairline-amber: rgba(180, 83, 9, 0.2);
   --hairline-input: #8d877b;
 }
@@ -204,7 +204,7 @@ body {
 /* Shadow cue for primary buttons only: a ::after shadow that fades as
    the button sinks (opacity only — the shadow itself never animates). */
 .polish-press-depth { position: relative; }
-.polish-press-depth::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 18px rgba(9, 39, 29, 0.20); opacity: 1; pointer-events: none; transition: opacity 90ms var(--polish-ease-physical); }
+.polish-press-depth::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: 0 8px 18px rgba(26, 9, 39, 0.20); opacity: 1; pointer-events: none; transition: opacity 90ms var(--polish-ease-physical); }
 .polish-press-depth:active::after { opacity: 0.25; }
 /* Cards: static elevation-1 shadow; hover lift is transform-only. */
 .polish-card { box-shadow: var(--polish-sh1); transition: transform 250ms var(--polish-ease-out); }
@@ -229,7 +229,7 @@ body {
 /* Adhkar playing rim: the ::after ring always exists; .is-playing
    only flips its opacity (no loop, no pulse). */
 .polish-listen-row { position: relative; }
-.polish-listen-row::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(4, 120, 87, 0.35); opacity: 0; pointer-events: none; transition: opacity 200ms var(--polish-ease-out); }
+.polish-listen-row::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(72, 4, 120, 0.35); opacity: 0; pointer-events: none; transition: opacity 200ms var(--polish-ease-out); }
 .polish-listen-row.is-playing::after { opacity: 1; }
 /* Centered modals (stronger pass): rise 20px + scale 0.94, 340ms. Mount-only. */
 @keyframes polish-modal-in {
@@ -253,7 +253,7 @@ body {
 /* Tab indicator: leaving is quick (160ms ease-in); arriving reads as
    one bar moving (320ms sheet curve + 40ms lag). Icon: 1.10, not 1.15,
    so the indicator stays the primary active cue. */
-.nav-indicator { position: absolute; top: 0; right: 1.25rem; left: 1.25rem; height: 3px; border-radius: 9999px; background: #047857; transform: scaleX(0); transition: transform 160ms var(--polish-ease-in); }
+.nav-indicator { position: absolute; top: 0; right: 1.25rem; left: 1.25rem; height: 3px; border-radius: 9999px; background: #480478; transform: scaleX(0); transition: transform 160ms var(--polish-ease-in); }
 .nav-indicator-on { transform: scaleX(1); transition: transform 320ms var(--polish-ease-sheet) 40ms; }
 .nav-icon { transition: transform 280ms var(--polish-ease-out); display: inline-flex; }
 .nav-icon-on { transform: scale(1.10); }
@@ -276,7 +276,7 @@ body {
 }
 .polish-hero-medal { animation: polish-hero-in 450ms var(--polish-ease-out) backwards; }
 /* Focus: visible keyboard focus (emerald, not gold) on opted-in controls. */
-.polish-focus:focus-visible { outline: 2px solid #047857; outline-offset: 3px; }
+.polish-focus:focus-visible { outline: 2px solid #480478; outline-offset: 3px; }
 /* Reduced motion: stop ALL polish movement (static elevation and
    colors stay). */
 /* Item 8.14: Tailwind's own animate-* utilities (spin, pulse, bounce,
@@ -315,9 +315,9 @@ html { -webkit-text-size-adjust: 100%; }
    deliberately unmistakable: a deeper emerald + cream + gold system,
    water-glass surfaces, ripple, tap sound, and route transitions
    you can actually feel. Every color pair below was checked with a
-   WCAG contrast calculation (never by eye): white on #0B4D33 = 9.89,
-   on #0F7A52 = 5.35, on #A85E0F = 4.91, on #7C4410 = 7.80, on
-   #0F766E = 5.47, on #115E59 = 7.58, on #85551B = 6.34 — all AA.
+   WCAG contrast calculation (never by eye): white on #310B4D = 9.89,
+   on #4D0F7A = 5.35, on #A85E0F = 4.91, on #7C4410 = 7.80, on
+   #4B0F76 = 5.47, on #3E115E = 7.58, on #85551B = 6.34 — all AA.
    Two pre-existing failures were fixed inside this batch's own
    scope: white on emerald-600 (3.77) and white on amber-600 (3.19)
    are replaced by the verified gradients on the Home buttons that
@@ -332,19 +332,19 @@ html { -webkit-text-size-adjust: 100%; }
    text; Mushaf images and word-tap zones are never animated (the
    route wrapper skips mushaf/follow entirely — see App.tsx). */
 :root {
-  --visual-emerald-deep: #0B4D33;
-  --visual-emerald-top: #0F7A52;
+  --visual-emerald-deep: #310B4D;
+  --visual-emerald-top: #4D0F7A;
   --visual-amber-top: #A85E0F;
   --visual-amber-deep: #7C4410;
-  --visual-teal-top: #0F766E;
-  --visual-teal-deep: #115E59;
+  --visual-teal-top: #4B0F76;
+  --visual-teal-deep: #3E115E;
   --visual-cream-0: #FFFEF9;
   --visual-cream-1: #F7F2E3;
   --visual-gold: #B58A38;
   --visual-gold-hairline: rgba(181, 138, 56, 0.45);
-  --visual-grad-emerald: linear-gradient(160deg, #0F7A52 0%, #0B4D33 100%);
+  --visual-grad-emerald: linear-gradient(160deg, #4D0F7A 0%, #310B4D 100%);
   --visual-grad-amber: linear-gradient(160deg, #A85E0F 0%, #7C4410 100%);
-  --visual-grad-teal: linear-gradient(160deg, #0F766E 0%, #115E59 100%);
+  --visual-grad-teal: linear-gradient(160deg, #4B0F76 0%, #3E115E 100%);
   --visual-grad-cream: linear-gradient(180deg, #FFFEF9 0%, #F7F2E3 100%);
   --visual-grad-glass: linear-gradient(180deg, rgba(255, 254,247, 0.78) 0%, rgba(247, 242, 227, 0.66) 100%);
 }
@@ -355,7 +355,7 @@ html { -webkit-text-size-adjust: 100%; }
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
   backdrop-filter: blur(18px) saturate(1.5);
   border-top: 1px solid var(--visual-gold-hairline);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 -8px 24px -8px rgba(28, 43, 38, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 -8px 24px -8px rgba(37, 28, 43, 0.12);
 }
 .glass-card {
   background: var(--visual-grad-cream);
@@ -363,11 +363,11 @@ html { -webkit-text-size-adjust: 100%; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), var(--polish-sh1);
 }
 /* Luminous door gradients (white text verified AA on both stops). */
-.grad-emerald-door { background-color: #0B4D33; background-image: var(--visual-grad-emerald); }
+.grad-emerald-door { background-color: #310B4D; background-image: var(--visual-grad-emerald); }
 .grad-amber-door { background-color: #7C4410; background-image: var(--visual-grad-amber); }
-.grad-teal-door { background-color: #115E59; background-image: var(--visual-grad-teal); }
+.grad-teal-door { background-color: #3E115E; background-image: var(--visual-grad-teal); }
 /* Static light inner edge for gradient doors (not a moving sheen). */
-.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.10), 0 10px 24px -12px rgba(9, 39, 29, 0.45); }
+.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(0, 0, 0, 0.10), 0 10px 24px -12px rgba(26, 9, 39, 0.45); }
 /* Ripple layer: a dedicated overlay (never the button itself, never
    Arabic text) so clipping cannot touch text layout. Ink is drawn
    by pressFeedback.ts via WAAPI and removed after ~450ms. */
@@ -407,7 +407,7 @@ html { -webkit-text-size-adjust: 100%; }
 .nav-pill-active {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   padding: 2px 16px 3px; border-radius: 9999px;
-  background: linear-gradient(180deg, rgba(11, 77, 51, 0.13), rgba(11, 77, 51, 0.06));
+  background: linear-gradient(180deg, rgba(49, 11, 77, 0.13), rgba(49, 11, 77, 0.06));
 }
 
 /* ============ BOLD beauty pass (2026-11-04) ============
@@ -419,7 +419,7 @@ html { -webkit-text-size-adjust: 100%; }
    + a new background, (2) visible transitions on EVERY page.
    Direction 1: richer, deeper door gradients (tops UNCHANGED so white
    text contrast is untouched: 5.35 / 4.91 / 5.47; bottoms deepened to
-   #083B27 / #5E3208 / #0B3D38 = 12.61 / 10.85 / 12.08), a layered page
+   #26083B / #5E3208 / #280B3D = 12.61 / 10.85 / 12.08), a layered page
    background (emerald + gold glows, faint dot texture, deeper cream
    foot — ink 12.60-14.62, ink-2 6.21-7.20 across its extremes), an
    emerald-tinted glass nav, a deeper active pill wash (emerald-deep
@@ -445,21 +445,21 @@ html { -webkit-text-size-adjust: 100%; }
    truncate/overflow rules on Arabic text (the only overflow:hidden in
    this file remains the empty .ripple-layer overlay span). */
 :root {
-  --bold-door-emerald-deep: #083B27;
+  --bold-door-emerald-deep: #26083B;
   --bold-door-amber-deep: #5E3208;
-  --bold-door-teal-deep: #0B3D38;
-  --bold-grad-emerald: linear-gradient(160deg, #0F7A52 0%, #083B27 100%);
+  --bold-door-teal-deep: #280B3D;
+  --bold-grad-emerald: linear-gradient(160deg, #4D0F7A 0%, #26083B 100%);
   --bold-grad-amber: linear-gradient(160deg, #A85E0F 0%, #5E3208 100%);
-  --bold-grad-teal: linear-gradient(160deg, #0F766E 0%, #0B3D38 100%);
+  --bold-grad-teal: linear-gradient(160deg, #4B0F76 0%, #280B3D 100%);
 }
 /* New page background: glows + dot texture + deeper cream foot.
    Later rule wins over the .page-bg above (same specificity). */
 .page-bg {
   background-color: #F3EDD9;
   background-image:
-    radial-gradient(720px 360px at 85% -5%, rgba(15, 122, 82, 0.14), transparent 65%),
+    radial-gradient(720px 360px at 85% -5%, rgba(77, 15, 122, 0.14), transparent 65%),
     radial-gradient(560px 300px at 5% 0%, rgba(181, 138, 56, 0.13), transparent 65%),
-    radial-gradient(circle, rgba(11, 77, 51, 0.07) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(49, 11, 77, 0.07) 1px, transparent 1.6px),
     linear-gradient(180deg, #FFFEF9 0%, #F3EDD9 100%);
   background-size: auto, auto, 26px 26px, auto;
   background-position: 0 0, 0 0, 0 0, 0 0;
@@ -473,28 +473,28 @@ body { background-color: #F3EDD9; }
   background-color: #F3EAD3;
   background-image:
     radial-gradient(720px 360px at 88% -5%, rgba(168, 94, 15, 0.16), transparent 65%),
-    radial-gradient(560px 300px at 5% 0%, rgba(15, 122, 82, 0.10), transparent 65%),
-    radial-gradient(circle, rgba(11, 77, 51, 0.06) 1px, transparent 1.6px),
+    radial-gradient(560px 300px at 5% 0%, rgba(77, 15, 122, 0.10), transparent 65%),
+    radial-gradient(circle, rgba(49, 11, 77, 0.06) 1px, transparent 1.6px),
     linear-gradient(180deg, #FDF8EA 0%, #F3EAD3 100%);
   background-size: auto, auto, 26px 26px, auto;
   background-position: 0 0, 0 0, 0 0, 0 0;
   background-repeat: no-repeat, no-repeat, repeat, no-repeat;
 }
 /* Deeper door gradients (tops unchanged, bottoms deepened). */
-.grad-emerald-door { background-color: #083B27; background-image: var(--bold-grad-emerald); }
+.grad-emerald-door { background-color: #26083B; background-image: var(--bold-grad-emerald); }
 .grad-amber-door { background-color: #5E3208; background-image: var(--bold-grad-amber); }
-.grad-teal-door { background-color: #0B3D38; background-image: var(--bold-grad-teal); }
+.grad-teal-door { background-color: #280B3D; background-image: var(--bold-grad-teal); }
 /* Stronger door light + shadow so doors read luminous, not flat. */
-.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 16px 32px -14px rgba(9, 39, 29, 0.55); }
+.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 16px 32px -14px rgba(26, 9, 39, 0.55); }
 /* Emerald-tinted water-glass nav (labels stay ink-2/emerald-deep). */
 .glass-nav {
-  background: linear-gradient(180deg, rgba(220, 235, 226, 0.82) 0%, rgba(247, 242, 227, 0.70) 100%);
+  background: linear-gradient(180deg, rgba(229, 220, 235, 0.82) 0%, rgba(247, 242, 227, 0.70) 100%);
   border-top: 1px solid var(--visual-gold-hairline);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 -8px 24px -8px rgba(28, 43, 38, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 -8px 24px -8px rgba(37, 28, 43, 0.12);
 }
 /* Deeper active pill wash (emerald-deep on blended wash = 6.28). */
 .nav-pill-active {
-  background: linear-gradient(180deg, rgba(11, 77, 51, 0.20), rgba(11, 77, 51, 0.10));
+  background: linear-gradient(180deg, rgba(49, 11, 77, 0.20), rgba(49, 11, 77, 0.10));
 }
 /* Deeper gold pill: every stop passes 3:1 on cream (6.37/4.50/3.58). */
 .nav-tab-pill {
@@ -555,12 +555,12 @@ body { background-color: #F3EDD9; }
       drafts FAILED and were deepened until they passed: white on
       amber top #B4630A was 4.44 -> #9E5608 is 5.54; gold #96711F on
       porcelain was 4.38 -> #86651A is 5.26. Final pairs: white on
-      emerald top #0C7A4E = 5.37, on amber top #9E5608 = 5.54, on teal
-      top #0E7A6E = 5.21, on deeps #053B27/#4A2703/#073C36 = 12.64 /
-      13.27 / 12.29; ink #1c2b26 on bg extremes = 13.34 / 10.87; ink-2
+      emerald top #4C0C7A = 5.37, on amber top #9E5608 = 5.54, on teal
+      top #4D0E7A = 5.21, on deeps #24053B/#4A2703/#26073C = 12.64 /
+      13.27 / 12.29; ink #251C2B on bg extremes = 13.34 / 10.87; ink-2
       #43534C on bg extremes = 7.36 / 5.99, on porcelain = 7.93; white
       on amber-link #85551B = 6.34; amber-link on porcelain = 6.18;
-      emerald-deep #053B27 on nav glass blend = 9.92, on porcelain =
+      emerald-deep #24053B on nav glass blend = 9.92, on porcelain =
       12.32; ink-2 on nav glass blend = 6.38; amber-700/emerald-700
       icons on white = 5.02 / 5.48 (icon bar 3.0). No gold/amber body
       text below AA exists.
@@ -600,23 +600,23 @@ body { background-color: #F3EDD9; }
   --chic-gold: #86651A;
   --chic-gold-hairline: rgba(134, 101, 26, 0.55);
   --chic-gold-border: rgba(134, 101, 26, 0.40);
-  --chic-emerald-top: #0C7A4E;
-  --chic-emerald-deep: #053B27;
+  --chic-emerald-top: #4C0C7A;
+  --chic-emerald-deep: #24053B;
   --chic-amber-top: #9E5608;
   --chic-amber-deep: #4A2703;
-  --chic-teal-top: #0E7A6E;
-  --chic-teal-deep: #073C36;
-  --chic-grad-emerald: linear-gradient(160deg, #0C7A4E 0%, #053B27 100%);
+  --chic-teal-top: #4D0E7A;
+  --chic-teal-deep: #26073C;
+  --chic-grad-emerald: linear-gradient(160deg, #4C0C7A 0%, #24053B 100%);
   --chic-grad-amber: linear-gradient(160deg, #9E5608 0%, #4A2703 100%);
-  --chic-grad-teal: linear-gradient(160deg, #0E7A6E 0%, #073C36 100%);
+  --chic-grad-teal: linear-gradient(160deg, #4D0E7A 0%, #26073C 100%);
 }
 /* Rich sand ground with presence (later rule wins over .page-bg). */
 .page-bg {
   background-color: #E9DCC0;
   background-image:
-    radial-gradient(720px 360px at 85% -5%, rgba(12, 122, 78, 0.20), transparent 65%),
+    radial-gradient(720px 360px at 85% -5%, rgba(76, 12, 122, 0.20), transparent 65%),
     radial-gradient(560px 300px at 5% 0%, rgba(180, 140, 40, 0.20), transparent 65%),
-    radial-gradient(circle, rgba(5, 59, 39, 0.10) 1px, transparent 1.6px),
+    radial-gradient(circle, rgba(36, 5, 59, 0.10) 1px, transparent 1.6px),
     linear-gradient(180deg, #FBF3DF 0%, #E9DCC0 100%);
   background-size: auto, auto, 26px 26px, auto;
   background-position: 0 0, 0 0, 0 0, 0 0;
@@ -629,40 +629,40 @@ body { background-color: #E9DCC0; }
   background-color: #EEDFC0;
   background-image:
     radial-gradient(720px 360px at 88% -5%, rgba(158, 86, 8, 0.20), transparent 65%),
-    radial-gradient(560px 300px at 5% 0%, rgba(12, 122, 78, 0.12), transparent 65%),
-    radial-gradient(circle, rgba(5, 59, 39, 0.08) 1px, transparent 1.6px),
+    radial-gradient(560px 300px at 5% 0%, rgba(76, 12, 122, 0.12), transparent 65%),
+    radial-gradient(circle, rgba(36, 5, 59, 0.08) 1px, transparent 1.6px),
     linear-gradient(180deg, #FDF6E3 0%, #EEDFC0 100%);
   background-size: auto, auto, 26px 26px, auto;
   background-position: 0 0, 0 0, 0 0, 0 0;
   background-repeat: no-repeat, no-repeat, repeat, no-repeat;
 }
 /* Deeper, more saturated door gradients (white text pairs above). */
-.grad-emerald-door { background-color: #053B27; background-image: var(--chic-grad-emerald); }
+.grad-emerald-door { background-color: #24053B; background-image: var(--chic-grad-emerald); }
 .grad-amber-door { background-color: #4A2703; background-image: var(--chic-grad-amber); }
-.grad-teal-door { background-color: #073C36; background-image: var(--chic-grad-teal); }
+.grad-teal-door { background-color: #26073C; background-image: var(--chic-grad-teal); }
 /* Stronger door light + shadow so doors read luminous, not flat. */
-.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.50), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 18px 36px -14px rgba(9, 39, 29, 0.60); }
+.glass-door-highlight { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.50), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 18px 36px -14px rgba(26, 9, 39, 0.60); }
 /* Porcelain cards that stand off the sand ground (not white-on-white). */
 .glass-card {
   border: 1px solid transparent;
   background:
     linear-gradient(180deg, #FFFCF3 0%, #FBF3DF 100%) padding-box,
     linear-gradient(180deg, rgba(134, 101, 26, 0.55) 0%, rgba(134, 101, 26, 0.28) 100%) border-box;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 24px -12px rgba(9, 39, 29, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 10px 24px -12px rgba(26, 9, 39, 0.28);
 }
 /* UNMISTAKABLE glass nav: truly translucent + strong blur + gold top
    edge + white inner line. Content scrolling beneath visibly smears
    through it; at rest the deeper background glows show through. */
 .glass-nav {
-  background: linear-gradient(180deg, rgba(214, 232, 220, 0.58) 0%, rgba(240, 232, 205, 0.45) 100%);
+  background: linear-gradient(180deg, rgba(224, 214, 232, 0.58) 0%, rgba(240, 232, 205, 0.45) 100%);
   -webkit-backdrop-filter: blur(24px) saturate(1.8);
   backdrop-filter: blur(24px) saturate(1.8);
   border-top: 1px solid var(--chic-gold-hairline);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 -10px 28px -10px rgba(28, 43, 38, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 -10px 28px -10px rgba(37, 28, 43, 0.18);
 }
 /* Deeper active pill wash on the translucent bar. */
 .nav-pill-active {
-  background: linear-gradient(180deg, rgba(5, 59, 39, 0.22), rgba(5, 59, 39, 0.12));
+  background: linear-gradient(180deg, rgba(36, 5, 59, 0.22), rgba(36, 5, 59, 0.12));
 }
 /* Water effect spans (drawn by pressFeedback.ts via WAAPI, removed
    after ~800ms). Colors are set inline (adaptive to host darkness);
@@ -676,7 +676,7 @@ body { background-color: #E9DCC0; }
    button inside the Home wrapper (.qr-home). The modal's store badges
    keep their brand colors. */
 .qr-home .bg-gradient-to-r {
-  background-image: linear-gradient(to right, #0C7A4E, #053B27);
+  background-image: linear-gradient(to right, #4C0C7A, #24053B);
 }
 
 /* ============ Route cross-fade (approved 2026-11-04) ============
@@ -706,8 +706,8 @@ html[data-mushaf-night="1"] .mushaf-page-bg {
   background-color: #D6C9A8;
   background-image:
     radial-gradient(720px 360px at 88% -5%, rgba(158, 86, 8, 0.10), transparent 65%),
-    radial-gradient(560px 300px at 5% 0%, rgba(12, 122, 78, 0.08), transparent 65%),
-    radial-gradient(circle, rgba(5, 59, 39, 0.06) 1px, transparent 1.6px),
+    radial-gradient(560px 300px at 5% 0%, rgba(76, 12, 122, 0.08), transparent 65%),
+    radial-gradient(circle, rgba(36, 5, 59, 0.06) 1px, transparent 1.6px),
     linear-gradient(180deg, #E6DBBE 0%, #D6C9A8 100%);
 }
 
@@ -796,8 +796,8 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
 
 /* Landing banner: big, attention-grabbing pulse (off for reduced motion) */
 @keyframes free-banner-pulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  50% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(115, 16, 185, 0.7); }
+  50% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(115, 16, 185, 0); }
 }
 .free-banner { animation: free-banner-pulse 1.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {

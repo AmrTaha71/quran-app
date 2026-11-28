@@ -8,7 +8,7 @@ export default function GrandpaIcon({ className = '' }: { className?: string }) 
     <svg viewBox="0 0 120 120" className={className} role="img" aria-label="جدو">
       <defs>
         <linearGradient id="gp-bg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#2E9A74" /><stop offset="1" stopColor="#0B5D40" />
+          <stop offset="0" stopColor="#6D2E9A" /><stop offset="1" stopColor="#3B0B5D" />
         </linearGradient>
         <linearGradient id="gp-gold" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#F3D77E" /><stop offset="1" stopColor="#C8952A" />
@@ -25,7 +25,7 @@ export default function GrandpaIcon({ className = '' }: { className?: string }) 
           <rect x="100" y="66" width="12" height="12" rx="2" transform="rotate(-12 106 72)" />
         </g>
         {/* shoulders and collar */}
-        <path d="M10 126 Q16 100 60 99 Q106 100 112 126 Z" fill="#0F4A37" />
+        <path d="M10 126 Q16 100 60 99 Q106 100 112 126 Z" fill="#310F4A" />
         <path d="M49 101 L61 117 L73 101 Z" fill="#F4EBD3" />
         {/* head: bald oval, turned a little right */}
         <path d="M40 46 Q38 12 64 12 Q90 14 88 46 Q88 66 74 72 Q58 78 46 68 Q40 60 40 46 Z" fill="#F6C9AC" />

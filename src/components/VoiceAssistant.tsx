@@ -266,7 +266,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
     if (!note) return null;
     return (
       <div dir="rtl" className="fixed inset-x-0 bottom-0 z-[3000] p-3 pointer-events-none">
-        <div className="pointer-events-auto max-w-md mx-auto rounded-2xl bg-[#0b3f37] text-white shadow-2xl px-4 py-3 text-base font-bold" role="status">{note}</div>
+        <div className="pointer-events-auto max-w-md mx-auto rounded-2xl bg-[#290B3F] text-white shadow-2xl px-4 py-3 text-base font-bold" role="status">{note}</div>
       </div>
     );
   }
@@ -281,7 +281,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
   ];
   const tile = 'min-h-[76px] rounded-2xl font-bold flex flex-col items-center justify-center text-white px-2 text-center active:scale-95 transition-transform';
   return (
-    <div dir="rtl" role="dialog" aria-modal="true" aria-label="اؤمرني" className="fixed inset-0 z-[3000] bg-gradient-to-b from-[#0b3f37] via-[#0f5c4d] to-[#082a25] text-white overflow-y-auto" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <div dir="rtl" role="dialog" aria-modal="true" aria-label="اؤمرني" className="fixed inset-0 z-[3000] bg-gradient-to-b from-[#290B3F] via-[#3C0F5C] to-[#1C082A] text-white overflow-y-auto" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="min-h-full max-w-md mx-auto flex flex-col items-center gap-4 px-4 py-6">
         <span className="text-7xl mt-4 animate-pulse" aria-hidden="true">🎙️</span>
         <p className="text-xl font-bold text-center leading-snug">{heard ? `«${heard}»` : 'المايك مفتوح، بسمعك…'}</p>
@@ -321,7 +321,7 @@ export default function VoiceAssistant({ onNavigate }: { onNavigate: (r: Route) 
             </div>
           )}
         </div>
-        <button type="button" onClick={() => stop('قفلت المايك')} className="min-h-[52px] w-full max-w-xs rounded-2xl bg-white text-[#0b3f37] text-lg font-bold">خلاص</button>
+        <button type="button" onClick={() => stop('قفلت المايك')} className="min-h-[52px] w-full max-w-xs rounded-2xl bg-white text-[#290B3F] text-lg font-bold">خلاص</button>
       </div>
     </div>
   );

@@ -163,7 +163,7 @@ export default function LandingPage({ session, onNavigate }: { session: Session 
           </button>
           <button
             onClick={() => onNavigate('mushaf')}
-            style={{ backgroundColor: '#D9A62B', backgroundImage: 'none', color: '#1c2b26' }}
+            style={{ backgroundColor: '#D9A62B', backgroundImage: 'none', color: '#251C2B' }}
             className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 sm:py-3.5 text-base font-bold rounded-xl shadow-lg transition-smooth"
           >
             <BookMarked className="w-5 h-5 shrink-0" />

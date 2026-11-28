@@ -15,7 +15,7 @@ export const TAJWEED_RULES: Record<string, TajweedRuleStyle> = {
   madd_munfasil: { color: '#c2255c', label: 'مدّ منفصل' },
   madd_muttasil: { color: '#e03131', label: 'مدّ متصل' },
   madd_6: { color: '#a61e4d', label: 'مدّ لازم (٦)' },
-  ghunnah: { color: '#2b8a3e', label: 'غنّة' },
+  ghunnah: { color: '#622B8A', label: 'غنّة' },
   ikhfa: { color: '#1971c2', label: 'إخفاء' },
   ikhfa_shafawi: { color: '#228be6', label: 'إخفاء شفوي' },
   idghaam_ghunnah: { color: '#0b7285', label: 'إدغام بغنّة' },

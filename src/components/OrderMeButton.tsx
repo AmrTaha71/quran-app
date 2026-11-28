@@ -39,7 +39,7 @@ export default function OrderMeButton({ onMutashabihat, onElderly }: Props) {
         onPointerDown={pressFeedback}
         onClick={() => window.dispatchEvent(new CustomEvent('voice-assistant-toggle'))}
         aria-label="اؤمرني"
-        className={`group relative w-full max-w-md flex flex-col items-center gap-1 px-2 py-3 rounded-3xl min-w-0 overflow-hidden shadow-xl polish-press transition-transform ${on ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#0f5c4d] via-[#12705d] to-[#0b3f37]'}`}
+        className={`group relative w-full max-w-md flex flex-col items-center gap-1 px-2 py-3 rounded-3xl min-w-0 overflow-hidden shadow-xl polish-press transition-transform ${on ? 'bg-gradient-to-l from-rose-700 to-rose-900 scale-[1.02]' : 'bg-gradient-to-l from-[#3C0F5C] via-[#491270] to-[#290B3F]'}`}
       >
         <VintageMic listening={on} />
         <span className="w-full min-w-0 text-center">

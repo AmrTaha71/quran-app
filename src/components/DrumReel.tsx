@@ -15,8 +15,8 @@ const STEP_DEG = 24;
 export type DrumVariant = 'range' | 'clock';
 const LOOK = {
   // range: cream face, lit gold bar (light on top, dark below) with dark-emerald choice.
-  range: { bg: '#FBF7EE', band: 'rgba(212,170,70,0.20)', sel: '#06301F', rest: '#6F8F7E', fade: '#FBF7EE' },
-  clock: { bg: 'transparent', band: 'rgba(255,255,255,0.10)', sel: '#FBF3DC', rest: '#7FA593', fade: '' },
+  range: { bg: '#FBF7EE', band: 'rgba(212,170,70,0.20)', sel: '#1E0630', rest: '#826F8F', fade: '#FBF7EE' },
+  clock: { bg: 'transparent', band: 'rgba(255,255,255,0.10)', sel: '#FBF3DC', rest: '#957FA5', fade: '' },
 } as const;
 
 let sharedCtx: AudioContext | null = null;

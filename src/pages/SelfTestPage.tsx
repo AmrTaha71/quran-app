@@ -1110,7 +1110,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           const close = document.createElement('button');
           close.id = 'quran-diag-manual-close';
           close.textContent = 'إغلاق';
-          close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
+          close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#3A065F;color:#fff;font-weight:bold;';
           close.onclick = () => { manual.remove(); close.remove(); };
           document.body.appendChild(close);
           setDiagCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق. اضغط مطوّلًا ثم «تحديد الكل»');
@@ -1250,7 +1250,7 @@ export default function SelfTestPage({ onNavigate }: { onNavigate: (r: Route) =>
           const close = document.createElement('button');
           close.id = 'quran-case-manual-close';
           close.textContent = 'إغلاق';
-          close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#065f46;color:#fff;font-weight:bold;';
+          close.style.cssText = 'position:fixed;top:16px;left:16px;z-index:10000;padding:8px 14px;border-radius:10px;background:#3A065F;color:#fff;font-weight:bold;';
           close.onclick = () => { manual.remove(); close.remove(); };
           document.body.appendChild(close);
           setRecCaseCopied('تعذر النسخ التلقائي — انسخ النص المعروض يدويًا ثم اضغط إغلاق. اضغط مطوّلًا ثم «تحديد الكل»');

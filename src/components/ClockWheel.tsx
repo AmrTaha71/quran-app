@@ -27,8 +27,8 @@ export default function ClockWheel({ initial, onChange }: { initial: string; onC
   }
 
   return (
-    <div className="relative rounded-2xl px-3" style={{ background: 'linear-gradient(180deg,#062B1D,#0A3B28 50%,#062B1D)' }} dir="ltr">
-      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[38px] rounded-xl pointer-events-none" style={{ background: '#145C41', boxShadow: 'inset 0 0 0 1px rgba(226,196,110,0.35)' }} />
+    <div className="relative rounded-2xl px-3" style={{ background: 'linear-gradient(180deg,#1C062B,#270A3B 50%,#1C062B)' }} dir="ltr">
+      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 h-[38px] rounded-xl pointer-events-none" style={{ background: '#3E145C', boxShadow: 'inset 0 0 0 1px rgba(226,196,110,0.35)' }} />
 <div className="flex items-stretch gap-1" dir="ltr">
         <DrumReel variant="clock" className="flex-1" labels={hours} index={hIdx} label="ساعة" onIndex={(i) => { setHIdx(i); emit(i, mIdx, pIdx); }} />
         <span className="self-center text-2xl font-extrabold text-[#E2C46E]">:</span>

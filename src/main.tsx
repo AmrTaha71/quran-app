@@ -79,13 +79,13 @@ if ('serviceWorker' in navigator && !Capacitor.isNativePlatform()) {
         bar.setAttribute('dir', 'rtl');
         // Item 8.18: announced politely, coloured from the design tokens.
         bar.setAttribute('role', 'status');
-        bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--visual-grad-emerald, #0B4D33);color:#fff;font-family:inherit;font-size:15px;box-shadow:0 4px 18px rgba(0,0,0,.3);';
+        bar.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--visual-grad-emerald, #310B4D);color:#fff;font-family:inherit;font-size:15px;box-shadow:0 4px 18px rgba(0,0,0,.3);';
         const text = document.createElement('span');
         text.style.flex = '1';
         text.textContent = 'نسخة جديدة من التطبيق متاحة';
         const btn = document.createElement('button');
         btn.textContent = 'حدّث الآن';
-        btn.style.cssText = 'background:#f0c85a;color:var(--visual-emerald-deep, #0B4D33);border:0;border-radius:10px;padding:8px 14px;font-size:15px;font-weight:700;cursor:pointer;';
+        btn.style.cssText = 'background:#f0c85a;color:var(--visual-emerald-deep, #310B4D);border:0;border-radius:10px;padding:8px 14px;font-size:15px;font-weight:700;cursor:pointer;';
         btn.onclick = () => window.location.reload();
         const close = document.createElement('button');
         close.textContent = '✕';

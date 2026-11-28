@@ -315,9 +315,9 @@ function spawnWater(host: HTMLElement, clientX: number, clientY: number): void {
     // flight. A rapid tapper never accumulates lingering DOM nodes.
     if (layer.childElementCount > 14) return;
     const dark = hostIsDark(host);
-    const washColor = dark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(5, 59, 39, 0.18)';
-    const dropColor = dark ? 'rgba(255, 255, 255, 0.90)' : 'rgba(5, 59, 39, 0.55)';
-    const ringColor = dark ? 'rgba(255, 255, 255, 0.80)' : 'rgba(5, 59, 39, 0.50)';
+    const washColor = dark ? 'rgba(255, 255, 255, 0.30)' : 'rgba(36, 5, 59, 0.18)';
+    const dropColor = dark ? 'rgba(255, 255, 255, 0.90)' : 'rgba(36, 5, 59, 0.55)';
+    const ringColor = dark ? 'rgba(255, 255, 255, 0.80)' : 'rgba(36, 5, 59, 0.50)';
     const maxDim = Math.max(rect.width, rect.height);
     // The wash is the widest element (2.6x) so the wave visibly
     // reaches — and dissolves past — the button's edges.

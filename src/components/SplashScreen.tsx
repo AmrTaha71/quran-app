@@ -42,7 +42,7 @@ export default function SplashScreen({ onFinish, duration = 2000, message }: { o
           overflow: hidden;
           background:
             radial-gradient(ellipse 90% 65% at 50% 38%, rgba(255, 235, 180, 0.10), rgba(255, 235, 180, 0) 60%),
-            linear-gradient(160deg, #0b7a5e 0%, #065f46 45%, #043d30 100%);
+            linear-gradient(160deg, #4C0B7A 0%, #3A065F 45%, #25043D 100%);
           font-family: 'Noto Naskh Arabic', 'Amiri', 'Traditional Naskh Arabic', serif;
           transition: opacity 500ms ease;
         }

@@ -10,7 +10,7 @@
    (--chic-grad-emerald / --chic-grad-amber, the last definitions).
 
    WHAT CHANGED vs the old gradients (still the same two families):
-   - Old emerald: linear-gradient(160deg, #0C7A4E 0%, #053B27 100%)
+   - Old emerald: linear-gradient(160deg, #4C0C7A 0%, #24053B 100%)
      Old gold:    linear-gradient(160deg, #9E5608 0%, #4A2703 100%)
      Two flat stops: a bright top fading straight into a dark bottom.
    - New: five-stop linear gradients + a faint top-light wash, so the
@@ -26,8 +26,8 @@
      brief is emerald + gold only.
 
    CONTRAST (white text, WCAG, computed, not eyeballed):
-   - Emerald stops: #0E8757 4.54 : 1 | #0B7448 5.82 : 1 |
-     #0A6B44 6.56 : 1 | #074A30 10.34 : 1 | #042E1D ~15 : 1.
+   - Emerald stops: #550E87 4.54 : 1 | #480B74 5.82 : 1 |
+     #430A6B 6.56 : 1 | #2E074A 10.34 : 1 | #1C042E ~15 : 1.
      Every stop passes AA (4.5 : 1) for normal white text on its own.
    - Gold stops: #A8650A 4.63 : 1 | #8F5E08 5.57 : 1 |
      #7A4505 7.83 : 1 | #5A2F03 11.40 : 1 | #381D02 ~15 : 1.
@@ -44,14 +44,14 @@
 
 /* --- Main doors: deeper, jewel-like emerald ------------------------------
    Lit emerald top -> saturated jewel heart -> deep forest shadow.
-   The heart (#0A6B44) is MORE saturated than the old top (#0C7A4E),
+   The heart (#430A6B) is MORE saturated than the old top (#4C0C7A),
    not just darker: that saturation is what makes it read jewel-like
    rather than flat, while staying dark enough for white text. */
 .grad-emerald-door {
-  background-color: #0A6B44;
+  background-color: #430A6B;
   background-image:
     radial-gradient(130% 95% at 50% -10%, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 55%),
-    linear-gradient(160deg, #0E8757 0%, #0B7448 28%, #0A6B44 55%, #074A30 78%, #042E1D 100%);
+    linear-gradient(160deg, #550E87 0%, #480B74 28%, #430A6B 55%, #2E074A 78%, #1C042E 100%);
 }
 
 /* --- Sub-doors: warmer, more luminous gold ------------------------------

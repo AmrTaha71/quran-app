@@ -71,7 +71,7 @@ export default function QiblaSheet({ onClose }: { onClose: () => void }) {
               <div className="absolute inset-4" style={{ transform: `rotate(${rotate}deg)`, transition: 'transform 0.25s ease-out' }}>
                 <div className="absolute left-1/2 top-0 -translate-x-1/2 flex flex-col items-center">
                   <span className={`text-3xl ${aligned ? 'drop-shadow-[0_0_8px_#d4a017]' : ''}`} aria-hidden="true">🕋</span>
-                  <div className="w-2 h-24 rounded-full" style={{ background: aligned ? '#b8860b' : '#065f46' }} />
+                  <div className="w-2 h-24 rounded-full" style={{ background: aligned ? '#b8860b' : '#3A065F' }} />
                 </div>
               </div>
               <div className="w-3 h-3 rounded-full bg-emerald-900" />

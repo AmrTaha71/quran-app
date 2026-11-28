@@ -25,7 +25,7 @@ html[data-elderly="1"] body {
      height so long lines stay readable at the larger size. */
   font-size: 1.15rem;
   line-height: 1.9;
-  color: #122019;
+  color: #1A1220;
   background-color: #fffdf7;
 }
 
@@ -59,7 +59,7 @@ html[data-elderly="1"] .text-stone-500,
 html[data-elderly="1"] .text-accent-400,
 html[data-elderly="1"] .text-accent-500,
 html[data-elderly="1"] .text-accent-600 {
-  color: #26332c;
+  color: #2E2633;
 }
 
 /* Form fields: index.css pins these to 16px (iOS auto-zoom floor);

@@ -16,9 +16,9 @@ export type MushafTheme = {
 
 export const MUSHAF_THEMES: MushafTheme[] = [
   { id: 'ivory', name: 'عاجي', bg: '#f6f0e0', ink: '#0a0907', frame: '#c9b27a', accent: '#8a6d1f', hl: '176, 200, 168', dark: false },
-  { id: 'white', name: 'أبيض', bg: '#ffffff', ink: '#000000', frame: '#b9c9bd', accent: '#2f6f4f', hl: '190, 214, 238', dark: false },
+  { id: 'white', name: 'أبيض', bg: '#ffffff', ink: '#000000', frame: '#C2B9C9', accent: '#542F6F', hl: '190, 214, 238', dark: false },
   { id: 'sepia', name: 'بني هادئ', bg: '#eadcc0', ink: '#140e07', frame: '#a8895a', accent: '#6b4a1c', hl: '214, 178, 124', dark: false },
-  { id: 'mint', name: 'أخضر هادئ', bg: '#e6f0e4', ink: '#07170f', frame: '#8fb39a', accent: '#2f6f4f', hl: '244, 226, 150', dark: false },
+  { id: 'mint', name: 'أخضر هادئ', bg: '#EBE4F0', ink: '#100717', frame: '#A48FB3', accent: '#542F6F', hl: '244, 226, 150', dark: false },
   { id: 'night', name: 'ليلي', bg: '#000000', ink: '#ffffff', frame: '#D7AC2A', accent: '#D7AC2A', hl: '92, 128, 104', dark: true },
 ];
 

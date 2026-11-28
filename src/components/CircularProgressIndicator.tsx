@@ -20,7 +20,7 @@ export default function CircularProgressIndicator({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#E8F5E9"
+          stroke="#F0E8F5"
           strokeWidth={strokeWidth}
         />
         <circle
@@ -28,7 +28,7 @@ export default function CircularProgressIndicator({
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#2E7D32"
+          stroke="#5C2E7D"
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           strokeDashoffset={offset}

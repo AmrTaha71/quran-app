@@ -57,13 +57,13 @@ export default class ErrorBoundary extends Component<Props, State> {
     const btn = 'w-full py-3 rounded-xl font-bold';
     if (this.props.page) {
       return (
-        <div dir="rtl" role="alert" className="min-h-[60dvh] flex items-center justify-center p-6 text-[#064e3b]">
+        <div dir="rtl" role="alert" className="min-h-[60dvh] flex items-center justify-center p-6 text-[#30064E]">
           <div className="max-w-sm w-full text-center space-y-4">
             <h1 className="text-xl font-bold">حصلت مشكلة في الصفحة دي</h1>
-            <p className="text-base leading-relaxed text-[#065f46]">باقي التطبيق شغال. جرّب تفتح الصفحة تاني.</p>
+            <p className="text-base leading-relaxed text-[#3A065F]">باقي التطبيق شغال. جرّب تفتح الصفحة تاني.</p>
             <div className="flex flex-col gap-3">
-              <button type="button" onClick={this.retryPage} className={`${btn} bg-[#065f46] text-white`}>أعد تحميل الصفحة دي بس</button>
-              <button type="button" onClick={this.reload} className={`${btn} bg-white border border-[#065f46] text-[#065f46]`}>إعادة تحميل التطبيق</button>
+              <button type="button" onClick={this.retryPage} className={`${btn} bg-[#3A065F] text-white`}>أعد تحميل الصفحة دي بس</button>
+              <button type="button" onClick={this.reload} className={`${btn} bg-white border border-[#3A065F] text-[#3A065F]`}>إعادة تحميل التطبيق</button>
             </div>
           </div>
         </div>
@@ -71,21 +71,21 @@ export default class ErrorBoundary extends Component<Props, State> {
     }
     const looping = homeTries() >= 2;
     return (
-      <div dir="rtl" role="alert" className="min-h-[100dvh] flex items-center justify-center p-6 bg-[#f7f5ef] text-[#064e3b] font-sans">
+      <div dir="rtl" role="alert" className="min-h-[100dvh] flex items-center justify-center p-6 bg-[#f7f5ef] text-[#30064E] font-sans">
         <div className="max-w-sm w-full text-center space-y-4">
           <h1 className="text-xl font-bold">حصلت مشكلة في الشاشة دي</h1>
-          <p className="text-base leading-relaxed text-[#065f46]">
+          <p className="text-base leading-relaxed text-[#3A065F]">
             {looping
               ? 'المشكلة اتكررت. أعد تحميل التطبيق، ولو فضلت امسح بيانات الجلسة المؤقتة (تقدّمك ومحفوظك مش هيتمسحوا).'
               : 'التطبيق لسه شغال. ارجع للرئيسية، ولو المشكلة فضلت اعمل إعادة تحميل.'}
           </p>
           <div className="flex flex-col gap-3">
             {!looping && (
-              <button type="button" onClick={this.goHome} className={`${btn} bg-[#065f46] text-white`}>ارجع للرئيسية</button>
+              <button type="button" onClick={this.goHome} className={`${btn} bg-[#3A065F] text-white`}>ارجع للرئيسية</button>
             )}
-            <button type="button" onClick={this.reload} className={`${btn} ${looping ? 'bg-[#065f46] text-white' : 'bg-white border border-[#065f46] text-[#065f46]'}`}>إعادة التحميل</button>
+            <button type="button" onClick={this.reload} className={`${btn} ${looping ? 'bg-[#3A065F] text-white' : 'bg-white border border-[#3A065F] text-[#3A065F]'}`}>إعادة التحميل</button>
             {looping && (
-              <button type="button" onClick={this.clearSessionAndReload} className={`${btn} bg-white border border-[#065f46] text-[#065f46]`}>امسح بيانات الجلسة المؤقتة وأعد التحميل</button>
+              <button type="button" onClick={this.clearSessionAndReload} className={`${btn} bg-white border border-[#3A065F] text-[#3A065F]`}>امسح بيانات الجلسة المؤقتة وأعد التحميل</button>
             )}
           </div>
         </div>

@@ -14,12 +14,12 @@ export default function ShareSheet({ title, text, url, onClose }: { title: strin
   const u = encodeURIComponent(url);
   const both = encodeURIComponent(`${text}\n${url}`);
   const targets: { name: string; href: string; bg: string; icon: string | null; ig?: boolean }[] = [
-    { name: 'واتساب', href: `https://wa.me/?text=${both}`, bg: '#25D366', icon: 'whatsapp' },
+    { name: 'واتساب', href: `https://wa.me/?text=${both}`, bg: '#8A25D3', icon: 'whatsapp' },
     { name: 'تيليجرام', href: `https://t.me/share/url?url=${u}&text=${t}`, bg: '#229ED9', icon: 'telegram' },
     { name: 'فيسبوك', href: `https://www.facebook.com/sharer/sharer.php?u=${u}`, bg: '#1877F2', icon: 'facebook' },
     { name: 'ماسنجر', href: `fb-messenger://share/?link=${u}`, bg: '#0084FF', icon: 'messenger' },
     { name: 'إكس', href: `https://twitter.com/intent/tweet?text=${t}&url=${u}`, bg: '#111111', icon: 'x' },
-    { name: 'رسالة SMS', href: `sms:?&body=${both}`, bg: '#34C759', icon: null },
+    { name: 'رسالة SMS', href: `sms:?&body=${both}`, bg: '#8A34C7', icon: null },
     { name: 'إيميل', href: `mailto:?subject=${encodeURIComponent(title)}&body=${both}`, bg: '#1A73E8', icon: null },
     { name: 'إنستجرام', href: 'https://www.instagram.com/', bg: 'linear-gradient(45deg,#FEDA75,#FA7E1E,#D62976,#962FBF,#4F5BD5)', icon: 'instagram', ig: true },
   ];

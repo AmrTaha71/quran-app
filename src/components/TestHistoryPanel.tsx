@@ -95,9 +95,9 @@ function Curve({ points }: { points: TestHistoryEntry[] }) {
           <text x={L - 4} y={y(g) + 4} textAnchor="end" fontSize={10} className="fill-accent-500">{ar(g)}٪</text>
         </g>
       ))}
-      {n > 1 && <path d={path} fill="none" stroke="#047857" strokeWidth={2} strokeLinejoin="round" />}
+      {n > 1 && <path d={path} fill="none" stroke="#480478" strokeWidth={2} strokeLinejoin="round" />}
       {points.map((p, i) => (
-        <circle key={i} cx={x(i)} cy={y(p.score)} r={3.5} fill={p.completed ? '#047857' : '#ffffff'} stroke="#047857" strokeWidth={1.5}>
+        <circle key={i} cx={x(i)} cy={y(p.score)} r={3.5} fill={p.completed ? '#480478' : '#ffffff'} stroke="#480478" strokeWidth={1.5}>
           <title>{`${when(p.ts)} — ${p.score}%${p.completed ? '' : ' (ما كملش)'}`}</title>
         </circle>
       ))}

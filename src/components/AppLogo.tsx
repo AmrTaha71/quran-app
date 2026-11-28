@@ -7,8 +7,8 @@ export default function AppLogo({ className = '' }: { className?: string }) {
     <svg viewBox="0 0 400 432" className={className} role="img" aria-label="تربيطات آيات القرآن">
       <defs>
         <radialGradient id="applogo-emerald" cx="50%" cy="42%" r="75%">
-          <stop offset="0%" stopColor="#0b7a5e" />
-          <stop offset="100%" stopColor="#04543c" />
+          <stop offset="0%" stopColor="#4C0B7A" />
+          <stop offset="100%" stopColor="#330454" />
         </radialGradient>
       </defs>
       {/* Cream ornamental frame */}
@@ -53,7 +53,7 @@ export default function AppLogo({ className = '' }: { className?: string }) {
       {/* Divider + name below the disc */}
       <line x1="140" y1="352" x2="260" y2="352" stroke="#f0c85a" strokeWidth="2" />
       <rect x="196" y="348" width="8" height="8" fill="#f0c85a" transform="rotate(45 200 352)" />
-      <text x="200" y="390" textAnchor="middle" fontSize="32" fill="#065f46" fontFamily="serif">تربيطات آيات القرآن</text>
+      <text x="200" y="390" textAnchor="middle" fontSize="32" fill="#3A065F" fontFamily="serif">تربيطات آيات القرآن</text>
     </svg>
   );
 }
