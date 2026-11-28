@@ -4015,7 +4015,9 @@ export default function QuranMushafPage({
     return { top, bottom, xTop: mid(rs.filter((q) => q.t < top + h0 / 2)), xBottom: mid(rs.filter((q) => q.t + q.h > bottom - h0 / 2)) };
   })();
   const popBox = ayahScreenBox ?? (popAnchor && popAnchor.y > 0 ? { top: popAnchor.y - 12, bottom: popAnchor.y + 12, xTop: popAnchor.x, xBottom: popAnchor.x } : null);
-  const popCompact = !!selectedVerse && !!popBox;
+  // Long ayahs leave too little room above/below for a callout: fall back to the centred window.
+  const popRoom = popBox && typeof window !== 'undefined' ? Math.max(popBox.top, window.innerHeight - popBox.bottom) : 0;
+  const popCompact = !!selectedVerse && !!popBox && popRoom >= 200;
   const popPos = (() => {
     if (!popCompact || !popBox || typeof window === 'undefined') return null;
     const vw = window.innerWidth, vh = window.innerHeight, gap = 14;
@@ -5462,7 +5464,7 @@ export default function QuranMushafPage({
                       </button>
                     </div>
                     <div className="p-3 overflow-y-auto min-h-0 flex-1">
-                      {hifzMode && !hifzRevealed ? (
+                      {hifzMode && !hifzRevealed && popBox ? (  // reveal only works when the ayah is on the page
                         <div className="mb-3 text-center bg-amber-50 border border-amber-200 rounded-xl p-4">
                           <p className="text-sm font-bold text-amber-800">الآية مخفية في وضع الحفظ — سمّعها من حفظك الأول</p>
                           <p className="text-xs text-accent-600 mt-1">تربيطاتها ظاهرة تحت، والنص يظهر لما تضغط الزر</p>
