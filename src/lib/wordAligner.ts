@@ -202,7 +202,8 @@ export function softWordEq(spoken: string, expected: string): boolean {
   // a bare leading ا (اكبر/كبر, امر/مر) is not dropped for that reason.
   for (const c of cands) {
     if (spoken.length >= 2 && !spoken.endsWith('ه') && c === spoken + 'ا') return true;
-    if (c.length >= 2 && spoken === c + 'ي') return true;
+    // Length >= 3: on 2-letter words an added ي makes a different word (من→مني, ان→اني).
+    if (c.length >= 3 && spoken === c + 'ي') return true;
     if (/^[وف]ا./.test(c) && spoken === c[0] + c.slice(2)) return true;
   }
   if (spoken.length < 3) return false;

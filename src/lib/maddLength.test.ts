@@ -61,4 +61,9 @@ describe('madd length is not a mistake', () => {
     assert.equal(softWordEq('فصلو', 'فصل'), false);
     assert.equal(softWordEq('قالوا', 'قال'), false);
   });
+
+  it('a 2-letter word with an added ي is a different word', () => {
+    assert.equal(softWordEq('مني', 'من'), false);
+    assert.equal(softWordEq('اني', 'ان'), false);
+  });
 });
