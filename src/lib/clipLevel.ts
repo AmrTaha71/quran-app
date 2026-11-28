@@ -94,3 +94,12 @@ export function unwireClip(el: HTMLAudioElement): void {
   wired.delete(el);
   try { w.src.disconnect(); w.gain.disconnect(); } catch { /* ignore */ }
 }
+
+// The reciter site may not allow Web Audio (CORS), and Safari ignores volume, so on the website the
+// clip goes through our own domain (vercel.json rewrite /ea/*): same origin, the fade always works.
+// Not on localhost or inside the native app (no rewrite there): the original URL as before.
+export function sameOriginClip(url: string): string | null {
+  const m = /^https:\/\/everyayah\.com\/data\/(.+)$/.exec(url);
+  if (!m || typeof location === 'undefined' || location.protocol !== 'https:' || /localhost/.test(location.hostname)) return null;
+  return `/ea/${m[1]}`;
+}

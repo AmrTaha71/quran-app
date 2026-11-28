@@ -1,4 +1,4 @@
-import { prepareClip, setClipSrc, wireClip, unwireClip, FADE_START, FADE_MS } from './clipLevel';
+import { prepareClip, setClipSrc, wireClip, unwireClip, sameOriginClip, FADE_START, FADE_MS } from './clipLevel';
 
 // Fallback when the Web Audio fade is not possible (no CORS check, or the audio context is
 // suspended, e.g. after the mic): ramp element.volume. Safari ignores it (shortcut: iPhone stays loud), upgrade: a fade that works there.
@@ -10,15 +10,6 @@ function softStart(a: HTMLAudioElement): void {
     try { a.volume = FADE_START + (1 - FADE_START) * k; } catch { /* ignore */ }
     if (k >= 1) clearInterval(iv);
   }, 30);
-}
-
-// The reciter site may not allow Web Audio (CORS), and Safari ignores volume, so on the website the
-// clip goes through our own domain (vercel.json rewrite /ea/*): same origin, the fade always works.
-// Not on localhost or inside the native app (no rewrite there): the original URL as before.
-export function sameOriginClip(url: string): string | null {
-  const m = /^https:\/\/everyayah\.com\/data\/(.+)$/.exec(url);
-  if (!m || typeof location === 'undefined' || location.protocol !== 'https:' || /localhost/.test(location.hostname)) return null;
-  return `/ea/${m[1]}`;
 }
 
 // Plays ONE span (from..to seconds) of a remote audio file and stops exactly
