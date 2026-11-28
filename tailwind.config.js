@@ -34,7 +34,7 @@ export default {
         'emerald-deep': '#053B27',
         cream: {
           DEFAULT: '#FFFCF3',
-          deep: '#EFE3C6',
+          deep: '#F4F1EA',
         },
         gold: '#86651A',
         'hairline-emerald': 'rgba(6, 95, 70, 0.18)',

@@ -11,7 +11,7 @@ import { SURAHS } from '../../lib/surahs';
 
 export type DigitalBox = { key: string; surah: number; ayah: number; wordNo: number; left: number; top: number; width: number; height: number };
 
-const PAPER = '#f8f1de';
+const PAPER = '#FBF9F3';
 // Digits (ayah numbers) are not in the Uthmanic font, so they use a font that has them.
 const DIGIT_FONT = "'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
 const FONT = "'KFGQPC Uthmanic Hafs', 'Amiri Quran', 'Amiri', 'Noto Naskh Arabic', 'Traditional Naskh Arabic', serif";
