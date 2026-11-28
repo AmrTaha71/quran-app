@@ -154,7 +154,7 @@ export default function SettingsPage({ onNavigate }: { onNavigate: (r: Route) =>
     } catch { /* ignore */ }
   }, [openDoor]);
   // "Digital Mushaf" (colour-changeable text page) is a choice here, not only a button inside the Mushaf.
-  const [digitalOn, setDigitalOn] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
+  const [digitalOn, setDigitalOn] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') !== '0'; } catch { return true; } });
   const [themeId, setThemeIdState] = useState<MushafThemeId>(loadThemeId);
   const [hlRgb, setHlRgb] = useState<string>(() => loadHl(loadThemeId()));
   const pickDigital = () => {

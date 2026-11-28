@@ -353,8 +353,8 @@ export default function QuranMushafPage({
   const [showEditionPicker, setShowEditionPicker] = useState(false);
   const [showEditionPickerInFullscreen, setShowEditionPickerInFullscreen] = useState(false);
   // Digital page (2026-11-21): the Madinah page redrawn as text with tajweed colours.
-  // Persisted ('quran-mushaf-digital' = '1'); the colour data loads only when it is on.
-  const [digitalView, setDigitalView] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') === '1'; } catch { return false; } });
+  // Persisted ('quran-mushaf-digital'). Owner 2026-11-28: digital is the default; only an explicit '0' (scan chosen) turns it off.
+  const [digitalView, setDigitalView] = useState(() => { try { return localStorage.getItem('quran-mushaf-digital') !== '0'; } catch { return true; } });
   const [tajweedMap, setTajweedMap] = useState<TajweedMap | null>(null);
   const [showDigitalLegend, setShowDigitalLegend] = useState(false);
   // Page colour of the standalone digital page (calm backgrounds, own ink + highlight each).
