@@ -808,3 +808,9 @@ html.lite-dim body::after { content: ''; position: fixed; inset: 0; background: 
    pages' sticky top bars stick under it instead of behind it. */
 html.offline-banner body { padding-top: var(--offline-banner-h, 0px); }
 html.offline-banner .sticky.top-0 { top: var(--offline-banner-h, 0px); }
+
+/* CdIcon: slow turn + moving sheen ("animate-" in the name so reduced-motion disables them) */
+@keyframes cd-spin { to { transform: rotate(360deg); } }
+@keyframes cd-sheen { from { transform: translateX(0); } to { transform: translateX(60px); } }
+.animate-cd-spin { animation: cd-spin 6s linear infinite; }
+.animate-cd-sheen { animation: cd-sheen 2.4s ease-in-out infinite; }

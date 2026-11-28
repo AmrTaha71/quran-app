@@ -4,8 +4,10 @@
 // Its extra tiles (radio, nearest mosque, qibla, big screen, grandpa page,
 // link of the day, QR) are not on the home any more: grandpa mode stays in
 // Settings, radio under استماع, the shared room joins استماع (6.2).
-import { useState } from 'react';
-import { BookOpen, Headphones, Brain } from 'lucide-react';
+import { useState, type ComponentType } from 'react';
+import { BookOpen } from 'lucide-react';
+import CdIcon from '../components/icons/CdIcon';
+import MicIcon from '../components/icons/MicIcon';
 import type { Route } from '../lib/routes';
 import BottomNav from '../components/BottomNav';
 import ElderlyHomeScreen from '../components/ElderlyHomeScreen';
@@ -16,13 +18,13 @@ type SectionId = 'hifz' | 'listen' | 'read';
 const SECTIONS: {
   id: SectionId;
   title: string;
-  Icon: typeof Brain;
+  Icon: ComponentType<{ className?: string; active?: boolean; spinning?: boolean }>;
   tabs: { label: string; route: Route }[];
 }[] = [
   {
     id: 'hifz',
     title: 'حفظ',
-    Icon: Brain,
+    Icon: MicIcon,
     tabs: [
       { label: 'الحفظ', route: 'hifz' },
       { label: 'سمّع لي', route: 'test' },
@@ -32,7 +34,7 @@ const SECTIONS: {
   {
     id: 'listen',
     title: 'استماع',
-    Icon: Headphones,
+    Icon: CdIcon,
     tabs: [
       { label: 'استمع للقرآن', route: 'listen' },
       { label: 'الأذكار', route: 'adhkar' },
@@ -53,6 +55,7 @@ const SECTIONS: {
 
 export default function Home2Page({ onNavigate }: { onNavigate: (r: Route) => void }) {
   const [open, setOpen] = useState<SectionId | null>(null);
+  const [pressed, setPressed] = useState<SectionId | null>(null);
   // 7.5: elderly mode keeps its simplified home (it lived in the hidden
   // HomeStartPage before 6.1).
   const elderly = useElderlyMode();
@@ -70,9 +73,13 @@ export default function Home2Page({ onNavigate }: { onNavigate: (r: Route) => vo
                 type="button"
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? null : id)}
+                onPointerDown={() => setPressed(id)}
+                onPointerUp={() => setPressed(null)}
+                onPointerLeave={() => setPressed(null)}
+                onPointerCancel={() => setPressed(null)}
                 className="w-full flex items-center justify-center gap-3 py-6 text-2xl font-bold polish-press"
               >
-                <Icon className="w-9 h-9 text-amber-300" />
+                <Icon className="w-12 h-12 text-amber-300" active={pressed === id} spinning={isOpen} />
                 {title}
               </button>
               {isOpen && (
