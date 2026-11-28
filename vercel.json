@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/ea/:path*", "destination": "https://everyayah.com/data/:path*" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
