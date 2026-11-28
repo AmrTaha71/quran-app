@@ -814,3 +814,10 @@ html.offline-banner .sticky.top-0 { top: var(--offline-banner-h, 0px); }
 @keyframes cd-sheen { from { transform: translateX(0); } to { transform: translateX(60px); } }
 .animate-cd-spin { animation: cd-spin 6s linear infinite; }
 .animate-cd-sheen { animation: cd-sheen 2.4s ease-in-out infinite; }
+
+/* Recitation mic: equaliser bars move only while the button is pressed (MicIcon). */
+.voice-bar { transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  button:active .voice-bar { animation: voice-bar 0.55s ease-in-out infinite alternate; }
+}
+@keyframes voice-bar { from { transform: scaleY(0.35); } to { transform: scaleY(1.9); } }
