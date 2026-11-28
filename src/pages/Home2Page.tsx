@@ -5,9 +5,8 @@
 // link of the day, QR) are not on the home any more: grandpa mode stays in
 // Settings, radio under استماع, the shared room joins استماع (6.2).
 import { useState, type ComponentType } from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Brain } from 'lucide-react';
 import CdIcon from '../components/icons/CdIcon';
-import MicIcon from '../components/icons/MicIcon';
 import type { Route } from '../lib/routes';
 import BottomNav from '../components/BottomNav';
 import ElderlyHomeScreen from '../components/ElderlyHomeScreen';
@@ -24,7 +23,7 @@ const SECTIONS: {
   {
     id: 'hifz',
     title: 'حفظ',
-    Icon: MicIcon,
+    Icon: Brain,
     tabs: [
       { label: 'الحفظ', route: 'hifz' },
       { label: 'سمّع لي', route: 'test' },
